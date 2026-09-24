@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nextgn Realtors — UI Preview</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --border:#e4e7eb; --muted:#6b7280; --fg:#111827;
+    --primary:#111827; --primary-fg:#ffffff; --accent:#eef2ff;
+    --green:#16a34a; --green-bg:#dcfce7; --yellow:#ca8a04; --yellow-bg:#fef9c3;
+    --red:#dc2626; --red-bg:#fee2e2; --blue:#2563eb; --blue-bg:#dbeafe;
+    --purple:#7c3aed; --purple-bg:#ede9fe; --gray-bg:#f1f5f9; --orange:#ea580c; --orange-bg:#ffedd5;
+    --indigo:#4f46e5; --indigo-bg:#e0e7ff; --teal:#0d9488; --teal-bg:#ccfbf1;
+    --amber-bg:#fffbeb; --amber-border:#fcd34d; --amber-fg:#92400e;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.45;}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 16px;}
+
+  /* preview switcher */
+  #switcher{position:sticky;top:0;z-index:50;background:#111827;color:#fff;padding:10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  #switcher span{opacity:.6;margin-right:6px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;}
+  #switcher button{background:transparent;border:1px solid #374151;color:#fff;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;}
+  #switcher button.active{background:#fff;color:#111827;border-color:#fff;font-weight:600;}
+
+  .view{display:none;padding:32px 0 60px;}
+  .view.active{display:block;}
+
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);}
+  .card-header{padding:16px 18px;border-bottom:1px solid var(--border);}
+  .card-header.flush{border-bottom:none;}
+  .card-body{padding:16px 18px;}
+  .card-title{font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px;}
+  .card-desc{color:var(--muted);font-size:12.5px;margin-top:4px;}
+
+  h1,h2,h3,p{margin:0;}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;white-space:nowrap;}
+  .btn-primary{background:var(--primary);color:var(--primary-fg);}
+  .btn-outline{background:#fff;border:1px solid var(--border);color:var(--fg);}
+  .btn-secondary{background:#f1f5f9;color:var(--fg);}
+  .btn-destructive{background:#fef2f2;color:var(--red);border:1px solid #fecaca;}
+  .btn-sm{padding:5px 10px;font-size:12px;}
+  .btn-block{width:100%;justify-content:center;}
+  .btn:hover{opacity:.85;}
+
+  .badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:600;white-space:nowrap;}
+  .b-gray{background:var(--gray-bg);color:#475569;}
+  .b-green{background:var(--green-bg);color:var(--green);}
+  .b-blue{background:var(--blue-bg);color:var(--blue);}
+  .b-purple{background:var(--purple-bg);color:var(--purple);}
+  .b-yellow{background:var(--yellow-bg);color:var(--yellow);}
+  .b-red{background:var(--red-bg);color:var(--red);}
+  .b-orange{background:var(--orange-bg);color:var(--orange);}
+  .b-indigo{background:var(--indigo-bg);color:var(--indigo);}
+  .b-teal{background:var(--teal-bg);color:var(--teal);}
+
+  input[type=text],input[type=email],input[type=password],input[type=tel],select{
+    width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;color:var(--fg);
+  }
+  label.field-label{display:block;font-size:12.5px;font-weight:500;margin-bottom:5px;color:#374151;}
+  .field{margin-bottom:14px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:640px){.grid2{grid-template-columns:1fr;}}
+
+  .otp{display:flex;gap:6px;margin:10px 0;}
+  .otp div{width:38px;height:42px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;background:#fff;}
+
+  /* Auth / onboarding centered cards */
+  .center-screen{min-height:70vh;display:flex;align-items:center;justify-content:center;padding:40px 16px;}
+  .auth-card{width:100%;max-width:420px;}
+  .logo{width:52px;height:52px;border-radius:10px;background:#111827;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;margin:0 auto 10px;}
+  .center-text{text-align:center;}
+  .divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:14px 0;}
+  .divider::before,.divider::after{content:"";flex:1;border-top:1px solid var(--border);}
+
+  .steps{display:flex;gap:6px;justify-content:center;margin-bottom:18px;}
+  .steps span{width:26px;height:4px;border-radius:4px;background:var(--border);}
+  .steps span.done{background:#111827;}
+
+  /* dashboard header */
+  .dash-header{background:#fff;border-bottom:1px solid var(--border);}
+  .dash-header .inner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 0;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand h1{font-size:17px;font-weight:700;}
+  .brand p{font-size:12px;color:var(--muted);}
+  .presets{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px;gap:2px;}
+  .presets button{border:none;background:none;padding:6px 12px;border-radius:6px;font-size:12.5px;font-weight:500;cursor:pointer;color:var(--muted);}
+  .presets button.active{background:#111827;color:#fff;}
+  .icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}
+  .header-actions{display:flex;align-items:center;gap:8px;}
+
+  .banner{margin-top:14px;border:1px solid var(--amber-border);background:var(--amber-bg);color:var(--amber-fg);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;}
+  .banner .spacer{flex:1;}
+
+  /* tabs */
+  .tabs-list{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px;flex-wrap:wrap;}
+  .tab-btn{padding:9px 14px;font-size:13.5px;font-weight:500;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .tab-btn.active{color:#111827;border-color:#111827;font-weight:600;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--border);}
+  tbody td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+
+  .filters{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;}
+  .filters .field{margin-bottom:0;min-width:150px;}
+
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
+  @media (max-width:800px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
+  .kpi{display:flex;align-items:center;gap:12px;padding:16px 18px;}
+  .kpi .ic{width:38px;height:38px;border-radius:10px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .kpi .val{font-size:20px;font-weight:700;}
+  .kpi .lbl{font-size:12px;color:var(--muted);}
+
+  .prop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  @media (max-width:900px){.prop-grid{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:640px){.prop-grid{grid-template-columns:1fr;}}
+  .prop-card .card-body{font-size:13px;}
+  .prop-card .price{font-size:17px;font-weight:700;}
+  .exec-box{background:#f8fafc;border-radius:8px;padding:8px 10px;margin:10px 0;font-size:12px;}
+  .prop-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+
+  .row-between{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+  .stack{display:flex;flex-direction:column;gap:10px;}
+  .list-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;flex-wrap:wrap;background:#fff;}
+  .muted{color:var(--muted);}
+  .mb-16{margin-bottom:16px;}
+  .mb-24{margin-bottom:24px;}
+
+  code.url{font-size:11.5px;background:#f1f5f9;padding:2px 6px;border-radius:6px;color:#334155;}
+  .switch{width:34px;height:19px;border-radius:999px;background:#cbd5e1;position:relative;cursor:pointer;display:inline-block;}
+  .switch.on{background:#16a34a;}
+  .switch i{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:.15s;}
+  .switch.on i{left:17px;}
+</style>
+</head>
+<body>
+
+<nav id="switcher">
+  <span>Preview</span>
+  <button data-view="auth" class="active">Sign in</button>
+  <button data-view="onboarding">Onboarding</button>
+  <button data-view="dashboard">Dashboard</button>
+</nav>
+
+<!-- ================= AUTH ================= -->
+<section class="view active" id="view-auth">
+  <div class="center-screen">
+    <div class="card auth-card">
+      <div class="card-body">
+        <div class="center-text">
+          <div class="logo">NG</div>
+          <h2 style="font-size:17px;font-weight:700;">Nextgn Realtors Admin Panel</h2>
+          <p class="muted" style="margin-top:4px;">Sign in to continue</p>
+        </div>
+        <div style="height:18px"></div>
+        <button class="btn btn-outline btn-block">Continue with Facebook</button>
+        <p class="muted center-text" style="font-size:11.5px;margin-top:8px;">
+          New realtor client? Continue with Facebook and we'll walk you through setting up your
+          workspace, phone verification and WhatsApp connection.
+        </p>
+        <div class="divider">or</div>
+        <div class="field">
+          <label class="field-label">Email</label>
+          <input type="email" placeholder="you@company.com" />
+        </div>
+        <div class="field">
+          <label class="field-label">Password</label>
+          <input type="password" placeholder="••••••••" />
+        </div>
+        <button class="btn btn-primary btn-block">Sign in</button>
+        <p class="center-text muted" style="margin-top:10px;font-size:12.5px;text-decoration:underline;cursor:pointer;">Need an account? Create one</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ONBOARDING ================= -->
+<section class="view" id="view-onboarding">
+  <div class="center-screen">
+    <div class="card auth-card" style="max-width:460px;">
+      <div class="card-body">
+        <div class="center-text">
+          <div class="logo">NG</div>
+          <h2 style="font-size:17px;font-weight:700;">Set up your workspace</h2>
+          <p class="muted" id="ob-subtitle" style="margin-top:4px;">First, let's verify your phone number.</p>
+        </div>
+        <div class="steps" style="margin-top:16px;">
+          <span class="done" data-step-dot="1"></span><span data-step-dot="2"></span><span data-step-dot="3"></span>
+        </div>
+
+        <!-- step 1 : phone -->
+        <div class="ob-step" data-step="1">
+          <div class="field">
+            <label class="field-label">Phone number</label>
+            <input type="tel" value="+91 98765 43210" />
+          </div>
+          <div class="otp">
+            <div>4</div><div>2</div><div>7</div><div>1</div><div>9</div><div>0</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="obGoto(2)">Verify</button>
+            <button class="btn btn-outline">Resend</button>
+          </div>
+          <p class="center-text muted" style="font-size:11.5px;margin-top:10px;text-decoration:underline;cursor:pointer;" onclick="obGoto(2)">Skip phone verification for now</p>
+        </div>
+
+        <!-- step 2: company -->
+        <div class="ob-step" data-step="2" style="display:none;">
+          <div class="field">
+            <label class="field-label">Agency / company name</label>
+            <input type="text" placeholder="e.g. Nextgn Realtors" value="Nextgn Realtors" />
+          </div>
+          <p class="muted" style="font-size:11.5px;margin-bottom:14px;">
+            If your email matches an executive your admin already added, we'll add you to their team
+            instead of creating a new workspace.
+          </p>
+          <button class="btn btn-primary btn-block" onclick="obGoto(3)">Continue</button>
+        </div>
+
+        <!-- step 3: whatsapp -->
+        <div class="ob-step" data-step="3" style="display:none;">
+          <div class="card" style="margin-bottom:14px;">
+            <div class="card-header">
+              <p class="card-title">💬 WhatsApp Business account</p>
+              <p class="card-desc">Link your Meta WhatsApp Business (Cloud API) number so incoming chats are routed to your leads automatically.</p>
+            </div>
+            <div class="card-body">
+              <button class="btn btn-primary">Connect WhatsApp Business account</button>
+            </div>
+          </div>
+          <p class="muted" style="font-size:11.5px;margin-bottom:12px;">You can also connect this later from the "Lead Sources &amp; WhatsApp" tab.</p>
+          <button class="btn btn-outline btn-block" onclick="showView('dashboard')">Go to dashboard</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= DASHBOARD ================= -->
+<section class="view" id="view-dashboard">
+  <div class="dash-header">
+    <div class="wrap inner">
+      <div class="brand">
+        <div class="logo" style="margin:0;width:44px;height:44px;font-size:14px;">NG</div>
+        <div>
+          <h1>Nextgn Realtors</h1>
+          <p>Manthan Bhatiya · Admin</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="presets">
+          <button class="active">Today</button><button>Tomorrow</button><button>All Time</button>
+        </div>
+        <div class="icon-btn" title="Refresh">⟳</div>
+        <button class="btn btn-outline btn-sm">⎋ Sign out</button>
+      </div>
+    </div>
+    <div class="wrap">
+      <div class="banner">
+        ⚠️ <span class="spacer">Your WhatsApp Business account isn't connected yet — leads from WhatsApp won't reach this dashboard until it is.</span>
+        <button class="btn btn-primary btn-sm">💬 Connect WhatsApp</button>
+      </div>
+      <div style="height:14px"></div>
+    </div>
+  </div>
+
+  <div class="wrap" style="padding-top:20px;">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="leads">Leads CRM</button>
+      <button class="tab-btn" data-tab="budget">Budget &amp; Properties</button>
+      <button class="tab-btn" data-tab="team">Team Performance</button>
+      <button class="tab-btn" data-tab="inventory">Inventory</button>
+      <button class="tab-btn" data-tab="integrations">Lead Sources &amp; WhatsApp</button>
+    </div>
+
+    <!-- LEADS -->
+    <div class="tab-panel active" data-panel="leads">
+      <div class="card mb-16">
+        <div class="card-body filters">
+          <div class="field"><label class="field-label">Executive</label><select><option>All</option><option>Arjun Kapoor</option></select></div>
+          <div class="field"><label class="field-label">Status</label><select><option>All Statuses</option></select></div>
+          <div class="field"><label class="field-label">Source</label><select><option>All</option></select></div>
+          <div class="field"><label class="field-label">From</label><input type="text" placeholder="dd/mm/yyyy"/></div>
+          <div class="field" style="flex:1;"><label class="field-label">Search</label><input type="text" placeholder="Name, phone or property"/></div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Customer</th><th>Executive</th><th>Phone</th><th>Status</th><th>AI bot</th><th>Selected property</th><th>Budget</th><th>Created</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Manthan Bhatiya</td><td>Arjun Kapoor</td><td class="muted">91511751****</td>
+              <td><span class="badge b-teal">Visit Completed</span></td>
+              <td><span class="switch on"><i></i></span></td>
+              <td>Parul complex</td><td>₹50,000</td><td class="muted">22 Sep 2026</td>
+              <td><button class="btn btn-outline btn-sm">Open</button></td>
+            </tr>
+            <tr>
+              <td>Rajesh Sharma</td><td>Ashish Bhatiya</td><td class="muted">91987654****</td>
+              <td><span class="badge b-indigo">Qualified Prospect</span></td>
+              <td><span class="switch on"><i></i></span></td>
+              <td>Green Heights</td><td>₹75,00,000</td><td class="muted">22 Sep 2026</td>
+              <td><button class="btn btn-outline btn-sm">Open</button></td>
+            </tr>
+            <tr>
+              <td>Pooja Patel</td><td class="muted">Unassigned</td><td class="muted">91990001****</td>
+              <td><span class="badge b-gray">Fresh Lead</span></td>
+              <td><span class="switch on"><i></i></span></td>
+              <td class="muted">—</td><td>₹60,00,000</td><td class="muted">22 Sep 2026</td>
+              <td><button class="btn btn-outline btn-sm">Open</button></td>
+            </tr>
+            <tr>
+              <td>Vikram Singh</td><td>Siddharth Shah</td><td class="muted">91887766****</td>
+              <td><span class="badge b-indigo">Qualified Prospect</span></td>
+              <td><span class="switch on"><i></i></span></td>
+              <td>Darshanam Crossroad</td><td>₹35,00,000</td><td class="muted">22 Sep 2026</td>
+              <td><button class="btn btn-outline btn-sm">Open</button></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- BUDGET -->
+    <div class="tab-panel" data-panel="budget">
+      <div class="grid2" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:18px;">
+        <div class="card"><div class="card-header"><div class="row-between"><span class="card-title">Luxury</span><span class="badge b-blue">1 leads</span></div><p class="card-desc">Above ₹60 L</p></div>
+          <div class="card-body"><p style="font-weight:600;">Rajesh Sharma</p><p class="muted" style="font-size:12px;">₹75.00 L · Gotri</p></div></div>
+        <div class="card"><div class="card-header"><div class="row-between"><span class="card-title">Middle</span><span class="badge b-blue">1 leads</span></div><p class="card-desc">₹25 L – ₹60 L</p></div>
+          <div class="card-body"><p style="font-weight:600;">Vikram Singh</p><p class="muted" style="font-size:12px;">₹35.00 L · Somatalav</p></div></div>
+        <div class="card"><div class="card-header"><div class="row-between"><span class="card-title">Lower</span><span class="badge b-blue">2 leads</span></div><p class="card-desc">Below ₹25 L</p></div>
+          <div class="card-body"><p style="font-weight:600;">Manthan Bhatiya</p><p class="muted" style="font-size:12px;">₹50,000 · Ajwa</p></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><p class="card-title">🏢 Property breakdown</p></div>
+        <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+          <div class="card"><div class="card-body"><p style="font-weight:600;">Green Heights</p><div style="display:flex;gap:6px;margin:8px 0;"><span class="badge b-indigo">1 interested</span><span class="badge b-green">0 site visits</span></div></div></div>
+          <div class="card"><div class="card-body"><p style="font-weight:600;">Parul complex</p><div style="display:flex;gap:6px;margin:8px 0;"><span class="badge b-indigo">1 interested</span><span class="badge b-green">1 site visits</span></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TEAM -->
+    <div class="tab-panel" data-panel="team">
+      <div class="card mb-16">
+        <div class="card-header row-between">
+          <div><p class="card-title">Team</p><p class="card-desc">Add a sales executive's email — their account is linked the moment they sign in with it.</p></div>
+          <button class="btn btn-primary btn-sm">＋ Add executive</button>
+        </div>
+        <div class="card-body stack">
+          <div class="list-row">
+            <div><p style="font-weight:600;">Ashish Bhatiya</p><p class="muted" style="font-size:12px;">ashish@nextgenrealtors.com · 9979989713</p></div>
+            <div style="display:flex;gap:8px;align-items:center;"><span class="badge b-green">Active</span><button class="btn btn-destructive btn-sm">Remove</button></div>
+          </div>
+          <div class="list-row">
+            <div><p style="font-weight:600;">Arjun Kapoor</p><p class="muted" style="font-size:12px;">arjun@nextgenrealtors.com · 5117510624</p></div>
+            <div style="display:flex;gap:8px;align-items:center;"><span class="badge b-green">Active</span><button class="btn btn-destructive btn-sm">Remove</button></div>
+          </div>
+          <div class="list-row">
+            <div><p style="font-weight:600;">Priya Mehta</p><p class="muted" style="font-size:12px;">priya@nextgenrealtors.com · —</p></div>
+            <div style="display:flex;gap:8px;align-items:center;"><span class="badge b-yellow">Invited — awaiting first sign-in</span><button class="btn btn-destructive btn-sm">Remove</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="card kpi"><div class="ic">👥</div><div><div class="val">4</div><div class="lbl">Total Leads</div></div></div>
+        <div class="card kpi"><div class="ic">📅</div><div><div class="val">1</div><div class="lbl">Site Visits Booked</div></div></div>
+        <div class="card kpi"><div class="ic">🤝</div><div><div class="val">0</div><div class="lbl">Pending Handovers</div></div></div>
+        <div class="card kpi"><div class="ic">⚠️</div><div><div class="val" style="color:var(--red);">0</div><div class="lbl">Unattended Alerts</div></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><p class="card-title">Executive scorecard</p></div>
+        <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Executive</th><th>Leads</th><th>Visits booked</th><th>Visits done</th><th>Conversion</th><th>Avg response</th></tr></thead>
+          <tbody>
+            <tr><td style="font-weight:600;">Arjun Kapoor</td><td>1</td><td>0</td><td>1</td><td>100%</td><td><span class="badge b-green">12 min</span></td></tr>
+            <tr><td style="font-weight:600;">Ashish Bhatiya</td><td>1</td><td>0</td><td>0</td><td>0%</td><td><span class="badge b-red">No data</span></td></tr>
+            <tr><td style="font-weight:600;">Siddharth Shah</td><td>1</td><td>1</td><td>0</td><td>0%</td><td><span class="badge b-yellow">22 min</span></td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- INVENTORY -->
+    <div class="tab-panel" data-panel="inventory">
+      <div class="row-between mb-16">
+        <p class="muted">4 properties</p>
+        <button class="btn btn-primary">＋ Add property</button>
+      </div>
+      <div class="prop-grid">
+        <div class="card prop-card">
+          <div class="card-header row-between"><span style="font-weight:600;">Green Heights</span><span class="badge b-green">AVAILABLE</span></div>
+          <div class="card-body">
+            <p class="muted" style="font-size:12px;">FLAT · 3BHK · Gotri</p>
+            <div class="row-between" style="margin:8px 0;"><span class="price">₹75.00 L</span><span class="muted">1800 sq.ft</span></div>
+            <div class="exec-box"><b>Ashish Bhatiya</b><br><span class="muted">9979989713 · nextgen exec</span></div>
+            <div class="prop-actions"><button class="btn btn-outline btn-sm">📄 Brochure</button><button class="btn btn-outline btn-sm">📍 Map</button><button class="btn btn-secondary btn-sm">✎ Edit</button><button class="btn btn-destructive btn-sm">🗑 Delete</button></div>
+          </div>
+        </div>
+        <div class="card prop-card">
+          <div class="card-header row-between"><span style="font-weight:600;">Sawgat Commercial Complex</span><span class="badge b-green">AVAILABLE</span></div>
+          <div class="card-body">
+            <p class="muted" style="font-size:12px;">SHOP · Shop · Ajwa road</p>
+            <div class="row-between" style="margin:8px 0;"><span class="price">₹35,000</span><span class="muted">900 sq.ft</span></div>
+            <div class="exec-box"><b>Ashish Bhatiya</b><br><span class="muted">9979989713 · nextgen exec</span></div>
+            <div class="prop-actions"><button class="btn btn-outline btn-sm">📍 Map</button><button class="btn btn-secondary btn-sm">✎ Edit</button><button class="btn btn-destructive btn-sm">🗑 Delete</button></div>
+          </div>
+        </div>
+        <div class="card prop-card">
+          <div class="card-header row-between"><span style="font-weight:600;">Darshanam Crossroad</span><span class="badge b-green">AVAILABLE</span></div>
+          <div class="card-body">
+            <p class="muted" style="font-size:12px;">COMMERCIAL · Somatalav</p>
+            <div class="row-between" style="margin:8px 0;"><span class="price">₹30.00 L</span><span class="muted">500 sq.ft</span></div>
+            <div class="exec-box"><b>Siddharth Shah</b><br><span class="muted">8539767325 · apex exec</span></div>
+            <div class="prop-actions"><button class="btn btn-outline btn-sm">📄 Brochure</button><button class="btn btn-secondary btn-sm">✎ Edit</button><button class="btn btn-destructive btn-sm">🗑 Delete</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INTEGRATIONS -->
+    <div class="tab-panel" data-panel="integrations">
+      <div class="card mb-16">
+        <div class="card-header"><p class="card-title">💬 WhatsApp Business account</p><p class="card-desc">Link your Meta WhatsApp Business (Cloud API) number so incoming chats are routed to your leads automatically.</p></div>
+        <div class="card-body">
+          <div class="list-row">
+            ✅ <div style="flex:1;"><p style="font-weight:600;">+91 99799 89713</p><p class="muted" style="font-size:12px;">WABA ID: 109283746554321 · Phone number ID: 511751062412345</p></div>
+            <span class="badge b-green">Connected</span>
+            <button class="btn btn-outline btn-sm">Reconnect / switch number</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header row-between">
+          <div><p class="card-title">🌐 Portal lead webhooks</p><p class="card-desc">Add the webhook URL for every portal you list on — 99acres, Housing.com, MagicBricks, OLX or anything else. Add as many as you need.</p></div>
+          <button class="btn btn-primary btn-sm">＋ Add webhook</button>
+        </div>
+        <div class="card-body stack">
+          <div class="list-row">
+            <div><div class="row-between" style="justify-content:flex-start;gap:8px;"><b>99acres</b><span class="badge b-green">Active</span></div><code class="url">.../webhook/portal/99acres/c3a8e10d-…</code></div>
+            <div style="display:flex;gap:8px;"><span class="switch on"><i></i></span><button class="btn btn-secondary btn-sm">✎ Edit</button><button class="btn btn-destructive btn-sm">🗑 Remove</button></div>
+          </div>
+          <div class="list-row">
+            <div><div class="row-between" style="justify-content:flex-start;gap:8px;"><b>Housing.com</b><span class="badge b-green">Active</span></div><code class="url">.../webhook/portal/housing/c3a8e10d-…</code></div>
+            <div style="display:flex;gap:8px;"><span class="switch on"><i></i></span><button class="btn btn-secondary btn-sm">✎ Edit</button><button class="btn btn-destructive btn-sm">🗑 Remove</button></div>
+          </div>
+          <div class="list-row">
+            <div><div class="row-between" style="justify-content:flex-start;gap:8px;"><b>MagicBricks</b><span class="badge b-gray">Paused</span></div><code class="url">.../webhook/portal/magicbricks/c3a8e10d-…</code></div>
+            <div style="display:flex;gap:8px;"><span class="switch"><i></i></span><button class="btn btn-secondary btn-sm">✎ Edit</button><button class="btn btn-destructive btn-sm">🗑 Remove</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  function showView(name){
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
+    document.querySelectorAll('#switcher button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  }
+  document.querySelectorAll('#switcher button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
+
+  const obSubtitles = {1:"First, let's verify your phone number.",2:"Tell us about your agency.",3:"Almost done — connect your WhatsApp Business number."};
+  function obGoto(step){
+    document.querySelectorAll('.ob-step').forEach(s => s.style.display = (Number(s.dataset.step) === step ? 'block' : 'none'));
+    document.querySelectorAll('[data-step-dot]').forEach(d => d.classList.toggle('done', Number(d.dataset.stepDot) <= step));
+    document.getElementById('ob-subtitle').textContent = obSubtitles[step];
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelector('[data-panel="' + btn.dataset.tab + '"]').classList.add('active');
+  }));
+
+  document.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => s.classList.toggle('on')));
+  document.querySelectorAll('.presets button').forEach(b => b.addEventListener('click', () => {
+    b.parentElement.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+  }));
+</script>
+</body>
+</html>

@@ -1,0 +1,406 @@
+import { useState } from "react";
+import {
+  AlarmClockOff,
+  CalendarCheck,
+  CheckCircle2,
+  MessageSquareText,
+  Phone,
+  Save,
+  Trash2,
+  UserCheck,
+} from "lucide-react";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PropertyStateBadge, StatusBadge } from "@/components/crm/badges";
+import { useInventory, useUpdateLead } from "@/lib/crm-data";
+import {
+  LEAD_STATUSES,
+  STATUS_MAP,
+  contactResolution,
+  formatDate,
+  formatMoney,
+  toNumber,
+  type Lead,
+} from "@/lib/crm";
+
+function PickOne({
+  value,
+  onChange,
+  options,
+  render,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  render?: (v: string) => string;
+}) {
+  const list = value && !options.includes(value) ? [value, ...options] : options;
+  return (
+    <Select {...(value ? { value } : {})} onValueChange={onChange}>
+      <SelectTrigger>
+        <SelectValue placeholder="Select…" />
+      </SelectTrigger>
+      <SelectContent>
+        {list.length === 0 && (
+          <SelectItem value="__none__" disabled>
+            No options
+          </SelectItem>
+        )}
+        {list.map((o) => (
+          <SelectItem key={o} value={o}>
+            {render ? render(o) : o}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+export function LeadDrawer({
+  lead,
+  open,
+  onOpenChange,
+}: {
+  lead: Lead | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const update = useUpdateLead();
+  const { data: inventory = [] } = useInventory();
+  const uniq = (vals: (string | null)[]) =>
+    Array.from(new Set(vals.filter((v): v is string => !!v))).sort();
+  const locations = uniq(inventory.map((p) => p.location));
+  const configurations = uniq(inventory.map((p) => p.configuration));
+  const projects = uniq(inventory.map((p) => p.project_name));
+  const [visitDate, setVisitDate] = useState("");
+  const [visitTime, setVisitTime] = useState("");
+  const [dropOpen, setDropOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Partial<Lead>>({});
+
+  if (!lead) return null;
+  const dropped = lead.status === "NOT_INTERESTED";
+  const notes = String(
+    (profile.executive_notes !== undefined ? profile.executive_notes : lead.executive_notes) ?? "",
+  ).trim();
+  const field = <K extends keyof Lead>(key: K): Lead[K] =>
+    (profile[key] !== undefined ? profile[key] : lead[key]) as Lead[K];
+  const set = (key: keyof Lead, value: unknown) => setProfile((p) => ({ ...p, [key]: value }));
+
+  const run = (values: Partial<Lead>, message: string, action: string) =>
+    update.mutate({ leadId: lead.lead_id, values, message, lead, action, note: notes || null });
+
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+        <SheetHeader>
+          <SheetTitle className="text-xl">{lead.name || "Unnamed lead"}</SheetTitle>
+          <SheetDescription>
+            {lead.phone || "No phone"} · Created {formatDate(lead.created_at)}
+          </SheetDescription>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <StatusBadge value={lead.status} />
+            <PropertyStateBadge value={lead.property_state} />
+          </div>
+        </SheetHeader>
+
+        <div className="space-y-6 px-4 pb-10">
+          {dropped && (
+            <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+              This lead is dropped. Actions are disabled.
+            </p>
+          )}
+
+          <section className="space-y-2">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <MessageSquareText className="size-4" /> Conversation summary
+            </h3>
+            <p className="whitespace-pre-wrap rounded-lg border bg-card p-3 text-sm text-muted-foreground">
+              {lead.summary || "No conversation summary yet."}
+            </p>
+          </section>
+
+          <Separator />
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">Quick actions</h3>
+            {notice && <p className="text-xs font-medium text-primary">{notice}</p>}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button asChild variant="outline" disabled={!lead.phone}>
+                <a href={`tel:${lead.phone ?? ""}`}>
+                  <Phone /> Call Now
+                </a>
+              </Button>
+              <Button
+                disabled={dropped || update.isPending || !notes}
+                onClick={() => {
+                  run(
+                    {
+                      ...contactResolution(lead),
+                      executive_notes: notes,
+                      bot_active: false,
+                    },
+                    "Marked contacted — alert cleared",
+                    "TAKEOVER",
+                  );
+                  setNotice("Chat taken over — bot paused and alert cleared.");
+                }}
+              >
+                <UserCheck /> Mark Contacted / Takeover Chat
+              </Button>
+              <Button
+                variant="outline"
+                disabled={dropped || update.isPending}
+                onClick={() => {
+                  run(
+                    { followup_count: 0, last_followup_at: new Date().toISOString() },
+                    "Follow-up counter reset",
+                    "CALL_NOT_ANSWERED",
+                  );
+                  setNotice("Follow-up counter reset for tomorrow's drip.");
+                }}
+              >
+                <AlarmClockOff /> Call Not Answered
+              </Button>
+              <Button
+                variant="outline"
+                disabled={dropped || update.isPending}
+                onClick={() => run({ status: "VISIT_DONE" }, "Site visit marked done", "VISIT_DONE")}
+              >
+                <CheckCircle2 /> Site Visit Done
+              </Button>
+            </div>
+          </section>
+
+          <Separator />
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">Book a site visit</h3>
+            {lead.site_visit_datetime && (
+              <p className="text-xs">
+                <span className="crm-badge" data-tone="green">
+                  Visit Scheduled
+                </span>{" "}
+                <span className="text-muted-foreground">{lead.site_visit_datetime}</span>
+              </p>
+            )}
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="visit-date">Date</Label>
+                <Input
+                  id="visit-date"
+                  type="date"
+                  value={visitDate}
+                  onChange={(e) => setVisitDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="visit-time">Time</Label>
+                <Input
+                  id="visit-time"
+                  type="time"
+                  value={visitTime}
+                  onChange={(e) => setVisitTime(e.target.value)}
+                />
+              </div>
+              <Button
+                disabled={dropped || !visitDate || !visitTime || update.isPending}
+                onClick={() =>
+                  run(
+                    {
+                      site_visit_datetime: `${visitDate} ${visitTime}`,
+                      status: "SITE_VISIT_BOOKED",
+                      property_state: "SITE_VISIT_BOOKED",
+                    },
+                    "Site visit confirmed",
+                      "VISIT_BOOKED",
+                  )
+                }
+              >
+                <CalendarCheck /> Confirm Visit
+              </Button>
+            </div>
+          </section>
+
+          <Separator />
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">Lead profile</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Status</Label>
+                <PickOne
+                  value={field("status") ?? ""}
+                  onChange={(v) => set("status", v)}
+                  options={LEAD_STATUSES}
+                  render={(v) => STATUS_MAP[v]?.label ?? v}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="budget">Budget</Label>
+                <Input
+                  id="budget"
+                  value={String(field("budget") ?? "")}
+                  onChange={(e) => set("budget", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">{formatMoney(lead.budget)}</p>
+              </div>
+              <div className="space-y-1">
+                <Label>Requirement</Label>
+                <PickOne
+                  value={field("requirement") ?? ""}
+                  onChange={(v) => set("requirement", v)}
+                  options={["BUY", "RENT"]}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Purpose</Label>
+                <PickOne
+                  value={field("purpose") ?? ""}
+                  onChange={(v) => set("purpose", v)}
+                  options={["SELF_USE", "INVESTMENT"]}
+                  render={(v) => (v === "SELF_USE" ? "Self use" : "Investment")}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Location</Label>
+                <PickOne
+                  value={field("location") ?? ""}
+                  onChange={(v) => set("location", v)}
+                  options={locations}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Property type</Label>
+                <PickOne
+                  value={field("property_type") ?? ""}
+                  onChange={(v) => set("property_type", v)}
+                  options={configurations}
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>Selected property</Label>
+                <PickOne
+                  value={field("selected_property_name") ?? ""}
+                  onChange={(v) => set("selected_property_name", v)}
+                  options={projects}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="timeline">Timeline</Label>
+                <Input
+                  id="timeline"
+                  value={field("timeline") ?? ""}
+                  onChange={(e) => set("timeline", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label htmlFor="notes">
+                  Executive notes <span style={{ color: "var(--tone-red)" }}>*</span>
+                </Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Required — what happened on this lead?"
+                  value={field("executive_notes") ?? ""}
+                  onChange={(e) => set("executive_notes", e.target.value)}
+                />
+                {!notes && (
+                  <p className="text-xs text-muted-foreground">
+                    Executive notes are required before you can save or clear the alert.
+                  </p>
+                )}
+              </div>
+            </div>
+            <Button
+              disabled={dropped || update.isPending || !notes}
+              onClick={() =>
+                run(
+                  {
+                    status: field("status"),
+                    budget: toNumber(field("budget") as never),
+                    location: field("location"),
+                    property_type: field("property_type"),
+                    purpose: field("purpose"),
+                    requirement: field("requirement"),
+                    timeline: field("timeline"),
+                    selected_property_name: field("selected_property_name"),
+                    executive_notes: notes,
+                    ...contactResolution(lead),
+                  },
+                  "Lead updated successfully",
+                  "PROFILE_UPDATED",
+                )
+              }
+            >
+              <Save /> Save Updates
+            </Button>
+          </section>
+
+          <Separator />
+
+          <Button
+            variant="destructive"
+            disabled={dropped || update.isPending}
+            onClick={() => setDropOpen(true)}
+          >
+            <Trash2 /> Drop Lead / Mark Junk
+          </Button>
+        </div>
+
+        <AlertDialog open={dropOpen} onOpenChange={setDropOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure you want to drop this lead?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The lead will be marked as Closed/Dropped and further actions will be disabled.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() =>
+                  run(
+                    { status: "NOT_INTERESTED", rejection_reason: "Dropped manually" },
+                    "Lead dropped",
+                    "LEAD_DROPPED",
+                  )
+                }
+              >
+                Yes, drop lead
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </SheetContent>
+    </Sheet>
+  );
+}
