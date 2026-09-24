@@ -85,7 +85,7 @@ without you touching Meta Business Manager per-client.
    - `VITE_META_APP_ID` / `VITE_META_CONFIG_ID` (browser-side — drives the
      "Connect WhatsApp" button in `src/components/crm/whatsapp-connect.tsx`)
    - `META_APP_ID` / `META_APP_SECRET` (server-side only — used by
-     `src/lib/server/onboarding.functions.ts` to exchange the signup `code`
+     `src/lib/onboarding.functions.ts` to exchange the signup `code`
      for a permanent access token via the Graph API)
 5. Once connected, the client's `clients` row gets `waba_id`,
    `phone_number_id`, `access_token`, `display_phone_number` populated, and

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ToneBadge } from "@/components/crm/badges";
-import { linkWhatsAppAccount } from "@/lib/server/onboarding.functions";
+import { linkWhatsAppAccount } from "@/lib/onboarding.functions";
 import type { Client } from "@/lib/crm";
 
 declare global {

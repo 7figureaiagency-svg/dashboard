@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { WhatsAppConnectCard } from "@/components/crm/whatsapp-connect";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
-import { completeOnboarding } from "@/lib/server/onboarding.functions";
+import { completeOnboarding } from "@/lib/onboarding.functions";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   head: () => ({
