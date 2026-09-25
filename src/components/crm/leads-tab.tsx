@@ -65,7 +65,8 @@ export function LeadsTab({
   }, [allActivity, leads]);
 
   const executives = useMemo(
-    () => Array.from(new Set(leads.map((l) => l.assigned_executive_name).filter(Boolean))) as string[],
+    () =>
+      Array.from(new Set(leads.map((l) => l.assigned_executive_name).filter(Boolean))) as string[],
     [leads],
   );
   const sources = useMemo(
@@ -246,6 +247,7 @@ export function LeadsTab({
         lead={selected ? (leads.find((l) => l.lead_id === selected.lead_id) ?? selected) : null}
         open={!!selected}
         onOpenChange={(v) => !v && setSelected(null)}
+        activity={selected ? activity.filter((a) => a.lead_id === selected.lead_id) : []}
       />
 
       <ExecutiveDrawer

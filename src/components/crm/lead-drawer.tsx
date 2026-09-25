@@ -1,8 +1,10 @@
 import { useState } from "react";
 import {
   AlarmClockOff,
+  Bot,
   CalendarCheck,
   CheckCircle2,
+  History,
   MessageSquareText,
   Phone,
   Save,
@@ -39,15 +41,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PropertyStateBadge, StatusBadge } from "@/components/crm/badges";
+import { PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
 import { useInventory, useUpdateLead } from "@/lib/crm-data";
 import {
   LEAD_STATUSES,
   STATUS_MAP,
+  actionLabel,
+  buildAiActivity,
   contactResolution,
   formatDate,
   formatMoney,
   toNumber,
+  type Activity,
   type Lead,
 } from "@/lib/crm";
 
@@ -88,10 +93,13 @@ export function LeadDrawer({
   lead,
   open,
   onOpenChange,
+  activity = [],
 }: {
   lead: Lead | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** Executive/admin actions logged for this lead — timestamped, unlike the AI snapshot below. */
+  activity?: Activity[];
 }) {
   const update = useUpdateLead();
   const { data: inventory = [] } = useInventory();
@@ -117,7 +125,6 @@ export function LeadDrawer({
 
   const run = (values: Partial<Lead>, message: string, action: string) =>
     update.mutate({ leadId: lead.lead_id, values, message, lead, action, note: notes || null });
-
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -148,6 +155,77 @@ export function LeadDrawer({
               {lead.summary || "No conversation summary yet."}
             </p>
           </section>
+
+          <Separator />
+
+          <section className="space-y-2">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <Bot className="size-4" /> AI activity &amp; follow-ups
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              What the automated workflow has done on this lead so far — reflects current state, not
+              a message-by-message log, since the bot writes straight to the database.
+            </p>
+            <ul className="space-y-2">
+              {buildAiActivity(lead).map((event) => (
+                <li
+                  key={event.key}
+                  className="flex flex-wrap items-start justify-between gap-2 rounded-lg border bg-card p-2.5"
+                >
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">{event.label}</p>
+                    {event.detail && (
+                      <p className="text-xs text-muted-foreground">{event.detail}</p>
+                    )}
+                    {event.timestamp && (
+                      <p className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</p>
+                    )}
+                  </div>
+                  <ToneBadge
+                    label={event.done ? "Done" : "Pending"}
+                    tone={event.done ? event.tone : "gray"}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {activity.length > 0 && (
+            <>
+              <Separator />
+              <section className="space-y-2">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <History className="size-4" /> Executive actions
+                </h3>
+                <ul className="space-y-2">
+                  {activity
+                    .slice()
+                    .sort(
+                      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+                    )
+                    .map((a) => (
+                      <li key={a.id} className="rounded-lg border bg-card p-2.5 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-medium">{actionLabel(a.action)}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(a.created_at)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {a.executive_name || "Unassigned"}
+                          {a.field
+                            ? ` · ${a.field}: ${a.old_value ?? "—"} → ${a.new_value ?? "—"}`
+                            : ""}
+                        </p>
+                        {a.note && (
+                          <p className="mt-1 text-xs italic text-muted-foreground">{a.note}</p>
+                        )}
+                      </li>
+                    ))}
+                </ul>
+              </section>
+            </>
+          )}
 
           <Separator />
 
@@ -194,7 +272,13 @@ export function LeadDrawer({
               <Button
                 variant="outline"
                 disabled={dropped || update.isPending}
-                onClick={() => run({ status: "VISIT_DONE" }, "Site visit marked done", "VISIT_DONE")}
+                onClick={() =>
+                  run(
+                    { status: "VISIT_DONE", property_state: "PROPERTY_SELECTED" },
+                    "Site visit marked done",
+                    "VISIT_DONE",
+                  )
+                }
               >
                 <CheckCircle2 /> Site Visit Done
               </Button>
@@ -242,7 +326,7 @@ export function LeadDrawer({
                       property_state: "SITE_VISIT_BOOKED",
                     },
                     "Site visit confirmed",
-                      "VISIT_BOOKED",
+                    "VISIT_BOOKED",
                   )
                 }
               >

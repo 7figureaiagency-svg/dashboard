@@ -1,6 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { LogOut, MessageCircleWarning, RefreshCw } from "lucide-react";
+import {
+  Building2,
+  LayoutList,
+  LineChart,
+  LogOut,
+  MessageCircleWarning,
+  RefreshCw,
+  Share2,
+  Wallet,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BudgetTab } from "@/components/crm/budget-tab";
@@ -40,6 +49,14 @@ const PRESETS: { key: DatePreset; label: string }[] = [
   { key: "tomorrow", label: "Tomorrow" },
   { key: "all", label: "All Time" },
 ];
+
+const NAV_ITEMS = [
+  { value: "leads", label: "Leads CRM", icon: LayoutList, adminOnly: false },
+  { value: "budget", label: "Budget & Properties", icon: Wallet, adminOnly: true },
+  { value: "team", label: "Team Performance", icon: LineChart, adminOnly: true },
+  { value: "inventory", label: "Inventory", icon: Building2, adminOnly: true },
+  { value: "integrations", label: "Lead Sources & WhatsApp", icon: Share2, adminOnly: true },
+] as const;
 
 function Dashboard() {
   const [preset, setPreset] = useState<DatePreset>("all");
@@ -142,56 +159,66 @@ function Dashboard() {
         </div>
       </header>
 
-      {isAdmin && client && !client.access_token && (
-        <div className="mx-auto max-w-7xl px-4 pt-4">
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
-            <MessageCircleWarning className="size-4 shrink-0" />
-            <span className="flex-1">
-              Your WhatsApp Business account isn't connected yet — leads from WhatsApp won't reach
-              this dashboard until it is.
-            </span>
-            <WhatsAppConnectCard clientId={client.id} compact />
-          </div>
-        </div>
-      )}
-
       <div className="mx-auto max-w-7xl px-4 py-6">
-        <Tabs defaultValue="leads" className="space-y-6">
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="leads">Leads CRM</TabsTrigger>
-            {isAdmin && <TabsTrigger value="budget">Budget &amp; Properties</TabsTrigger>}
-            {isAdmin && <TabsTrigger value="team">Team Performance</TabsTrigger>}
-            {isAdmin && <TabsTrigger value="inventory">Inventory</TabsTrigger>}
-            {isAdmin && <TabsTrigger value="integrations">Lead Sources &amp; WhatsApp</TabsTrigger>}
-          </TabsList>
+        <Tabs defaultValue="leads">
+          <div className="flex flex-col gap-6 md:flex-row md:items-start">
+            <TabsList className="flex h-auto w-full shrink-0 gap-1 overflow-x-auto bg-transparent p-0 md:w-56 md:flex-col md:items-stretch md:overflow-visible">
+              {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) => {
+                const Icon = item.icon;
+                return (
+                  <TabsTrigger
+                    key={item.value}
+                    value={item.value}
+                    className="shrink-0 justify-start gap-2 rounded-lg px-3 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none md:w-full"
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    {item.label}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
 
-          <TabsContent value="leads">
-            <LeadsTab
-              leads={leads}
-              loading={leadsQuery.isLoading}
-              lockedExecutive={isAdmin ? null : me?.fullName || null}
-            />
-          </TabsContent>
-          {isAdmin && (
-            <>
-              <TabsContent value="budget">
-                <BudgetTab leads={leads} />
-              </TabsContent>
-              <TabsContent value="team">
-                <PerformanceTab leads={leadsQuery.data ?? []} clientId={clientId} />
-              </TabsContent>
-              <TabsContent value="inventory">
-                <InventoryTab
-                  properties={inventoryQuery.data ?? []}
-                  loading={inventoryQuery.isLoading}
-                  clientId={clientId}
+            <div className="min-w-0 flex-1 space-y-6">
+              {isAdmin && client && !client.access_token && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                  <MessageCircleWarning className="size-4 shrink-0" />
+                  <span className="flex-1">
+                    Your WhatsApp Business account isn't connected yet — leads from WhatsApp won't
+                    reach this dashboard until it is.
+                  </span>
+                  <WhatsAppConnectCard clientId={client.id} compact />
+                </div>
+              )}
+
+              <TabsContent value="leads" className="mt-0">
+                <LeadsTab
+                  leads={leads}
+                  loading={leadsQuery.isLoading}
+                  lockedExecutive={isAdmin ? null : me?.fullName || null}
                 />
               </TabsContent>
-              <TabsContent value="integrations">
-                <IntegrationsTab clientId={clientId} client={client ?? null} />
-              </TabsContent>
-            </>
-          )}
+              {isAdmin && (
+                <>
+                  <TabsContent value="budget" className="mt-0">
+                    <BudgetTab leads={leads} />
+                  </TabsContent>
+                  <TabsContent value="team" className="mt-0">
+                    <PerformanceTab leads={leadsQuery.data ?? []} clientId={clientId} />
+                  </TabsContent>
+                  <TabsContent value="inventory" className="mt-0">
+                    <InventoryTab
+                      properties={inventoryQuery.data ?? []}
+                      loading={inventoryQuery.isLoading}
+                      clientId={clientId}
+                    />
+                  </TabsContent>
+                  <TabsContent value="integrations" className="mt-0">
+                    <IntegrationsTab clientId={clientId} client={client ?? null} />
+                  </TabsContent>
+                </>
+              )}
+            </div>
+          </div>
         </Tabs>
       </div>
     </main>

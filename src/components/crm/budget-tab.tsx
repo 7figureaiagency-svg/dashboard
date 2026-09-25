@@ -2,22 +2,44 @@ import { useMemo, useState } from "react";
 import { Building2, ChevronDown, Phone } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PropertyStateBadge, StatusBadge } from "@/components/crm/badges";
 import { BUDGET_TIERS, formatMoney, type Lead } from "@/lib/crm";
 
+/** Normalizes a lead's free-text `requirement` (set by the AI parser) into one of the three deal types. */
+type DealType = "BUY" | "RENT" | "LEASE" | "OTHER";
+
+const DEAL_TYPE_GROUPS: {
+  key: DealType;
+  label: string;
+  tone: "indigo" | "green" | "purple" | "gray";
+}[] = [
+  { key: "BUY", label: "Buy", tone: "indigo" },
+  { key: "RENT", label: "Rent", tone: "green" },
+  { key: "LEASE", label: "Lease", tone: "purple" },
+  { key: "OTHER", label: "Unspecified", tone: "gray" },
+];
+
+function dealType(requirement: string | null): DealType {
+  const r = (requirement || "").toLowerCase();
+  if (r.includes("rent")) return "RENT";
+  if (r.includes("lease")) return "LEASE";
+  if (r.includes("buy") || r.includes("sale") || r.includes("purchase")) return "BUY";
+  return "OTHER";
+}
+
 export function BudgetTab({ leads }: { leads: Lead[] }) {
   const tiers = useMemo(
     () =>
-      BUDGET_TIERS.map((t) => ({
-        ...t,
-        leads: leads.filter((l) => (l.budget ?? 0) >= t.min && (l.budget ?? 0) < t.max),
-      })),
+      BUDGET_TIERS.map((t) => {
+        const tierLeads = leads.filter((l) => (l.budget ?? 0) >= t.min && (l.budget ?? 0) < t.max);
+        const groups = DEAL_TYPE_GROUPS.map((g) => ({
+          ...g,
+          leads: tierLeads.filter((l) => dealType(l.requirement) === g.key),
+        })).filter((g) => g.leads.length > 0);
+        return { ...t, leads: tierLeads, groups };
+      }),
     [leads],
   );
 
@@ -49,12 +71,26 @@ export function BudgetTab({ leads }: { leads: Lead[] }) {
               </CardTitle>
               <p className="text-xs text-muted-foreground">{tier.hint}</p>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               {tier.leads.length === 0 && (
                 <p className="text-sm text-muted-foreground">No leads in this tier.</p>
               )}
-              {tier.leads.map((lead) => (
-                <LeadMiniCard key={lead.lead_id} lead={lead} />
+              {tier.groups.map((group) => (
+                <div key={group.key} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="crm-badge" data-tone={group.tone}>
+                      {group.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {group.leads.length} lead{group.leads.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {group.leads.map((lead) => (
+                      <LeadMiniCard key={lead.lead_id} lead={lead} />
+                    ))}
+                  </div>
+                </div>
               ))}
             </CardContent>
           </Card>

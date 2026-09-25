@@ -352,6 +352,176 @@ export function actionLabel(action: string | null): string {
   return ACTION_LABELS[action]?.label ?? action;
 }
 
+/* ------------------------------------------------------------------ */
+/* AI activity & follow-up snapshot                                    */
+/* ------------------------------------------------------------------ */
+
+export type AiActivityEvent = {
+  key: string;
+  label: string;
+  detail?: string | null;
+  /** Only set when a real timestamp exists on the lead for this milestone. */
+  timestamp?: string | null;
+  tone: Tone;
+  done: boolean;
+};
+
+/**
+ * Reconstructs "what has the AI/automation done on this lead" from the
+ * columns the n8n workflow itself writes on `leads`. There is no separate
+ * historical event log for bot-driven actions — n8n writes straight to
+ * Supabase, bypassing `lead_activity` (which only records executive/admin
+ * actions taken from this dashboard) — so this is a snapshot of current
+ * state, not a replay of every message. Timestamps are shown only where a
+ * real one is stored; milestones without one just show as done/pending.
+ */
+export function buildAiActivity(lead: Lead): AiActivityEvent[] {
+  const events: AiActivityEvent[] = [];
+
+  events.push({
+    key: "captured",
+    label: "Lead captured",
+    detail: lead.source ? `via ${lead.source}` : null,
+    timestamp: lead.created_at,
+    tone: "blue",
+    done: true,
+  });
+
+  const qualified = !!(
+    lead.requirement &&
+    lead.property_type &&
+    lead.location &&
+    lead.budget &&
+    lead.purpose &&
+    lead.timeline
+  );
+  events.push({
+    key: "qualified",
+    label: "Requirements qualified",
+    detail: qualified
+      ? [lead.property_type, lead.location, formatMoney(lead.budget)].filter(Boolean).join(" · ")
+      : "Still collecting requirement, location, budget, purpose or timeline",
+    tone: "indigo",
+    done: qualified,
+  });
+
+  let sharedNames: string[] = [];
+  const rawOptions: unknown = lead.last_option_ids;
+  if (Array.isArray(rawOptions)) {
+    sharedNames = rawOptions
+      .map((o) =>
+        o && typeof o === "object" ? (o as Record<string, unknown>)["property_name"] : null,
+      )
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+  }
+  events.push({
+    key: "options_shared",
+    label: "Property options shared",
+    detail: sharedNames.length ? sharedNames.join(", ") : "No options sent yet",
+    tone: "blue",
+    done: sharedNames.length > 0,
+  });
+
+  events.push({
+    key: "property_selected",
+    label: "Property selected",
+    detail: lead.selected_property_name
+      ? [lead.selected_property_name, formatMoney(lead.selected_property_price)]
+          .filter(Boolean)
+          .join(" · ")
+      : "No property selected yet",
+    tone: "purple",
+    done: !!lead.selected_property_name,
+  });
+
+  events.push({
+    key: "visit_booked",
+    label: "Site visit booked",
+    detail: lead.site_visit_datetime
+      ? `Scheduled for ${lead.site_visit_datetime}`
+      : "Not booked yet",
+    timestamp: lead.site_visit_datetime,
+    tone: "green",
+    done: !!lead.site_visit_datetime,
+  });
+
+  const visitTime = lead.site_visit_datetime ? new Date(lead.site_visit_datetime) : null;
+  const visitIsFuture = !!visitTime && !Number.isNaN(visitTime.getTime()) && visitTime > new Date();
+  events.push({
+    key: "pre_visit_reminder",
+    label: "Pre-visit reminder",
+    detail: !lead.site_visit_datetime
+      ? "No visit booked yet"
+      : visitIsFuture
+        ? lead.bot_active
+          ? "Will be sent automatically before the visit"
+          : "Bot is paused — won't be sent automatically"
+        : "Visit date has passed",
+    tone: "yellow",
+    done: !!lead.site_visit_datetime && !visitIsFuture,
+  });
+
+  events.push({
+    key: "visit_outcome",
+    label:
+      lead.status === "VISIT_MISSED"
+        ? "Site visit missed"
+        : lead.status === "VISIT_DONE"
+          ? "Site visit completed"
+          : "Post-visit outcome",
+    detail:
+      lead.status === "VISIT_DONE"
+        ? "Marked done — awaiting negotiation/booking follow-up"
+        : lead.status === "VISIT_MISSED"
+          ? "Executive should re-engage or reschedule"
+          : "Pending — visit not yet marked done or missed",
+    tone: lead.status === "VISIT_MISSED" ? "orange" : "teal",
+    done: lead.status === "VISIT_DONE" || lead.status === "VISIT_MISSED",
+  });
+
+  events.push({
+    key: "sales_alert",
+    label: "Sales team notified",
+    detail: lead.assigned_executive_name ? `Alerted ${lead.assigned_executive_name}` : null,
+    timestamp: lead.alert_sent_at,
+    tone: "orange",
+    done: !!lead.alert_sent_at,
+  });
+
+  events.push({
+    key: "human_takeover",
+    label: "Executive took over chat",
+    timestamp: lead.first_human_contact_at,
+    tone: "purple",
+    done: !!lead.first_human_contact_at,
+  });
+
+  const followupCount = lead.followup_count ?? 0;
+  events.push({
+    key: "drip_followups",
+    label: "Automated day-wise follow-ups",
+    detail:
+      followupCount > 0
+        ? `${followupCount} follow-up${followupCount === 1 ? "" : "s"} sent · drip stage ${lead.drip_stage ?? 0}`
+        : "None sent yet",
+    timestamp: lead.last_followup_at,
+    tone: "gray",
+    done: followupCount > 0,
+  });
+
+  if (lead.rejection_reason) {
+    events.push({
+      key: "rejection",
+      label: "Rejection / objection logged",
+      detail: lead.rejection_reason,
+      tone: "red",
+      done: true,
+    });
+  }
+
+  return events;
+}
+
 /** Fields whose before/after values are worth recording on the timeline. */
 const TRACKED: { key: keyof Lead; label: string }[] = [
   { key: "status", label: "Status" },
