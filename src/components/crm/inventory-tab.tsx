@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, MapPin, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { FileText, ImageOff, MapPin, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -31,16 +31,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { ToneBadge } from "@/components/crm/badges";
-import { useDeleteProperty, uploadBrochure, useExecutives, useSaveProperty } from "@/lib/crm-data";
 import {
+  uploadBrochure,
+  uploadPropertyImages,
+  useDeleteProperty,
+  useExecutives,
+  useSaveProperty,
+} from "@/lib/crm-data";
+import {
+  AMENITY_OPTIONS,
+  COMMERCIAL_ATTRIBUTE_FIELDS,
   configurationsForCategory,
+  FACING_OPTIONS,
   formatMoney,
+  FURNISHED_STATUSES,
   INVENTORY_STATUSES,
   isValidUrl,
+  LISTING_TYPES,
+  OWNERSHIP_TYPES,
   PROPERTY_CATEGORIES,
   STOCK_TYPES,
   toNumber,
+  TRANSACTION_TYPES,
   type Property,
   type Tone,
 } from "@/lib/crm";
@@ -55,10 +69,29 @@ interface Draft {
   area_sqft: string;
   status: string;
   stock_type: string;
+  listing_type: string;
+  furnished_status: string;
   possession_status: string;
   brochure_url: string;
   map_url: string;
   assigned_executive_id: string;
+  /** Commercial-only physical/utility specs — stored in `inventory.attributes`. */
+  attr_length_ft: string;
+  attr_width_ft: string;
+  attr_height_ft: string;
+  attr_power_supply_kw: string;
+  /** Universal listing details. */
+  rera_number: string;
+  carpet_area_sqft: string;
+  super_built_up_area_sqft: string;
+  property_age_years: string;
+  transaction_type: string;
+  facing: string;
+  ownership_type: string;
+  price_negotiable: string;
+  maintenance_charges: string;
+  amenities: string[];
+  image_urls: string[];
 }
 
 const EMPTY: Draft = {
@@ -71,10 +104,37 @@ const EMPTY: Draft = {
   area_sqft: "",
   status: "AVAILABLE",
   stock_type: "REGULAR",
+  listing_type: "SALE",
+  furnished_status: "UNFURNISHED",
   possession_status: "",
   brochure_url: "",
   map_url: "",
   assigned_executive_id: "",
+  attr_length_ft: "",
+  attr_width_ft: "",
+  attr_height_ft: "",
+  attr_power_supply_kw: "",
+  rera_number: "",
+  carpet_area_sqft: "",
+  super_built_up_area_sqft: "",
+  property_age_years: "",
+  transaction_type: "NEW_BOOKING",
+  facing: "NORTH",
+  ownership_type: "FREEHOLD",
+  price_negotiable: "false",
+  maintenance_charges: "",
+  amenities: [],
+  image_urls: [],
+};
+
+const ATTRIBUTE_FIELD_TO_DRAFT_KEY: Record<
+  (typeof COMMERCIAL_ATTRIBUTE_FIELDS)[number]["key"],
+  keyof Draft
+> = {
+  length_ft: "attr_length_ft",
+  width_ft: "attr_width_ft",
+  height_ft: "attr_height_ft",
+  power_supply_kw: "attr_power_supply_kw",
 };
 
 const statusTone: Record<string, Tone> = {
@@ -98,10 +158,31 @@ export function InventoryTab({
   const del = useDeleteProperty();
 
   const openEdit = (p: Property) => {
-    const draft = { ...EMPTY } as unknown as Record<string, string>;
+    const draft = { ...EMPTY } as unknown as Record<string, unknown>;
     for (const key of Object.keys(EMPTY)) {
+      // Arrays and attribute-derived fields are populated separately below —
+      // the generic loop below only handles plain scalar columns.
+      if (key.startsWith("attr_") || key === "amenities" || key === "image_urls") continue;
       const v = (p as unknown as Record<string, unknown>)[key];
       draft[key] = v === null || v === undefined ? "" : String(v);
+    }
+    // Rows saved before these columns existed have them as null — fall back
+    // to a sensible default rather than showing an unselected dropdown.
+    if (!draft["furnished_status"]) draft["furnished_status"] = "UNFURNISHED";
+    if (!draft["listing_type"]) draft["listing_type"] = "SALE";
+    if (!draft["transaction_type"]) draft["transaction_type"] = "NEW_BOOKING";
+    if (!draft["facing"]) draft["facing"] = "NORTH";
+    if (!draft["ownership_type"]) draft["ownership_type"] = "FREEHOLD";
+
+    draft["amenities"] = Array.isArray(p.amenities) ? p.amenities : [];
+    draft["image_urls"] = Array.isArray(p.image_urls) ? p.image_urls : [];
+
+    const attributes = (p.attributes as Record<string, unknown> | null) ?? {};
+    for (const { key } of COMMERCIAL_ATTRIBUTE_FIELDS) {
+      const draftKey = ATTRIBUTE_FIELD_TO_DRAFT_KEY[key];
+      if (!draftKey) continue;
+      const v = attributes[key];
+      draft[draftKey] = v === null || v === undefined ? "" : String(v);
     }
     setIsNew(false);
     setEditing(draft as unknown as Draft);
@@ -125,7 +206,18 @@ export function InventoryTab({
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {properties.map((p) => (
-          <Card key={p.property_id}>
+          <Card key={p.property_id} className="overflow-hidden">
+            {p.image_urls && p.image_urls.length > 0 ? (
+              <img
+                src={p.image_urls[0]}
+                alt={p.project_name}
+                className="h-40 w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-40 w-full items-center justify-center bg-muted text-muted-foreground">
+                <ImageOff className="size-6" />
+              </div>
+            )}
             <CardHeader className="pb-2">
               <CardTitle className="flex items-start justify-between gap-2 text-base">
                 <span>{p.project_name}</span>
@@ -223,6 +315,7 @@ function PropertyForm({
 }) {
   const [values, setValues] = useState<Draft>(draft ?? EMPTY);
   const [uploading, setUploading] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const save = useSaveProperty();
   const { data: executives = [] } = useExecutives();
 
@@ -239,6 +332,17 @@ function PropertyForm({
 
   const set = (k: keyof Draft, v: string) => setValues((p) => ({ ...p, [k]: v }));
 
+  const toggleAmenity = (amenity: string) =>
+    setValues((p) => ({
+      ...p,
+      amenities: p.amenities.includes(amenity)
+        ? p.amenities.filter((a) => a !== amenity)
+        : [...p.amenities, amenity],
+    }));
+
+  const removeImage = (url: string) =>
+    setValues((p) => ({ ...p, image_urls: p.image_urls.filter((u) => u !== url) }));
+
   const submit = () => {
     if (!current.project_name || !current.location) {
       toast.error("Project name and location are required");
@@ -252,20 +356,55 @@ function PropertyForm({
       toast.error("Enter a valid map URL (https://…)");
       return;
     }
+    // Configuration encodes the BHK count for FLAT/VILLA (e.g. "3BHK") —
+    // keep the numeric `bhk_num` column in sync with it rather than asking
+    // for the number twice; commercial units/plots have no BHK count.
+    const bhkMatch = /^(\d+)BHK$/.exec(current.configuration);
+    const bhk_num = bhkMatch ? Number(bhkMatch[1]) : null;
+
+    // Commercial-only physical/utility specs live in `attributes` (jsonb) —
+    // only persist them for commercial units, and clear the column
+    // otherwise so switching a listing away from Commercial doesn't leave
+    // stale specs behind.
+    const attributes =
+      current.property_category === "COMMERCIAL"
+        ? Object.fromEntries(
+            COMMERCIAL_ATTRIBUTE_FIELDS.map(({ key }) => [
+              key,
+              toNumber(current[ATTRIBUTE_FIELD_TO_DRAFT_KEY[key]] as string),
+            ]).filter(([, v]) => v !== null),
+          )
+        : {};
+
     const payload = {
       property_id: current.property_id || `PROP-${Date.now()}`,
       project_name: current.project_name,
       property_category: current.property_category,
       configuration: current.configuration,
+      bhk_num,
       location: current.location,
       price: toNumber(current.price) ?? 0,
       area_sqft: toNumber(current.area_sqft),
       status: current.status,
       stock_type: current.stock_type,
+      listing_type: current.listing_type || null,
+      furnished_status: current.furnished_status || null,
       possession_status: current.possession_status || null,
       brochure_url: current.brochure_url || null,
       map_url: current.map_url || null,
       assigned_executive_id: current.assigned_executive_id,
+      attributes,
+      rera_number: current.rera_number || null,
+      carpet_area_sqft: toNumber(current.carpet_area_sqft),
+      super_built_up_area_sqft: toNumber(current.super_built_up_area_sqft),
+      property_age_years: toNumber(current.property_age_years),
+      transaction_type: current.transaction_type || null,
+      facing: current.facing || null,
+      ownership_type: current.ownership_type || null,
+      price_negotiable: current.price_negotiable === "true",
+      maintenance_charges: toNumber(current.maintenance_charges),
+      amenities: current.amenities,
+      image_urls: current.image_urls,
     };
     save.mutate({ values: payload, isNew, clientId }, { onSuccess: onClose });
   };
@@ -291,6 +430,13 @@ function PropertyForm({
             <Input
               value={current.project_name}
               onChange={(e) => set("project_name", e.target.value)}
+            />
+          </Field>
+          <Field label="RERA number">
+            <Input
+              value={current.rera_number}
+              placeholder="Optional"
+              onChange={(e) => set("rera_number", e.target.value)}
             />
           </Field>
           <Field label="Category">
@@ -330,6 +476,35 @@ function PropertyForm({
               onChange={(v) => set("status", v)}
             />
           </Field>
+          <Field label="Transaction type">
+            <Dropdown
+              value={current.transaction_type}
+              options={TRANSACTION_TYPES}
+              onChange={(v) => set("transaction_type", v)}
+            />
+          </Field>
+          <Field label="Ownership type">
+            <Dropdown
+              value={current.ownership_type}
+              options={OWNERSHIP_TYPES}
+              onChange={(v) => set("ownership_type", v)}
+            />
+          </Field>
+          <Field label="Facing">
+            <Dropdown
+              value={current.facing}
+              options={FACING_OPTIONS}
+              onChange={(v) => set("facing", v)}
+            />
+          </Field>
+          <Field label="Property age (years)">
+            <Input
+              inputMode="numeric"
+              value={current.property_age_years}
+              placeholder="0 for new construction"
+              onChange={(e) => set("property_age_years", e.target.value)}
+            />
+          </Field>
           <Field label="Price">
             <Input
               inputMode="numeric"
@@ -338,11 +513,46 @@ function PropertyForm({
             />
             <p className="text-xs text-muted-foreground">{formatMoney(toNumber(current.price))}</p>
           </Field>
-          <Field label="Area (sq.ft)">
+          <Field label="Price negotiable">
+            <div className="flex h-9 items-center gap-2">
+              <Switch
+                checked={current.price_negotiable === "true"}
+                onCheckedChange={(v) => set("price_negotiable", v ? "true" : "false")}
+              />
+              <span className="text-sm text-muted-foreground">
+                {current.price_negotiable === "true" ? "Yes" : "No"}
+              </span>
+            </div>
+          </Field>
+          <Field label="Maintenance charges (₹/month)">
+            <Input
+              inputMode="numeric"
+              value={current.maintenance_charges}
+              placeholder="Optional"
+              onChange={(e) => set("maintenance_charges", e.target.value)}
+            />
+          </Field>
+          <Field label="Built-up area (sq.ft)">
             <Input
               inputMode="numeric"
               value={current.area_sqft}
               onChange={(e) => set("area_sqft", e.target.value)}
+            />
+          </Field>
+          <Field label="Carpet area (sq.ft)">
+            <Input
+              inputMode="numeric"
+              value={current.carpet_area_sqft}
+              placeholder="Optional"
+              onChange={(e) => set("carpet_area_sqft", e.target.value)}
+            />
+          </Field>
+          <Field label="Super built-up area (sq.ft)">
+            <Input
+              inputMode="numeric"
+              value={current.super_built_up_area_sqft}
+              placeholder="Optional"
+              onChange={(e) => set("super_built_up_area_sqft", e.target.value)}
             />
           </Field>
           <Field label="Stock type">
@@ -352,12 +562,116 @@ function PropertyForm({
               onChange={(v) => set("stock_type", v)}
             />
           </Field>
+          <Field label="Listing type">
+            <Dropdown
+              value={current.listing_type}
+              options={LISTING_TYPES}
+              onChange={(v) => set("listing_type", v)}
+            />
+          </Field>
+          {current.property_category !== "PLOT" && (
+            <Field label="Furnished status">
+              <Dropdown
+                value={current.furnished_status}
+                options={FURNISHED_STATUSES}
+                onChange={(v) => set("furnished_status", v)}
+              />
+            </Field>
+          )}
           <Field label="Possession status">
             <Input
               value={current.possession_status}
               onChange={(e) => set("possession_status", e.target.value)}
             />
           </Field>
+          {current.property_category === "COMMERCIAL" && (
+            <>
+              {COMMERCIAL_ATTRIBUTE_FIELDS.map(({ key, label }) => (
+                <Field key={key} label={label}>
+                  <Input
+                    inputMode="decimal"
+                    value={current[ATTRIBUTE_FIELD_TO_DRAFT_KEY[key]]}
+                    onChange={(e) => set(ATTRIBUTE_FIELD_TO_DRAFT_KEY[key], e.target.value)}
+                  />
+                </Field>
+              ))}
+            </>
+          )}
+
+          <div className="sm:col-span-2">
+            <Field label="Amenities">
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {AMENITY_OPTIONS.map((amenity) => (
+                  <label
+                    key={amenity}
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground"
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-4 rounded border-input"
+                      checked={current.amenities.includes(amenity)}
+                      onChange={() => toggleAmenity(amenity)}
+                    />
+                    {amenity.replaceAll("_", " ")}
+                  </label>
+                ))}
+              </div>
+            </Field>
+          </div>
+
+          <div className="sm:col-span-2">
+            <Field label="Photos">
+              <div className="flex items-center gap-2">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length === 0) return;
+                    if (!clientId) {
+                      toast.error("No tenant selected — cannot upload");
+                      return;
+                    }
+                    setUploadingImages(true);
+                    try {
+                      const urls = await uploadPropertyImages(files, clientId);
+                      setValues((p) => ({ ...p, image_urls: [...p.image_urls, ...urls] }));
+                      toast.success(`${urls.length} photo${urls.length > 1 ? "s" : ""} uploaded`);
+                    } catch (err) {
+                      toast.error((err as Error).message);
+                    } finally {
+                      setUploadingImages(false);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+                {uploadingImages && <Upload className="size-4 animate-pulse" />}
+              </div>
+              {current.image_urls.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {current.image_urls.map((url) => (
+                    <div key={url} className="group relative">
+                      <img
+                        src={url}
+                        alt="Property"
+                        className="size-20 rounded-md border object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(url)}
+                        className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-label="Remove photo"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Field>
+          </div>
+
           <Field label="Brochure (PDF)">
             <div className="flex items-center gap-2">
               <Input
@@ -431,7 +745,7 @@ function PropertyForm({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={save.isPending || uploading}>
+          <Button onClick={submit} disabled={save.isPending || uploading || uploadingImages}>
             Save property
           </Button>
         </DialogFooter>

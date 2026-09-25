@@ -211,6 +211,22 @@ export async function uploadBrochure(file: File, clientId: string): Promise<stri
   return supabase.storage.from("property-brochures").getPublicUrl(path).data.publicUrl;
 }
 
+/** Uploads one property photo to the (per-tenant-scoped) `property-images` bucket. */
+export async function uploadPropertyImage(file: File, clientId: string): Promise<string> {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${clientId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
+  const { error } = await supabase.storage
+    .from("property-images")
+    .upload(path, file, { contentType: file.type || "image/jpeg", upsert: true });
+  if (error) throw error;
+  return supabase.storage.from("property-images").getPublicUrl(path).data.publicUrl;
+}
+
+/** Uploads several property photos in parallel, returning their public URLs in order. */
+export async function uploadPropertyImages(files: File[], clientId: string): Promise<string[]> {
+  return Promise.all(files.map((file) => uploadPropertyImage(file, clientId)));
+}
+
 /* ------------------------------------------------------------------ */
 /* Team (executives)                                                   */
 /* ------------------------------------------------------------------ */

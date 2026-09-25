@@ -88,6 +88,49 @@ export function configurationsForCategory(category: string): string[] {
 
 export const INVENTORY_STATUSES = ["AVAILABLE", "SOLD", "HOLD"];
 export const STOCK_TYPES = ["REGULAR", "CLEARANCE"];
+export const LISTING_TYPES = ["SALE", "RENT", "LEASE"];
+export const FURNISHED_STATUSES = ["UNFURNISHED", "SEMI_FURNISHED", "FURNISHED"];
+export const TRANSACTION_TYPES = ["NEW_BOOKING", "RESALE"];
+export const FACING_OPTIONS = [
+  "NORTH",
+  "SOUTH",
+  "EAST",
+  "WEST",
+  "NORTH_EAST",
+  "NORTH_WEST",
+  "SOUTH_EAST",
+  "SOUTH_WEST",
+];
+export const OWNERSHIP_TYPES = [
+  "FREEHOLD",
+  "LEASEHOLD",
+  "COOPERATIVE_SOCIETY",
+  "POWER_OF_ATTORNEY",
+];
+export const AMENITY_OPTIONS = [
+  "PARKING",
+  "LIFT",
+  "POWER_BACKUP",
+  "SECURITY",
+  "GYM",
+  "CLUBHOUSE",
+  "SWIMMING_POOL",
+  "GARDEN",
+  "GATED_COMMUNITY",
+];
+
+/**
+ * Commercial units (shops/offices) need a few physical/utility parameters
+ * that don't have their own dedicated `inventory` column — they're stored
+ * in the free-form `attributes` jsonb column instead. Each entry maps a
+ * form field key to the jsonb key it reads/writes and a display label.
+ */
+export const COMMERCIAL_ATTRIBUTE_FIELDS = [
+  { key: "length_ft", label: "Length (ft)" },
+  { key: "width_ft", label: "Width (ft)" },
+  { key: "height_ft", label: "Height (ft)" },
+  { key: "power_supply_kw", label: "Power supply (KW)" },
+] as const;
 
 /** Common lead-source portals a client can wire a webhook up for. */
 export const INTEGRATION_PROVIDERS = [
