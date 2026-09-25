@@ -89,19 +89,70 @@ export const completeOnboarding = createServerFn({ method: "POST" })
       return { status: "needs_company_name" as const };
     }
 
-    const { data: newClient, error: clientErr } = await supabaseAdmin
-      .from("clients")
-      .insert({
-        company_name: data.companyName.trim(),
-        email: lookupEmail || null,
-        owner_user_id: userId,
-        is_active: true,
-      })
-      .select("id")
-      .single();
-    if (clientErr) throw new Error(clientErr.message);
+    // Resumability: a previous attempt may have created the `clients` row
+    // and then failed on a later step (e.g. a transient error, or the
+    // env-var issue this deployment hit while it was still being set up).
+    // Retrying "Continue" would otherwise hit clients_email_key on the
+    // insert below — reuse that row instead of erroring.
+    let clientId: string;
+    if (lookupEmail) {
+      const { data: existingClient, error: existingErr } = await supabaseAdmin
+        .from("clients")
+        .select("id, owner_user_id")
+        .eq("email", lookupEmail)
+        .maybeSingle();
+      if (existingErr) throw new Error(existingErr.message);
 
-    const profileUpdate: Record<string, unknown> = { role: "admin", client_id: newClient.id };
+      if (
+        existingClient &&
+        (!existingClient.owner_user_id || existingClient.owner_user_id === userId)
+      ) {
+        clientId = existingClient.id;
+        if (!existingClient.owner_user_id) {
+          const { error: claimErr } = await supabaseAdmin
+            .from("clients")
+            .update({
+              company_name: data.companyName.trim(),
+              owner_user_id: userId,
+              is_active: true,
+            })
+            .eq("id", clientId);
+          if (claimErr) throw new Error(claimErr.message);
+        }
+      } else if (existingClient) {
+        throw new Error(
+          "An account with this email already has a workspace under a different owner.",
+        );
+      } else {
+        const { data: newClient, error: clientErr } = await supabaseAdmin
+          .from("clients")
+          .insert({
+            company_name: data.companyName.trim(),
+            email: lookupEmail,
+            owner_user_id: userId,
+            is_active: true,
+          })
+          .select("id")
+          .single();
+        if (clientErr) throw new Error(clientErr.message);
+        clientId = newClient.id as string;
+      }
+    } else {
+      const { data: newClient, error: clientErr } = await supabaseAdmin
+        .from("clients")
+        .insert({
+          company_name: data.companyName.trim(),
+          email: null,
+          owner_user_id: userId,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+      if (clientErr) throw new Error(clientErr.message);
+      clientId = newClient.id as string;
+    }
+
+    const profileUpdate: Record<string, unknown> = { role: "admin", client_id: clientId };
     if (data.phone) profileUpdate["phone"] = data.phone;
 
     const { error: promoteErr } = await supabaseAdmin
@@ -112,7 +163,7 @@ export const completeOnboarding = createServerFn({ method: "POST" })
 
     return {
       status: "created_client" as const,
-      clientId: newClient.id as string,
+      clientId,
       role: "admin" as const,
     };
   });
