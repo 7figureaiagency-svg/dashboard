@@ -1,8 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { LogOut, MessageCircleWarning, RefreshCw } from "lucide-react";
-import logoAsset from "@/assets/nextgn-logo.jpg.asset.json";
-
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BudgetTab } from "@/components/crm/budget-tab";
@@ -87,11 +85,6 @@ function Dashboard() {
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-5">
           <div className="flex items-center gap-3">
-            <img
-              src={logoAsset.url}
-              alt="Nexgn Realtors logo"
-              className="h-12 w-auto shrink-0 rounded-md object-contain"
-            />
             <div>
               <h1 className="text-lg font-bold tracking-tight">
                 {client?.company_name || "Nextgn Realtors Admin Panel"}

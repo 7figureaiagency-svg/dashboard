@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import logoAsset from "@/assets/nextgn-logo.jpg.asset.json";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -97,12 +96,7 @@ function AuthPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
       <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
-          <img
-            src={logoAsset.url}
-            alt="Nextgn Realtors logo"
-            className="mx-auto h-14 w-auto rounded-md object-contain"
-          />
-          <CardTitle className="mt-3">Nextgn Realtors Admin Panel</CardTitle>
+          <CardTitle>Nextgn Realtors Admin Panel</CardTitle>
           <CardDescription>
             {mode === "signin" ? "Sign in to continue" : "Create your team account"}
           </CardDescription>

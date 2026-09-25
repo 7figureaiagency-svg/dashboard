@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, MessageCircle, ShieldCheck } from "lucide-react";
 
-import logoAsset from "@/assets/nextgn-logo.jpg.asset.json";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
@@ -124,12 +123,7 @@ function OnboardingPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
       <Card className="w-full max-w-lg">
         <CardHeader className="items-center text-center">
-          <img
-            src={logoAsset.url}
-            alt="Nextgn Realtors logo"
-            className="mx-auto h-14 w-auto rounded-md object-contain"
-          />
-          <CardTitle className="mt-3">Set up your workspace</CardTitle>
+          <CardTitle>Set up your workspace</CardTitle>
           <CardDescription>
             {step === "phone" && "First, let's verify your phone number."}
             {step === "company" && "Tell us about your agency."}

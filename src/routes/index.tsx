@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import logoAsset from "@/assets/nextgn-logo.jpg.asset.json";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -39,12 +38,7 @@ function Landing() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
       <div className="max-w-md text-center">
-        <img
-          src={logoAsset.url}
-          alt="Nextgn Realtors logo"
-          className="mx-auto h-16 w-auto rounded-md object-contain"
-        />
-        <h1 className="mt-6 text-2xl font-bold tracking-tight">Nextgn Realtors Admin Panel</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Nextgn Realtors Admin Panel</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Leads, site visits, team performance and property inventory in one place.
         </p>
