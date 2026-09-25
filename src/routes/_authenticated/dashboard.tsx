@@ -45,7 +45,7 @@ function Dashboard() {
   const [preset, setPreset] = useState<DatePreset>("all");
   const leadsQuery = useLeads();
   const inventoryQuery = useInventory();
-  const { data: me } = useCurrentUser();
+  const { data: me, isFetching: meFetching } = useCurrentUser();
   const { data: executives = [] } = useExecutives();
   const { data: client } = useClient(me?.clientId);
   const signOut = useSignOut();
@@ -56,11 +56,16 @@ function Dashboard() {
 
   // Brand-new sign-ins (no client_id yet, not claimed as an invited
   // executive) need to onboard themselves before they can see a dashboard.
+  // Wait out any in-flight refetch first — right after onboarding finishes,
+  // this query may still be serving a stale cached "role: null" while a
+  // background refetch (triggered by onboarding's invalidateQueries) is
+  // still resolving; redirecting on that stale read is what caused the
+  // dashboard <-> onboarding bounce-loop.
   useEffect(() => {
-    if (me && me.role === null) {
+    if (!meFetching && me && me.role === null) {
       navigate({ to: "/onboarding", replace: true });
     }
-  }, [me, navigate]);
+  }, [me, meFetching, navigate]);
 
   const myExecutiveId = useMemo(
     () => executives.find((e) => e.user_id === me?.id)?.id ?? null,

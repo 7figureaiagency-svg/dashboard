@@ -212,7 +212,13 @@ function OnboardingPage() {
               <Button
                 className="w-full"
                 variant="outline"
-                onClick={() => navigate({ to: "/dashboard", replace: true })}
+                onClick={async () => {
+                  // Make sure the dashboard sees the freshly-set role/client_id
+                  // before it mounts — otherwise it can read a stale cached
+                  // "role: null" and bounce straight back here.
+                  await qc.invalidateQueries({ queryKey: ["current-user"] });
+                  navigate({ to: "/dashboard", replace: true });
+                }}
               >
                 <CheckCircle2 /> Go to dashboard
               </Button>
