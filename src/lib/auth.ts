@@ -25,11 +25,27 @@ export function useCurrentUser() {
       const user = userData.user;
       if (!user) return null;
 
-      const { data: profile } = await supabase
+      let { data: profile } = await supabase
         .from("profiles")
         .select("email, full_name, role, client_id, phone, phone_verified")
         .eq("id", user.id)
         .maybeSingle();
+
+      // No role yet: an admin may have added this person as a sales
+      // executive (by email) *after* this account already existed, in which
+      // case the one-time signup trigger never got a chance to link them.
+      // Retry that link now — a no-op if there's genuinely nothing to claim.
+      if (!profile?.role) {
+        const { error: claimError } = await supabase.rpc("claim_executive_seat");
+        if (!claimError) {
+          const { data: refetched } = await supabase
+            .from("profiles")
+            .select("email, full_name, role, client_id, phone, phone_verified")
+            .eq("id", user.id)
+            .maybeSingle();
+          profile = refetched ?? profile;
+        }
+      }
 
       const role: AppRole | null =
         profile?.role === "admin" || profile?.role === "sales_executive" ? profile.role : null;

@@ -489,6 +489,7 @@ export type Database = {
       is_admin: { Args: { _user_id: string }; Returns: boolean };
       current_client_id: { Args: Record<PropertyKey, never>; Returns: string };
       current_executive_id: { Args: Record<PropertyKey, never>; Returns: string };
+      claim_executive_seat: { Args: Record<PropertyKey, never>; Returns: undefined };
     };
     Enums: {
       [_ in never]: never;
