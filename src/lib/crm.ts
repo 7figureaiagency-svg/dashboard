@@ -69,8 +69,23 @@ export const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
 export const LEAD_STATUSES = Object.keys(STATUS_MAP);
 export const PROPERTY_STATES = Object.keys(PROPERTY_STATE_MAP);
 
-export const PROPERTY_CATEGORIES = ["FLAT", "VILLA", "COMMERCIAL", "PLOT", "SHOP", "OFFICE"];
+// SHOP/OFFICE/PLOT are configurations, not top-level categories — a
+// property's category is one of these four; its configuration options then
+// depend on which category is picked (see CONFIGURATIONS_BY_CATEGORY below).
+export const PROPERTY_CATEGORIES = ["FLAT", "VILLA", "COMMERCIAL", "PLOT"];
 export const CONFIGURATIONS = ["1BHK", "2BHK", "3BHK", "4BHK", "5BHK", "SHOP", "OFFICE", "PLOT"];
+
+export const CONFIGURATIONS_BY_CATEGORY: Record<string, string[]> = {
+  FLAT: ["1BHK", "2BHK", "3BHK", "4BHK", "5BHK"],
+  VILLA: ["1BHK", "2BHK", "3BHK", "4BHK", "5BHK"],
+  COMMERCIAL: ["SHOP", "OFFICE"],
+  PLOT: ["PLOT"],
+};
+
+export function configurationsForCategory(category: string): string[] {
+  return CONFIGURATIONS_BY_CATEGORY[category] ?? CONFIGURATIONS;
+}
+
 export const INVENTORY_STATUSES = ["AVAILABLE", "SOLD", "HOLD"];
 export const STOCK_TYPES = ["REGULAR", "CLEARANCE"];
 

@@ -34,7 +34,7 @@ import {
 import { ToneBadge } from "@/components/crm/badges";
 import { useDeleteProperty, uploadBrochure, useExecutives, useSaveProperty } from "@/lib/crm-data";
 import {
-  CONFIGURATIONS,
+  configurationsForCategory,
   formatMoney,
   INVENTORY_STATUSES,
   isValidUrl,
@@ -297,13 +297,26 @@ function PropertyForm({
             <Dropdown
               value={current.property_category}
               options={PROPERTY_CATEGORIES}
-              onChange={(v) => set("property_category", v)}
+              onChange={(v) => {
+                // Configuration options depend on the category (a flat can be
+                // 1-5 BHK, a commercial unit is a Shop/Office, a plot is just
+                // a plot) — reset it whenever the category changes so a
+                // stale, no-longer-valid configuration never gets saved.
+                const validOptions = configurationsForCategory(v);
+                setValues((p) => ({
+                  ...p,
+                  property_category: v,
+                  configuration: validOptions.includes(p.configuration)
+                    ? p.configuration
+                    : (validOptions[0] ?? ""),
+                }));
+              }}
             />
           </Field>
           <Field label="Configuration">
             <Dropdown
               value={current.configuration}
-              options={CONFIGURATIONS}
+              options={configurationsForCategory(current.property_category)}
               onChange={(v) => set("configuration", v)}
             />
           </Field>
