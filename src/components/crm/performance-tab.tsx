@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Handshake,
+  Pencil,
   Plus,
   Trash2,
   Users,
@@ -43,7 +44,8 @@ import {
 } from "@/components/ui/table";
 import { ToneBadge } from "@/components/crm/badges";
 import { ExecutiveDrawer } from "@/components/crm/executive-drawer";
-import { useActivity, useAddExecutive, useDeleteExecutive, useExecutives } from "@/lib/crm-data";
+import { useActivity, useAddExecutive, useDeleteExecutive, useExecutives, useUpdateExecutive } from "@/lib/crm-data";
+import type { Executive } from "@/lib/crm";
 import { buildExecStats, dailyActivity, type ExecStats } from "@/lib/crm-metrics";
 import {
   ACTION_LABELS,
@@ -407,13 +409,31 @@ function TeamManager({ clientId }: { clientId: string | null }) {
   const { data: executives = [] } = useExecutives();
   const add = useAddExecutive();
   const del = useDeleteExecutive();
+  const update = useUpdateExecutive();
+
+  // Add dialog state
   const [open, setOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
-  const submit = () => {
+  // Edit dialog state
+  const [editEx, setEditEx] = useState<Executive | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+
+  // Delete confirm state
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const openEdit = (ex: Executive) => {
+    setEditEx(ex);
+    setEditName(ex.name);
+    setEditEmail(ex.email ?? "");
+    setEditPhone(ex.phone ?? "");
+  };
+
+  const submitAdd = () => {
     if (!clientId) {
       toast.error("No tenant selected");
       return;
@@ -432,6 +452,18 @@ function TeamManager({ clientId }: { clientId: string | null }) {
           setPhone("");
         },
       },
+    );
+  };
+
+  const submitEdit = () => {
+    if (!editEx) return;
+    if (!editName.trim() || !editEmail.trim()) {
+      toast.error("Name and email are required");
+      return;
+    }
+    update.mutate(
+      { id: editEx.id, name: editName, email: editEmail, phone: editPhone },
+      { onSuccess: () => setEditEx(null) },
     );
   };
 
@@ -469,6 +501,9 @@ function TeamManager({ clientId }: { clientId: string | null }) {
                 tone={ex.user_id ? "green" : "yellow"}
                 label={ex.user_id ? "Active" : "Invited — awaiting first sign-in"}
               />
+              <Button size="sm" variant="outline" onClick={() => openEdit(ex)}>
+                <Pencil /> Edit
+              </Button>
               <Button size="sm" variant="destructive" onClick={() => setDeleteId(ex.id)}>
                 <Trash2 /> Remove
               </Button>
@@ -477,6 +512,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
         ))}
       </CardContent>
 
+      {/* Add dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -503,13 +539,48 @@ function TeamManager({ clientId }: { clientId: string | null }) {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={submit} disabled={add.isPending}>
+            <Button onClick={submitAdd} disabled={add.isPending}>
               Add
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Edit dialog */}
+      <Dialog open={!!editEx} onOpenChange={(v) => !v && setEditEx(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit executive details</DialogTitle>
+            <DialogDescription>
+              Update the name, email, or phone for this sales executive.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Phone (optional)</Label>
+              <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditEx(null)}>
+              Cancel
+            </Button>
+            <Button onClick={submitEdit} disabled={update.isPending}>
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove confirm */}
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

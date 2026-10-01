@@ -287,6 +287,39 @@ export function useDeleteExecutive() {
   });
 }
 
+export function useUpdateExecutive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      name,
+      email,
+      phone,
+    }: {
+      id: string;
+      name: string;
+      email: string;
+      phone?: string;
+    }) => {
+      const { error } = await supabase
+        .from("executives")
+        .update({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          phone: phone?.trim() || null,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["executives"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      toast.success("Executive details updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* Client (tenant) record                                              */
 /* ------------------------------------------------------------------ */
