@@ -201,7 +201,10 @@ export const linkWhatsAppAccount = createServerFn({ method: "POST" })
     }
 
     let accessToken: string | null = null;
+    let accessTokenExpiresAt: string | null = null;
+
     if (META_APP_ID && META_APP_SECRET) {
+      // Step 1: exchange the short-lived OAuth code for an initial token
       try {
         const params = new URLSearchParams({
           client_id: META_APP_ID,
@@ -216,6 +219,36 @@ export const linkWhatsAppAccount = createServerFn({ method: "POST" })
         else console.error("Meta token exchange did not return a token", tokenJson.error);
       } catch (err) {
         console.error("Meta token exchange failed", err);
+      }
+
+      // Step 2: exchange the short-lived token for a long-lived token (~60 days)
+      if (accessToken) {
+        try {
+          const llParams = new URLSearchParams({
+            grant_type: "fb_exchange_token",
+            client_id: META_APP_ID,
+            client_secret: META_APP_SECRET,
+            fb_exchange_token: accessToken,
+          });
+          const llRes = await fetch(
+            `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token?${llParams.toString()}`,
+          );
+          const llJson = (await llRes.json()) as {
+            access_token?: string;
+            expires_in?: number;
+            error?: unknown;
+          };
+          if (llJson.access_token) {
+            accessToken = llJson.access_token;
+            // expires_in is in seconds; default to 60 days if not returned
+            const secondsToExpiry = llJson.expires_in ?? 60 * 24 * 60 * 60;
+            accessTokenExpiresAt = new Date(Date.now() + secondsToExpiry * 1000).toISOString();
+          } else {
+            console.error("Meta long-lived token exchange failed", llJson.error);
+          }
+        } catch (err) {
+          console.error("Meta long-lived token exchange failed", err);
+        }
       }
     }
 
@@ -239,6 +272,7 @@ export const linkWhatsAppAccount = createServerFn({ method: "POST" })
         phone_number_id: data.phoneNumberId ?? null,
         waba_business_id: data.businessId ?? null,
         access_token: accessToken,
+        access_token_expires_at: accessTokenExpiresAt,
         display_phone_number: displayPhoneNumber,
         is_active: true,
         meta_signup_status: accessToken ? "connected" : "connected_pending_token",
@@ -269,4 +303,106 @@ export const linkWhatsAppAccount = createServerFn({ method: "POST" })
     }
 
     return { status: accessToken ? ("connected" as const) : ("connected_pending_token" as const) };
+  });
+
+/**
+ * Clears all WhatsApp credentials for the tenant's `clients` row and disables
+ * the Meta `client_integrations` entry.  Only the tenant admin may call this.
+ */
+export const disconnectWhatsApp = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { clientId: string }) => data)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const userId = context.userId;
+
+    const { data: profile, error: profileErr } = await supabaseAdmin
+      .from("profiles")
+      .select("client_id, role")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profileErr) throw new Error(profileErr.message);
+    if (!profile?.client_id || profile.client_id !== data.clientId || profile.role !== "admin") {
+      throw new Error("You're not authorized to disconnect WhatsApp for this tenant.");
+    }
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("clients")
+      .update({
+        waba_id: null,
+        phone_number_id: null,
+        waba_business_id: null,
+        access_token: null,
+        access_token_expires_at: null,
+        display_phone_number: null,
+        meta_signup_status: "disconnected",
+      })
+      .eq("id", data.clientId);
+    if (updateErr) throw new Error(updateErr.message);
+
+    // Disable (but don't delete) the meta integration row so webhook history is preserved
+    await supabaseAdmin
+      .from("client_integrations")
+      .update({ is_enabled: false })
+      .eq("client_id", data.clientId)
+      .eq("provider", "meta");
+
+    return { status: "disconnected" as const };
+  });
+
+type TestConnectionResult =
+  | { ok: true; displayPhoneNumber: string }
+  | { ok: false; reason: "no_credentials" | "token_invalid" | "number_not_found" | "network_error" };
+
+/**
+ * Probes the Meta Graph API with the tenant's stored credentials to verify
+ * the token and phone number are still live.
+ */
+export const testWhatsAppConnection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { clientId: string }) => data)
+  .handler(async ({ data, context }): Promise<TestConnectionResult> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const userId = context.userId;
+
+    // Any team member (not just admin) may run the test
+    const { data: profile, error: profileErr } = await supabaseAdmin
+      .from("profiles")
+      .select("client_id")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profileErr) throw new Error(profileErr.message);
+    if (!profile?.client_id || profile.client_id !== data.clientId) {
+      throw new Error("Not authorized.");
+    }
+
+    const { data: clientRow } = await supabaseAdmin
+      .from("clients")
+      .select("access_token, phone_number_id")
+      .eq("id", data.clientId)
+      .maybeSingle();
+
+    if (!clientRow?.access_token || !clientRow?.phone_number_id) {
+      return { ok: false, reason: "no_credentials" };
+    }
+
+    try {
+      const res = await fetch(
+        `https://graph.facebook.com/${META_GRAPH_VERSION}/${clientRow.phone_number_id}?fields=display_phone_number&access_token=${clientRow.access_token}`,
+      );
+      const json = (await res.json()) as {
+        display_phone_number?: string;
+        error?: { code?: number; message?: string };
+      };
+      if (json.display_phone_number) {
+        return { ok: true, displayPhoneNumber: json.display_phone_number };
+      }
+      const errCode = json.error?.code;
+      return {
+        ok: false,
+        reason: errCode === 190 ? "token_invalid" : "number_not_found",
+      };
+    } catch {
+      return { ok: false, reason: "network_error" };
+    }
   });

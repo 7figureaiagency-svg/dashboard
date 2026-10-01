@@ -2,7 +2,8 @@
 // NOTE: hand-updated 2026-09-24 to reconcile with the live multi-tenant
 // schema (clients/executives/client_integrations + client_id columns), and
 // again 2026-09-25 to add universal property-detail fields + image gallery
-// columns on `inventory` — regenerate with `supabase gen types typescript`
+// columns on `inventory`, and again 2026-10-01 to add access_token_expires_at
+// and executives.role — regenerate with `supabase gen types typescript`
 // once the CLI is wired up, and diff against this file before overwriting.
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -22,6 +23,7 @@ export type Database = {
           waba_id: string | null;
           phone_number_id: string | null;
           access_token: string | null;
+          access_token_expires_at: string | null;
           display_phone_number: string | null;
           is_active: boolean;
           owner_user_id: string | null;
@@ -38,6 +40,7 @@ export type Database = {
           waba_id?: string | null;
           phone_number_id?: string | null;
           access_token?: string | null;
+          access_token_expires_at?: string | null;
           display_phone_number?: string | null;
           is_active?: boolean;
           owner_user_id?: string | null;
@@ -54,6 +57,7 @@ export type Database = {
           waba_id?: string | null;
           phone_number_id?: string | null;
           access_token?: string | null;
+          access_token_expires_at?: string | null;
           display_phone_number?: string | null;
           is_active?: boolean;
           owner_user_id?: string | null;
@@ -74,6 +78,7 @@ export type Database = {
           phone: string | null;
           email: string | null;
           user_id: string | null;
+          role: string;
           created_at: string;
           updated_at: string;
         };
@@ -85,6 +90,7 @@ export type Database = {
           phone?: string | null;
           email?: string | null;
           user_id?: string | null;
+          role?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -96,6 +102,7 @@ export type Database = {
           phone?: string | null;
           email?: string | null;
           user_id?: string | null;
+          role?: string;
           created_at?: string;
           updated_at?: string;
         };

@@ -1,12 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, MessageCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  MessageCircle,
+  WifiOff,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { ToneBadge } from "@/components/crm/badges";
-import { linkWhatsAppAccount } from "@/lib/onboarding.functions";
+import {
+  disconnectWhatsApp,
+  linkWhatsAppAccount,
+  testWhatsAppConnection,
+} from "@/lib/onboarding.functions";
 import type { Client } from "@/lib/crm";
 
 declare global {
@@ -55,6 +77,13 @@ function loadFacebookSdk(): Promise<void> {
   return fbSdkPromise;
 }
 
+/** Returns the number of whole days until the given ISO timestamp, or null if none. */
+function daysUntil(isoTs: string | null | undefined): number | null {
+  if (!isoTs) return null;
+  const ms = new Date(isoTs).getTime() - Date.now();
+  return Math.floor(ms / 86_400_000);
+}
+
 type SignupPayload = { waba_id?: string; phone_number_id?: string; business_id?: string };
 
 export function WhatsAppConnectCard({
@@ -68,10 +97,24 @@ export function WhatsAppConnectCard({
 }) {
   const qc = useQueryClient();
   const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [testing, setTesting] = useState(false);
   const signupData = useRef<SignupPayload>({});
 
   const configured = !!META_APP_ID && !!META_CONFIG_ID;
-  const connected = !!client?.access_token && !!client?.phone_number_id;
+
+  // Derive connection state
+  const signupStatus = client?.meta_signup_status;
+  const fullyConnected =
+    !!client?.access_token && !!client?.phone_number_id && signupStatus === "connected";
+  const pendingToken =
+    !!client?.phone_number_id && signupStatus === "connected_pending_token";
+  const hasCredentials = fullyConnected || pendingToken;
+
+  // Token expiry
+  const daysRemaining = daysUntil(client?.access_token_expires_at);
+  const expiringSoon = daysRemaining !== null && daysRemaining <= 7 && daysRemaining >= 0;
+  const tokenExpired = daysRemaining !== null && daysRemaining < 0;
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -160,6 +203,43 @@ export function WhatsAppConnectCard({
     }
   };
 
+  const disconnect = async () => {
+    if (!clientId) return;
+    setDisconnecting(true);
+    try {
+      await disconnectWhatsApp({ data: { clientId } });
+      toast.success("WhatsApp account disconnected.");
+      qc.invalidateQueries({ queryKey: ["client", clientId] });
+    } catch (err) {
+      toast.error((err as Error).message || "Couldn't disconnect.");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  const testConnection = async () => {
+    if (!clientId) return;
+    setTesting(true);
+    try {
+      const result = await testWhatsAppConnection({ data: { clientId } });
+      if (result.ok) {
+        toast.success(`Connection live — number confirmed: ${result.displayPhoneNumber}`);
+      } else {
+        const messages: Record<string, string> = {
+          token_invalid: "Token is invalid or expired — reconnect to refresh it.",
+          number_not_found: "Phone number ID not found on this WABA — reconnect to fix it.",
+          no_credentials: "No credentials stored — please connect first.",
+          network_error: "Couldn't reach Meta — check your network.",
+        };
+        toast.error(messages[result.reason] ?? "Connection test failed.");
+      }
+    } catch (err) {
+      toast.error((err as Error).message || "Connection test failed.");
+    } finally {
+      setTesting(false);
+    }
+  };
+
   if (compact) {
     return (
       <Button size="sm" onClick={connect} disabled={connecting}>
@@ -180,22 +260,135 @@ export function WhatsAppConnectCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {connected ? (
+
+        {/* ── Pending-token warning ─────────────────────────────────── */}
+        {pendingToken && (
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/30">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="flex-1">
+              <p className="font-medium text-amber-800 dark:text-amber-300">
+                Token pending — manual setup required
+              </p>
+              <p className="mt-0.5 text-amber-700 dark:text-amber-400">
+                WhatsApp details saved, but a permanent access token hasn't been issued yet. Follow
+                the System User Token steps in <span className="font-mono text-xs">SETUP.md</span>{" "}
+                or reconnect below to complete the setup.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Token expiry warning ──────────────────────────────────── */}
+        {fullyConnected && (expiringSoon || tokenExpired) && (
+          <div
+            className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
+              tokenExpired
+                ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30"
+                : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
+            }`}
+          >
+            <Clock
+              className={`mt-0.5 size-4 shrink-0 ${
+                tokenExpired
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-amber-600 dark:text-amber-400"
+              }`}
+            />
+            <div className="flex-1">
+              <p
+                className={`font-medium ${
+                  tokenExpired
+                    ? "text-red-800 dark:text-red-300"
+                    : "text-amber-800 dark:text-amber-300"
+                }`}
+              >
+                {tokenExpired
+                  ? "Access token has expired"
+                  : `Access token expires in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`}
+              </p>
+              <p
+                className={`mt-0.5 ${
+                  tokenExpired
+                    ? "text-red-700 dark:text-red-400"
+                    : "text-amber-700 dark:text-amber-400"
+                }`}
+              >
+                Reconnect to refresh the token and keep incoming leads flowing.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Connected ────────────────────────────────────────────── */}
+        {hasCredentials ? (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3 text-sm">
-            <CheckCircle2 className="size-5 text-green-600" />
+            {fullyConnected && !expiringSoon && !tokenExpired ? (
+              <CheckCircle2 className="size-5 text-green-600 dark:text-green-400" />
+            ) : (
+              <WifiOff className="size-5 text-amber-500" />
+            )}
             <div className="flex-1">
               <p className="font-medium">{client?.display_phone_number || "Connected number"}</p>
               <p className="text-xs text-muted-foreground">
                 WABA ID: {client?.waba_id || "—"} · Phone number ID:{" "}
                 {client?.phone_number_id || "—"}
+                {client?.access_token_expires_at && daysRemaining !== null && daysRemaining >= 0 && (
+                  <> · Token expires in {daysRemaining}d</>
+                )}
               </p>
             </div>
-            <ToneBadge tone="green" label="Connected" />
-            <Button size="sm" variant="outline" onClick={connect} disabled={connecting}>
-              Reconnect / switch number
-            </Button>
+            {fullyConnected ? (
+              <ToneBadge tone="green" label="Connected" />
+            ) : (
+              <ToneBadge tone="orange" label="Pending token" />
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={testConnection}
+                disabled={testing || !fullyConnected}
+              >
+                {testing ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : null}
+                {testing ? "Testing…" : "Test connection"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={connect} disabled={connecting}>
+                {connecting ? "Connecting…" : "Reconnect / switch number"}
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" disabled={disconnecting}>
+                    {disconnecting ? "Disconnecting…" : "Disconnect"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Disconnect WhatsApp?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will clear your stored WABA credentials and stop new WhatsApp leads from
+                      being routed to your CRM. Existing leads and activity won't be affected. You
+                      can reconnect at any time.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={disconnect}
+                    >
+                      Disconnect
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
         ) : (
+          /* ── Not connected ─────────────────────────────────────── */
           <div className="flex flex-wrap items-center gap-3">
             <Button onClick={connect} disabled={connecting}>
               <MessageCircle className="size-4" />
