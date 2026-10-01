@@ -35,6 +35,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -416,12 +423,14 @@ function TeamManager({ clientId }: { clientId: string | null }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [role, setRole] = useState("sales_executive");
 
   // Edit dialog state
   const [editEx, setEditEx] = useState<Executive | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editRole, setEditRole] = useState("sales_executive");
 
   // Delete confirm state
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -431,6 +440,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
     setEditName(ex.name);
     setEditEmail(ex.email ?? "");
     setEditPhone(ex.phone ?? "");
+    setEditRole((ex as Executive & { role?: string }).role ?? "sales_executive");
   };
 
   const submitAdd = () => {
@@ -443,13 +453,14 @@ function TeamManager({ clientId }: { clientId: string | null }) {
       return;
     }
     add.mutate(
-      { clientId, name: name.trim(), email: email.trim(), phone: phone.trim() },
+      { clientId, name: name.trim(), email: email.trim(), phone: phone.trim(), role },
       {
         onSuccess: () => {
           setOpen(false);
           setName("");
           setEmail("");
           setPhone("");
+          setRole("sales_executive");
         },
       },
     );
@@ -462,7 +473,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
       return;
     }
     update.mutate(
-      { id: editEx.id, name: editName, email: editEmail, phone: editPhone },
+      { id: editEx.id, name: editName, email: editEmail, phone: editPhone, role: editRole },
       { onSuccess: () => setEditEx(null) },
     );
   };
@@ -478,7 +489,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
           </CardDescription>
         </div>
         <Button size="sm" onClick={() => setOpen(true)}>
-          <Plus /> Add executive
+          <Plus /> Add team member
         </Button>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -498,6 +509,10 @@ function TeamManager({ clientId }: { clientId: string | null }) {
             </div>
             <div className="flex items-center gap-2">
               <ToneBadge
+                tone={(ex as Executive & { role?: string }).role === "manager" ? "blue" : "gray"}
+                label={(ex as Executive & { role?: string }).role === "manager" ? "Manager" : "Sales Executive"}
+              />
+              <ToneBadge
                 tone={ex.user_id ? "green" : "yellow"}
                 label={ex.user_id ? "Active" : "Invited — awaiting first sign-in"}
               />
@@ -516,12 +531,24 @@ function TeamManager({ clientId }: { clientId: string | null }) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Add a sales executive</DialogTitle>
+            <DialogTitle>Add team member</DialogTitle>
             <DialogDescription>
               They'll be linked automatically on their first sign-in.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sales_executive">Sales Executive</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label>Name</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -550,12 +577,24 @@ function TeamManager({ clientId }: { clientId: string | null }) {
       <Dialog open={!!editEx} onOpenChange={(v) => !v && setEditEx(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Edit executive details</DialogTitle>
+            <DialogTitle>Edit team member details</DialogTitle>
             <DialogDescription>
-              Update the name, email, or phone for this sales executive.
+              Update the role, name, email, or phone for this team member.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={editRole} onValueChange={setEditRole}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sales_executive">Sales Executive</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label>Name</Label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />

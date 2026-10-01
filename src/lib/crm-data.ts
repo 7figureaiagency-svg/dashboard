@@ -252,6 +252,7 @@ export function useAddExecutive() {
       email: string;
       phone?: string;
       telegram_id?: string;
+      role?: string;
     }) => {
       const { error } = await supabase.from("executives").insert({
         client_id: values.clientId,
@@ -259,6 +260,7 @@ export function useAddExecutive() {
         email: values.email.trim().toLowerCase(),
         phone: values.phone || null,
         telegram_id: values.telegram_id || null,
+        role: values.role || "sales_executive",
       });
       if (error) throw error;
     },
@@ -295,11 +297,13 @@ export function useUpdateExecutive() {
       name,
       email,
       phone,
+      role,
     }: {
       id: string;
       name: string;
       email: string;
       phone?: string;
+      role?: string;
     }) => {
       const { error } = await supabase
         .from("executives")
@@ -307,6 +311,7 @@ export function useUpdateExecutive() {
           name: name.trim(),
           email: email.trim().toLowerCase(),
           phone: phone?.trim() || null,
+          role: role || "sales_executive",
         })
         .eq("id", id);
       if (error) throw error;
