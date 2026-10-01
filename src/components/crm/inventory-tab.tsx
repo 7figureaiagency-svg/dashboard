@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, ImageOff, MapPin, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { FileText, ImageOff, LayoutGrid, LayoutList, MapPin, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -32,6 +32,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { ToneBadge } from "@/components/crm/badges";
 import {
   uploadBrochure,
@@ -143,6 +151,8 @@ const statusTone: Record<string, Tone> = {
   HOLD: "yellow",
 };
 
+type ViewMode = "grid" | "list";
+
 export function InventoryTab({
   properties,
   loading,
@@ -155,19 +165,16 @@ export function InventoryTab({
   const [editing, setEditing] = useState<Draft | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [view, setView] = useState<ViewMode>("grid");
   const del = useDeleteProperty();
 
   const openEdit = (p: Property) => {
     const draft = { ...EMPTY } as unknown as Record<string, unknown>;
     for (const key of Object.keys(EMPTY)) {
-      // Arrays and attribute-derived fields are populated separately below —
-      // the generic loop below only handles plain scalar columns.
       if (key.startsWith("attr_") || key === "amenities" || key === "image_urls") continue;
       const v = (p as unknown as Record<string, unknown>)[key];
       draft[key] = v === null || v === undefined ? "" : String(v);
     }
-    // Rows saved before these columns existed have them as null — fall back
-    // to a sensible default rather than showing an unselected dropdown.
     if (!draft["furnished_status"]) draft["furnished_status"] = "UNFURNISHED";
     if (!draft["listing_type"]) draft["listing_type"] = "SALE";
     if (!draft["transaction_type"]) draft["transaction_type"] = "NEW_BOOKING";
@@ -190,87 +197,210 @@ export function InventoryTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">{properties.length} properties</p>
-        <Button
-          onClick={() => {
-            setIsNew(true);
-            setEditing({ ...EMPTY });
-          }}
-        >
-          <Plus /> Add property
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex rounded-lg border bg-background p-1">
+            <button
+              onClick={() => setView("grid")}
+              className={`rounded-md p-1.5 transition-colors ${view === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              title="Grid view"
+            >
+              <LayoutGrid className="size-4" />
+            </button>
+            <button
+              onClick={() => setView("list")}
+              className={`rounded-md p-1.5 transition-colors ${view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              title="List view"
+            >
+              <LayoutList className="size-4" />
+            </button>
+          </div>
+          <Button
+            onClick={() => {
+              setIsNew(true);
+              setEditing({ ...EMPTY });
+            }}
+          >
+            <Plus /> Add property
+          </Button>
+        </div>
       </div>
 
       {loading && <p className="text-sm text-muted-foreground">Loading inventory…</p>}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {properties.map((p) => (
-          <Card key={p.property_id} className="overflow-hidden">
-            {p.image_urls && p.image_urls.length > 0 ? (
-              <img
-                src={p.image_urls[0]}
-                alt={p.project_name}
-                className="h-40 w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-40 w-full items-center justify-center bg-muted text-muted-foreground">
-                <ImageOff className="size-6" />
-              </div>
-            )}
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-start justify-between gap-2 text-base">
-                <span>{p.project_name}</span>
-                <ToneBadge
-                  tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
-                  label={p.status ?? "—"}
+      {/* ── Grid view ── */}
+      {view === "grid" && (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {properties.map((p) => (
+            <Card key={p.property_id} className="overflow-hidden">
+              {p.image_urls && p.image_urls.length > 0 ? (
+                <img
+                  src={p.image_urls[0]}
+                  alt={p.project_name}
+                  className="h-40 w-full object-cover"
                 />
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                {p.property_category} · {p.configuration || "—"} · {p.location}
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-baseline justify-between">
-                <span className="text-lg font-semibold">{formatMoney(p.price)}</span>
-                <span className="text-muted-foreground">{p.area_sqft ?? "—"} sq.ft</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Stock: {p.stock_type} · {p.possession_status || "Possession N/A"}
-              </p>
-              <div className="rounded-lg bg-muted/60 p-2 text-xs">
-                <p className="font-medium">{p.assigned_executive_name || "No executive"}</p>
-                <p className="text-muted-foreground">
-                  {p.assigned_executive_phone || "—"} · {p.assigned_executive_telegram_id || "—"}
+              ) : (
+                <div className="flex h-40 w-full items-center justify-center bg-muted text-muted-foreground">
+                  <ImageOff className="size-6" />
+                </div>
+              )}
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-start justify-between gap-2 text-base">
+                  <span>{p.project_name}</span>
+                  <ToneBadge
+                    tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
+                    label={p.status ?? "—"}
+                  />
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  {p.property_category} · {p.configuration || "—"} · {p.location}
                 </p>
-                <p className="text-muted-foreground">{p.assigned_executive_email || "—"}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {p.brochure_url && (
-                  <Button asChild size="sm" variant="outline">
-                    <a href={p.brochure_url} target="_blank" rel="noreferrer">
-                      <FileText /> Brochure
-                    </a>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-lg font-semibold">{formatMoney(p.price)}</span>
+                  <span className="text-muted-foreground">{p.area_sqft ?? "—"} sq.ft</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Stock: {p.stock_type} · {p.possession_status || "Possession N/A"}
+                </p>
+                <div className="rounded-lg bg-muted/60 p-2 text-xs">
+                  <p className="font-medium">{p.assigned_executive_name || "No executive"}</p>
+                  <p className="text-muted-foreground">
+                    {p.assigned_executive_phone || "—"} · {p.assigned_executive_telegram_id || "—"}
+                  </p>
+                  <p className="text-muted-foreground">{p.assigned_executive_email || "—"}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {p.brochure_url && (
+                    <Button asChild size="sm" variant="outline">
+                      <a href={p.brochure_url} target="_blank" rel="noreferrer">
+                        <FileText /> Brochure
+                      </a>
+                    </Button>
+                  )}
+                  {p.map_url && (
+                    <Button asChild size="sm" variant="outline">
+                      <a href={p.map_url} target="_blank" rel="noreferrer">
+                        <MapPin /> Map
+                      </a>
+                    </Button>
+                  )}
+                  <Button size="sm" variant="secondary" onClick={() => openEdit(p)}>
+                    <Pencil /> Edit
                   </Button>
-                )}
-                {p.map_url && (
-                  <Button asChild size="sm" variant="outline">
-                    <a href={p.map_url} target="_blank" rel="noreferrer">
-                      <MapPin /> Map
-                    </a>
+                  <Button size="sm" variant="destructive" onClick={() => setDeleteId(p.property_id)}>
+                    <Trash2 /> Delete
                   </Button>
-                )}
-                <Button size="sm" variant="secondary" onClick={() => openEdit(p)}>
-                  <Pencil /> Edit
-                </Button>
-                <Button size="sm" variant="destructive" onClick={() => setDeleteId(p.property_id)}>
-                  <Trash2 /> Delete
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ── List view ── */}
+      {view === "list" && (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Property</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Area</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Executive</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {properties.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                    No properties yet.
+                  </TableCell>
+                </TableRow>
+              )}
+              {properties.map((p) => (
+                <TableRow key={p.property_id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      {p.image_urls && p.image_urls.length > 0 ? (
+                        <img
+                          src={p.image_urls[0]}
+                          alt={p.project_name}
+                          className="size-10 rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                          <ImageOff className="size-4" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-medium leading-tight">{p.project_name}</p>
+                        <p className="text-xs text-muted-foreground">{p.property_id}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm">
+                    {p.property_category} · {p.configuration || "—"}
+                  </TableCell>
+                  <TableCell className="text-sm">{p.location}</TableCell>
+                  <TableCell className="whitespace-nowrap font-semibold">
+                    {formatMoney(p.price)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {p.area_sqft ?? "—"} sq.ft
+                  </TableCell>
+                  <TableCell>
+                    <ToneBadge
+                      tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
+                      label={p.status ?? "—"}
+                    />
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {p.assigned_executive_name || (
+                      <span className="text-muted-foreground">Unassigned</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      {p.brochure_url && (
+                        <Button asChild size="sm" variant="outline">
+                          <a href={p.brochure_url} target="_blank" rel="noreferrer">
+                            <FileText />
+                          </a>
+                        </Button>
+                      )}
+                      {p.map_url && (
+                        <Button asChild size="sm" variant="outline">
+                          <a href={p.map_url} target="_blank" rel="noreferrer">
+                            <MapPin />
+                          </a>
+                        </Button>
+                      )}
+                      <Button size="sm" variant="secondary" onClick={() => openEdit(p)}>
+                        <Pencil />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setDeleteId(p.property_id)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       <PropertyForm
         draft={editing}
@@ -348,11 +478,7 @@ function PropertyForm({
       toast.error("Project name and location are required");
       return;
     }
-    if (!current.assigned_executive_id) {
-      toast.error("Assign a sales executive to this property");
-      return;
-    }
-    if (!isValidUrl(current.map_url)) {
+    if (current.map_url && !isValidUrl(current.map_url)) {
       toast.error("Enter a valid map URL (https://…)");
       return;
     }
@@ -392,7 +518,7 @@ function PropertyForm({
       possession_status: current.possession_status || null,
       brochure_url: current.brochure_url || null,
       map_url: current.map_url || null,
-      assigned_executive_id: current.assigned_executive_id,
+      assigned_executive_id: current.assigned_executive_id || null,
       attributes,
       rera_number: current.rera_number || null,
       carpet_area_sqft: toNumber(current.carpet_area_sqft),
@@ -716,20 +842,21 @@ function PropertyForm({
               onChange={(e) => set("map_url", e.target.value)}
             />
           </Field>
-          <Field label="Assigned sales executive">
+          <Field label="Assigned sales executive (optional)">
             {executives.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 No executives yet — add one from the Team Performance tab first.
               </p>
             ) : (
               <Select
-                {...(current.assigned_executive_id ? { value: current.assigned_executive_id } : {})}
-                onValueChange={(v) => set("assigned_executive_id", v)}
+                value={current.assigned_executive_id || "__none__"}
+                onValueChange={(v) => set("assigned_executive_id", v === "__none__" ? "" : v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select an executive…" />
+                  <SelectValue placeholder="None (unassigned)" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">None (unassigned)</SelectItem>
                   {executives.map((ex) => (
                     <SelectItem key={ex.id} value={ex.id}>
                       {ex.name} {ex.email ? `· ${ex.email}` : ""}

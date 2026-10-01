@@ -443,6 +443,10 @@ function TeamManager({ clientId }: { clientId: string | null }) {
     setEditRole((ex as Executive & { role?: string }).role ?? "sales_executive");
   };
 
+  const hasManager = executives.some(
+    (ex) => (ex as Executive & { role?: string }).role === "manager",
+  );
+
   const submitAdd = () => {
     if (!clientId) {
       toast.error("No tenant selected");
@@ -450,6 +454,10 @@ function TeamManager({ clientId }: { clientId: string | null }) {
     }
     if (!name.trim() || !email.trim()) {
       toast.error("Name and email are required");
+      return;
+    }
+    if (role === "manager" && hasManager) {
+      toast.error("A manager already exists for this team. Only one manager is allowed.");
       return;
     }
     add.mutate(
@@ -470,6 +478,12 @@ function TeamManager({ clientId }: { clientId: string | null }) {
     if (!editEx) return;
     if (!editName.trim() || !editEmail.trim()) {
       toast.error("Name and email are required");
+      return;
+    }
+    const currentRole = (editEx as Executive & { role?: string }).role ?? "sales_executive";
+    const changingToManager = editRole === "manager" && currentRole !== "manager";
+    if (changingToManager && hasManager) {
+      toast.error("A manager already exists for this team. Only one manager is allowed.");
       return;
     }
     update.mutate(
@@ -545,7 +559,9 @@ function TeamManager({ clientId }: { clientId: string | null }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="sales_executive">Sales Executive</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="manager" disabled={hasManager}>
+                    Manager{hasManager ? " (already assigned)" : ""}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -591,7 +607,18 @@ function TeamManager({ clientId }: { clientId: string | null }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="sales_executive">Sales Executive</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem
+                    value="manager"
+                    disabled={
+                      hasManager &&
+                      (editEx as Executive & { role?: string })?.role !== "manager"
+                    }
+                  >
+                    Manager
+                    {hasManager && (editEx as Executive & { role?: string })?.role !== "manager"
+                      ? " (already assigned)"
+                      : ""}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
