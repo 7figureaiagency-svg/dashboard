@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
+import { StatusBadge, ToneBadge } from "@/components/crm/badges";
 import { LeadDrawer } from "@/components/crm/lead-drawer";
 import { ExecutiveDrawer } from "@/components/crm/executive-drawer";
 import { useActivity, useUpdateLead } from "@/lib/crm-data";
@@ -193,10 +193,7 @@ export function LeadsTab({
                   </TableCell>
                   <TableCell className="text-muted-foreground">{lead.phone || "—"}</TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      <StatusBadge value={lead.status} />
-                      <PropertyStateBadge value={lead.property_state} />
-                    </div>
+                    <StatusBadge value={lead.status} />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">

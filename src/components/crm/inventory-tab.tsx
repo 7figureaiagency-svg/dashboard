@@ -544,14 +544,11 @@ function PropertyForm({
         </DialogHeader>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Property ID">
-            <Input
-              value={current.property_id}
-              disabled={!isNew}
-              placeholder="Auto-generated if blank"
-              onChange={(e) => set("property_id", e.target.value)}
-            />
-          </Field>
+          {!isNew && (
+            <Field label="Property ID">
+              <Input value={current.property_id} disabled onChange={() => {}} />
+            </Field>
+          )}
           <Field label="Project name">
             <Input
               value={current.project_name}

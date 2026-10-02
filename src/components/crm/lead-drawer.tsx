@@ -7,6 +7,7 @@ import {
   History,
   MessageSquareText,
   Phone,
+  RotateCcw,
   Save,
   Trash2,
   UserCheck,
@@ -23,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -89,6 +91,21 @@ function PickOne({
   );
 }
 
+function formatDateIST(value: string | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  }).format(d);
+}
+
 export function LeadDrawer({
   lead,
   open,
@@ -107,7 +124,6 @@ export function LeadDrawer({
     Array.from(new Set(vals.filter((v): v is string => !!v))).sort();
   const locations = uniq(inventory.map((p) => p.location));
   const configurations = uniq(inventory.map((p) => p.configuration));
-  const projects = uniq(inventory.map((p) => p.project_name));
   const [visitDate, setVisitDate] = useState("");
   const [visitTime, setVisitTime] = useState("");
   const [dropOpen, setDropOpen] = useState(false);
@@ -116,6 +132,19 @@ export function LeadDrawer({
 
   if (!lead) return null;
   const dropped = lead.status === "NOT_INTERESTED";
+
+  // Fix #4: filter projects by currently selected location + property_type
+  const activeLocation = (profile.location !== undefined ? profile.location : lead.location) as string | undefined;
+  const activePropType = (profile.property_type !== undefined ? profile.property_type : lead.property_type) as string | undefined;
+  const projects = uniq(
+    inventory
+      .filter((p) => {
+        if (activeLocation && p.location !== activeLocation) return false;
+        if (activePropType && p.configuration !== activePropType) return false;
+        return true;
+      })
+      .map((p) => p.project_name),
+  );
   const notes = String(
     (profile.executive_notes !== undefined ? profile.executive_notes : lead.executive_notes) ?? "",
   ).trim();
@@ -143,7 +172,8 @@ export function LeadDrawer({
         <div className="space-y-6 px-4 pb-10">
           {dropped && (
             <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-              This lead is dropped. Actions are disabled.
+              This lead is dropped. Most actions are disabled — use <strong>Revert Lead</strong>{" "}
+              below to reactivate.
             </p>
           )}
 
@@ -158,74 +188,88 @@ export function LeadDrawer({
 
           <Separator />
 
-          <section className="space-y-2">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Bot className="size-4" /> AI activity &amp; follow-ups
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              What the automated workflow has done on this lead so far — reflects current state, not
-              a message-by-message log, since the bot writes straight to the database.
-            </p>
-            <ul className="space-y-2">
-              {buildAiActivity(lead).map((event) => (
-                <li
-                  key={event.key}
-                  className="flex flex-wrap items-start justify-between gap-2 rounded-lg border bg-card p-2.5"
-                >
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">{event.label}</p>
-                    {event.detail && (
-                      <p className="text-xs text-muted-foreground">{event.detail}</p>
-                    )}
-                    {event.timestamp && (
-                      <p className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</p>
-                    )}
-                  </div>
-                  <ToneBadge
-                    label={event.done ? "Done" : "Pending"}
-                    tone={event.done ? event.tone : "gray"}
-                  />
-                </li>
-              ))}
-            </ul>
-          </section>
+          <Tabs defaultValue="ai">
+            <TabsList className="w-full">
+              <TabsTrigger value="ai" className="flex flex-1 items-center gap-1.5">
+                <Bot className="size-3.5" /> AI activity &amp; follow-ups
+              </TabsTrigger>
+              <TabsTrigger value="exec" className="flex flex-1 items-center gap-1.5">
+                <History className="size-3.5" /> Sales Executive actions
+              </TabsTrigger>
+            </TabsList>
 
-          {activity.length > 0 && (
-            <>
-              <Separator />
-              <section className="space-y-2">
-                <h3 className="flex items-center gap-2 text-sm font-semibold">
-                  <History className="size-4" /> Executive actions
-                </h3>
-                <ul className="space-y-2">
+            <TabsContent value="ai" className="mt-3 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                What the automated workflow has done on this lead so far — reflects current state,
+                not a message-by-message log.
+              </p>
+              <ul className="space-y-2">
+                {buildAiActivity(lead).map((event) => (
+                  <li
+                    key={event.key}
+                    className="flex flex-wrap items-start justify-between gap-2 rounded-lg border bg-card p-2.5"
+                  >
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium">{event.label}</p>
+                      {event.detail && (
+                        <p className="text-xs text-muted-foreground">{event.detail}</p>
+                      )}
+                      {event.timestamp && (
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateIST(event.timestamp)}
+                        </p>
+                      )}
+                    </div>
+                    <ToneBadge
+                      label={event.done ? "Done" : "Pending"}
+                      tone={event.done ? event.tone : "gray"}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </TabsContent>
+
+            <TabsContent value="exec" className="mt-3 space-y-2">
+              {activity.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No executive actions yet.</p>
+              ) : (
+                <ul className="space-y-1.5">
                   {activity
                     .slice()
                     .sort(
-                      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+                      (a, b) =>
+                        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
                     )
                     .map((a) => (
-                      <li key={a.id} className="rounded-lg border bg-card p-2.5 text-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="font-medium">{actionLabel(a.action)}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDate(a.created_at)}
-                          </span>
+                      <li
+                        key={a.id}
+                        className="flex items-start gap-2 rounded-md border bg-card px-3 py-2"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                            <span className="text-sm font-medium">{actionLabel(a.action)}</span>
+                            <span className="text-xs text-muted-foreground">
+                              · {a.executive_name || "Unassigned"}
+                            </span>
+                          </div>
+                          {a.field && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {a.field}: {a.old_value ?? "—"} → {a.new_value ?? "—"}
+                            </p>
+                          )}
+                          {a.note && (
+                            <p className="mt-0.5 text-xs italic text-muted-foreground">{a.note}</p>
+                          )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {a.executive_name || "Unassigned"}
-                          {a.field
-                            ? ` · ${a.field}: ${a.old_value ?? "—"} → ${a.new_value ?? "—"}`
-                            : ""}
-                        </p>
-                        {a.note && (
-                          <p className="mt-1 text-xs italic text-muted-foreground">{a.note}</p>
-                        )}
+                        <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                          {formatDateIST(a.created_at)}
+                        </span>
                       </li>
                     ))}
                 </ul>
-              </section>
-            </>
-          )}
+              )}
+            </TabsContent>
+          </Tabs>
 
           <Separator />
 
@@ -451,13 +495,25 @@ export function LeadDrawer({
 
           <Separator />
 
-          <Button
-            variant="destructive"
-            disabled={dropped || update.isPending}
-            onClick={() => setDropOpen(true)}
-          >
-            <Trash2 /> Drop Lead / Mark Junk
-          </Button>
+          {dropped ? (
+            <Button
+              variant="outline"
+              disabled={update.isPending}
+              onClick={() =>
+                run({ status: "QUALIFYING" }, "Lead reverted to active", "LEAD_REVERTED")
+              }
+            >
+              <RotateCcw /> Revert Lead
+            </Button>
+          ) : (
+            <Button
+              variant="destructive"
+              disabled={update.isPending}
+              onClick={() => setDropOpen(true)}
+            >
+              <Trash2 /> Drop Lead / Mark Junk
+            </Button>
+          )}
         </div>
 
         <AlertDialog open={dropOpen} onOpenChange={setDropOpen}>
