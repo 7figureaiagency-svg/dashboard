@@ -91,20 +91,6 @@ function PickOne({
   );
 }
 
-function formatDateIST(value: string | null | undefined): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: "Asia/Kolkata",
-  }).format(d);
-}
 
 export function LeadDrawer({
   lead,
@@ -216,7 +202,7 @@ export function LeadDrawer({
                       )}
                       {event.timestamp && (
                         <p className="text-xs text-muted-foreground">
-                          {formatDateIST(event.timestamp)}
+                          {formatDate(event.timestamp)}
                         </p>
                       )}
                     </div>
@@ -262,7 +248,7 @@ export function LeadDrawer({
                           )}
                         </div>
                         <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                          {formatDateIST(a.created_at)}
+                          {formatDate(a.created_at)}
                         </span>
                       </li>
                     ))}

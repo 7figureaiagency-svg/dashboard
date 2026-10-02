@@ -162,13 +162,15 @@ export function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString("en-GB", {
+  return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
-  });
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  }).format(d);
 }
 
 export function isValidUrl(value: string): boolean {
