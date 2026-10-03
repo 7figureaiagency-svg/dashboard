@@ -135,8 +135,8 @@ export function IntegrationsTab({
       <WhatsAppConnectCard clientId={clientId} client={client} />
 
       <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-          <div>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <div className="flex-1">
             <CardTitle className="flex items-center gap-2 text-base">
               <Globe2 className="size-4" /> Portal lead webhooks
             </CardTitle>
@@ -146,7 +146,7 @@ export function IntegrationsTab({
               lead here. You can add as many as you need.
             </CardDescription>
           </div>
-          <Button onClick={openAdd}>
+          <Button onClick={openAdd} className="w-full sm:w-auto">
             <Plus /> Add webhook
           </Button>
         </CardHeader>
@@ -301,24 +301,28 @@ function IntegrationRow({
 }) {
   const meta = INTEGRATION_PROVIDERS.find((p) => p.key === row.provider);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3">
+    <div className="flex flex-col gap-2 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <p className="font-medium">{row.label || meta?.label || row.provider}</p>
           <ToneBadge
             tone={row.is_enabled ? "green" : "gray"}
             label={row.is_enabled ? "Active" : "Paused"}
           />
         </div>
-        <p className="truncate text-xs text-muted-foreground">{row.webhook_url || "No URL set"}</p>
+        <p className="mt-0.5 break-all text-xs text-muted-foreground">
+          {row.webhook_url || "No URL set"}
+        </p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Switch checked={row.is_enabled} onCheckedChange={onToggle} aria-label="Toggle webhook" />
         <Button size="sm" variant="secondary" onClick={onEdit}>
-          <Pencil /> Edit
+          <Pencil className="size-3.5" />
+          <span>Edit</span>
         </Button>
         <Button size="sm" variant="destructive" onClick={onDelete}>
-          <Trash2 /> Remove
+          <Trash2 className="size-3.5" />
+          <span>Remove</span>
         </Button>
       </div>
     </div>

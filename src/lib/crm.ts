@@ -545,7 +545,13 @@ const asText = (v: unknown): string | null => {
   return String(v);
 };
 
-/** Build one activity row per meaningful change made by an executive action. */
+/**
+ * Build exactly ONE activity row for an executive action, annotated with the
+ * primary field that changed (the first match in TRACKED order).
+ * Returning a single row per call prevents duplicate entries in the timeline
+ * when an action updates multiple fields simultaneously (e.g. VISIT_DONE sets
+ * both `status` and `property_state`).
+ */
 export function buildActivityRows(
   lead: Lead,
   values: Partial<Lead>,
@@ -560,16 +566,17 @@ export function buildActivityRows(
     action,
     note: (note ?? values.executive_notes ?? null) || null,
   };
-  const rows: ActivityInsert[] = [];
+  // Find the primary (first) field that actually changed and annotate the row.
   for (const t of TRACKED) {
     if (!(t.key in values)) continue;
     const next = asText(values[t.key]);
     const prev = asText(lead[t.key]);
-    if (next === prev) continue;
-    rows.push({ ...base, field: t.label, old_value: prev, new_value: next });
+    if (next !== prev) {
+      return [{ ...base, field: t.label, old_value: prev, new_value: next }];
+    }
   }
-  if (rows.length === 0) rows.push({ ...base });
-  return rows;
+  // No tracked field changed — still record the action with no field annotation.
+  return [{ ...base }];
 }
 
 /* ------------------------------------------------------------------ */

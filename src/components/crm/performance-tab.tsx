@@ -494,15 +494,15 @@ function TeamManager({ clientId }: { clientId: string | null }) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-        <div>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="flex-1">
           <CardTitle className="text-base">Team</CardTitle>
           <CardDescription>
             Add a sales executive's email here — their account is linked to your workspace the
             moment they sign in with that email.
           </CardDescription>
         </div>
-        <Button size="sm" onClick={() => setOpen(true)}>
+        <Button size="sm" onClick={() => setOpen(true)} className="w-full sm:w-auto">
           <Plus /> Add team member
         </Button>
       </CardHeader>
@@ -513,28 +513,30 @@ function TeamManager({ clientId }: { clientId: string | null }) {
         {executives.map((ex) => (
           <div
             key={ex.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card p-3"
+            className="flex flex-col gap-2 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between"
           >
-            <div>
+            <div className="min-w-0">
               <p className="font-medium">{ex.name}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="truncate text-xs text-muted-foreground">
                 {ex.email || "—"} · {ex.phone || "—"}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <ToneBadge
                 tone={(ex as Executive & { role?: string }).role === "manager" ? "blue" : "gray"}
                 label={(ex as Executive & { role?: string }).role === "manager" ? "Manager" : "Sales Executive"}
               />
               <ToneBadge
                 tone={ex.user_id ? "green" : "yellow"}
-                label={ex.user_id ? "Active" : "Invited — awaiting first sign-in"}
+                label={ex.user_id ? "Active" : "Pending sign-in"}
               />
               <Button size="sm" variant="outline" onClick={() => openEdit(ex)}>
-                <Pencil /> Edit
+                <Pencil className="size-3.5" />
+                <span className="hidden sm:inline">Edit</span>
               </Button>
               <Button size="sm" variant="destructive" onClick={() => setDeleteId(ex.id)}>
-                <Trash2 /> Remove
+                <Trash2 className="size-3.5" />
+                <span className="hidden sm:inline">Remove</span>
               </Button>
             </div>
           </div>
