@@ -52,7 +52,10 @@ function AuthPage() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "facebook",
-        options: { redirectTo: `${window.location.origin}/dashboard` },
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+          scopes: "email,public_profile",
+        },
       });
       if (error) throw error;
     } catch (err) {
