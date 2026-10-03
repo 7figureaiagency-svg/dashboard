@@ -63,6 +63,8 @@ export const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   SITE_VISIT_BOOKED: { label: "Site Visit Booked", tone: "green" },
   VISIT_DONE: { label: "Visit Completed", tone: "teal" },
   VISIT_MISSED: { label: "Visit Missed", tone: "orange" },
+  DEAL_WON: { label: "Deal Won", tone: "teal" },
+  COLD: { label: "Gone Cold", tone: "gray" },
   NOT_INTERESTED: { label: "Closed/Dropped", tone: "gray" },
 };
 
@@ -218,6 +220,10 @@ export function contactResolution(lead: Lead): Partial<Lead> {
   return {
     alert_sent_at: null,
     first_human_contact_at: lead.first_human_contact_at ?? now,
+    // Always stamp last_interaction_at — the n8n drip cadence (DRIP_DAY_1/3/7/14/30)
+    // and the 4-hour anti-spam gap both read this field. Without it the bot keeps
+    // firing against leads the executive just acted on.
+    last_interaction_at: now,
     ...(frozen !== null ? { sla_response_minutes: frozen } : {}),
     ...(lead.property_state === "HUMAN_HANDOVER"
       ? {
@@ -343,7 +349,11 @@ export const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
   CALL_NOT_ANSWERED: { label: "Call not answered", tone: "orange" },
   VISIT_BOOKED: { label: "Booked site visit", tone: "blue" },
   VISIT_DONE: { label: "Marked visit done", tone: "teal" },
+  VISIT_MISSED: { label: "Marked visit missed", tone: "orange" },
+  OPTIONS_SHARED: { label: "Shared property options", tone: "blue" },
+  DEAL_WON: { label: "Marked deal won", tone: "teal" },
   LEAD_DROPPED: { label: "Dropped lead", tone: "red" },
+  LEAD_REVERTED: { label: "Reverted lead", tone: "indigo" },
   PROFILE_UPDATED: { label: "Updated lead profile", tone: "indigo" },
   BOT_TOGGLED: { label: "Changed AI bot", tone: "gray" },
   NOTE_ADDED: { label: "Added notes", tone: "yellow" },

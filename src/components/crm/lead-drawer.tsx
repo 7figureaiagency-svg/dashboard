@@ -3,13 +3,16 @@ import {
   AlarmClockOff,
   Bot,
   CalendarCheck,
+  CalendarX,
   CheckCircle2,
   History,
   MessageSquareText,
   Phone,
   RotateCcw,
   Save,
+  Send,
   Trash2,
+  Trophy,
   UserCheck,
 } from "lucide-react";
 
@@ -118,6 +121,9 @@ export function LeadDrawer({
 
   if (!lead) return null;
   const dropped = lead.status === "NOT_INTERESTED";
+  const dealWon = lead.status === "DEAL_WON";
+  // "closed" covers both dropped and deal-won — most actions disabled for both.
+  const closed = dropped || dealWon;
 
   // Fix #4: filter projects by currently selected location + property_type
   const activeLocation = (profile.location !== undefined ? profile.location : lead.location) as string | undefined;
@@ -156,10 +162,11 @@ export function LeadDrawer({
         </SheetHeader>
 
         <div className="space-y-6 px-4 pb-10">
-          {dropped && (
+          {closed && (
             <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-              This lead is dropped. Most actions are disabled — use <strong>Revert Lead</strong>{" "}
-              below to reactivate.
+              {dealWon
+                ? "Deal won — this lead is closed. Use Revert below if you need to reopen it."
+                : "This lead is dropped. Most actions are disabled — use Revert Lead below to reactivate."}
             </p>
           )}
 
@@ -263,13 +270,14 @@ export function LeadDrawer({
             <h3 className="text-sm font-semibold">Quick actions</h3>
             {notice && <p className="text-xs font-medium text-primary">{notice}</p>}
             <div className="grid gap-2 sm:grid-cols-2">
+              {/* ── Always available ── */}
               <Button asChild variant="outline" disabled={!lead.phone}>
                 <a href={`tel:${lead.phone ?? ""}`}>
                   <Phone /> Call Now
                 </a>
               </Button>
               <Button
-                disabled={dropped || update.isPending || !notes}
+                disabled={closed || update.isPending || !notes}
                 onClick={() => {
                   run(
                     {
@@ -285,40 +293,109 @@ export function LeadDrawer({
               >
                 <UserCheck /> Mark Contacted / Takeover Chat
               </Button>
+
+              {/* ── Call not answered: sets last_followup_at (1-msg/day anti-spam) ── */}
               <Button
                 variant="outline"
-                disabled={dropped || update.isPending}
+                disabled={closed || update.isPending}
                 onClick={() => {
                   run(
-                    { followup_count: 0, last_followup_at: new Date().toISOString() },
-                    "Follow-up counter reset",
+                    { last_followup_at: new Date().toISOString() },
+                    "Call not answered — bot follow-up paused for today",
                     "CALL_NOT_ANSWERED",
                   );
-                  setNotice("Follow-up counter reset for tomorrow's drip.");
+                  setNotice("Bot follow-up paused for today.");
                 }}
               >
                 <AlarmClockOff /> Call Not Answered
               </Button>
-              <Button
-                variant="outline"
-                disabled={dropped || update.isPending}
-                onClick={() =>
-                  run(
-                    { status: "VISIT_DONE", property_state: "PROPERTY_SELECTED" },
-                    "Site visit marked done",
-                    "VISIT_DONE",
-                  )
-                }
-              >
-                <CheckCircle2 /> Site Visit Done
-              </Button>
+
+              {/* ── Options Shared: triggers n8n OPTIONS_FEEDBACK drip ── */}
+              {lead.status === "QUALIFIED" && (
+                <Button
+                  variant="outline"
+                  disabled={closed || update.isPending}
+                  onClick={() =>
+                    run(
+                      {
+                        property_state: "PROPERTY_OPTIONS_SENT",
+                        last_interaction_at: new Date().toISOString(),
+                      },
+                      "Property options shared with lead",
+                      "OPTIONS_SHARED",
+                    )
+                  }
+                >
+                  <Send /> Options Shared
+                </Button>
+              )}
+
+              {/* ── Site visit lifecycle buttons (only when a visit is booked) ── */}
+              {lead.status === "SITE_VISIT_BOOKED" && (
+                <>
+                  <Button
+                    variant="outline"
+                    disabled={closed || update.isPending}
+                    onClick={() =>
+                      run(
+                        {
+                          status: "VISIT_DONE",
+                          property_state: "PROPERTY_SELECTED",
+                          last_interaction_at: new Date().toISOString(),
+                        },
+                        "Site visit marked done",
+                        "VISIT_DONE",
+                      )
+                    }
+                  >
+                    <CheckCircle2 /> Site Visit Done
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={closed || update.isPending}
+                    onClick={() =>
+                      run(
+                        {
+                          status: "VISIT_MISSED",
+                          last_interaction_at: new Date().toISOString(),
+                        },
+                        "Site visit marked as missed",
+                        "VISIT_MISSED",
+                      )
+                    }
+                  >
+                    <CalendarX /> Visit Missed
+                  </Button>
+                </>
+              )}
+
+              {/* ── Deal Won: excludes lead from all n8n follow-ups ── */}
+              {!closed && !["NOT_INTERESTED", "DEAL_WON"].includes(lead.status ?? "") && (
+                <Button
+                  variant="outline"
+                  disabled={update.isPending}
+                  onClick={() =>
+                    run(
+                      {
+                        status: "DEAL_WON",
+                        bot_active: false,
+                        last_interaction_at: new Date().toISOString(),
+                      },
+                      "Deal marked as won",
+                      "DEAL_WON",
+                    )
+                  }
+                >
+                  <Trophy /> Deal Won
+                </Button>
+              )}
             </div>
           </section>
 
           <Separator />
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold">Book a site visit</h3>
+            <h3 className="text-sm font-semibold">Book / reschedule site visit</h3>
             {lead.site_visit_datetime && (
               <p className="text-xs">
                 <span className="crm-badge" data-tone="green">
@@ -347,13 +424,14 @@ export function LeadDrawer({
                 />
               </div>
               <Button
-                disabled={dropped || !visitDate || !visitTime || update.isPending}
+                disabled={closed || !visitDate || !visitTime || update.isPending}
                 onClick={() =>
                   run(
                     {
                       site_visit_datetime: `${visitDate} ${visitTime}`,
                       status: "SITE_VISIT_BOOKED",
                       property_state: "SITE_VISIT_BOOKED",
+                      last_interaction_at: new Date().toISOString(),
                     },
                     "Site visit confirmed",
                     "VISIT_BOOKED",
@@ -455,7 +533,7 @@ export function LeadDrawer({
               </div>
             </div>
             <Button
-              disabled={dropped || update.isPending || !notes}
+              disabled={closed || update.isPending || !notes}
               onClick={() =>
                 run(
                   {
@@ -481,25 +559,35 @@ export function LeadDrawer({
 
           <Separator />
 
-          {dropped ? (
-            <Button
-              variant="outline"
-              disabled={update.isPending}
-              onClick={() =>
-                run({ status: "QUALIFYING" }, "Lead reverted to active", "LEAD_REVERTED")
-              }
-            >
-              <RotateCcw /> Revert Lead
-            </Button>
-          ) : (
-            <Button
-              variant="destructive"
-              disabled={update.isPending}
-              onClick={() => setDropOpen(true)}
-            >
-              <Trash2 /> Drop Lead / Mark Junk
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {closed ? (
+              <Button
+                variant="outline"
+                disabled={update.isPending}
+                onClick={() =>
+                  run(
+                    {
+                      status: "QUALIFYING",
+                      bot_active: true,
+                      last_interaction_at: new Date().toISOString(),
+                    },
+                    "Lead reverted to active",
+                    "LEAD_REVERTED",
+                  )
+                }
+              >
+                <RotateCcw /> Revert Lead
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                disabled={update.isPending}
+                onClick={() => setDropOpen(true)}
+              >
+                <Trash2 /> Drop Lead / Mark Junk
+              </Button>
+            )}
+          </div>
         </div>
 
         <AlertDialog open={dropOpen} onOpenChange={setDropOpen}>
