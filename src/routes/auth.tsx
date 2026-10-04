@@ -197,19 +197,19 @@ function AuthPage() {
               </form>
             </div>
           )}
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            By continuing, you agree to our{" "}
+            <Link to="/terms" className="underline hover:text-foreground">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link to="/privacy-policy" className="underline hover:text-foreground">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </CardContent>
       </Card>
-      <p className="mt-6 text-center text-xs text-muted-foreground">
-        By continuing, you agree to our{" "}
-        <Link to="/terms" className="underline hover:text-foreground">
-          Terms of Service
-        </Link>{" "}
-        and{" "}
-        <Link to="/privacy-policy" className="underline hover:text-foreground">
-          Privacy Policy
-        </Link>
-        .
-      </p>
     </main>
   );
 }
