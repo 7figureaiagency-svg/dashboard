@@ -227,6 +227,17 @@ export async function uploadPropertyImages(files: File[], clientId: string): Pro
   return Promise.all(files.map((file) => uploadPropertyImage(file, clientId)));
 }
 
+/** Uploads a company logo to the `client-logos` bucket and returns its public URL. */
+export async function uploadClientLogo(file: File, clientId: string): Promise<string> {
+  const ext = file.name.split(".").pop() ?? "png";
+  const path = `${clientId}/logo.${ext}`;
+  const { error } = await supabase.storage
+    .from("client-logos")
+    .upload(path, file, { contentType: file.type || "image/png", upsert: true });
+  if (error) throw error;
+  return supabase.storage.from("client-logos").getPublicUrl(path).data.publicUrl;
+}
+
 /* ------------------------------------------------------------------ */
 /* Team (executives)                                                   */
 /* ------------------------------------------------------------------ */

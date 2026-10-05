@@ -8,6 +8,7 @@ import {
   MessageCircleWarning,
   RefreshCw,
   Share2,
+  UserCircle,
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { InventoryTab } from "@/components/crm/inventory-tab";
 import { IntegrationsTab } from "@/components/crm/integrations-tab";
 import { LeadsTab } from "@/components/crm/leads-tab";
 import { PerformanceTab } from "@/components/crm/performance-tab";
+import { ProfileTab } from "@/components/crm/profile-tab";
 import { WhatsAppConnectCard } from "@/components/crm/whatsapp-connect";
 import { useClient, useExecutives, useInventory, useLeads } from "@/lib/crm-data";
 import { useCurrentUser, useSignOut } from "@/lib/auth";
@@ -56,6 +58,7 @@ const NAV_ITEMS = [
   { value: "team", label: "Team Performance", icon: LineChart, adminOnly: true },
   { value: "inventory", label: "Inventory", icon: Building2, adminOnly: true },
   { value: "integrations", label: "Lead Sources & WhatsApp", icon: Share2, adminOnly: true },
+  { value: "profile", label: "Profile", icon: UserCircle, adminOnly: false },
 ] as const;
 
 function Dashboard() {
@@ -217,6 +220,9 @@ function Dashboard() {
                   </TabsContent>
                 </>
               )}
+              <TabsContent value="profile" className="mt-0">
+                <ProfileTab />
+              </TabsContent>
             </div>
           </div>
         </Tabs>

@@ -125,14 +125,37 @@ export function LeadDrawer({
   // "closed" covers both dropped and deal-won — most actions disabled for both.
   const closed = dropped || dealWon;
 
-  // Fix #4: filter projects by currently selected location + property_type
+  // Filter projects by all live lead-profile fields: location, property_type, budget, requirement
   const activeLocation = (profile.location !== undefined ? profile.location : lead.location) as string | undefined;
   const activePropType = (profile.property_type !== undefined ? profile.property_type : lead.property_type) as string | undefined;
+  const activeBudget = toNumber(
+    (profile.budget !== undefined ? profile.budget : lead.budget) as never,
+  );
+  const activeRequirement = (
+    profile.requirement !== undefined ? profile.requirement : lead.requirement
+  ) as string | undefined;
+
+  // Map lead requirement → inventory listing_type values
+  const requirementMatch = (listingType: string | null): boolean => {
+    if (!activeRequirement) return true;
+    if (!listingType) return true;
+    const lt = listingType.toLowerCase();
+    if (activeRequirement === "BUY") return lt === "sale" || lt === "for sale" || lt === "buy";
+    if (activeRequirement === "RENT") return lt === "rent" || lt === "for rent" || lt === "lease";
+    return true;
+  };
+
   const projects = uniq(
     inventory
       .filter((p) => {
         if (activeLocation && p.location !== activeLocation) return false;
         if (activePropType && p.configuration !== activePropType) return false;
+        if (!requirementMatch(p.listing_type)) return false;
+        // Budget: show properties at or below budget (allow 20% headroom for negotiable)
+        if (activeBudget && activeBudget > 0) {
+          const ceiling = p.price_negotiable ? p.price * 0.8 : p.price;
+          if (ceiling > activeBudget) return false;
+        }
         return true;
       })
       .map((p) => p.project_name),
@@ -464,7 +487,9 @@ export function LeadDrawer({
                   value={String(field("budget") ?? "")}
                   onChange={(e) => set("budget", e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">{formatMoney(lead.budget)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatMoney(toNumber(field("budget") as never))}
+                </p>
               </div>
               <div className="space-y-1">
                 <Label>Requirement</Label>
