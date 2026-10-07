@@ -121,31 +121,16 @@ export function LeadDrawer({
   const [notice, setNotice] = useState<string | null>(null);
   const [profile, setProfile] = useState<Partial<Lead>>({});
 
-  if (!lead) return null;
-  const dropped = lead.status === "NOT_INTERESTED";
-  const dealWon = lead.status === "DEAL_WON";
-  // "closed" covers both dropped and deal-won — most actions disabled for both.
-  const closed = dropped || dealWon;
-
   // Filter projects by all live lead-profile fields: location, property_type, budget, requirement
-  const activeLocation = (profile.location !== undefined ? profile.location : lead.location) as string | undefined;
-  const activePropType = (profile.property_type !== undefined ? profile.property_type : lead.property_type) as string | undefined;
+  // These must be derived before the hooks below — hooks cannot come after an early return.
+  const activeLocation = (profile.location !== undefined ? profile.location : lead?.location) as string | undefined;
+  const activePropType = (profile.property_type !== undefined ? profile.property_type : lead?.property_type) as string | undefined;
   const activeBudget = toNumber(
-    (profile.budget !== undefined ? profile.budget : lead.budget) as never,
+    (profile.budget !== undefined ? profile.budget : lead?.budget) as never,
   );
   const activeRequirement = (
-    profile.requirement !== undefined ? profile.requirement : lead.requirement
+    profile.requirement !== undefined ? profile.requirement : lead?.requirement
   ) as string | undefined;
-
-  // Map lead requirement → inventory listing_type values
-  const requirementMatch = (listingType: string | null): boolean => {
-    if (!activeRequirement) return true;
-    if (!listingType) return true;
-    const lt = listingType.toLowerCase();
-    if (activeRequirement === "BUY") return lt === "sale" || lt === "for sale" || lt === "buy";
-    if (activeRequirement === "RENT") return lt === "rent" || lt === "for rent" || lt === "lease";
-    return true;
-  };
 
   // Memoised so useEffect below gets a stable reference to compare against.
   const projects = useMemo(
@@ -177,12 +162,29 @@ export function LeadDrawer({
   // When filters change and the currently-selected property is no longer in
   // the filtered list, clear the selection so the dropdown resets to "Select…"
   useEffect(() => {
+    if (!lead) return;
     const currentSel = String(profile.selected_property_name ?? lead.selected_property_name ?? "");
     if (currentSel && projects.length > 0 && !projects.includes(currentSel)) {
       setProfile((p) => ({ ...p, selected_property_name: "" }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects]);
+
+  if (!lead) return null;
+  const dropped = lead.status === "NOT_INTERESTED";
+  const dealWon = lead.status === "DEAL_WON";
+  // "closed" covers both dropped and deal-won — most actions disabled for both.
+  const closed = dropped || dealWon;
+
+  // Map lead requirement → inventory listing_type values
+  const requirementMatch = (listingType: string | null): boolean => {
+    if (!activeRequirement) return true;
+    if (!listingType) return true;
+    const lt = listingType.toLowerCase();
+    if (activeRequirement === "BUY") return lt === "sale" || lt === "for sale" || lt === "buy";
+    if (activeRequirement === "RENT") return lt === "rent" || lt === "for rent" || lt === "lease";
+    return true;
+  };
 
   const notes = String(
     (profile.executive_notes !== undefined ? profile.executive_notes : lead.executive_notes) ?? "",
