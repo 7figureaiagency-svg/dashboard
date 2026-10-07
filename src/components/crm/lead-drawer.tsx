@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlarmClockOff,
   Bot,
@@ -72,19 +72,21 @@ function PickOne({
   options: string[];
   render?: (v: string) => string;
 }) {
-  const list = value && !options.includes(value) ? [value, ...options] : options;
+  // Only pass `value` to Select when it's actually a valid option — if the
+  // current value has been invalidated by a filter change, show placeholder.
+  const validValue = value && options.includes(value) ? value : "";
   return (
-    <Select {...(value ? { value } : {})} onValueChange={onChange}>
+    <Select {...(validValue ? { value: validValue } : {})} onValueChange={onChange}>
       <SelectTrigger>
         <SelectValue placeholder="Select…" />
       </SelectTrigger>
       <SelectContent>
-        {list.length === 0 && (
+        {options.length === 0 && (
           <SelectItem value="__none__" disabled>
             No options
           </SelectItem>
         )}
-        {list.map((o) => (
+        {options.map((o) => (
           <SelectItem key={o} value={o}>
             {render ? render(o) : o}
           </SelectItem>
@@ -145,21 +147,43 @@ export function LeadDrawer({
     return true;
   };
 
-  const projects = uniq(
-    inventory
-      .filter((p) => {
-        if (activeLocation && p.location !== activeLocation) return false;
-        if (activePropType && p.configuration !== activePropType) return false;
-        if (!requirementMatch(p.listing_type)) return false;
-        // Budget: show properties at or below budget (allow 20% headroom for negotiable)
-        if (activeBudget && activeBudget > 0) {
-          const ceiling = p.price_negotiable ? p.price * 0.8 : p.price;
-          if (ceiling > activeBudget) return false;
-        }
-        return true;
-      })
-      .map((p) => p.project_name),
+  // Memoised so useEffect below gets a stable reference to compare against.
+  const projects = useMemo(
+    () =>
+      uniq(
+        inventory
+          .filter((p) => {
+            if (activeLocation && p.location !== activeLocation) return false;
+            if (activePropType && p.configuration !== activePropType) return false;
+            // Map requirement → listing_type inline (requirementMatch closure isn't stable)
+            if (activeRequirement) {
+              const lt = (p.listing_type ?? "").toLowerCase();
+              if (activeRequirement === "BUY" && !(lt === "sale" || lt === "for sale" || lt === "buy")) return false;
+              if (activeRequirement === "RENT" && !(lt === "rent" || lt === "for rent" || lt === "lease")) return false;
+            }
+            // Budget: show properties at or below budget (20% headroom for negotiable)
+            if (activeBudget && activeBudget > 0) {
+              const ceiling = p.price_negotiable ? p.price * 0.8 : p.price;
+              if (ceiling > activeBudget) return false;
+            }
+            return true;
+          })
+          .map((p) => p.project_name),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inventory, activeLocation, activePropType, activeBudget, activeRequirement],
   );
+
+  // When filters change and the currently-selected property is no longer in
+  // the filtered list, clear the selection so the dropdown resets to "Select…"
+  useEffect(() => {
+    const currentSel = String(profile.selected_property_name ?? lead.selected_property_name ?? "");
+    if (currentSel && projects.length > 0 && !projects.includes(currentSel)) {
+      setProfile((p) => ({ ...p, selected_property_name: "" }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
+
   const notes = String(
     (profile.executive_notes !== undefined ? profile.executive_notes : lead.executive_notes) ?? "",
   ).trim();

@@ -24,6 +24,7 @@ import {
   PERIODS,
   actionLabel,
   formatDate,
+  formatMinutes,
   inPeriod,
   timeAgo,
   type Activity,
@@ -107,7 +108,7 @@ export function ExecutiveDrawer({
             <Stat label="Conversion" value={`${stats?.conversion ?? 0}%`} />
             <Stat
               label="Avg response"
-              value={stats?.avgSla === null || stats === undefined ? "—" : `${stats.avgSla} min`}
+              value={stats === undefined ? "—" : formatMinutes(stats.avgSla ?? null)}
             />
             <Stat label="Actions logged" value={stats?.actions ?? 0} />
             <Stat label="Open alerts" value={stats?.openAlerts ?? 0} danger />

@@ -59,6 +59,7 @@ import {
   PERIODS,
   actionLabel,
   inPeriod,
+  formatMinutes,
   slaTone,
   timeAgo,
   type Lead,
@@ -249,7 +250,7 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                         <div className="space-y-1">
                           <ToneBadge
                             tone={slaTone(row.avgSla)}
-                            label={row.avgSla === null ? "No data" : `${row.avgSla} min`}
+                            label={row.avgSla === null ? "No data" : formatMinutes(row.avgSla)}
                           />
                           <p className="text-[11px] text-muted-foreground">
                             {row.fast} fast · {row.ok} ok · {row.slow} slow

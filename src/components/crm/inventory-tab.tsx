@@ -51,6 +51,8 @@ import {
 import {
   AMENITY_OPTIONS,
   COMMERCIAL_ATTRIBUTE_FIELDS,
+  COMMERCIAL_HAS_DIMENSIONS,
+  COMMERCIAL_NO_FURNISHED,
   configurationsForCategory,
   FACING_OPTIONS,
   formatMoney,
@@ -59,6 +61,7 @@ import {
   isValidUrl,
   LISTING_TYPES,
   OWNERSHIP_TYPES,
+  POSSESSION_STATUSES,
   PROPERTY_CATEGORIES,
   STOCK_TYPES,
   toNumber,
@@ -647,37 +650,43 @@ function PropertyForm({
               </span>
             </div>
           </Field>
-          <Field label="Maintenance charges (₹/month)">
-            <Input
-              inputMode="numeric"
-              value={current.maintenance_charges}
-              placeholder="Optional"
-              onChange={(e) => set("maintenance_charges", e.target.value)}
-            />
-          </Field>
-          <Field label="Built-up area (sq.ft)">
+          {current.property_category !== "PLOT" && (
+            <Field label="Maintenance charges (₹/month)">
+              <Input
+                inputMode="numeric"
+                value={current.maintenance_charges}
+                placeholder="Optional"
+                onChange={(e) => set("maintenance_charges", e.target.value)}
+              />
+            </Field>
+          )}
+          <Field label={current.property_category === "PLOT" ? "Plot area (sq.ft)" : "Built-up area (sq.ft)"}>
             <Input
               inputMode="numeric"
               value={current.area_sqft}
               onChange={(e) => set("area_sqft", e.target.value)}
             />
           </Field>
-          <Field label="Carpet area (sq.ft)">
-            <Input
-              inputMode="numeric"
-              value={current.carpet_area_sqft}
-              placeholder="Optional"
-              onChange={(e) => set("carpet_area_sqft", e.target.value)}
-            />
-          </Field>
-          <Field label="Super built-up area (sq.ft)">
-            <Input
-              inputMode="numeric"
-              value={current.super_built_up_area_sqft}
-              placeholder="Optional"
-              onChange={(e) => set("super_built_up_area_sqft", e.target.value)}
-            />
-          </Field>
+          {current.property_category !== "PLOT" && (
+            <Field label="Carpet area (sq.ft)">
+              <Input
+                inputMode="numeric"
+                value={current.carpet_area_sqft}
+                placeholder="Optional"
+                onChange={(e) => set("carpet_area_sqft", e.target.value)}
+              />
+            </Field>
+          )}
+          {current.property_category !== "PLOT" && (
+            <Field label="Super built-up area (sq.ft)">
+              <Input
+                inputMode="numeric"
+                value={current.super_built_up_area_sqft}
+                placeholder="Optional"
+                onChange={(e) => set("super_built_up_area_sqft", e.target.value)}
+              />
+            </Field>
+          )}
           <Field label="Stock type">
             <Dropdown
               value={current.stock_type}
@@ -685,41 +694,59 @@ function PropertyForm({
               onChange={(v) => set("stock_type", v)}
             />
           </Field>
-          <Field label="Listing type">
-            <Dropdown
-              value={current.listing_type}
-              options={LISTING_TYPES}
-              onChange={(v) => set("listing_type", v)}
-            />
-          </Field>
           {current.property_category !== "PLOT" && (
-            <Field label="Furnished status">
+            <Field label="Listing type">
               <Dropdown
-                value={current.furnished_status}
-                options={FURNISHED_STATUSES}
-                onChange={(v) => set("furnished_status", v)}
+                value={current.listing_type}
+                options={LISTING_TYPES}
+                onChange={(v) => set("listing_type", v)}
               />
             </Field>
           )}
+          {current.property_category !== "PLOT" &&
+            !(
+              current.property_category === "COMMERCIAL" &&
+              COMMERCIAL_NO_FURNISHED.has(current.configuration)
+            ) && (
+              <Field label="Furnished status">
+                <Dropdown
+                  value={current.furnished_status}
+                  options={FURNISHED_STATUSES}
+                  onChange={(v) => set("furnished_status", v)}
+                />
+              </Field>
+            )}
           <Field label="Possession status">
-            <Input
+            <Select
               value={current.possession_status}
-              onChange={(e) => set("possession_status", e.target.value)}
-            />
+              onValueChange={(v) => set("possession_status", v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select…" />
+              </SelectTrigger>
+              <SelectContent>
+                {POSSESSION_STATUSES.map((o) => (
+                  <SelectItem key={o} value={o}>
+                    {o.replaceAll("_", " ")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
-          {current.property_category === "COMMERCIAL" && (
-            <>
-              {COMMERCIAL_ATTRIBUTE_FIELDS.map(({ key, label }) => (
-                <Field key={key} label={label}>
-                  <Input
-                    inputMode="decimal"
-                    value={current[ATTRIBUTE_FIELD_TO_DRAFT_KEY[key]]}
-                    onChange={(e) => set(ATTRIBUTE_FIELD_TO_DRAFT_KEY[key], e.target.value)}
-                  />
-                </Field>
-              ))}
-            </>
-          )}
+          {current.property_category === "COMMERCIAL" &&
+            COMMERCIAL_HAS_DIMENSIONS.has(current.configuration) && (
+              <>
+                {COMMERCIAL_ATTRIBUTE_FIELDS.map(({ key, label }) => (
+                  <Field key={key} label={label}>
+                    <Input
+                      inputMode="decimal"
+                      value={current[ATTRIBUTE_FIELD_TO_DRAFT_KEY[key]]}
+                      onChange={(e) => set(ATTRIBUTE_FIELD_TO_DRAFT_KEY[key], e.target.value)}
+                    />
+                  </Field>
+                ))}
+              </>
+            )}
 
           <div className="sm:col-span-2">
             <Field label="Amenities">

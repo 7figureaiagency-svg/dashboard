@@ -80,19 +80,65 @@ export const CONFIGURATIONS = ["1BHK", "2BHK", "3BHK", "4BHK", "5BHK", "SHOP", "
 export const CONFIGURATIONS_BY_CATEGORY: Record<string, string[]> = {
   FLAT: ["1BHK", "2BHK", "3BHK", "4BHK", "5BHK"],
   VILLA: ["1BHK", "2BHK", "3BHK", "4BHK", "5BHK"],
-  COMMERCIAL: ["SHOP", "OFFICE"],
+  COMMERCIAL: [
+    "SHOP",
+    "SHOWROOM",
+    "OFFICE",
+    "CO_WORKING_SPACE",
+    "STUDIO_OFFICE",
+    "RESTAURANT",
+    "HOTEL",
+    "GUEST_HOUSE",
+    "WAREHOUSE",
+    "GODOWN",
+    "INDUSTRIAL_SHED",
+    "FACTORY",
+  ],
   PLOT: ["PLOT"],
 };
+
+/**
+ * Commercial subtypes where furnished_status is not applicable
+ * (industrial/storage/raw-space units).
+ */
+export const COMMERCIAL_NO_FURNISHED = new Set([
+  "WAREHOUSE",
+  "GODOWN",
+  "INDUSTRIAL_SHED",
+  "FACTORY",
+]);
+
+/**
+ * Commercial subtypes where physical dimensions and power supply are
+ * relevant (storage/industrial/production spaces).
+ */
+export const COMMERCIAL_HAS_DIMENSIONS = new Set([
+  "SHOP",
+  "SHOWROOM",
+  "WAREHOUSE",
+  "GODOWN",
+  "INDUSTRIAL_SHED",
+  "FACTORY",
+  "RESTAURANT",
+]);
 
 export function configurationsForCategory(category: string): string[] {
   return CONFIGURATIONS_BY_CATEGORY[category] ?? CONFIGURATIONS;
 }
 
 export const INVENTORY_STATUSES = ["AVAILABLE", "SOLD", "HOLD"];
-export const STOCK_TYPES = ["REGULAR", "CLEARANCE"];
-export const LISTING_TYPES = ["SALE", "RENT", "LEASE"];
+export const STOCK_TYPES = ["REGULAR", "PREMIUM", "DISTRESS", "BANK_AUCTION", "CLEARANCE"];
+export const LISTING_TYPES = ["SALE", "RENT", "LEASE", "PG"];
 export const FURNISHED_STATUSES = ["UNFURNISHED", "SEMI_FURNISHED", "FURNISHED"];
-export const TRANSACTION_TYPES = ["NEW_BOOKING", "RESALE"];
+export const TRANSACTION_TYPES = ["NEW_BOOKING", "RESALE", "UNDER_CONSTRUCTION"];
+export const POSSESSION_STATUSES = [
+  "READY_TO_MOVE",
+  "WITHIN_3_MONTHS",
+  "WITHIN_6_MONTHS",
+  "WITHIN_12_MONTHS",
+  "WITHIN_24_MONTHS",
+  "UNDER_CONSTRUCTION",
+];
 export const FACING_OPTIONS = [
   "NORTH",
   "SOUTH",
@@ -238,6 +284,15 @@ export function contactResolution(lead: Lead): Partial<Lead> {
 export function isUnattendedHotAlert(lead: Lead): boolean {
   if (!lead.alert_sent_at || lead.first_human_contact_at) return false;
   return (Date.now() - new Date(lead.alert_sent_at).getTime()) / 60000 > 30;
+}
+
+/** Formats a minute value as "Xh Ym" when ≥ 60 min, otherwise "X min". */
+export function formatMinutes(mins: number | null): string {
+  if (mins === null) return "—";
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
 export function slaTone(mins: number | null): Tone {
