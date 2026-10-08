@@ -593,7 +593,18 @@ function PropertyForm({
             />
           </Field>
           <Field label="Location">
-            <Input value={current.location} onChange={(e) => set("location", e.target.value)} />
+            <Input
+              value={current.location}
+              onChange={(e) => {
+                const raw = e.target.value;
+                // Normalise to Title Case so "waghodia" and "Waghodia" are never stored differently
+                const titleCase = raw
+                  .split(" ")
+                  .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                  .join(" ");
+                set("location", titleCase);
+              }}
+            />
           </Field>
           <Field label="Status">
             <Dropdown

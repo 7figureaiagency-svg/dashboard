@@ -497,41 +497,13 @@ export function LeadDrawer({
           <section className="space-y-3">
             <h3 className="text-sm font-semibold">Lead profile</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label>Status</Label>
-                <PickOne
-                  value={field("status") ?? ""}
-                  onChange={(v) => set("status", v)}
-                  options={LEAD_STATUSES}
-                  render={(v) => STATUS_MAP[v]?.label ?? v}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="budget">Budget</Label>
-                <Input
-                  id="budget"
-                  value={String(field("budget") ?? "")}
-                  onChange={(e) => set("budget", e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {formatMoney(toNumber(field("budget") as never))}
-                </p>
-              </div>
+              {/* ── Filter funnel: each field narrows Selected property ── */}
               <div className="space-y-1">
                 <Label>Requirement</Label>
                 <PickOne
                   value={field("requirement") ?? ""}
                   onChange={(v) => set("requirement", v)}
                   options={["BUY", "RENT"]}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Purpose</Label>
-                <PickOne
-                  value={field("purpose") ?? ""}
-                  onChange={(v) => set("purpose", v)}
-                  options={["SELF_USE", "INVESTMENT"]}
-                  render={(v) => (v === "SELF_USE" ? "Self use" : "Investment")}
                 />
               </div>
               <div className="space-y-1">
@@ -550,12 +522,39 @@ export function LeadDrawer({
                   options={configurations}
                 />
               </div>
+              <div className="space-y-1">
+                <Label htmlFor="budget">Budget</Label>
+                <Input
+                  id="budget"
+                  value={String(field("budget") ?? "")}
+                  onChange={(e) => set("budget", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {formatMoney(toNumber(field("budget") as never))}
+                </p>
+              </div>
+              {/* ── Result: filtered property list ── */}
               <div className="space-y-1 sm:col-span-2">
-                <Label>Selected property</Label>
+                <Label>
+                  Selected property{" "}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    ({projects.length} available)
+                  </span>
+                </Label>
                 <PickOne
                   value={field("selected_property_name") ?? ""}
                   onChange={(v) => set("selected_property_name", v)}
                   options={projects}
+                />
+              </div>
+              {/* ── Lead metadata ── */}
+              <div className="space-y-1">
+                <Label>Purpose</Label>
+                <PickOne
+                  value={field("purpose") ?? ""}
+                  onChange={(v) => set("purpose", v)}
+                  options={["SELF_USE", "INVESTMENT"]}
+                  render={(v) => (v === "SELF_USE" ? "Self use" : "Investment")}
                 />
               </div>
               <div className="space-y-1">
@@ -564,6 +563,15 @@ export function LeadDrawer({
                   id="timeline"
                   value={field("timeline") ?? ""}
                   onChange={(e) => set("timeline", e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Status</Label>
+                <PickOne
+                  value={field("status") ?? ""}
+                  onChange={(v) => set("status", v)}
+                  options={LEAD_STATUSES}
+                  render={(v) => STATUS_MAP[v]?.label ?? v}
                 />
               </div>
               <div className="space-y-1 sm:col-span-2">
