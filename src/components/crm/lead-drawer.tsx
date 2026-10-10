@@ -53,6 +53,7 @@ import {
   STATUS_MAP,
   actionLabel,
   buildAiActivity,
+  buildLeadSummary,
   contactResolution,
   formatDate,
   formatMoney,
@@ -221,10 +222,10 @@ export function LeadDrawer({
 
           <section className="space-y-2">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <MessageSquareText className="size-4" /> Conversation summary
+              <MessageSquareText className="size-4" /> AI Conversation summary
             </h3>
-            <p className="whitespace-pre-wrap rounded-lg border bg-card p-3 text-sm text-muted-foreground">
-              {lead.summary || "No conversation summary yet."}
+            <p className="whitespace-pre-wrap rounded-lg border bg-card p-3 text-sm text-muted-foreground leading-relaxed">
+              {buildLeadSummary(lead)}
             </p>
           </section>
 
@@ -593,7 +594,18 @@ export function LeadDrawer({
             </div>
             <Button
               disabled={closed || update.isPending || !notes}
-              onClick={() =>
+              onClick={() => {
+                // When selected property changes, auto-assign the executive
+                // who owns that property in the inventory.
+                const selectedName = field("selected_property_name");
+                const matchedProperty = selectedName
+                  ? inventory.find(
+                      (p) =>
+                        p.project_name === selectedName &&
+                        p.assigned_executive_id != null,
+                    )
+                  : null;
+
                 run(
                   {
                     status: field("status"),
@@ -603,14 +615,18 @@ export function LeadDrawer({
                     purpose: field("purpose"),
                     requirement: field("requirement"),
                     timeline: field("timeline"),
-                    selected_property_name: field("selected_property_name"),
+                    selected_property_name: selectedName,
                     executive_notes: notes,
+                    // Re-assign executive to whoever owns the selected property
+                    ...(matchedProperty
+                      ? { assigned_executive_id: matchedProperty.assigned_executive_id }
+                      : {}),
                     ...contactResolution(lead),
                   },
                   "Lead updated successfully",
                   "PROFILE_UPDATED",
-                )
-              }
+                );
+              }}
             >
               <Save /> Save Updates
             </Button>

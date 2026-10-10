@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PropertyStateBadge, StatusBadge } from "@/components/crm/badges";
-import { BUDGET_TIERS, formatMoney, type Lead } from "@/lib/crm";
+import { BUDGET_TIERS, buildLeadSummary, formatMoney, type Lead } from "@/lib/crm";
 
 /** Normalizes a lead's free-text `requirement` (set by the AI parser) into one of the three deal types. */
 type DealType = "BUY" | "RENT" | "LEASE" | "OTHER";
@@ -160,8 +160,8 @@ function LeadMiniCard({ lead }: { lead: Lead }) {
             <ChevronDown className={open ? "rotate-180 transition" : "transition"} /> Summary
           </Button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="whitespace-pre-wrap pt-1 text-sm text-muted-foreground">
-          {lead.summary || "No summary yet."}
+        <CollapsibleContent className="whitespace-pre-wrap pt-1 text-sm text-muted-foreground leading-relaxed">
+          {buildLeadSummary(lead)}
         </CollapsibleContent>
       </Collapsible>
     </div>

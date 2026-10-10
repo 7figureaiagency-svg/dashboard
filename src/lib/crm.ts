@@ -221,6 +221,109 @@ export function formatDate(value: string | null | undefined): string {
   }).format(d);
 }
 
+/**
+ * Builds a Hinglish conversation summary purely from lead column values.
+ * Zero network calls — runs synchronously in the render cycle.
+ */
+export function buildLeadSummary(lead: Lead): string {
+  const name = lead.name?.trim() || "Yeh lead";
+  const firstName = name.split(" ")[0];
+
+  const parts: string[] = [];
+
+  // ── 1. Opening — who & what ─────────────────────────────────────────────
+  const reqLabel =
+    lead.requirement === "BUY"
+      ? "kharidna chahte hain"
+      : lead.requirement === "RENT"
+        ? "rent par lena chahte hain"
+        : null;
+
+  const propLabel = lead.property_type
+    ? lead.property_type.replace(/_/g, " ").toLowerCase()
+    : null;
+
+  if (reqLabel && propLabel) {
+    parts.push(`${firstName} ji ek ${propLabel} ${reqLabel}.`);
+  } else if (propLabel) {
+    parts.push(`${firstName} ji ${propLabel} mein interested hain.`);
+  } else {
+    parts.push(`${firstName} ji property mein interested hain.`);
+  }
+
+  // ── 2. Location ──────────────────────────────────────────────────────────
+  if (lead.location) {
+    parts.push(`Preferred location: ${lead.location}.`);
+  }
+
+  // ── 3. Budget ────────────────────────────────────────────────────────────
+  if (lead.budget && lead.budget > 0) {
+    parts.push(`Budget approximately ${formatMoney(lead.budget)} hai.`);
+  }
+
+  // ── 4. Purpose ───────────────────────────────────────────────────────────
+  if (lead.purpose === "INVESTMENT") {
+    parts.push("Is property ko investment ke liye dekh rahe hain.");
+  } else if (lead.purpose === "SELF_USE") {
+    parts.push("Property apne personal use ke liye chahiye.");
+  }
+
+  // ── 5. Timeline ──────────────────────────────────────────────────────────
+  if (lead.timeline) {
+    parts.push(`Timeline: ${lead.timeline} mein move karna chahte hain.`);
+  }
+
+  // ── 6. Selected property ─────────────────────────────────────────────────
+  if (lead.selected_property_name) {
+    parts.push(`Abhi ${lead.selected_property_name} unki shortlist mein hai.`);
+  }
+
+  // ── 7. Site visit ────────────────────────────────────────────────────────
+  if (lead.site_visit_datetime) {
+    const d = new Date(lead.site_visit_datetime);
+    if (!Number.isNaN(d.getTime())) {
+      const label = new Intl.DateTimeFormat("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Kolkata",
+      }).format(d);
+      parts.push(`Site visit ${label} ke liye scheduled hai.`);
+    }
+  }
+
+  // ── 8. Lead stage / next step ────────────────────────────────────────────
+  const stageHints: Record<string, string> = {
+    NEW: "Lead abhi naya hai — qualify karna baaki hai.",
+    QUALIFYING: "Qualification chal rahi hai — kuch details abhi bhi pending hain.",
+    QUALIFIED: "Lead fully qualified hai — property options share ki ja sakti hain.",
+    SITE_VISIT_BOOKED: "Site visit book ho gayi hai.",
+    NEGOTIATING: "Negotiation phase chal raha hai.",
+    DEAL_WON: "Deal close ho gayi hai — congratulations!",
+    NOT_INTERESTED: "Lead ne abhi interest nahi dikhaya.",
+  };
+  const stageHint = lead.status ? stageHints[lead.status] : null;
+  if (stageHint) parts.push(stageHint);
+
+  // ── 9. Bot / follow-up state ─────────────────────────────────────────────
+  if (lead.bot_active === false) {
+    parts.push("AI bot paused hai — manual follow-up required.");
+  }
+  if (lead.followup_count && lead.followup_count > 0) {
+    parts.push(`AI ne ab tak ${lead.followup_count} follow-up bheje hain.`);
+  }
+
+  // ── 10. Last interaction ─────────────────────────────────────────────────
+  if (lead.last_interaction_at) {
+    parts.push(`Last interaction: ${formatDate(lead.last_interaction_at)}.`);
+  }
+
+  return parts.join(" ");
+}
+
 export function isValidUrl(value: string): boolean {
   if (!value) return true;
   try {
@@ -505,7 +608,7 @@ export function buildAiActivity(lead: Lead): AiActivityEvent[] {
     key: "visit_booked",
     label: "Site visit booked",
     detail: lead.site_visit_datetime
-      ? `Scheduled for ${lead.site_visit_datetime}`
+      ? null
       : "Not booked yet",
     timestamp: lead.site_visit_datetime,
     tone: "green",
