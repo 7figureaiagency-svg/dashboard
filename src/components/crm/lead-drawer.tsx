@@ -224,7 +224,7 @@ export function LeadDrawer({
             <h3 className="flex items-center gap-2 text-sm font-semibold">
               <MessageSquareText className="size-4" /> AI Conversation summary
             </h3>
-            <p className="whitespace-pre-wrap rounded-lg border bg-card p-3 text-sm text-muted-foreground leading-relaxed">
+            <p className="rounded-lg border bg-card p-3 text-sm text-muted-foreground leading-relaxed">
               {buildLeadSummary(lead)}
             </p>
           </section>
@@ -451,7 +451,7 @@ export function LeadDrawer({
                 <span className="crm-badge" data-tone="green">
                   Visit Scheduled
                 </span>{" "}
-                <span className="text-muted-foreground">{lead.site_visit_datetime}</span>
+                <span className="text-muted-foreground">{formatDate(lead.site_visit_datetime)}</span>
               </p>
             )}
             <div className="flex flex-wrap items-end gap-2">
