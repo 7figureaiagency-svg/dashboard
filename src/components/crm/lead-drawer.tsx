@@ -73,18 +73,28 @@ function PickOne({
   options: string[];
   render?: (v: string) => string;
 }) {
-  // Only pass `value` to Select when it's actually a valid option — if the
-  // current value has been invalidated by a filter change, show placeholder.
-  const validValue = value && options.includes(value) ? value : "";
+  // If the current value exists but isn't in the options list (e.g. AI-parsed
+  // free-text that doesn't match inventory exactly), include it so the field
+  // displays the saved value rather than falling back to placeholder.
+  const extraOption = value && !options.includes(value) ? value : null;
+  const allOptions = extraOption ? [extraOption, ...options] : options;
+  // Only pass `value` to Select when it's a known option — prevents stale
+  // selections from persisting after filter changes invalidate them.
+  const validValue = value && allOptions.includes(value) ? value : "";
   return (
     <Select {...(validValue ? { value: validValue } : {})} onValueChange={onChange}>
       <SelectTrigger>
         <SelectValue placeholder="Select…" />
       </SelectTrigger>
       <SelectContent>
-        {options.length === 0 && (
+        {allOptions.length === 0 && (
           <SelectItem value="__none__" disabled>
             No options
+          </SelectItem>
+        )}
+        {extraOption && (
+          <SelectItem key={extraOption} value={extraOption} className="text-muted-foreground italic">
+            {render ? render(extraOption) : extraOption}
           </SelectItem>
         )}
         {options.map((o) => (
