@@ -132,6 +132,12 @@ export function LeadDrawer({
   const [notice, setNotice] = useState<string | null>(null);
   const [profile, setProfile] = useState<Partial<Lead>>({});
 
+  // Reset local edits whenever a different lead is opened so stale profile
+  // values from the previous lead don't bleed into the newly opened one.
+  useEffect(() => {
+    setProfile({});
+  }, [lead?.lead_id]);
+
   // Filter projects by all live lead-profile fields: location, property_type, budget, requirement
   // These must be derived before the hooks below — hooks cannot come after an early return.
   const activeLocation = (profile.location !== undefined ? profile.location : lead?.location) as string | undefined;
