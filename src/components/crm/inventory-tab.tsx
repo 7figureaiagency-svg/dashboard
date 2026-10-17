@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Building2,
   CheckCircle2,
@@ -567,6 +567,7 @@ function OwnerSubmissionsView({
   const [filter, setFilter] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
   const [detailsSubmission, setDetailsSubmission] = useState<PropertySubmission | null>(null);
+  const [editSubmission, setEditSubmission] = useState<PropertySubmission | null>(null);
 
   const { data: submissions = [], isLoading } = usePropertySubmissions();
   const approveMutation = useApprovePropertySubmission();
@@ -844,6 +845,15 @@ function OwnerSubmissionsView({
                         >
                           <Eye className="size-3.5" />
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                          onClick={() => setEditSubmission(s)}
+                          title="Edit submission details"
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -964,6 +974,19 @@ function OwnerSubmissionsView({
                 Lead Ref: {detailsSubmission.lead_id || "—"}
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const toEdit = detailsSubmission;
+                    setDetailsSubmission(null);
+                    setEditSubmission(toEdit);
+                  }}
+                  title="Edit submission details"
+                >
+                  <Pencil className="size-3.5 mr-1.5" />
+                  Edit Details
+                </Button>
                 {detailsSubmission.status !== "CONVERTED_TO_INVENTORY" && (
                   <Button
                     size="sm"
@@ -986,7 +1009,517 @@ function OwnerSubmissionsView({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Edit Submission Dialog */}
+      <EditOwnerSubmissionDialog
+        submission={editSubmission}
+        open={!!editSubmission}
+        onOpenChange={(open) => !open && setEditSubmission(null)}
+      />
     </div>
+  );
+}
+
+function EditOwnerSubmissionDialog({
+  submission,
+  open,
+  onOpenChange,
+}: {
+  submission: PropertySubmission | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const updateMutation = useUpdatePropertySubmission();
+
+  const [form, setForm] = useState({
+    owner_name: "",
+    owner_phone: "",
+    project_name: "",
+    society_name: "",
+    location: "",
+    property_category: "RESIDENTIAL",
+    configuration: "2BHK",
+    transaction_type: "SELL",
+    expected_price: "",
+    expected_rent: "",
+    carpet_area_sqft: "",
+    super_built_up_sqft: "",
+    possession_status: "READY_TO_MOVE",
+    furnishing_status: "UNFURNISHED",
+    notes: "",
+    floor_number: "",
+    total_floors: "",
+    bathrooms: "",
+    balconies: "",
+    parking: "",
+  });
+
+  useEffect(() => {
+    if (submission) {
+      const rawAttrs =
+        typeof submission.attributes === "object" && submission.attributes !== null
+          ? (submission.attributes as Record<string, unknown>)
+          : {};
+
+      setForm({
+        owner_name: submission.owner_name ?? "",
+        owner_phone: submission.owner_phone ?? "",
+        project_name: submission.project_name ?? submission.society_name ?? "",
+        society_name: submission.society_name ?? submission.project_name ?? "",
+        location: submission.location ?? "Vadodara",
+        property_category: submission.property_category ?? "RESIDENTIAL",
+        configuration: submission.configuration ?? "2BHK",
+        transaction_type: submission.transaction_type ?? "SELL",
+        expected_price: submission.expected_price ? String(submission.expected_price) : "",
+        expected_rent: submission.expected_rent ? String(submission.expected_rent) : "",
+        carpet_area_sqft: submission.carpet_area_sqft ? String(submission.carpet_area_sqft) : "",
+        super_built_up_sqft: submission.super_built_up_sqft ? String(submission.super_built_up_sqft) : "",
+        possession_status: submission.possession_status ?? "READY_TO_MOVE",
+        furnishing_status: submission.furnishing_status ?? "UNFURNISHED",
+        notes: submission.notes ?? "",
+        floor_number:
+          rawAttrs.floor_number !== undefined && rawAttrs.floor_number !== null
+            ? String(rawAttrs.floor_number)
+            : "",
+        total_floors:
+          rawAttrs.total_floors !== undefined && rawAttrs.total_floors !== null
+            ? String(rawAttrs.total_floors)
+            : "",
+        bathrooms:
+          rawAttrs.bathrooms !== undefined && rawAttrs.bathrooms !== null
+            ? String(rawAttrs.bathrooms)
+            : "",
+        balconies:
+          rawAttrs.balconies !== undefined && rawAttrs.balconies !== null
+            ? String(rawAttrs.balconies)
+            : "",
+        parking:
+          rawAttrs.parking !== undefined && rawAttrs.parking !== null
+            ? String(rawAttrs.parking)
+            : "",
+      });
+    }
+  }, [submission]);
+
+  const setField = (key: string, val: string) => {
+    setForm((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!submission) return;
+
+    const rawAttrs =
+      typeof submission.attributes === "object" && submission.attributes !== null
+        ? (submission.attributes as Record<string, unknown>)
+        : {};
+
+    const updatedAttrs = {
+      ...rawAttrs,
+      floor_number: form.floor_number.trim() ? Number(form.floor_number) : null,
+      total_floors: form.total_floors.trim() ? Number(form.total_floors) : null,
+      bathrooms: form.bathrooms.trim() ? Number(form.bathrooms) : null,
+      balconies: form.balconies.trim() ? Number(form.balconies) : null,
+      parking: form.parking.trim() ? form.parking.trim() : null,
+      owner_name: form.owner_name.trim() || null,
+      owner_phone: form.owner_phone.trim() || null,
+    };
+
+    const payload: Partial<PropertySubmission> = {
+      owner_name: form.owner_name.trim() || null,
+      owner_phone: form.owner_phone.trim() || null,
+      project_name: form.project_name.trim() || null,
+      society_name: form.society_name.trim() || form.project_name.trim() || null,
+      location: form.location.trim() || null,
+      property_category: form.property_category || "RESIDENTIAL",
+      configuration: form.configuration || null,
+      transaction_type: form.transaction_type || "SELL",
+      expected_price: form.expected_price.trim() ? Number(form.expected_price) : null,
+      expected_rent: form.expected_rent.trim() ? Number(form.expected_rent) : null,
+      carpet_area_sqft: form.carpet_area_sqft.trim() ? Number(form.carpet_area_sqft) : null,
+      super_built_up_sqft: form.super_built_up_sqft.trim() ? Number(form.super_built_up_sqft) : null,
+      possession_status: form.possession_status || null,
+      furnishing_status: form.furnishing_status || null,
+      notes: form.notes.trim() || null,
+      attributes: updatedAttrs as never,
+    };
+
+    try {
+      await updateMutation.mutateAsync({
+        id: submission.id,
+        values: payload,
+      });
+      onOpenChange(false);
+    } catch {
+      // Error is surfaced by mutation toast
+    }
+  };
+
+  const CATEGORY_OPTIONS = ["RESIDENTIAL", "COMMERCIAL", "LAND_PLOT", "FLAT", "VILLA", "PLOT"];
+  const CONFIG_OPTIONS = [
+    "1RK",
+    "1BHK",
+    "2BHK",
+    "3BHK",
+    "4BHK",
+    "5BHK",
+    "PENTHOUSE",
+    "DUPLEX",
+    "VILLA",
+    "SHOP",
+    "SHOWROOM",
+    "OFFICE",
+    "WAREHOUSE",
+    "PLOT",
+    "AGRICULTURAL_LAND",
+  ];
+  const TX_OPTIONS = ["SELL", "RENT", "LEASE"];
+  const POSSESSION_OPTIONS = [
+    "READY_TO_MOVE",
+    "UNDER_CONSTRUCTION",
+    "RESALE",
+    "WITHIN_3_MONTHS",
+    "WITHIN_6_MONTHS",
+  ];
+  const FURNISHING_OPTIONS = ["UNFURNISHED", "SEMI_FURNISHED", "FULLY_FURNISHED"];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="size-4 text-primary" />
+            <span>Edit Owner Property Submission</span>
+          </DialogTitle>
+          <DialogDescription>
+            Update owner contact, project specifications, and expected price before or after verification.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSave} className="space-y-4 pt-1">
+          {/* Section: Owner Information */}
+          <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <User className="size-3.5 text-muted-foreground" />
+              <span>Owner Contact Information</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Owner Name</Label>
+                <Input
+                  value={form.owner_name}
+                  onChange={(e) => setField("owner_name", e.target.value)}
+                  placeholder="e.g. Rajesh Patel"
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Owner Phone</Label>
+                <Input
+                  value={form.owner_phone}
+                  onChange={(e) => setField("owner_phone", e.target.value)}
+                  placeholder="e.g. +91 98765 43210"
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Property Identification & Location */}
+          <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Building2 className="size-3.5 text-muted-foreground" />
+              <span>Property & Locality Details</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Project / Society Name</Label>
+                <Input
+                  value={form.project_name}
+                  onChange={(e) => {
+                    setField("project_name", e.target.value);
+                    setField("society_name", e.target.value);
+                  }}
+                  placeholder="e.g. Nilamber Bellissimo"
+                  className="h-8 text-xs"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Location / Area</Label>
+                <Input
+                  value={form.location}
+                  onChange={(e) => setField("location", e.target.value)}
+                  placeholder="e.g. Waghodia, Vasna, Gotri"
+                  className="h-8 text-xs"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Category</Label>
+                <Select
+                  value={form.property_category}
+                  onValueChange={(val) => setField("property_category", val)}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map((c) => (
+                      <SelectItem key={c} value={c} className="text-xs">
+                        {c.replaceAll("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Configuration</Label>
+                <Select
+                  value={form.configuration}
+                  onValueChange={(val) => setField("configuration", val)}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Config" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONFIG_OPTIONS.map((cfg) => (
+                      <SelectItem key={cfg} value={cfg} className="text-xs">
+                        {cfg.replaceAll("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Transaction Type</Label>
+                <Select
+                  value={form.transaction_type}
+                  onValueChange={(val) => setField("transaction_type", val)}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TX_OPTIONS.map((t) => (
+                      <SelectItem key={t} value={t} className="text-xs">
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Pricing & Area */}
+          <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <span>💰 Commercials & Sizing</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">
+                  Expected Sale Price (₹)
+                  {form.expected_price && Number(form.expected_price) > 0 && (
+                    <span className="ml-1 text-[11px] font-normal text-primary">
+                      ({formatMoney(Number(form.expected_price))})
+                    </span>
+                  )}
+                </Label>
+                <Input
+                  type="number"
+                  value={form.expected_price}
+                  onChange={(e) => setField("expected_price", e.target.value)}
+                  placeholder="e.g. 7500000"
+                  className="h-8 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">
+                  Expected Rent (₹/month)
+                  {form.expected_rent && Number(form.expected_rent) > 0 && (
+                    <span className="ml-1 text-[11px] font-normal text-primary">
+                      ({formatMoney(Number(form.expected_rent))}/mo)
+                    </span>
+                  )}
+                </Label>
+                <Input
+                  type="number"
+                  value={form.expected_rent}
+                  onChange={(e) => setField("expected_rent", e.target.value)}
+                  placeholder="e.g. 25000"
+                  className="h-8 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Carpet Area (sq.ft)</Label>
+                <Input
+                  type="number"
+                  value={form.carpet_area_sqft}
+                  onChange={(e) => setField("carpet_area_sqft", e.target.value)}
+                  placeholder="e.g. 1250"
+                  className="h-8 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Super Built-up Area (sq.ft)</Label>
+                <Input
+                  type="number"
+                  value={form.super_built_up_sqft}
+                  onChange={(e) => setField("super_built_up_sqft", e.target.value)}
+                  placeholder="e.g. 1650"
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Status & Interior Specs */}
+          <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <span>🏗️ Status & Specifications</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Possession Status</Label>
+                <Select
+                  value={form.possession_status}
+                  onValueChange={(val) => setField("possession_status", val)}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Possession" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {POSSESSION_OPTIONS.map((p) => (
+                      <SelectItem key={p} value={p} className="text-xs">
+                        {p.replaceAll("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Furnishing Status</Label>
+                <Select
+                  value={form.furnishing_status}
+                  onValueChange={(val) => setField("furnishing_status", val)}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Furnishing" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FURNISHING_OPTIONS.map((f) => (
+                      <SelectItem key={f} value={f} className="text-xs">
+                        {f.replaceAll("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1">
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Floor</Label>
+                <Input
+                  type="number"
+                  value={form.floor_number}
+                  onChange={(e) => setField("floor_number", e.target.value)}
+                  placeholder="e.g. 4"
+                  className="h-7 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Total Floors</Label>
+                <Input
+                  type="number"
+                  value={form.total_floors}
+                  onChange={(e) => setField("total_floors", e.target.value)}
+                  placeholder="e.g. 10"
+                  className="h-7 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Baths</Label>
+                <Input
+                  type="number"
+                  value={form.bathrooms}
+                  onChange={(e) => setField("bathrooms", e.target.value)}
+                  placeholder="e.g. 3"
+                  className="h-7 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Balconies</Label>
+                <Input
+                  type="number"
+                  value={form.balconies}
+                  onChange={(e) => setField("balconies", e.target.value)}
+                  placeholder="e.g. 2"
+                  className="h-7 text-xs"
+                />
+              </div>
+              <div className="col-span-2 sm:col-span-1 space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Parking</Label>
+                <Input
+                  value={form.parking}
+                  onChange={(e) => setField("parking", e.target.value)}
+                  placeholder="1 Covered"
+                  className="h-7 text-xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Notes */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Realtor Notes / Verification Remarks</Label>
+            <Textarea
+              value={form.notes}
+              onChange={(e) => setField("notes", e.target.value)}
+              placeholder="e.g. Corner flat, East facing, owner open to slight negotiation on token..."
+              rows={3}
+              className="text-xs resize-none"
+            />
+          </div>
+
+          <DialogFooter className="flex items-center justify-between sm:justify-between pt-3 border-t">
+            <span className="text-xs text-muted-foreground">
+              Lead ID: {submission?.lead_id ? `${submission.lead_id.slice(0, 14)}…` : "Direct"}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+                disabled={updateMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={updateMutation.isPending}
+                className="bg-primary text-primary-foreground"
+              >
+                {updateMutation.isPending ? "Saving Changes…" : "Save Changes"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
