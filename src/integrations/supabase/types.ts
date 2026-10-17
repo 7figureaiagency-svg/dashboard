@@ -18,7 +18,13 @@ export type Database = {
       clients: {
         Row: {
           id: string;
-          company_name: string;
+          company_name?: string | null;
+          name?: string | null;
+          city?: string | null;
+          office_address?: string | null;
+          bot_token?: string | null;
+          whatsapp_phone_number_id?: string | null;
+          notification_channel?: string | null;
           email: string | null;
           waba_id: string | null;
           phone_number_id: string | null;
@@ -35,7 +41,13 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          company_name: string;
+          company_name?: string | null;
+          name?: string | null;
+          city?: string | null;
+          office_address?: string | null;
+          bot_token?: string | null;
+          whatsapp_phone_number_id?: string | null;
+          notification_channel?: string | null;
           email?: string | null;
           waba_id?: string | null;
           phone_number_id?: string | null;
@@ -52,7 +64,13 @@ export type Database = {
         };
         Update: {
           id?: string;
-          company_name?: string;
+          company_name?: string | null;
+          name?: string | null;
+          city?: string | null;
+          office_address?: string | null;
+          bot_token?: string | null;
+          whatsapp_phone_number_id?: string | null;
+          notification_channel?: string | null;
           email?: string | null;
           waba_id?: string | null;
           phone_number_id?: string | null;
@@ -195,6 +213,8 @@ export type Database = {
           maintenance_charges: number | null;
           amenities: string[];
           image_urls: string[];
+          landmarks: string[];
+          city: string | null;
           updated_at: string | null;
         };
         Insert: {
@@ -228,6 +248,8 @@ export type Database = {
           maintenance_charges?: number | null;
           amenities?: string[];
           image_urls?: string[];
+          landmarks?: string[];
+          city?: string | null;
           updated_at?: string | null;
         };
         Update: {
@@ -261,6 +283,8 @@ export type Database = {
           maintenance_charges?: number | null;
           amenities?: string[];
           image_urls?: string[];
+          landmarks?: string[];
+          city?: string | null;
           updated_at?: string | null;
         };
         Relationships: [
@@ -347,8 +371,11 @@ export type Database = {
           last_option_ids: Json | null;
           lead_id: string;
           location: string | null;
-          metadata: Json;
+          metadata?: Json;
           name: string | null;
+          first_name?: string | null;
+          state?: string | null;
+          site_visit_at?: string | null;
           phone: string | null;
           property_state: string | null;
           property_type: string | null;
@@ -382,6 +409,9 @@ export type Database = {
           location?: string | null;
           metadata?: Json;
           name?: string | null;
+          first_name?: string | null;
+          state?: string | null;
+          site_visit_at?: string | null;
           phone?: string | null;
           property_state?: string | null;
           property_type?: string | null;
@@ -415,6 +445,9 @@ export type Database = {
           location?: string | null;
           metadata?: Json;
           name?: string | null;
+          first_name?: string | null;
+          state?: string | null;
+          site_visit_at?: string | null;
           phone?: string | null;
           property_state?: string | null;
           property_type?: string | null;
@@ -487,6 +520,156 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      lead_events: {
+        Row: {
+          id: string;
+          client_id: string;
+          lead_id: string;
+          event_type: string;
+          payload: Json | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          lead_id: string;
+          event_type: string;
+          payload?: Json | null;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          lead_id?: string;
+          event_type?: string;
+          payload?: Json | null;
+          created_at?: string | null;
+        };
+        Relationships: [];
+      };
+      site_visits: {
+        Row: {
+          id: string;
+          lead_id: string;
+          client_id: string;
+          property_id: string;
+          executive_id: string | null;
+          scheduled_at: string;
+          status: string | null;
+          reminder_2h_sent: boolean | null;
+          feedback_collected: boolean | null;
+          feedback_notes: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          client_id: string;
+          property_id: string;
+          executive_id?: string | null;
+          scheduled_at: string;
+          status?: string | null;
+          reminder_2h_sent?: boolean | null;
+          feedback_collected?: boolean | null;
+          feedback_notes?: string | null;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          lead_id?: string;
+          client_id?: string;
+          property_id?: string;
+          executive_id?: string | null;
+          scheduled_at?: string;
+          status?: string | null;
+          reminder_2h_sent?: boolean | null;
+          feedback_collected?: boolean | null;
+          feedback_notes?: string | null;
+          created_at?: string | null;
+        };
+        Relationships: [];
+      };
+      property_submissions: {
+        Row: {
+          id: string;
+          client_id: string | null;
+          lead_id: string | null;
+          owner_name: string | null;
+          owner_phone: string | null;
+          property_category: string | null;
+          property_type: string | null;
+          transaction_type: string | null;
+          project_name: string | null;
+          society_name: string | null;
+          location: string | null;
+          configuration: string | null;
+          carpet_area_sqft: number | null;
+          super_built_up_sqft: number | null;
+          expected_price: number | null;
+          expected_rent: number | null;
+          furnishing_status: string | null;
+          possession_status: string | null;
+          status: string | null;
+          images: string[] | null;
+          attributes: Json | null;
+          notes: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          client_id?: string | null;
+          lead_id?: string | null;
+          owner_name?: string | null;
+          owner_phone?: string | null;
+          property_category?: string | null;
+          property_type?: string | null;
+          transaction_type?: string | null;
+          project_name?: string | null;
+          society_name?: string | null;
+          location?: string | null;
+          configuration?: string | null;
+          carpet_area_sqft?: number | null;
+          super_built_up_sqft?: number | null;
+          expected_price?: number | null;
+          expected_rent?: number | null;
+          furnishing_status?: string | null;
+          possession_status?: string | null;
+          status?: string | null;
+          images?: string[] | null;
+          attributes?: Json | null;
+          notes?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          client_id?: string | null;
+          lead_id?: string | null;
+          owner_name?: string | null;
+          owner_phone?: string | null;
+          property_category?: string | null;
+          property_type?: string | null;
+          transaction_type?: string | null;
+          project_name?: string | null;
+          society_name?: string | null;
+          location?: string | null;
+          configuration?: string | null;
+          carpet_area_sqft?: number | null;
+          super_built_up_sqft?: number | null;
+          expected_price?: number | null;
+          expected_rent?: number | null;
+          furnishing_status?: string | null;
+          possession_status?: string | null;
+          status?: string | null;
+          images?: string[] | null;
+          attributes?: Json | null;
+          notes?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
       };
     };
     Views: {

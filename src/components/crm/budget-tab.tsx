@@ -50,7 +50,11 @@ export function BudgetTab({ leads }: { leads: Lead[] }) {
       if (!key) continue;
       const entry = map.get(key) ?? { leads: [], visits: 0 };
       entry.leads.push(l);
-      if (l.status === "SITE_VISIT_BOOKED" || l.property_state === "SITE_VISIT_BOOKED")
+      if (
+        l.status === "SITE_VISIT_BOOKED" ||
+        l.status === "VISIT_BOOKED" ||
+        l.property_state === "SITE_VISIT_BOOKED"
+      )
         entry.visits += 1;
       map.set(key, entry);
     }

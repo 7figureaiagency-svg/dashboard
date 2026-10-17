@@ -15,6 +15,7 @@ import {
   type Lead,
   type Property,
   type PropertyRow,
+  type PropertySubmission,
 } from "@/lib/crm";
 
 const POLL_MS = 30000;
@@ -29,22 +30,79 @@ const POLL_MS = 30000;
 async function fetchExecutivesMap(): Promise<Map<string, ExecutiveLite>> {
   const { data, error } = await supabase
     .from("executives")
-    .select("id,name,email,phone,telegram_id");
-  if (error) throw error;
-  return new Map((data ?? []).map((e) => [e.id, e]));
+    .select("id,name,phone,telegram_id");
+  if (error) {
+    console.warn("fetchExecutivesMap warning:", error);
+    return new Map();
+  }
+  return new Map(
+    (data ?? []).map((e: any) => [
+      e.id,
+      {
+        id: e.id,
+        name: e.name,
+        email: e.email ?? null,
+        phone: e.phone ?? null,
+        telegram_id: e.telegram_id ?? null,
+      },
+    ]),
+  );
 }
 
 export function useActivity() {
   return useQuery({
     queryKey: ["lead_activity"],
     queryFn: async (): Promise<Activity[]> => {
+      // First try lead_activity
       const { data, error } = await supabase
-        .from("lead_activity")
+        .from("lead_activity" as any)
         .select("*")
         .order("created_at", { ascending: false })
         .limit(1000);
-      if (error) throw error;
-      return data ?? [];
+      if (!error && data && data.length > 0) return data as Activity[];
+
+      // Fallback to live database table lead_events
+      const [{ data: events }, { data: leadsData }, execMap] = await Promise.all([
+        supabase
+          .from("lead_events" as any)
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1000),
+        supabase
+          .from("leads")
+          .select("lead_id, first_name, assigned_executive_id"),
+        fetchExecutivesMap(),
+      ]);
+
+      if (!events) return [];
+
+      const leadMap = new Map((leadsData ?? []).map((l: any) => [l.lead_id, l]));
+
+      return events.map((ev: any) => {
+        const payload = ev.payload || {};
+        const lead = leadMap.get(ev.lead_id);
+        const exec = lead?.assigned_executive_id ? execMap.get(lead.assigned_executive_id) : undefined;
+        const noteText =
+          payload.replySent ||
+          payload.replyText ||
+          payload.userText ||
+          (payload.matched_properties ? `Matched: ${payload.matched_properties.join(", ")}` : "") ||
+          payload.pitchHint ||
+          ev.event_type;
+        return {
+          id: ev.id,
+          client_id: ev.client_id,
+          lead_id: ev.lead_id,
+          action: ev.event_type || "ACTIVITY",
+          created_at: ev.created_at,
+          lead_name: lead?.first_name || (payload.name as string) || (payload.userName as string) || null,
+          executive_name: exec?.name || (payload.executive_name as string) || null,
+          field: payload.state ? `state: ${payload.state}` : null,
+          old_value: null,
+          new_value: payload.state || null,
+          note: noteText,
+        } as Activity;
+      });
     },
     refetchInterval: POLL_MS,
     refetchOnWindowFocus: false,
@@ -201,6 +259,157 @@ export function useDeleteProperty() {
   });
 }
 
+export function usePropertySubmissions() {
+  return useQuery({
+    queryKey: ["property_submissions"],
+    queryFn: async (): Promise<PropertySubmission[]> => {
+      const { data, error } = await supabase
+        .from("property_submissions")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.warn("fetch property_submissions warning:", error);
+        return [];
+      }
+      return data ?? [];
+    },
+    refetchInterval: POLL_MS,
+    refetchOnWindowFocus: false,
+    staleTime: POLL_MS,
+  });
+}
+
+export function useApprovePropertySubmission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      submission,
+      clientId,
+    }: {
+      submission: PropertySubmission;
+      clientId?: string | null;
+    }) => {
+      // 1. Generate unique property_id
+      const timestamp = Date.now().toString(36).toUpperCase();
+      const cfgClean = (submission.configuration || "PROP").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+      const propertyId = `OWNER-${cfgClean}-${timestamp}`;
+
+      // 2. Map category and listing type
+      const cat = submission.property_category?.toUpperCase() || "FLAT";
+      const validCategories = ["FLAT", "VILLA", "COMMERCIAL", "PLOT", "LAND"];
+      const propertyCategory = validCategories.includes(cat) ? cat : "FLAT";
+
+      const txType = submission.transaction_type?.toUpperCase() || "SELL";
+      const listingType = txType === "RENT" || txType === "LEASE" ? "RENT" : "SALE";
+
+      const price = Number(
+        listingType === "RENT"
+          ? (submission.expected_rent || submission.expected_price || 0)
+          : (submission.expected_price || submission.expected_rent || 0)
+      );
+
+      const area = submission.carpet_area_sqft
+        ? Number(submission.carpet_area_sqft)
+        : submission.super_built_up_sqft
+        ? Number(submission.super_built_up_sqft)
+        : null;
+
+      // Extract numeric BHK count for inventory.bhk_num
+      const bhkMatch = (submission.configuration || "").match(/\b([1-5])\s*bhk\b/i);
+      const bhk_num = bhkMatch ? Number(bhkMatch[1]) : null;
+
+      // Extract attributes object safely
+      const rawAttrs = typeof submission.attributes === "object" && submission.attributes !== null
+        ? (submission.attributes as Record<string, unknown>)
+        : {};
+
+      // 3. Insert into inventory
+      const { error: insertError } = await supabase.from("inventory").insert({
+        property_id: propertyId,
+        client_id: submission.client_id || clientId || null,
+        project_name: submission.project_name || submission.society_name || "Direct Owner Property",
+        property_category: propertyCategory,
+        configuration: submission.configuration || "2BHK",
+        bhk_num,
+        location: submission.location || "Vadodara",
+        city: "Vadodara",
+        price,
+        area_sqft: area,
+        carpet_area_sqft: submission.carpet_area_sqft ? Number(submission.carpet_area_sqft) : null,
+        super_built_up_area_sqft: submission.super_built_up_sqft ? Number(submission.super_built_up_sqft) : null,
+        status: "AVAILABLE",
+        stock_type: "RESALE",
+        listing_type: listingType,
+        transaction_type: listingType === "RENT" ? "RENTAL" : "RESALE",
+        furnished_status: submission.furnishing_status || "UNFURNISHED",
+        possession_status: submission.possession_status || "READY_TO_MOVE",
+        image_urls: submission.images ?? [],
+        attributes: {
+          ...rawAttrs,
+          floor_number: rawAttrs.floor_number ?? null,
+          total_floors: rawAttrs.total_floors ?? null,
+          bathrooms: rawAttrs.bathrooms ?? null,
+          balconies: rawAttrs.balconies ?? null,
+          parking: rawAttrs.parking ?? null,
+          owner_name: submission.owner_name,
+          owner_phone: submission.owner_phone,
+          lead_id: submission.lead_id,
+          submission_id: submission.id,
+          verified_source: "OWNER_SUBMISSION",
+        },
+      } as never);
+
+      if (insertError) throw insertError;
+
+      // 4. Update property_submissions status
+      const { error: updateError } = await supabase
+        .from("property_submissions")
+        .update({
+          status: "CONVERTED_TO_INVENTORY",
+          updated_at: new Date().toISOString(),
+        } as never)
+        .eq("id", submission.id);
+
+      if (updateError) throw updateError;
+
+      return { propertyId };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["property_submissions"] });
+      toast.success("Owner submission approved and added to Live Inventory!");
+    },
+    onError: (e: Error) => {
+      toast.error(`Approval failed: ${e.message}`);
+    },
+  });
+}
+
+export function useUpdatePropertySubmission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      values,
+    }: {
+      id: string;
+      values: Partial<PropertySubmission>;
+    }) => {
+      const { error } = await supabase
+        .from("property_submissions")
+        .update({ ...values, updated_at: new Date().toISOString() } as never)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["property_submissions"] });
+      toast.success("Submission updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+
 export async function uploadBrochure(file: File, clientId: string): Promise<string> {
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${clientId}/${Date.now()}-${safeName}`;
@@ -260,25 +469,33 @@ export function useAddExecutive() {
     mutationFn: async (values: {
       clientId: string;
       name: string;
-      email: string;
+      email?: string;
       phone?: string;
       telegram_id?: string;
       role?: string;
     }) => {
-      const { error } = await supabase.from("executives").insert({
+      const payload: Record<string, unknown> = {
         client_id: values.clientId,
         name: values.name,
-        email: values.email.trim().toLowerCase(),
         phone: values.phone || null,
         telegram_id: values.telegram_id || null,
         role: values.role || "sales_executive",
-      });
+      };
+      if (values.email) {
+        payload["email"] = values.email.trim().toLowerCase();
+      }
+      let { error } = await supabase.from("executives").insert(payload as any);
+      if (error && error.message?.includes("email")) {
+        delete payload["email"];
+        const res = await supabase.from("executives").insert(payload as any);
+        error = res.error;
+      }
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["executives"] });
       toast.success(
-        "Executive added — they'll be linked automatically the next time they sign in with this email.",
+        "Executive added successfully.",
       );
     },
     onError: (e: Error) => toast.error(e.message),
@@ -312,19 +529,25 @@ export function useUpdateExecutive() {
     }: {
       id: string;
       name: string;
-      email: string;
+      email?: string;
       phone?: string;
       role?: string;
     }) => {
-      const { error } = await supabase
+      const payload: Record<string, unknown> = {
+        name: name.trim(),
+        phone: phone?.trim() || null,
+        role: role || "sales_executive",
+      };
+      if (email) payload["email"] = email.trim().toLowerCase();
+      let { error } = await supabase
         .from("executives")
-        .update({
-          name: name.trim(),
-          email: email.trim().toLowerCase(),
-          phone: phone?.trim() || null,
-          role: role || "sales_executive",
-        })
+        .update(payload as any)
         .eq("id", id);
+      if (error && error.message?.includes("email")) {
+        delete payload["email"];
+        const res = await supabase.from("executives").update(payload as any).eq("id", id);
+        error = res.error;
+      }
       if (error) throw error;
     },
     onSuccess: () => {
@@ -343,15 +566,23 @@ export function useUpdateExecutive() {
 export function useClient(clientId: string | null | undefined) {
   return useQuery({
     queryKey: ["client", clientId],
-    enabled: !!clientId,
+    enabled: true,
     queryFn: async (): Promise<Client | null> => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("id", clientId as string)
-        .maybeSingle();
-      if (error) throw error;
-      return data ?? null;
+      let query = supabase.from("clients").select("*");
+      if (clientId) {
+        query = query.eq("id", clientId);
+      }
+      const { data, error } = await query.limit(1).maybeSingle();
+      if (error) {
+        console.warn("useClient warning:", error);
+        return null;
+      }
+      if (!data) return null;
+      const raw = data as Record<string, unknown>;
+      return {
+        ...data,
+        company_name: (raw.company_name as string) || (raw.name as string) || "Nextgen Realty",
+      } as Client;
     },
     staleTime: 30_000,
   });

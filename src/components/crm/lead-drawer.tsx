@@ -397,7 +397,7 @@ export function LeadDrawer({
               )}
 
               {/* ── Site visit lifecycle buttons (only when a visit is booked) ── */}
-              {lead.status === "SITE_VISIT_BOOKED" && (
+              {(lead.status === "SITE_VISIT_BOOKED" || lead.status === "VISIT_BOOKED") && (
                 <>
                   <Button
                     variant="outline"

@@ -1,5 +1,24 @@
 import { useState } from "react";
-import { FileText, ImageOff, LayoutGrid, LayoutList, MapPin, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import {
+  Building2,
+  CheckCircle2,
+  Eye,
+  FileText,
+  ImageOff,
+  LayoutGrid,
+  LayoutList,
+  MapPin,
+  MessageSquare,
+  Pencil,
+  Phone,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+  User,
+  X,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -41,12 +60,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ToneBadge } from "@/components/crm/badges";
+import { Textarea } from "@/components/ui/textarea";
 import {
   uploadBrochure,
   uploadPropertyImages,
+  useApprovePropertySubmission,
   useDeleteProperty,
   useExecutives,
+  usePropertySubmissions,
   useSaveProperty,
+  useUpdatePropertySubmission,
 } from "@/lib/crm-data";
 import {
   AMENITY_OPTIONS,
@@ -63,10 +86,12 @@ import {
   OWNERSHIP_TYPES,
   POSSESSION_STATUSES,
   PROPERTY_CATEGORIES,
+  PROPERTY_SUBMISSION_STATUS_MAP,
   STOCK_TYPES,
   toNumber,
   TRANSACTION_TYPES,
   type Property,
+  type PropertySubmission,
   type Tone,
 } from "@/lib/crm";
 
@@ -103,6 +128,13 @@ interface Draft {
   maintenance_charges: string;
   amenities: string[];
   image_urls: string[];
+  landmarks_input: string;
+  city: string;
+  floor_number: string;
+  total_floors: string;
+  bathrooms: string;
+  balconies: string;
+  description: string;
 }
 
 const EMPTY: Draft = {
@@ -136,6 +168,13 @@ const EMPTY: Draft = {
   maintenance_charges: "",
   amenities: [],
   image_urls: [],
+  landmarks_input: "",
+  city: "",
+  floor_number: "",
+  total_floors: "",
+  bathrooms: "",
+  balconies: "",
+  description: "",
 };
 
 const ATTRIBUTE_FIELD_TO_DRAFT_KEY: Record<
@@ -156,6 +195,13 @@ const statusTone: Record<string, Tone> = {
 
 type ViewMode = "grid" | "list";
 
+function cleanPhone(phone?: string | null): string {
+  if (!phone) return "";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 10) return `91${digits}`;
+  return digits;
+}
+
 export function InventoryTab({
   properties,
   loading,
@@ -165,11 +211,17 @@ export function InventoryTab({
   loading: boolean;
   clientId: string | null;
 }) {
+  const [activeTab, setActiveTab] = useState<"inventory" | "submissions">("inventory");
   const [editing, setEditing] = useState<Draft | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("grid");
   const del = useDeleteProperty();
+
+  const { data: submissions = [] } = usePropertySubmissions();
+  const pendingSubmissionsCount = submissions.filter(
+    (s) => !s.status || s.status === "PENDING_VERIFICATION",
+  ).length;
 
   const openEdit = (p: Property) => {
     const draft = { ...EMPTY } as unknown as Record<string, unknown>;
@@ -186,6 +238,10 @@ export function InventoryTab({
 
     draft["amenities"] = Array.isArray(p.amenities) ? p.amenities : [];
     draft["image_urls"] = Array.isArray(p.image_urls) ? p.image_urls : [];
+    draft["landmarks_input"] = Array.isArray((p as { landmarks?: string[] }).landmarks)
+      ? ((p as { landmarks?: string[] }).landmarks ?? []).join(", ")
+      : "";
+    draft["city"] = (p as { city?: string | null }).city || "";
 
     const attributes = (p.attributes as Record<string, unknown> | null) ?? {};
     for (const { key } of COMMERCIAL_ATTRIBUTE_FIELDS) {
@@ -194,13 +250,63 @@ export function InventoryTab({
       const v = attributes[key];
       draft[draftKey] = v === null || v === undefined ? "" : String(v);
     }
+    draft["floor_number"] = attributes.floor_number !== undefined && attributes.floor_number !== null ? String(attributes.floor_number) : "";
+    draft["total_floors"] = attributes.total_floors !== undefined && attributes.total_floors !== null ? String(attributes.total_floors) : "";
+    draft["bathrooms"] = attributes.bathrooms !== undefined && attributes.bathrooms !== null ? String(attributes.bathrooms) : "";
+    draft["balconies"] = attributes.balconies !== undefined && attributes.balconies !== null ? String(attributes.balconies) : "";
+    draft["description"] = attributes.description !== undefined && attributes.description !== null ? String(attributes.description) : "";
     setIsNew(false);
     setEditing(draft as unknown as Draft);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Sub-tab segment toggle */}
+      <div className="flex items-center justify-between border-b pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("inventory")}
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              activeTab === "inventory"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <Building2 className="size-4" />
+            <span>Live Inventory ({properties.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("submissions")}
+            className={`relative flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              activeTab === "submissions"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <User className="size-4" />
+            <span>Owner Submissions ({submissions.length})</span>
+            {pendingSubmissionsCount > 0 && (
+              <span
+                className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+                  activeTab === "submissions"
+                    ? "bg-amber-400 text-slate-950 font-bold"
+                    : "bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold"
+                }`}
+              >
+                {pendingSubmissionsCount} new
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {activeTab === "submissions" ? (
+        <OwnerSubmissionsView clientId={clientId} />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">{properties.length} properties</p>
         <div className="flex items-center gap-2">
           {/* View toggle */}
@@ -258,8 +364,14 @@ export function InventoryTab({
                   />
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  {p.property_category} · {p.configuration || "—"} · {p.location}
+                  {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"} · {p.location}
+                  {p.city ? `, ${p.city}` : ""}
                 </p>
+                {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
+                  <p className="line-clamp-1 text-xs text-muted-foreground">
+                    📍 {p.landmarks.join(", ")}
+                  </p>
+                )}
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex items-baseline justify-between">
@@ -350,9 +462,19 @@ export function InventoryTab({
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm">
-                    {p.property_category} · {p.configuration || "—"}
+                    {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"}
                   </TableCell>
-                  <TableCell className="text-sm">{p.location}</TableCell>
+                  <TableCell className="text-sm">
+                    <div>
+                      {p.location}
+                      {p.city ? `, ${p.city}` : ""}
+                    </div>
+                    {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
+                      <div className="line-clamp-1 text-xs text-muted-foreground">
+                        📍 {p.landmarks.slice(0, 2).join(", ")}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap font-semibold">
                     {formatMoney(p.price)}
                   </TableCell>
@@ -404,6 +526,8 @@ export function InventoryTab({
           </Table>
         </div>
       )}
+        </>
+      )}
 
       <PropertyForm
         draft={editing}
@@ -434,6 +558,438 @@ export function InventoryTab({
     </div>
   );
 }
+
+function OwnerSubmissionsView({
+  clientId,
+}: {
+  clientId: string | null;
+}) {
+  const [filter, setFilter] = useState<string>("ALL");
+  const [search, setSearch] = useState<string>("");
+  const [detailsSubmission, setDetailsSubmission] = useState<PropertySubmission | null>(null);
+
+  const { data: submissions = [], isLoading } = usePropertySubmissions();
+  const approveMutation = useApprovePropertySubmission();
+  const updateMutation = useUpdatePropertySubmission();
+
+  const pendingCount = submissions.filter(
+    (s) => !s.status || s.status === "PENDING_VERIFICATION",
+  ).length;
+
+  const convertedCount = submissions.filter(
+    (s) => s.status === "CONVERTED_TO_INVENTORY",
+  ).length;
+
+  const rejectedCount = submissions.filter(
+    (s) => s.status === "REJECTED",
+  ).length;
+
+  const filtered = submissions.filter((s) => {
+    if (filter === "PENDING" && s.status && s.status !== "PENDING_VERIFICATION") return false;
+    if (filter === "CONVERTED" && s.status !== "CONVERTED_TO_INVENTORY") return false;
+    if (filter === "REJECTED" && s.status !== "REJECTED") return false;
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const matchName = s.owner_name?.toLowerCase().includes(q);
+      const matchPhone = s.owner_phone?.toLowerCase().includes(q);
+      const matchProject =
+        s.project_name?.toLowerCase().includes(q) || s.society_name?.toLowerCase().includes(q);
+      const matchLoc = s.location?.toLowerCase().includes(q);
+      const matchConfig = s.configuration?.toLowerCase().includes(q);
+      if (!matchName && !matchPhone && !matchProject && !matchLoc && !matchConfig) return false;
+    }
+    return true;
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Pending alert banner */}
+      {pendingCount > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-300/60 bg-amber-50/70 p-3.5 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="flex size-2 rounded-full bg-amber-500 animate-pulse" />
+            <span className="font-medium">
+              {pendingCount} new owner {pendingCount === 1 ? "submission" : "submissions"} pending verification
+            </span>
+          </div>
+          <p className="text-xs text-amber-700 dark:text-amber-300 hidden sm:block">
+            Review specifications and click <strong>Approve</strong> to automatically publish into live inventory.
+          </p>
+        </div>
+      )}
+
+      {/* Filter and search bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            size="sm"
+            variant={filter === "ALL" ? "default" : "outline"}
+            onClick={() => setFilter("ALL")}
+            className="h-8 text-xs"
+          >
+            All ({submissions.length})
+          </Button>
+          <Button
+            size="sm"
+            variant={filter === "PENDING" ? "default" : "outline"}
+            onClick={() => setFilter("PENDING")}
+            className={`h-8 text-xs ${filter !== "PENDING" && pendingCount > 0 ? "border-amber-400 text-amber-600 dark:text-amber-400" : ""}`}
+          >
+            Pending ({pendingCount})
+          </Button>
+          <Button
+            size="sm"
+            variant={filter === "CONVERTED" ? "default" : "outline"}
+            onClick={() => setFilter("CONVERTED")}
+            className="h-8 text-xs"
+          >
+            Live Inventory ({convertedCount})
+          </Button>
+          <Button
+            size="sm"
+            variant={filter === "REJECTED" ? "default" : "outline"}
+            onClick={() => setFilter("REJECTED")}
+            className="h-8 text-xs"
+          >
+            Rejected ({rejectedCount})
+          </Button>
+        </div>
+
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search owner, project, locality..."
+            className="h-8 pl-8 text-xs"
+          />
+        </div>
+      </div>
+
+      {isLoading && <p className="text-sm text-muted-foreground">Loading owner submissions…</p>}
+
+      {!isLoading && submissions.length === 0 && (
+        <Card className="p-8 text-center">
+          <Building2 className="mx-auto size-10 text-muted-foreground/60 mb-2" />
+          <h3 className="text-base font-medium">No owner submissions yet</h3>
+          <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+            When sellers and landlords send messages like <em>"Mera 3BHK flat bechna hai"</em> or <em>"Shop rent par deni hai"</em>, the AI conversational engine automatically gathers their society, carpet area, and expected price and lists them here for 1-click verification.
+          </p>
+        </Card>
+      )}
+
+      {!isLoading && submissions.length > 0 && filtered.length === 0 && (
+        <Card className="p-6 text-center text-xs text-muted-foreground">
+          No property submissions match the current filter or search criteria.
+        </Card>
+      )}
+
+      {!isLoading && filtered.length > 0 && (
+        <div className="rounded-lg border bg-card overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40">
+                <TableHead className="w-[200px]">Owner</TableHead>
+                <TableHead>Property Specs</TableHead>
+                <TableHead>Area & Price</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((s) => {
+                const isConverted = s.status === "CONVERTED_TO_INVENTORY";
+                const isRejected = s.status === "REJECTED";
+                const isPending = !s.status || s.status === "PENDING_VERIFICATION";
+                const priceDisplay = s.expected_price
+                  ? formatMoney(Number(s.expected_price))
+                  : s.expected_rent
+                  ? `${formatMoney(Number(s.expected_rent))}/mo`
+                  : "Price on request";
+
+                return (
+                  <TableRow key={s.id} className="hover:bg-muted/30">
+                    <TableCell className="align-top">
+                      <div className="font-medium text-sm text-foreground">
+                        {s.owner_name || "Owner"}
+                      </div>
+                      {s.owner_phone && (
+                        <div className="mt-1 flex items-center gap-2 text-xs">
+                          <a
+                            href={`https://wa.me/${cleanPhone(s.owner_phone)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-0.5 text-emerald-600 hover:underline font-mono"
+                            title="Chat on WhatsApp"
+                          >
+                            <MessageSquare className="size-3" />
+                            {s.owner_phone}
+                          </a>
+                          <a
+                            href={`tel:${s.owner_phone}`}
+                            className="text-muted-foreground hover:text-foreground"
+                            title="Call Owner"
+                          >
+                            <Phone className="size-3" />
+                          </a>
+                        </div>
+                      )}
+                      {s.lead_id && (
+                        <div className="mt-1 text-[11px] font-mono text-muted-foreground">
+                          ID: {s.lead_id.length > 15 ? `${s.lead_id.slice(0, 15)}…` : s.lead_id}
+                        </div>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="align-top">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-sm">
+                          {s.project_name || s.society_name || "Direct Owner Listing"}
+                        </span>
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          {s.transaction_type || "SELL"}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {s.property_category || "RESIDENTIAL"} · {s.configuration?.replaceAll("_", " ") || "—"} · 📍 {s.location || "Vadodara"}
+                      </p>
+                      {s.notes && (
+                        <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1 italic">
+                          "{s.notes}"
+                        </p>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="align-top">
+                      <div className="font-semibold text-sm text-foreground">
+                        {priceDisplay}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {s.carpet_area_sqft
+                          ? `${s.carpet_area_sqft} sq.ft carpet`
+                          : s.super_built_up_sqft
+                          ? `${s.super_built_up_sqft} sq.ft built-up`
+                          : "Area not specified"}
+                      </div>
+                      {(s.possession_status || s.furnishing_status) && (
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
+                          {[s.possession_status?.replaceAll("_", " "), s.furnishing_status?.replaceAll("_", " ")]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="align-top">
+                      <ToneBadge
+                        tone={PROPERTY_SUBMISSION_STATUS_MAP[s.status || "PENDING_VERIFICATION"]?.tone ?? "yellow"}
+                        label={PROPERTY_SUBMISSION_STATUS_MAP[s.status || "PENDING_VERIFICATION"]?.label ?? (s.status || "Pending")}
+                      />
+                    </TableCell>
+
+                    <TableCell className="align-top text-xs text-muted-foreground whitespace-nowrap">
+                      {s.created_at ? new Date(s.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
+                    </TableCell>
+
+                    <TableCell className="align-top text-right">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        {isPending && (
+                          <>
+                            <Button
+                              size="sm"
+                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                              disabled={approveMutation.isPending}
+                              onClick={() => approveMutation.mutate({ submission: s, clientId })}
+                              title="Convert to Live Inventory for Seeker Matching"
+                            >
+                              <CheckCircle2 className="size-3.5 mr-1" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                              disabled={updateMutation.isPending}
+                              onClick={() => updateMutation.mutate({ id: s.id, values: { status: "REJECTED" } })}
+                              title="Reject submission"
+                            >
+                              <XCircle className="size-3.5" />
+                            </Button>
+                          </>
+                        )}
+                        {isConverted && (
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                            <CheckCircle2 className="size-3" /> Live
+                          </span>
+                        )}
+                        {isRejected && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            disabled={updateMutation.isPending}
+                            onClick={() => updateMutation.mutate({ id: s.id, values: { status: "PENDING_VERIFICATION" } })}
+                          >
+                            Reopen
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          onClick={() => setDetailsSubmission(s)}
+                          title="View complete details"
+                        >
+                          <Eye className="size-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* Details Dialog */}
+      {detailsSubmission && (
+        <Dialog open={!!detailsSubmission} onOpenChange={(open) => !open && setDetailsSubmission(null)}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center justify-between gap-2">
+                <span>{detailsSubmission.project_name || detailsSubmission.society_name || "Owner Property Submission"}</span>
+                <ToneBadge
+                  tone={PROPERTY_SUBMISSION_STATUS_MAP[detailsSubmission.status || "PENDING_VERIFICATION"]?.tone ?? "yellow"}
+                  label={PROPERTY_SUBMISSION_STATUS_MAP[detailsSubmission.status || "PENDING_VERIFICATION"]?.label ?? (detailsSubmission.status || "Pending")}
+                />
+              </DialogTitle>
+              <DialogDescription>
+                Submitted by {detailsSubmission.owner_name || "Property Owner"} on{" "}
+                {detailsSubmission.created_at ? new Date(detailsSubmission.created_at).toLocaleString("en-IN") : "recently"}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-2 gap-3 text-sm py-2">
+              <div className="rounded-lg border bg-muted/40 p-2.5">
+                <span className="text-xs text-muted-foreground block">Owner Details</span>
+                <span className="font-semibold block">{detailsSubmission.owner_name || "—"}</span>
+                <span className="text-xs font-mono text-muted-foreground block">{detailsSubmission.owner_phone || "—"}</span>
+                {detailsSubmission.owner_phone && (
+                  <a
+                    href={`https://wa.me/${cleanPhone(detailsSubmission.owner_phone)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline mt-1"
+                  >
+                    <MessageSquare className="size-3" /> Chat on WhatsApp
+                  </a>
+                )}
+              </div>
+
+              <div className="rounded-lg border bg-muted/40 p-2.5">
+                <span className="text-xs text-muted-foreground block">Location & Society</span>
+                <span className="font-semibold block">{detailsSubmission.society_name || detailsSubmission.project_name || "—"}</span>
+                <span className="text-xs text-muted-foreground block">📍 {detailsSubmission.location || "Vadodara"}</span>
+              </div>
+
+              <div className="rounded-lg border bg-muted/40 p-2.5">
+                <span className="text-xs text-muted-foreground block">Category & Type</span>
+                <span className="font-semibold block">{detailsSubmission.property_category || "RESIDENTIAL"}</span>
+                <span className="text-xs text-muted-foreground block">{detailsSubmission.configuration || "—"} ({detailsSubmission.transaction_type || "SELL"})</span>
+              </div>
+
+              <div className="rounded-lg border bg-muted/40 p-2.5">
+                <span className="text-xs text-muted-foreground block">Carpet & Built-up Area</span>
+                <span className="font-semibold block">{detailsSubmission.carpet_area_sqft ? `${detailsSubmission.carpet_area_sqft} sq.ft` : "—"}</span>
+                <span className="text-xs text-muted-foreground block">{detailsSubmission.super_built_up_sqft ? `${detailsSubmission.super_built_up_sqft} sq.ft super` : "—"}</span>
+              </div>
+
+              <div className="rounded-lg border bg-muted/40 p-2.5">
+                <span className="text-xs text-muted-foreground block">Asking Price / Rent</span>
+                <span className="font-semibold block text-base text-primary">
+                  {detailsSubmission.expected_price
+                    ? formatMoney(Number(detailsSubmission.expected_price))
+                    : detailsSubmission.expected_rent
+                    ? `${formatMoney(Number(detailsSubmission.expected_rent))}/mo`
+                    : "Not specified"}
+                </span>
+              </div>
+
+              <div className="rounded-lg border bg-muted/40 p-2.5">
+                <span className="text-xs text-muted-foreground block">Status & Furnishing</span>
+                <span className="font-semibold block">{detailsSubmission.possession_status?.replaceAll("_", " ") || "—"}</span>
+                <span className="text-xs text-muted-foreground block">{detailsSubmission.furnishing_status?.replaceAll("_", " ") || "—"}</span>
+              </div>
+            </div>
+
+            {detailsSubmission.notes && (
+              <div className="rounded-lg border p-2.5 bg-background">
+                <span className="text-xs font-medium text-muted-foreground block mb-1">Notes / Special Instructions</span>
+                <p className="text-xs leading-relaxed text-foreground">{detailsSubmission.notes}</p>
+              </div>
+            )}
+
+            {detailsSubmission.attributes && typeof detailsSubmission.attributes === "object" && (
+              (() => {
+                const attrs = detailsSubmission.attributes as Record<string, unknown>;
+                const specs = [
+                  attrs.floor_number !== undefined && attrs.floor_number !== null
+                    ? `Floor: ${attrs.floor_number}${attrs.total_floors ? ` of ${attrs.total_floors}` : ""}`
+                    : null,
+                  attrs.bathrooms ? `${attrs.bathrooms} Bathrooms` : null,
+                  attrs.balconies ? `${attrs.balconies} Balconies` : null,
+                  attrs.parking ? `${attrs.parking} Parking` : null,
+                ].filter(Boolean);
+                if (specs.length === 0) return null;
+                return (
+                  <div className="rounded-lg border bg-muted/20 p-2.5">
+                    <span className="text-xs text-muted-foreground block mb-1">Additional Specifications</span>
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                      {specs.map((s, idx) => (
+                        <span key={idx} className="rounded bg-muted px-2 py-0.5 font-medium">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()
+            )}
+
+            <DialogFooter className="flex items-center justify-between sm:justify-between pt-2">
+              <div className="text-xs text-muted-foreground">
+                Lead Ref: {detailsSubmission.lead_id || "—"}
+              </div>
+              <div className="flex items-center gap-2">
+                {detailsSubmission.status !== "CONVERTED_TO_INVENTORY" && (
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    disabled={approveMutation.isPending}
+                    onClick={() => {
+                      approveMutation.mutate({ submission: detailsSubmission, clientId });
+                      setDetailsSubmission(null);
+                    }}
+                  >
+                    <CheckCircle2 className="size-4 mr-1.5" />
+                    Approve & Add to Live Inventory
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" onClick={() => setDetailsSubmission(null)}>
+                  Close
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
 
 function PropertyForm({
   draft,
@@ -488,14 +1044,12 @@ function PropertyForm({
     // Configuration encodes the BHK count for FLAT/VILLA (e.g. "3BHK") —
     // keep the numeric `bhk_num` column in sync with it rather than asking
     // for the number twice; commercial units/plots have no BHK count.
-    const bhkMatch = /^(\d+)BHK$/.exec(current.configuration);
+    const bhkMatch = /(\d+)\s*BHK/i.exec(current.configuration);
     const bhk_num = bhkMatch ? Number(bhkMatch[1]) : null;
 
-    // Commercial-only physical/utility specs live in `attributes` (jsonb) —
-    // only persist them for commercial units, and clear the column
-    // otherwise so switching a listing away from Commercial doesn't leave
-    // stale specs behind.
-    const attributes =
+    // Commercial-only physical/utility specs live in `attributes` (jsonb).
+    // Also persist floor_number, total_floors, bathrooms, balconies, and description.
+    const commercialSpecs =
       current.property_category === "COMMERCIAL"
         ? Object.fromEntries(
             COMMERCIAL_ATTRIBUTE_FIELDS.map(({ key }) => [
@@ -504,6 +1058,15 @@ function PropertyForm({
             ]).filter(([, v]) => v !== null),
           )
         : {};
+
+    const attributes: Record<string, unknown> = {
+      ...commercialSpecs,
+      ...(current.floor_number ? { floor_number: toNumber(current.floor_number) } : {}),
+      ...(current.total_floors ? { total_floors: toNumber(current.total_floors) } : {}),
+      ...(current.bathrooms ? { bathrooms: toNumber(current.bathrooms) } : {}),
+      ...(current.balconies ? { balconies: toNumber(current.balconies) } : {}),
+      ...(current.description?.trim() ? { description: current.description.trim() } : {}),
+    };
 
     const payload = {
       property_id: current.property_id || `PROP-${Date.now()}`,
@@ -534,6 +1097,13 @@ function PropertyForm({
       maintenance_charges: toNumber(current.maintenance_charges),
       amenities: current.amenities,
       image_urls: current.image_urls,
+      landmarks: current.landmarks_input
+        ? current.landmarks_input
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [],
+      city: current.city ? current.city.trim() : null,
     };
     save.mutate({ values: payload, isNew, clientId }, { onSuccess: onClose });
   };
@@ -592,9 +1162,17 @@ function PropertyForm({
               onChange={(v) => set("configuration", v)}
             />
           </Field>
-          <Field label="Location">
+          <Field label="City">
+            <Input
+              value={current.city}
+              placeholder="e.g. Vadodara, Ahmedabad, Pune"
+              onChange={(e) => set("city", e.target.value)}
+            />
+          </Field>
+          <Field label="Location / Area">
             <Input
               value={current.location}
+              placeholder="e.g. Gotri, Bhayli, Vastrapur"
               onChange={(e) => {
                 const raw = e.target.value;
                 // Normalise to Title Case so "waghodia" and "Waghodia" are never stored differently
@@ -606,6 +1184,25 @@ function PropertyForm({
               }}
             />
           </Field>
+          <div className="sm:col-span-2">
+            <Field label="Landmarks & Nearby Spots (Comma separated)">
+              <Input
+                value={current.landmarks_input}
+                placeholder="e.g. Near Bansal Mall, Gotri D-Mart, Yash Complex"
+                onChange={(e) => set("landmarks_input", e.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field label="Property Highlights & Description">
+              <Textarea
+                value={current.description}
+                placeholder="Key features, landmark proximity, special amenities, developer highlights…"
+                rows={3}
+                onChange={(e) => set("description", e.target.value)}
+              />
+            </Field>
+          </div>
           <Field label="Status">
             <Dropdown
               value={current.status}
@@ -661,7 +1258,7 @@ function PropertyForm({
               </span>
             </div>
           </Field>
-          {current.property_category !== "PLOT" && (
+          {!["PLOT", "LAND"].includes(current.property_category) && (
             <Field label="Maintenance charges (₹/month)">
               <Input
                 inputMode="numeric"
@@ -671,14 +1268,14 @@ function PropertyForm({
               />
             </Field>
           )}
-          <Field label={current.property_category === "PLOT" ? "Plot area (sq.ft)" : "Built-up area (sq.ft)"}>
+          <Field label={["PLOT", "LAND"].includes(current.property_category) ? "Plot / Land area (sq.ft)" : "Built-up area (sq.ft)"}>
             <Input
               inputMode="numeric"
               value={current.area_sqft}
               onChange={(e) => set("area_sqft", e.target.value)}
             />
           </Field>
-          {current.property_category !== "PLOT" && (
+          {!["PLOT", "LAND"].includes(current.property_category) && (
             <Field label="Carpet area (sq.ft)">
               <Input
                 inputMode="numeric"
@@ -688,7 +1285,7 @@ function PropertyForm({
               />
             </Field>
           )}
-          {current.property_category !== "PLOT" && (
+          {!["PLOT", "LAND"].includes(current.property_category) && (
             <Field label="Super built-up area (sq.ft)">
               <Input
                 inputMode="numeric"
@@ -705,16 +1302,14 @@ function PropertyForm({
               onChange={(v) => set("stock_type", v)}
             />
           </Field>
-          {current.property_category !== "PLOT" && (
-            <Field label="Listing type">
-              <Dropdown
-                value={current.listing_type}
-                options={LISTING_TYPES}
-                onChange={(v) => set("listing_type", v)}
-              />
-            </Field>
-          )}
-          {current.property_category !== "PLOT" &&
+          <Field label="Listing type">
+            <Dropdown
+              value={current.listing_type}
+              options={LISTING_TYPES}
+              onChange={(v) => set("listing_type", v)}
+            />
+          </Field>
+          {!["PLOT", "LAND"].includes(current.property_category) &&
             !(
               current.property_category === "COMMERCIAL" &&
               COMMERCIAL_NO_FURNISHED.has(current.configuration)
@@ -744,6 +1339,42 @@ function PropertyForm({
               </SelectContent>
             </Select>
           </Field>
+          {!["PLOT", "LAND"].includes(current.property_category) && (
+            <>
+              <Field label="Floor number">
+                <Input
+                  inputMode="numeric"
+                  value={current.floor_number}
+                  placeholder="e.g. 4"
+                  onChange={(e) => set("floor_number", e.target.value)}
+                />
+              </Field>
+              <Field label="Total floors in building">
+                <Input
+                  inputMode="numeric"
+                  value={current.total_floors}
+                  placeholder="e.g. 14"
+                  onChange={(e) => set("total_floors", e.target.value)}
+                />
+              </Field>
+              <Field label="Bathrooms / Washrooms">
+                <Input
+                  inputMode="numeric"
+                  value={current.bathrooms}
+                  placeholder="e.g. 2"
+                  onChange={(e) => set("bathrooms", e.target.value)}
+                />
+              </Field>
+              <Field label="Balconies">
+                <Input
+                  inputMode="numeric"
+                  value={current.balconies}
+                  placeholder="e.g. 1"
+                  onChange={(e) => set("balconies", e.target.value)}
+                />
+              </Field>
+            </>
+          )}
           {current.property_category === "COMMERCIAL" &&
             COMMERCIAL_HAS_DIMENSIONS.has(current.configuration) && (
               <>
@@ -942,7 +1573,7 @@ function Dropdown({
       <SelectContent>
         {options.map((o) => (
           <SelectItem key={o} value={o}>
-            {o}
+            {o.replaceAll("_", " ")}
           </SelectItem>
         ))}
       </SelectContent>

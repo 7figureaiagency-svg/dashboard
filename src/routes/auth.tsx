@@ -195,6 +195,19 @@ function AuthPage() {
                     : "Already have an account? Sign in"}
                 </button>
               </form>
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full border"
+                  onClick={() => {
+                    localStorage.setItem("demo_mode", "true");
+                    navigate({ to: "/dashboard", replace: true });
+                  }}
+                >
+                  🚀 Direct Access Dashboard (Nextgen Realty)
+                </Button>
+              </div>
             </div>
           )}
           <p className="mt-4 text-center text-xs text-muted-foreground">

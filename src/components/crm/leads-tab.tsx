@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Phone, Search, SlidersHorizontal } from "lucide-react";
+import { Phone, Search, Send, SlidersHorizontal } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,7 +25,15 @@ import { PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/bad
 import { LeadDrawer } from "@/components/crm/lead-drawer";
 import { ExecutiveDrawer } from "@/components/crm/executive-drawer";
 import { useActivity, useUpdateLead } from "@/lib/crm-data";
-import { formatDate, formatMoney, STATUS_MAP, type Lead, type Period } from "@/lib/crm";
+import {
+  formatDate,
+  formatMoney,
+  isVisitBookedStatus,
+  isVisitDoneStatus,
+  STATUS_MAP,
+  type Lead,
+  type Period,
+} from "@/lib/crm";
 
 const ALL = "__all__";
 
@@ -56,7 +65,38 @@ export function LeadsTab({
   const [selected, setSelected] = useState<Lead | null>(null);
   const [profile, setProfile] = useState<string | null>(null);
   const [profilePeriod, setProfilePeriod] = useState<Period>("30d");
+  const [sweeping, setSweeping] = useState(false);
   const update = useUpdateLead();
+
+  const handleRunSweep = async () => {
+    try {
+      setSweeping(true);
+      toast.info("Running automated follow-up sweep...");
+      const res = await fetch(
+        "https://yeiygfysijptjdepctnx.supabase.co/functions/v1/realtor-lead-engine/cron-sweep",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force: false }),
+        }
+      );
+      const data = await res.json();
+      if (data.success) {
+        const rem = data.pre_visit_reminders?.length || 0;
+        const fb = data.post_visit_feedbacks?.length || 0;
+        const fl = data.daily_followups?.length || 0;
+        toast.success(
+          `Sweep completed: ${rem} pre-visit reminders, ${fb} post-visit feedbacks, ${fl} daily drips sent.`
+        );
+      } else {
+        toast.error("Sweep finished with errors: " + JSON.stringify(data.errors));
+      }
+    } catch (err: any) {
+      toast.error("Failed to run follow-up sweep: " + err.message);
+    } finally {
+      setSweeping(false);
+    }
+  };
   const { data: allActivity = [] } = useActivity();
 
   const activity = useMemo(() => {
@@ -78,7 +118,15 @@ export function LeadsTab({
     () =>
       leads.filter((l) => {
         if (executive !== ALL && l.assigned_executive_name !== executive) return false;
-        if (status !== ALL && l.status !== status) return false;
+        if (status !== ALL) {
+          if (status === "SITE_VISIT_BOOKED") {
+            if (!isVisitBookedStatus(l.status)) return false;
+          } else if (status === "VISIT_DONE") {
+            if (!isVisitDoneStatus(l.status)) return false;
+          } else if (l.status !== status) {
+            return false;
+          }
+        }
         if (source !== ALL && l.source !== source) return false;
         if (from && (!l.created_at || new Date(l.created_at) < new Date(from))) return false;
         if (to && (!l.created_at || new Date(l.created_at) > new Date(`${to}T23:59:59`)))
@@ -142,6 +190,19 @@ export function LeadsTab({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <div className="flex items-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRunSweep}
+              disabled={sweeping}
+              className="h-9 gap-1.5 font-medium border-primary/20 text-primary hover:bg-primary/5"
+              title="Run Automated Pre-Visit Reminders, Post-Visit Feedback & Daily Qualification Follow-Up"
+            >
+              <Send className={`size-3.5 ${sweeping ? "animate-spin" : ""}`} />
+              {sweeping ? "Sweeping..." : "Run Follow-Up Sweep"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -197,6 +258,16 @@ export function LeadsTab({
                       <StatusBadge value={lead.status} />
                       {lead.property_state === "HUMAN_HANDOVER" && (
                         <PropertyStateBadge value="HUMAN_HANDOVER" />
+                      )}
+                      {lead.pre_visit_reminder_sent && (
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                          ⏰ Reminder Sent
+                        </span>
+                      )}
+                      {lead.post_visit_feedback_sent && (
+                        <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">
+                          💬 Survey Sent
+                        </span>
                       )}
                     </div>
                   </TableCell>

@@ -54,15 +54,6 @@ export function ExecutiveDrawer({
     [name, leads, activity, period],
   );
 
-  const timeline = useMemo(
-    () =>
-      activity
-        .filter((a) => (a.executive_name || "Unassigned") === name && inPeriod(a.created_at, period))
-        .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
-        .slice(0, 100),
-    [activity, name, period],
-  );
-
   const myLeads = useMemo(
     () =>
       leads
@@ -71,6 +62,21 @@ export function ExecutiveDrawer({
           (b.updated_at ?? b.created_at ?? "").localeCompare(a.updated_at ?? a.created_at ?? ""),
         ),
     [leads, name],
+  );
+
+  const myLeadIds = useMemo(() => new Set(myLeads.map((l) => l.lead_id)), [myLeads]);
+
+  const timeline = useMemo(
+    () =>
+      activity
+        .filter(
+          (a) =>
+            ((a.executive_name && a.executive_name === name) || myLeadIds.has(a.lead_id)) &&
+            inPeriod(a.created_at, period),
+        )
+        .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
+        .slice(0, 100),
+    [activity, name, period, myLeadIds],
   );
 
   if (!name) return null;

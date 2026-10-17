@@ -59,6 +59,8 @@ import {
   PERIODS,
   actionLabel,
   inPeriod,
+  isVisitBookedStatus,
+  isVisitDoneStatus,
   formatMinutes,
   slaTone,
   timeAgo,
@@ -87,9 +89,11 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
   const kpis = useMemo(
     () => ({
       total: periodLeads.length,
-      visits: periodLeads.filter((l) => l.status === "SITE_VISIT_BOOKED").length,
+      visits: periodLeads.filter((l) => isVisitBookedStatus(l.status)).length,
       handovers: periodLeads.filter((l) => l.property_state === "HUMAN_HANDOVER").length,
-      unattended: periodLeads.filter((l) => l.alert_sent_at && l.status !== "VISIT_DONE").length,
+      unattended: periodLeads.filter(
+        (l) => l.alert_sent_at && !isVisitDoneStatus(l.status),
+      ).length,
     }),
     [periodLeads],
   );

@@ -1,6 +1,8 @@
 import {
   hoursSince,
   inPeriod,
+  isVisitBookedStatus,
+  isVisitDoneStatus,
   responseMinutes,
   type Activity,
   type Lead,
@@ -50,11 +52,15 @@ export function buildExecStats(
   return Array.from(names)
     .map((name) => {
       const mine = leads.filter((l) => execName(l) === name);
+      const myLeadIds = new Set(mine.map((l) => l.lead_id));
+      const isMine = (a: Activity) =>
+        (a.executive_name && a.executive_name === name) || myLeadIds.has(a.lead_id);
+
       const allActs = activity
-        .filter((a) => (a.executive_name || "Unassigned") === name)
+        .filter(isMine)
         .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
       const acts = periodActivity
-        .filter((a) => (a.executive_name || "Unassigned") === name)
+        .filter(isMine)
         .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
 
       const mins: number[] = [];
@@ -78,11 +84,13 @@ export function buildExecStats(
         if (touched !== null && touched > 24 * 7 && l.status !== "NOT_INTERESTED") staleLeads += 1;
       }
 
-      const visitsDone = mine.filter((l) => l.status === "VISIT_DONE").length;
+      const visitsDone = mine.filter((l) => isVisitDoneStatus(l.status)).length;
+      const visitsBooked = mine.filter((l) => isVisitBookedStatus(l.status)).length;
+
       // Fall back to the newest lead update so history that predates the
       // activity log does not read as "silent".
       const lastLeadTouch = mine
-        .map((l) => l.updated_at)
+        .map((l) => l.updated_at ?? l.last_interaction_at ?? l.created_at)
         .filter((v): v is string => !!v)
         .sort()
         .pop();
@@ -96,9 +104,14 @@ export function buildExecStats(
       return {
         name,
         assigned: mine.length,
-        visitsBooked: mine.filter((l) => l.status === "SITE_VISIT_BOOKED").length,
+        visitsBooked,
         visitsDone,
-        handovers: mine.filter((l) => l.property_state === "HUMAN_HANDOVER").length,
+        handovers: mine.filter(
+          (l) =>
+            l.property_state === "HUMAN_HANDOVER" ||
+            l.status === "QUALIFIED" ||
+            l.status === "QUALIFYING",
+        ).length,
         conversion: mine.length ? Math.round((visitsDone / mine.length) * 100) : 0,
         avgSla: mins.length ? Math.round(mins.reduce((a, b) => a + b, 0) / mins.length) : null,
         fast: mins.filter((m) => m < 15).length,

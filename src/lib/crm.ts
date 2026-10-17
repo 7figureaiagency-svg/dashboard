@@ -10,18 +10,41 @@ export type ExecutiveInsert = Database["public"]["Tables"]["executives"]["Insert
 export type ClientIntegration = Database["public"]["Tables"]["client_integrations"]["Row"];
 export type ClientIntegrationInsert = Database["public"]["Tables"]["client_integrations"]["Insert"];
 export type Client = Database["public"]["Tables"]["clients"]["Row"];
+export type PropertySubmission = Database["public"]["Tables"]["property_submissions"]["Row"];
+export type PropertySubmissionInsert = Database["public"]["Tables"]["property_submissions"]["Insert"];
+export type PropertySubmissionUpdate = Database["public"]["Tables"]["property_submissions"]["Update"];
 
-export type ExecutiveLite = Pick<Executive, "id" | "name" | "email" | "phone" | "telegram_id">;
+export type ExecutiveLite = {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  telegram_id?: string | null;
+};
 
 /**
- * `leads` and `inventory` were redesigned server-side around a normalized
- * `assigned_executive_id` FK and a free-form `metadata`/`attributes` jsonb
- * column instead of a pile of flat text columns. The dashboard UI still
- * wants to read plain fields like `assigned_executive_name` or
- * `selected_property_name`, so the data layer "hydrates" every row with
- * these derived, read-only fields before handing it to components.
+ * `leads` and `inventory` support both flat columns (e.g. `first_name`, `state`,
+ * `site_visit_at` from the live DB) and hydrated fields used by UI components.
  */
 export type Lead = LeadRow & {
+  name?: string | null;
+  first_name?: string | null;
+  status?: string | null;
+  state?: string | null;
+  site_visit_datetime?: string | null;
+  site_visit_at?: string | null;
+  source?: string | null;
+  property_state?: string | null;
+  requirement?: string | null;
+  purpose?: string | null;
+  timeline?: string | null;
+  followup_count?: number | null;
+  pre_visit_reminder_sent?: boolean | null;
+  post_visit_feedback_sent?: boolean | null;
+  sla_response_minutes?: number | null;
+  alert_sent_at?: string | null;
+  first_human_contact_at?: string | null;
+  last_interaction_at?: string | null;
   assigned_executive_name: string | null;
   assigned_executive_email: string | null;
   assigned_executive_phone: string | null;
@@ -42,6 +65,25 @@ export type Property = PropertyRow & {
   assigned_executive_email: string | null;
   assigned_executive_phone: string | null;
   assigned_executive_telegram_id: string | null;
+  area_sqft?: number | null;
+  stock_type?: string | null;
+  listing_type?: string | null;
+  furnished_status?: string | null;
+  possession_status?: string | null;
+  attributes?: Record<string, unknown> | null;
+  rera_number?: string | null;
+  carpet_area_sqft?: number | null;
+  super_built_up_area_sqft?: number | null;
+  property_age_years?: number | null;
+  transaction_type?: string | null;
+  facing?: string | null;
+  ownership_type?: string | null;
+  price_negotiable?: boolean;
+  maintenance_charges?: number | null;
+  amenities?: string[];
+  image_urls?: string[];
+  landmarks?: string[];
+  city?: string | null;
 };
 
 export type Tone =
@@ -59,28 +101,104 @@ export const PROPERTY_STATE_MAP: Record<string, { label: string; tone: Tone; pul
 
 export const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   NEW: { label: "Fresh Lead", tone: "gray" },
+  FRESH: { label: "Fresh Lead", tone: "gray" },
   QUALIFYING: { label: "In Conversation", tone: "blue" },
+  OPTIONS_SENT: { label: "Options Shared", tone: "blue" },
   QUALIFIED: { label: "Qualified Prospect", tone: "indigo" },
   SITE_VISIT_BOOKED: { label: "Site Visit Booked", tone: "green" },
+  VISIT_BOOKED: { label: "Site Visit Booked", tone: "green" },
+  VISIT_RESCHEDULED: { label: "Visit Rescheduled", tone: "yellow" },
+  VISIT_CANCELLED: { label: "Visit Cancelled", tone: "red" },
   VISIT_DONE: { label: "Visit Completed", tone: "teal" },
+  VISIT_COMPLETED: { label: "Visit Completed", tone: "teal" },
+  SITE_VISIT_DONE: { label: "Visit Completed", tone: "teal" },
   VISIT_MISSED: { label: "Visit Missed", tone: "orange" },
+  SITE_VISIT_MISSED: { label: "Visit Missed", tone: "orange" },
+  SITE_VISIT_RESCHEDULED: { label: "Visit Rescheduled", tone: "yellow" },
   DEAL_WON: { label: "Deal Won", tone: "teal" },
   COLD: { label: "Gone Cold", tone: "gray" },
+  COLD_UNQUALIFIED: { label: "Gone Cold", tone: "gray" },
   NOT_INTERESTED: { label: "Closed/Dropped", tone: "gray" },
+};
+
+export const PROPERTY_SUBMISSION_STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
+  PENDING_VERIFICATION: { label: "Pending Verification", tone: "yellow" },
+  VERIFIED: { label: "Verified", tone: "blue" },
+  CONVERTED_TO_INVENTORY: { label: "Added to Inventory", tone: "green" },
+  REJECTED: { label: "Rejected", tone: "red" },
 };
 
 export const LEAD_STATUSES = Object.keys(STATUS_MAP);
 export const PROPERTY_STATES = Object.keys(PROPERTY_STATE_MAP);
 
 // SHOP/OFFICE/PLOT are configurations, not top-level categories — a
-// property's category is one of these four; its configuration options then
+// Property categories and configurations — a property's configuration options
 // depend on which category is picked (see CONFIGURATIONS_BY_CATEGORY below).
-export const PROPERTY_CATEGORIES = ["FLAT", "VILLA", "COMMERCIAL", "PLOT"];
-export const CONFIGURATIONS = ["1BHK", "2BHK", "3BHK", "4BHK", "5BHK", "SHOP", "OFFICE", "PLOT"];
+export const PROPERTY_CATEGORIES = ["FLAT", "VILLA", "COMMERCIAL", "PLOT", "LAND"];
+export const CONFIGURATIONS = [
+  "1RK",
+  "STUDIO_APARTMENT",
+  "1BHK",
+  "2BHK",
+  "3BHK",
+  "4BHK",
+  "5BHK",
+  "PENTHOUSE",
+  "DUPLEX",
+  "SKY_VILLA",
+  "BUNGALOW",
+  "ROW_HOUSE",
+  "FARM_HOUSE",
+  "DUPLEX_VILLA",
+  "TRIPLEX",
+  "SHOP",
+  "SHOWROOM",
+  "OFFICE",
+  "CO_WORKING_SPACE",
+  "STUDIO_OFFICE",
+  "RESTAURANT",
+  "HOTEL",
+  "GUEST_HOUSE",
+  "WAREHOUSE",
+  "GODOWN",
+  "INDUSTRIAL_SHED",
+  "FACTORY",
+  "PRE_LEASED_PROPERTY",
+  "COMMERCIAL_BUILDING",
+  "RETAIL_SPACE",
+  "RESIDENTIAL_PLOT",
+  "COMMERCIAL_PLOT",
+  "INDUSTRIAL_PLOT",
+  "AGRICULTURAL_LAND",
+  "NA_PLOT",
+  "FARM_HOUSE_PLOT",
+  "PLOT",
+];
 
 export const CONFIGURATIONS_BY_CATEGORY: Record<string, string[]> = {
-  FLAT: ["1BHK", "2BHK", "3BHK", "4BHK", "5BHK"],
-  VILLA: ["1BHK", "2BHK", "3BHK", "4BHK", "5BHK"],
+  FLAT: [
+    "1RK",
+    "STUDIO_APARTMENT",
+    "1BHK",
+    "2BHK",
+    "3BHK",
+    "4BHK",
+    "5BHK",
+    "PENTHOUSE",
+    "DUPLEX",
+    "SKY_VILLA",
+  ],
+  VILLA: [
+    "2BHK",
+    "3BHK",
+    "4BHK",
+    "5BHK",
+    "BUNGALOW",
+    "ROW_HOUSE",
+    "FARM_HOUSE",
+    "DUPLEX_VILLA",
+    "TRIPLEX",
+  ],
   COMMERCIAL: [
     "SHOP",
     "SHOWROOM",
@@ -94,8 +212,26 @@ export const CONFIGURATIONS_BY_CATEGORY: Record<string, string[]> = {
     "GODOWN",
     "INDUSTRIAL_SHED",
     "FACTORY",
+    "PRE_LEASED_PROPERTY",
+    "COMMERCIAL_BUILDING",
+    "RETAIL_SPACE",
   ],
-  PLOT: ["PLOT"],
+  PLOT: [
+    "RESIDENTIAL_PLOT",
+    "COMMERCIAL_PLOT",
+    "INDUSTRIAL_PLOT",
+    "AGRICULTURAL_LAND",
+    "NA_PLOT",
+    "FARM_HOUSE_PLOT",
+    "PLOT",
+  ],
+  LAND: [
+    "AGRICULTURAL_LAND",
+    "COMMERCIAL_LAND",
+    "INDUSTRIAL_LAND",
+    "RESIDENTIAL_LAND",
+    "FARM_LAND",
+  ],
 };
 
 /**
@@ -121,6 +257,9 @@ export const COMMERCIAL_HAS_DIMENSIONS = new Set([
   "INDUSTRIAL_SHED",
   "FACTORY",
   "RESTAURANT",
+  "PRE_LEASED_PROPERTY",
+  "RETAIL_SPACE",
+  "COMMERCIAL_BUILDING",
 ]);
 
 export function configurationsForCategory(category: string): string[] {
@@ -130,7 +269,14 @@ export function configurationsForCategory(category: string): string[] {
 export const INVENTORY_STATUSES = ["AVAILABLE", "SOLD", "HOLD"];
 export const STOCK_TYPES = ["REGULAR", "PREMIUM", "DISTRESS", "BANK_AUCTION", "CLEARANCE"];
 export const LISTING_TYPES = ["SALE", "RENT", "LEASE", "PG"];
-export const FURNISHED_STATUSES = ["UNFURNISHED", "SEMI_FURNISHED", "FURNISHED"];
+export const FURNISHED_STATUSES = [
+  "UNFURNISHED",
+  "SEMI_FURNISHED",
+  "FURNISHED",
+  "FULLY_FURNISHED",
+  "BARE_SHELL",
+  "WARM_SHELL",
+];
 export const TRANSACTION_TYPES = ["NEW_BOOKING", "RESALE", "UNDER_CONSTRUCTION"];
 export const POSSESSION_STATUSES = [
   "READY_TO_MOVE",
@@ -158,14 +304,22 @@ export const OWNERSHIP_TYPES = [
 ];
 export const AMENITY_OPTIONS = [
   "PARKING",
+  "RESERVED_PARKING",
+  "VISITOR_PARKING",
   "LIFT",
   "POWER_BACKUP",
   "SECURITY",
+  "CCTV",
+  "FIRE_SAFETY",
   "GYM",
   "CLUBHOUSE",
   "SWIMMING_POOL",
   "GARDEN",
+  "CHILDRENS_PLAY_AREA",
   "GATED_COMMUNITY",
+  "GAS_PIPELINE",
+  "EV_CHARGING",
+  "WATER_STORAGE",
 ];
 
 /**
@@ -430,23 +584,77 @@ function metaNum(meta: Record<string, unknown>, key: string): number | null {
   return toNumber(v as never);
 }
 
+export function isVisitBookedStatus(status?: string | null): boolean {
+  return (
+    status === "SITE_VISIT_BOOKED" ||
+    status === "VISIT_BOOKED" ||
+    status === "VISIT_RESCHEDULED" ||
+    status === "SITE_VISIT_RESCHEDULED"
+  );
+}
+
+export function isVisitDoneStatus(status?: string | null): boolean {
+  return (
+    status === "VISIT_DONE" ||
+    status === "VISIT_COMPLETED" ||
+    status === "SITE_VISIT_DONE"
+  );
+}
+
 export function hydrateLead(row: LeadRow, executivesById: Map<string, ExecutiveLite>): Lead {
-  const meta = ((row.metadata as Record<string, unknown> | null) ?? {}) as Record<string, unknown>;
+  const raw = row as Record<string, unknown>;
+  const meta = ((raw.metadata as Record<string, unknown> | null) ?? {}) as Record<string, unknown>;
   const exec = row.assigned_executive_id
     ? executivesById.get(row.assigned_executive_id)
     : undefined;
+
+  const firstName = (raw.first_name as string) || (raw.name as string)?.split(" ")[0] || "Lead";
+  const name = (raw.name as string) || (raw.first_name as string) || "Lead";
+  let status = (raw.status as string) || (raw.state as string) || "NEW";
+  // Normalize canonical synonyms so all components and metrics work seamlessly:
+  if (status === "VISIT_BOOKED") status = "SITE_VISIT_BOOKED";
+  if (status === "VISIT_COMPLETED" || status === "SITE_VISIT_DONE") status = "VISIT_DONE";
+  if (status === "SITE_VISIT_MISSED") status = "VISIT_MISSED";
+  if (status === "SITE_VISIT_RESCHEDULED") status = "VISIT_RESCHEDULED";
+  if (status === "FRESH") status = "NEW";
+  if (status === "COLD_UNQUALIFIED") status = "COLD";
+
+  const siteVisitDate =
+    (raw.site_visit_datetime as string) || (raw.site_visit_at as string) || null;
+
   return {
     ...row,
-    assigned_executive_name: exec?.name ?? null,
+    name,
+    first_name: firstName,
+    status,
+    state: (raw.state as string) || status,
+    pre_visit_reminder_sent: (raw.pre_visit_reminder_sent as boolean) ?? false,
+    post_visit_feedback_sent: (raw.post_visit_feedback_sent as boolean) ?? false,
+    property_state:
+      metaStr(meta, "property_state") ||
+      (raw.property_state as string) ||
+      (status === "SITE_VISIT_BOOKED" ? "SITE_VISIT_BOOKED" : null),
+    first_human_contact_at:
+      metaStr(meta, "first_human_contact_at") || (raw.first_human_contact_at as string) || null,
+    sla_response_minutes:
+      metaNum(meta, "sla_response_minutes") ?? (raw.sla_response_minutes as number) ?? null,
+    source: metaStr(meta, "source") || (raw.source as string) || "WhatsApp",
+    site_visit_datetime: siteVisitDate,
+    site_visit_at: siteVisitDate,
+    assigned_executive_name: exec?.name ?? (raw.assigned_executive_name as string) ?? null,
     assigned_executive_email: exec?.email ?? null,
     assigned_executive_phone: exec?.phone ?? null,
     assigned_executive_telegram_id: exec?.telegram_id ?? null,
-    summary: metaStr(meta, "summary"),
+    summary:
+      metaStr(meta, "summary") ||
+      `${firstName} (${(raw.user_language as string) || "GUJLISH"}) - ${(raw.property_type as string) || "Property"} in ${(raw.location as string) || "Vadodara"}`,
     last_message: metaStr(meta, "last_message"),
     followup_type: metaStr(meta, "followup_type"),
     followup_message: metaStr(meta, "followup_message"),
-    selected_property_name: metaStr(meta, "selected_property_name"),
-    selected_property_price: metaNum(meta, "selected_property_price"),
+    selected_property_name:
+      metaStr(meta, "selected_property_name") || (raw.selected_property_id as string) || null,
+    selected_property_price:
+      metaNum(meta, "selected_property_price") || (raw.budget as number) || null,
     selected_property_map_url: metaStr(meta, "selected_property_map_url"),
     selected_property_brochure_url: metaStr(meta, "selected_property_brochure_url"),
     portal_property_id: metaStr(meta, "portal_property_id"),
@@ -457,11 +665,15 @@ export function hydrateProperty(
   row: PropertyRow,
   executivesById: Map<string, ExecutiveLite>,
 ): Property {
+  const raw = row as Record<string, unknown>;
   const exec = row.assigned_executive_id
     ? executivesById.get(row.assigned_executive_id)
     : undefined;
   return {
     ...row,
+    image_urls: (raw.image_urls as string[]) || (raw.image_url ? [raw.image_url as string] : []),
+    amenities: (raw.amenities as string[]) || [],
+    attributes: (raw.attributes as Record<string, unknown>) || {},
     assigned_executive_name: exec?.name ?? null,
     assigned_executive_email: exec?.email ?? null,
     assigned_executive_phone: exec?.phone ?? null,
@@ -497,6 +709,12 @@ export function splitLeadUpdate(values: Partial<Lead>): {
     if (METADATA_LEAD_FIELDS.has(key)) metadataPatch[key] = value;
     else columns[key] = value;
   }
+  // Sync live database column names
+  if (columns.status && !columns.state) columns.state = columns.status;
+  if (columns.state && !columns.status) columns.status = columns.state;
+  if (columns.site_visit_datetime && !columns.site_visit_at)
+    columns.site_visit_at = columns.site_visit_datetime;
+  if (columns.name && !columns.first_name) columns.first_name = columns.name;
   return { columns, metadataPatch };
 }
 
@@ -509,15 +727,29 @@ export const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
   CONTACTED: { label: "Marked contacted", tone: "green" },
   CALL_NOT_ANSWERED: { label: "Call not answered", tone: "orange" },
   VISIT_BOOKED: { label: "Booked site visit", tone: "blue" },
+  SITE_VISIT_BOOKED: { label: "Booked site visit", tone: "blue" },
+  SITE_VISIT_RESCHEDULED: { label: "Rescheduled visit", tone: "yellow" },
+  RESCHEDULE_VISIT: { label: "Rescheduled visit", tone: "yellow" },
+  SITE_VISIT_CANCELLED: { label: "Cancelled site visit", tone: "red" },
+  CANCEL_VISIT: { label: "Cancelled site visit", tone: "red" },
   VISIT_DONE: { label: "Marked visit done", tone: "teal" },
+  VISIT_COMPLETED: { label: "Visit completed", tone: "teal" },
   VISIT_MISSED: { label: "Marked visit missed", tone: "orange" },
   OPTIONS_SHARED: { label: "Shared property options", tone: "blue" },
+  OPTIONS_SENT: { label: "Shared property options", tone: "blue" },
   DEAL_WON: { label: "Marked deal won", tone: "teal" },
   LEAD_DROPPED: { label: "Dropped lead", tone: "red" },
   LEAD_REVERTED: { label: "Reverted lead", tone: "indigo" },
   PROFILE_UPDATED: { label: "Updated lead profile", tone: "indigo" },
   BOT_TOGGLED: { label: "Changed AI bot", tone: "gray" },
   NOTE_ADDED: { label: "Added notes", tone: "yellow" },
+  MESSAGE_PROCESSED: { label: "Message processed", tone: "indigo" },
+  POST_VISIT_FEEDBACK_SENT: { label: "Feedback survey sent", tone: "teal" },
+  NO_PROPERTY_MATCH: { label: "No property match", tone: "orange" },
+  PASSIVE_ACK_SILENCED: { label: "Closing acknowledged", tone: "gray" },
+  NEGOTIATION_REQUEST: { label: "Price negotiation", tone: "yellow" },
+  BROCHURE_REQUEST: { label: "Brochure shared", tone: "indigo" },
+  MAP_REQUEST: { label: "Map location shared", tone: "indigo" },
 };
 
 export function actionLabel(action: string | null): string {
@@ -620,18 +852,37 @@ export function buildAiActivity(lead: Lead): AiActivityEvent[] {
 
   const visitTime = lead.site_visit_datetime ? new Date(lead.site_visit_datetime) : null;
   const visitIsFuture = !!visitTime && !Number.isNaN(visitTime.getTime()) && visitTime > new Date();
+  const preReminderSent = !!lead.pre_visit_reminder_sent;
+  const postFeedbackSent = !!lead.post_visit_feedback_sent;
+
   events.push({
     key: "pre_visit_reminder",
     label: "Pre-visit reminder",
-    detail: !lead.site_visit_datetime
-      ? "No visit booked yet"
-      : visitIsFuture
-        ? lead.bot_active
-          ? "Will be sent automatically before the visit"
-          : "Bot is paused — won't be sent automatically"
-        : "Visit date has passed",
-    tone: "yellow",
-    done: !!lead.site_visit_datetime && !visitIsFuture,
+    detail: preReminderSent
+      ? "1-hour pre-visit reminder delivered with site map"
+      : !lead.site_visit_datetime
+        ? "No visit booked yet"
+        : visitIsFuture
+          ? lead.bot_active
+            ? "Will be sent automatically 1 hour before visit"
+            : "Bot is paused — won't be sent automatically"
+          : "Visit date has passed",
+    tone: preReminderSent ? "green" : "yellow",
+    done: preReminderSent || (!!lead.site_visit_datetime && !visitIsFuture),
+  });
+
+  events.push({
+    key: "post_visit_feedback",
+    label: "Post-visit feedback survey",
+    detail: postFeedbackSent
+      ? "1-hour post-visit feedback survey delivered"
+      : !lead.site_visit_datetime
+        ? "No visit booked yet"
+        : visitIsFuture
+          ? "Scheduled 1 hour after visit completes"
+          : "Pending post-visit feedback survey",
+    tone: postFeedbackSent ? "teal" : "blue",
+    done: postFeedbackSent,
   });
 
   events.push({
@@ -644,9 +895,9 @@ export function buildAiActivity(lead: Lead): AiActivityEvent[] {
           : "Post-visit outcome",
     detail:
       lead.status === "VISIT_DONE"
-        ? "Marked done — awaiting negotiation/booking follow-up"
+        ? "Visit completed — Day-wise follow-up active"
         : lead.status === "VISIT_MISSED"
-          ? "Executive should re-engage or reschedule"
+          ? "Customer missed visit — Reschedule requested"
           : "Pending — visit not yet marked done or missed",
     tone: lead.status === "VISIT_MISSED" ? "orange" : "teal",
     done: lead.status === "VISIT_DONE" || lead.status === "VISIT_MISSED",
@@ -675,10 +926,12 @@ export function buildAiActivity(lead: Lead): AiActivityEvent[] {
     label: "Automated day-wise follow-ups",
     detail:
       followupCount > 0
-        ? `${followupCount} follow-up${followupCount === 1 ? "" : "s"} sent · drip stage ${lead.drip_stage ?? 0}`
-        : "None sent yet",
+        ? `${followupCount} follow-up${followupCount === 1 ? "" : "s"} sent · Stage: ${lead.drip_stage ?? "N/A"}`
+        : lead.status === "VISIT_DONE"
+          ? "Post-visit drip cadence ready"
+          : "None sent yet",
     timestamp: lead.last_followup_at,
-    tone: "gray",
+    tone: lead.status === "VISIT_DONE" ? "teal" : "gray",
     done: followupCount > 0,
   });
 
