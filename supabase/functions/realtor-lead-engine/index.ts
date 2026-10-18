@@ -135,6 +135,10 @@ async function dispatchSalesAlert(
         badge = "⚠️ SITE VISIT MISSED (HIGH RE-ENGAGEMENT PRIORITY)";
         pitchHint = "Customer site visit attend nahi kar paya. Call with empathy: 'Sir koi problem aa gayi thi kya? Main kal shaam ya weekend ka slot book karwa deta hu.'";
         break;
+      case "UNCONFIRMED_VISIT":
+        badge = "⏳ SITE VISIT ATTENDANCE UNCONFIRMED";
+        pitchHint = "Customer ne site visit attendance message ka reply nahi diya. 1-minute courtesy call karke visit attendance verify karein aur fresh visit plan karein.";
+        break;
       case "NEW_OWNER_LISTING":
         badge = "🏡 NEW OWNER PROPERTY LISTING";
         pitchHint = extra.hint || "Call owner within 15 mins: verify ownership paperwork, confirm asking price flexibility, and schedule on-site inspection & photography.";
@@ -1465,11 +1469,11 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
             let feedbackMsg = "";
             if (lang === "GUJLISH") {
-              feedbackMsg = `Namaste <b>${name} bhai</b>! 🙏 Asha chhe ke tamari <b>${projectName}</b> ni site visit sari rahi hashe!\n\n1️⃣ Tamne property ane layout kevo lagyo?\n2️⃣ Pricing, payment plan ke home loan babate koi query chhe?\n3️⃣ Shu ame builder sathe baithak ane special offer discuss karavie?\n\nTamaro abhipray amara mate khub mahatvano chhe! Kripya janavjo jethi ame aagad coordinate kari shakie.`;
+              feedbackMsg = `Namaste <b>${name} bhai</b>! 🙏\nAaje <b>${projectName}</b> par tamari VIP site visit scheduled hati.\n\nShu tame visit par pahonchi shakya hata? 🚗\n\n1️⃣ <b>Haan, visit attend kari</b>\n2️⃣ <b>Nahi, visit nathi thai saki</b>\n\n<i>(Tame 1 ke 2 lakhi ne pan reply kari shako chho)</i>`;
             } else if (lang === "ENGLISH") {
-              feedbackMsg = `Hello <b>${name}</b>! 🙏 We hope your site visit to <b>${projectName}</b> went well!\n\n1️⃣ How did you like the property and floor layout?\n2️⃣ Do you have any questions regarding pricing, payment schedules, or home loans?\n3️⃣ Would you like us to arrange a final sitting with the developer for exclusive pricing?\n\nYour feedback is truly valuable to us! Please let us know so we can assist you further.`;
+              feedbackMsg = `Hello <b>${name}</b>! 🙏\nYou had a VIP site visit scheduled today for <b>${projectName}</b>.\n\nWere you able to attend the visit? 🚗\n\n1️⃣ <b>Yes, attended the visit</b>\n2️⃣ <b>No, couldn't make it</b>\n\n<i>(You can reply with 1 or 2)</i>`;
             } else {
-              feedbackMsg = `Namaste <b>${name} ji</b>! 🙏 Asha hai aapki <b>${projectName}</b> ki site visit achhi rahi hogi!\n\n1️⃣ Aapko property aur layout kaisa laga?\n2️⃣ Pricing, payment plan ya home loan ke related koi query hai?\n3️⃣ Kya hum developer ke sath special pricing discussion / final sitting plan karein?\n\nAapka feedback hamare liye bohot zaroori hai! Kripya batayein taaki hum aage coordinate kar sakein.`;
+              feedbackMsg = `Namaste <b>${name} ji</b>! 🙏\nAaj <b>${projectName}</b> par aapki VIP site visit scheduled thi.\n\nKya aap visit par pahunch paaye the? 🚗\n\n1️⃣ <b>Haan, visit attend ki</b>\n2️⃣ <b>Nahi, visit nahi ho paayi</b>\n\n<i>(Aap 1 ya 2 likhkar bhi reply kar sakte hain)</i>`;
             }
 
             await sleepJitter();
@@ -1484,8 +1488,17 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, feedbackMsg);
             }
 
-            await supabase.from("leads").update({ post_visit_feedback_sent: true }).eq("id", l.id);
-            await supabase.from("site_visits").update({ status: "COMPLETED" }).eq("lead_id", l.id).eq("status", "SCHEDULED");
+            await supabase.from("leads").update({
+              post_visit_feedback_sent: true,
+              last_followup_at: new Date().toISOString(),
+              last_active_at: new Date().toISOString(),
+            }).eq("id", l.id);
+
+            // Note: Keep site_visits status as SCHEDULED until user confirms attendance!
+            await supabase.from("site_visits").update({
+              notes: "Post-visit attendance confirmation sent to customer"
+            }).eq("lead_id", l.id).eq("status", "SCHEDULED");
+
             await supabase.from("lead_events").insert({
               client_id: defaultTenantId,
               lead_id: l.lead_id,
@@ -1496,6 +1509,95 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             sweepLog.post_visit_feedbacks.push({ lead_id: l.lead_id, name, scheduledAt: scheduledIso, diffMinutesPast });
           } catch (itemErr: any) {
             sweepLog.errors.push({ module: "post_visit_item", lead_id: l.lead_id, error: itemErr.message });
+          }
+        }
+      }
+    }
+
+    // =========================================================================
+    // 2b. MODULE 2B: UNCONFIRMED VISIT ATTENDANCE NUDGE (20-48 Hours After Post-Visit Check)
+    // =========================================================================
+    if (runPostVisit) {
+      const inBusinessHours = isWithinWorkingHours(11, 19);
+      if (inBusinessHours || options.force) {
+        let qNudge = supabase
+          .from("leads")
+          .select("*")
+          .eq("site_visit_booked", true)
+          .eq("post_visit_feedback_sent", true)
+          .not("state", "in", '("SITE_VISIT_DONE","VISIT_DONE","VISIT_MISSED","DROPPED")')
+          .or("bot_active.is.null,bot_active.eq.true");
+
+        if (options.testLeadId) {
+          qNudge = qNudge.eq("lead_id", options.testLeadId);
+        }
+        qNudge = qNudge.order("last_followup_at", { ascending: true, nullsFirst: true }).limit(BATCH_LIMIT);
+
+        const { data: unconfirmedLeads } = await qNudge;
+        if (unconfirmedLeads) {
+          for (const l of unconfirmedLeads) {
+            try {
+              const meta = (typeof l.metadata === "object" && l.metadata !== null) ? (l.metadata as Record<string, unknown>) : {};
+              if (meta.post_visit_nudge_sent && !options.force) continue;
+
+              const lastFollowup = l.last_followup_at || l.updated_at || l.created_at;
+              const hoursSinceCheck = lastFollowup ? (nowMs - new Date(lastFollowup).getTime()) / (1000 * 3600) : 999;
+
+              // Send soft nudge between 20 and 48 hours after the post-visit check
+              if (!options.force && (hoursSinceCheck < 20 || hoursSinceCheck > 72)) continue;
+
+              let prop: any = null;
+              const propId = l.selected_property_id || l.last_option_ids?.[0];
+              if (propId) {
+                const { data: p } = await supabase.from("inventory").select("*").eq("property_id", propId).maybeSingle();
+                if (p) prop = p;
+              }
+              const projectName = prop?.project_name || "the property";
+              const lang = l.user_language || "HINGLISH";
+              const name = l.first_name || "Customer";
+
+              let nudgeMsg = "";
+              if (lang === "GUJLISH") {
+                nudgeMsg = `Hi <b>${name} bhai</b>! 🙏 Kaale tamari <b>${projectName}</b> visit babate check karvano hato — shu kaale javani thayu hatu, ke aa aavta weekend par navi visit plan kariye? 🚗`;
+              } else if (lang === "ENGLISH") {
+                nudgeMsg = `Hi <b>${name}</b>! 🙏 Just following up regarding your <b>${projectName}</b> site visit yesterday — were you able to make it, or should we arrange a fresh visit this upcoming weekend? 🚗`;
+              } else {
+                nudgeMsg = `Hi <b>${name} ji</b>! 🙏 Kal aapki <b>${projectName}</b> visit ke baare me follow-up kar raha tha — kya kal aapka visit par jana ho paaya tha, ya hum is aane wale weekend par nayi visit arrange karein? 🚗`;
+              }
+
+              await sleepJitter();
+
+              const isTelegram = /^[0-9]+$/.test(l.lead_id) || !l.phone || l.phone.startsWith("tg_") || String(l.metadata?.platform).toUpperCase() === "TELEGRAM";
+              if (isTelegram) {
+                await sendTelegramMessage(defaultBotToken, l.lead_id, nudgeMsg);
+              } else {
+                const waPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
+                const waToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+                await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, nudgeMsg);
+              }
+
+              const updatedMeta = {
+                ...meta,
+                post_visit_nudge_sent: true,
+                post_visit_nudge_at: new Date().toISOString(),
+              };
+
+              await supabase.from("leads").update({
+                metadata: updatedMeta,
+                last_followup_at: new Date().toISOString(),
+              }).eq("id", l.id);
+
+              // If hoursSinceCheck >= 36 and alert not sent yet, alert sales team for courtesy call
+              if (hoursSinceCheck >= 36 && !meta.unconfirmed_visit_alert_sent) {
+                await dispatchSalesAlert(defaultTenantId, "UNCONFIRMED_VISIT", l, { property: prop });
+                updatedMeta.unconfirmed_visit_alert_sent = true;
+                await supabase.from("leads").update({ metadata: updatedMeta }).eq("id", l.id);
+              }
+
+              sweepLog.post_visit_feedbacks.push({ lead_id: l.lead_id, name, type: "UNCONFIRMED_ATTENDANCE_NUDGE" });
+            } catch (nudgeErr: any) {
+              sweepLog.errors.push({ module: "post_visit_nudge_item", lead_id: l.lead_id, error: nudgeErr.message });
+            }
           }
         }
       }
@@ -2287,7 +2389,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v38-dual-role-dynamic-intent-switching",
+        version: "v39-post-visit-attendance-and-reschedule-flow",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -2301,6 +2403,9 @@ Deno.serve(async (req: Request) => {
           groq_len: (Deno.env.get("GROQ_API_KEY") || "").length,
         },
         features: [
+          "post-visit-attendance-confirmation",
+          "silent-user-unconfirmed-visit-nudge",
+          "attendance-option-1-and-2-support",
           "single-question-owner-cascade",
           "indic-continuity-language-lock",
           "full-fidelity-inventory-capture",
@@ -2604,6 +2709,8 @@ Deno.serve(async (req: Request) => {
         /(nathi\s*aavi\s*sakyo|nathi\s*gayo|aavi\s*na\s*sakyo|nathi\s*pahonchi\s*sakyo|busy\s*hato|kam\s*ma\s*fasaai\s*gayo|miss\s*thai\s*gai|miss\s*thai\s*gayo|aaje\s*nathi\s*aavyo|nathi\s*aavayem|aaje\s*nahi\s*aavay|aaje\s*nai\s*aavay)/i.test(lower) ||
         /(નથી\s*આવી\s*શકાય|નહી\s*આવાય|નહીં\s*આવી\s*શકાય|શક્ય\s*નથી|આવી\s*શકું\s*તેમ\s*નથી)/i.test(lower) ||
         /(?:cannot|can't|cant|won't|wont|will\s*not|wouldn't|would\s*not|unable\s*to|not\s*able\s*to)(?:\s+be\s*able\s*to)?\s*(?:come|attend|make\s*it|reach|visit|be\s*there)/i.test(lower) ||
+        // Option 2 or direct negative replies to post-visit attendance confirmation
+        (Boolean(lead.post_visit_feedback_sent) && /^(?:2|2️⃣|two|option\s*2|nahi|nhi|na|no|nope|nathi|nathi\s*thai|nathi\s*gayo|nathi\s*aavi\s*sakyo|nahi\s*ho\s*payi|nahi\s*ho\s*paayi|nahi\s*gaya|nahi\s*gaye|nahi\s*gayi|missed|not\s*yet|couldn't|attend\s*nahi\s*ki|attend\s*nathi\s*kari|reschedule|cancel)$/i.test(lower.trim())) ||
         /(not\s*possible\s*today|not\s*possible\s*for\s*me|cannot\s*make\s*it|could\s*not\s*make\s*it|missed\s*the\s*visit|won't\s*make\s*it|wont\s*make\s*it)/i.test(lower)
       );
 
@@ -2759,8 +2866,9 @@ Deno.serve(async (req: Request) => {
     // 2c. POST-VISIT FEEDBACK (Only for attended / completed visits)
     // =========================================================================
     else if (
-      (lead.post_visit_feedback_sent || ["SITE_VISIT_DONE", "VISIT_DONE"].includes(lead.state)) &&
+      (lead.post_visit_feedback_sent || ["SITE_VISIT_BOOKED", "VISIT_BOOKED", "SITE_VISIT_DONE", "VISIT_DONE"].includes(lead.state)) &&
       (
+        /^(?:1|1️⃣|one|option\s*1|ha|haan|ji\s*haan|yes|yep|yeah|attended|visit\s*attend\s*ki|visit\s*attend\s*kari|attend\s*kari|gaya\s*tha|gaye\s*the|gayo\s*hato|visit\s*ho\s*gayi|visit\s*thai\s*gai|dekh\s*liya|joee\s*lidhi)$/i.test(lower.trim()) ||
         /(acha|achha|saras|badiya|good|nice|liked|pasand|mast|average|theek|bhav|price|budget|discount|negotiat|loan|bank|emi|interest|builder|developer|sitting|baithak|owner|meeting|offer|process|token|kharab|bekar|nathi\s*gamyu|gamyu|pasand\s*nathi|bahut\s*acha|visit\s*ho\s*gayi|visit\s*done|gaya\s*tha|dekh\s*liya|joee\s*lidhi|gayo\s*hato|visit\s*thai\s*gai|completed|attended|dekh\s*aaye|dekh\s*kar\s*aaye|dekhne\s*gaye)/i.test(lower) ||
         /(kaisa|kaisi|lagyo|lagi|kem|rate|kharch|cost|query|sawal|prashna)/i.test(lower)
       )
@@ -2798,6 +2906,7 @@ Deno.serve(async (req: Request) => {
 
         const isLoan = /(loan|bank|emi|interest|finance)/i.test(lower);
         const isNegotiation = /(bhav|price|discount|negotiat|kam|ochho|kamti|builder|developer|sitting|baithak|owner|meeting|kam\s*karo)/i.test(lower);
+        const isSimpleAttendanceOnly = /^(?:1|1️⃣|one|option\s*1|ha|haan|ji\s*haan|yes|yep|yeah|attended|visit\s*attend\s*ki|visit\s*attend\s*kari|attend\s*kari|gaya\s*tha|gaye\s*the|gayo\s*hato|visit\s*ho\s*gayi|visit\s*thai\s*gai|dekh\s*liya|joee\s*lidhi)$/i.test(lower.trim());
 
         if (isNegotiation) {
           replyText =
@@ -2813,6 +2922,13 @@ Deno.serve(async (req: Request) => {
               : lang === "ENGLISH"
               ? `Thank you for your feedback <b>${senderName}</b>! 🏦 Our preferred banking partners will reach out shortly to guide you with the lowest home loan interest rates and flexible EMI structures.`
               : `Aapke feedback ke liye dhanyawad <b>${senderName} ji</b>! 🏦 Hamari home loan & banking team lowest interest rate aur easy EMI structure guide karne ke liye aapse turant connect karegi.`;
+        } else if (isSimpleAttendanceOnly) {
+          replyText =
+            lang === "GUJLISH"
+              ? `Khub saras <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 🌟\n\nTamne property ane layout kevo lagyo? Jo project pasand aavyo hoy to shu ame developer sathe <b>special token pricing baithak</b> plan kariye, ke aa budget ma <b>bija options</b> jova mango chho?`
+              : lang === "ENGLISH"
+              ? `Wonderful <b>${senderName || "there"}</b>! 🌟\n\nHow did you like the property and floor layout? If you liked it, shall we arrange a <b>developer sitting for exclusive negotiated pricing</b>, or would you like to explore <b>more options</b> in this budget?`
+              : `Bohot badiya <b>${senderName ? `${senderName} ji` : "Friend"}</b>! 🌟\n\nAapko property aur layout kaisa laga? Agar pasand aaya ho to kya hum developer ke sath <b>best token pricing sitting</b> arrange karein, ya aap is budget me <b>kuch aur options</b> dekhna chahenge?`;
         } else {
           replyText =
             lang === "GUJLISH"
