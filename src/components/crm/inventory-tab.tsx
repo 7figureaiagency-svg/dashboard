@@ -654,6 +654,141 @@ export function InventoryTab({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Reverse Demand Matchmaker Dialog ── */}
+      <Dialog
+        open={!!matchingDialogProperty}
+        onOpenChange={(open) => !open && setMatchingDialogProperty(null)}
+      >
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Sparkles className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">
+                  Reverse Demand Matchmaker
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Active CRM buyer leads matching{" "}
+                  <b className="text-foreground">
+                    {matchingDialogProperty?.property.project_name}
+                  </b>{" "}
+                  ({matchingDialogProperty?.property.location} ·{" "}
+                  {formatMoney(matchingDialogProperty?.property.price)})
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto pr-1 space-y-3 py-2">
+            {!matchingDialogProperty || matchingDialogProperty.buyers.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No active buyer leads currently match this property's criteria.
+              </div>
+            ) : (
+              matchingDialogProperty.buyers.map((buyer) => (
+                <div
+                  key={buyer.lead_id}
+                  className="rounded-lg border p-3.5 bg-card hover:border-primary/40 transition-colors shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm leading-tight text-foreground">
+                        {buyer.name || "Unnamed Buyer"}
+                      </span>
+                      <StatusBadge value={buyer.status} />
+                      {buyer.ai_score !== undefined && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          Score: {buyer.ai_score}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                      {buyer.phone && (
+                        <span className="font-mono text-foreground font-medium flex items-center gap-1">
+                          <Phone className="size-3 text-muted-foreground" />
+                          {buyer.phone}
+                        </span>
+                      )}
+                      <span>
+                        Budget:{" "}
+                        <b className="text-foreground">
+                          {buyer.budget ? formatMoney(buyer.budget) : "Flexible"}
+                        </b>
+                      </span>
+                      {buyer.location && (
+                        <span>
+                          Area: <b className="text-foreground">{buyer.location}</b>
+                        </span>
+                      )}
+                      {buyer.property_type && (
+                        <span>
+                          Type: <b className="text-foreground">{buyer.property_type}</b>
+                        </span>
+                      )}
+                    </div>
+                    {buyer.ai_notes && (
+                      <p className="text-xs text-muted-foreground line-clamp-1 italic mt-0.5">
+                        "{buyer.ai_notes}"
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    {buyer.phone ? (
+                      <Button
+                        asChild
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-8 px-3 gap-1.5 shadow-2xs"
+                        title={`Call ${buyer.name || "Buyer"}`}
+                      >
+                        <a href={`tel:${buyer.phone}`}>
+                          <Phone className="size-3.5" />
+                          <span>Call Lead</span>
+                        </a>
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">No phone</span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs px-2.5"
+                      onClick={() => {
+                        setSelectedLead(buyer);
+                      }}
+                    >
+                      View CRM Profile
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <DialogFooter className="border-t pt-3 flex items-center justify-between sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              {matchingDialogProperty?.buyers.length || 0} potential buyer(s) with matching budget & location.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setMatchingDialogProperty(null)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lead Drawer for viewing matching buyer details */}
+      <LeadDrawer
+        lead={selectedLead}
+        open={!!selectedLead}
+        onOpenChange={(open) => !open && setSelectedLead(null)}
+      />
     </div>
   );
 }
@@ -1103,141 +1238,6 @@ function OwnerSubmissionsView({
         submission={editSubmission}
         open={!!editSubmission}
         onOpenChange={(open) => !open && setEditSubmission(null)}
-      />
-
-      {/* ── Reverse Demand Matchmaker Dialog ── */}
-      <Dialog
-        open={!!matchingDialogProperty}
-        onOpenChange={(open) => !open && setMatchingDialogProperty(null)}
-      >
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Sparkles className="size-5" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg font-bold">
-                  Reverse Demand Matchmaker
-                </DialogTitle>
-                <DialogDescription className="text-xs">
-                  Active CRM buyer leads matching{" "}
-                  <b className="text-foreground">
-                    {matchingDialogProperty?.property.project_name}
-                  </b>{" "}
-                  ({matchingDialogProperty?.property.location} ·{" "}
-                  {formatMoney(matchingDialogProperty?.property.price)})
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto pr-1 space-y-3 py-2">
-            {!matchingDialogProperty || matchingDialogProperty.buyers.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                No active buyer leads currently match this property's criteria.
-              </div>
-            ) : (
-              matchingDialogProperty.buyers.map((buyer) => (
-                <div
-                  key={buyer.lead_id}
-                  className="rounded-lg border p-3.5 bg-card hover:border-primary/40 transition-colors shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-                >
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm leading-tight text-foreground">
-                        {buyer.name || "Unnamed Buyer"}
-                      </span>
-                      <StatusBadge value={buyer.status} />
-                      {buyer.ai_score !== undefined && (
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                          Score: {buyer.ai_score}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                      {buyer.phone && (
-                        <span className="font-mono text-foreground font-medium flex items-center gap-1">
-                          <Phone className="size-3 text-muted-foreground" />
-                          {buyer.phone}
-                        </span>
-                      )}
-                      <span>
-                        Budget:{" "}
-                        <b className="text-foreground">
-                          {buyer.budget ? formatMoney(buyer.budget) : "Flexible"}
-                        </b>
-                      </span>
-                      {buyer.location && (
-                        <span>
-                          Area: <b className="text-foreground">{buyer.location}</b>
-                        </span>
-                      )}
-                      {buyer.property_type && (
-                        <span>
-                          Type: <b className="text-foreground">{buyer.property_type}</b>
-                        </span>
-                      )}
-                    </div>
-                    {buyer.ai_notes && (
-                      <p className="text-xs text-muted-foreground line-clamp-1 italic mt-0.5">
-                        "{buyer.ai_notes}"
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                    {buyer.phone ? (
-                      <Button
-                        asChild
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-8 px-3 gap-1.5 shadow-2xs"
-                        title={`Call ${buyer.name || "Buyer"}`}
-                      >
-                        <a href={`tel:${buyer.phone}`}>
-                          <Phone className="size-3.5" />
-                          <span>Call Lead</span>
-                        </a>
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-muted-foreground italic">No phone</span>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs px-2.5"
-                      onClick={() => {
-                        setSelectedLead(buyer);
-                      }}
-                    >
-                      View CRM Profile
-                    </Button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <DialogFooter className="border-t pt-3 flex items-center justify-between sm:justify-between">
-            <p className="text-xs text-muted-foreground">
-              {matchingDialogProperty?.buyers.length || 0} potential buyer(s) with matching budget & location.
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setMatchingDialogProperty(null)}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Lead Drawer for viewing matching buyer details */}
-      <LeadDrawer
-        lead={selectedLead}
-        open={!!selectedLead}
-        onOpenChange={(open) => !open && setSelectedLead(null)}
       />
     </div>
   );
