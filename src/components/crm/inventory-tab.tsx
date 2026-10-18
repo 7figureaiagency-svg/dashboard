@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
   CheckCircle2,
@@ -8,11 +8,13 @@ import {
   LayoutGrid,
   LayoutList,
   MapPin,
+  MessageCircle,
   MessageSquare,
   Pencil,
   Phone,
   Plus,
   Search,
+  Sparkles,
   Trash2,
   Upload,
   User,
@@ -59,7 +61,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ToneBadge } from "@/components/crm/badges";
+import { StatusBadge, ToneBadge } from "@/components/crm/badges";
+import { LeadDrawer } from "@/components/crm/lead-drawer";
 import { Textarea } from "@/components/ui/textarea";
 import {
   uploadBrochure,
@@ -67,6 +70,7 @@ import {
   useApprovePropertySubmission,
   useDeleteProperty,
   useExecutives,
+  useLeads,
   usePropertySubmissions,
   useSaveProperty,
   useUpdatePropertySubmission,
@@ -90,6 +94,7 @@ import {
   STOCK_TYPES,
   toNumber,
   TRANSACTION_TYPES,
+  type Lead,
   type Property,
   type PropertySubmission,
   type Tone,
@@ -217,6 +222,51 @@ export function InventoryTab({
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("grid");
   const del = useDeleteProperty();
+
+  const { data: allLeads = [] } = useLeads();
+  const [matchingDialogProperty, setMatchingDialogProperty] = useState<{
+    property: Property;
+    buyers: Lead[];
+  } | null>(null);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
+  const matchingBuyersMap = useMemo(() => {
+    const map = new Map<string, Lead[]>();
+    for (const p of properties) {
+      const pLoc = (p.location || "").toLowerCase().trim();
+      const pCat = (p.property_category || "").toLowerCase().trim();
+      const pConfig = (p.configuration || "").toLowerCase().trim();
+      const pPrice = Number(p.price) || 0;
+
+      const matches = allLeads.filter((l) => {
+        if (l.status === "NOT_INTERESTED" || l.status === "DROPPED") return false;
+
+        let score = 0;
+        const lLoc = (l.location || "").toLowerCase().trim();
+        if (lLoc && pLoc && (pLoc.includes(lLoc) || lLoc.includes(pLoc))) {
+          score += 3;
+        }
+
+        const lType = (l.property_type || "").toLowerCase().trim();
+        if (lType) {
+          if (pConfig && (lType.includes(pConfig) || pConfig.includes(lType))) score += 2;
+          else if (pCat && (lType.includes(pCat) || pCat.includes(lType))) score += 1;
+        }
+
+        const lBudget = toNumber(l.budget as never);
+        if (lBudget > 0 && pPrice > 0) {
+          if (lBudget >= pPrice * 0.8) {
+            score += 2;
+          }
+        }
+
+        return score >= 2;
+      });
+
+      map.set(p.property_id, matches);
+    }
+    return map;
+  }, [properties, allLeads]);
 
   const { data: submissions = [] } = usePropertySubmissions();
   const pendingSubmissionsCount = submissions.filter(
@@ -388,6 +438,33 @@ export function InventoryTab({
                   </p>
                   <p className="text-muted-foreground">{p.assigned_executive_email || "—"}</p>
                 </div>
+
+                {/* ── 🎯 Reverse Matchmaker: Matching Buyers Pill ── */}
+                {(() => {
+                  const matchingBuyers = matchingBuyersMap.get(p.property_id) ?? [];
+                  return matchingBuyers.length > 0 ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="w-full justify-between border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 font-medium h-8 text-xs shadow-2xs"
+                      onClick={() =>
+                        setMatchingDialogProperty({ property: p, buyers: matchingBuyers })
+                      }
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="size-3.5 text-primary" />
+                        <span><b>{matchingBuyers.length}</b> Matching {matchingBuyers.length === 1 ? "Buyer" : "Buyers"}</span>
+                      </span>
+                      <span className="text-[10px] text-muted-foreground underline">View & Call</span>
+                    </Button>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground italic px-1">
+                      No matching buyers in CRM yet
+                    </p>
+                  );
+                })()}
+
                 <div className="flex flex-wrap gap-2">
                   {p.brochure_url && (
                     <Button asChild size="sm" variant="outline">
@@ -429,13 +506,14 @@ export function InventoryTab({
                 <TableHead>Area</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Executive</TableHead>
+                <TableHead>Matching Demand</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {properties.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                     No properties yet.
                   </TableCell>
                 </TableRow>
@@ -491,6 +569,27 @@ export function InventoryTab({
                     {p.assigned_executive_name || (
                       <span className="text-muted-foreground">Unassigned</span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const matchingBuyers = matchingBuyersMap.get(p.property_id) || [];
+                      return matchingBuyers.length > 0 ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2.5 border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-medium text-xs gap-1.5 shadow-2xs"
+                          onClick={() =>
+                            setMatchingDialogProperty({ property: p, buyers: matchingBuyers })
+                          }
+                          title={`View ${matchingBuyers.length} matching buyer leads`}
+                        >
+                          <Sparkles className="size-3 text-primary" />
+                          <span><b>{matchingBuyers.length}</b> {matchingBuyers.length === 1 ? "Buyer" : "Buyers"}</span>
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">None yet</span>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
@@ -719,21 +818,12 @@ function OwnerSubmissionsView({
                       {s.owner_phone && (
                         <div className="mt-1 flex items-center gap-2 text-xs">
                           <a
-                            href={`https://wa.me/${cleanPhone(s.owner_phone)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-0.5 text-emerald-600 hover:underline font-mono"
-                            title="Chat on WhatsApp"
-                          >
-                            <MessageSquare className="size-3" />
-                            {s.owner_phone}
-                          </a>
-                          <a
                             href={`tel:${s.owner_phone}`}
-                            className="text-muted-foreground hover:text-foreground"
+                            className="inline-flex items-center gap-1 text-primary hover:underline font-mono font-medium"
                             title="Call Owner"
                           >
                             <Phone className="size-3" />
+                            {s.owner_phone}
                           </a>
                         </div>
                       )}
@@ -889,12 +979,10 @@ function OwnerSubmissionsView({
                 <span className="text-xs font-mono text-muted-foreground block">{detailsSubmission.owner_phone || "—"}</span>
                 {detailsSubmission.owner_phone && (
                   <a
-                    href={`https://wa.me/${cleanPhone(detailsSubmission.owner_phone)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline mt-1"
+                    href={`tel:${detailsSubmission.owner_phone}`}
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1 font-medium"
                   >
-                    <MessageSquare className="size-3" /> Chat on WhatsApp
+                    <Phone className="size-3" /> Call Owner ({detailsSubmission.owner_phone})
                   </a>
                 )}
               </div>
@@ -1015,6 +1103,141 @@ function OwnerSubmissionsView({
         submission={editSubmission}
         open={!!editSubmission}
         onOpenChange={(open) => !open && setEditSubmission(null)}
+      />
+
+      {/* ── Reverse Demand Matchmaker Dialog ── */}
+      <Dialog
+        open={!!matchingDialogProperty}
+        onOpenChange={(open) => !open && setMatchingDialogProperty(null)}
+      >
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Sparkles className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">
+                  Reverse Demand Matchmaker
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Active CRM buyer leads matching{" "}
+                  <b className="text-foreground">
+                    {matchingDialogProperty?.property.project_name}
+                  </b>{" "}
+                  ({matchingDialogProperty?.property.location} ·{" "}
+                  {formatMoney(matchingDialogProperty?.property.price)})
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto pr-1 space-y-3 py-2">
+            {!matchingDialogProperty || matchingDialogProperty.buyers.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No active buyer leads currently match this property's criteria.
+              </div>
+            ) : (
+              matchingDialogProperty.buyers.map((buyer) => (
+                <div
+                  key={buyer.lead_id}
+                  className="rounded-lg border p-3.5 bg-card hover:border-primary/40 transition-colors shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm leading-tight text-foreground">
+                        {buyer.name || "Unnamed Buyer"}
+                      </span>
+                      <StatusBadge status={buyer.status} />
+                      {buyer.ai_score !== undefined && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          Score: {buyer.ai_score}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                      {buyer.phone && (
+                        <span className="font-mono text-foreground font-medium flex items-center gap-1">
+                          <Phone className="size-3 text-muted-foreground" />
+                          {buyer.phone}
+                        </span>
+                      )}
+                      <span>
+                        Budget:{" "}
+                        <b className="text-foreground">
+                          {buyer.budget ? formatMoney(buyer.budget) : "Flexible"}
+                        </b>
+                      </span>
+                      {buyer.location && (
+                        <span>
+                          Area: <b className="text-foreground">{buyer.location}</b>
+                        </span>
+                      )}
+                      {buyer.property_type && (
+                        <span>
+                          Type: <b className="text-foreground">{buyer.property_type}</b>
+                        </span>
+                      )}
+                    </div>
+                    {buyer.ai_notes && (
+                      <p className="text-xs text-muted-foreground line-clamp-1 italic mt-0.5">
+                        "{buyer.ai_notes}"
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    {buyer.phone ? (
+                      <Button
+                        asChild
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-8 px-3 gap-1.5 shadow-2xs"
+                        title={`Call ${buyer.name || "Buyer"}`}
+                      >
+                        <a href={`tel:${buyer.phone}`}>
+                          <Phone className="size-3.5" />
+                          <span>Call Lead</span>
+                        </a>
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">No phone</span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs px-2.5"
+                      onClick={() => {
+                        setSelectedLead(buyer);
+                      }}
+                    >
+                      View CRM Profile
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <DialogFooter className="border-t pt-3 flex items-center justify-between sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              {matchingDialogProperty?.buyers.length || 0} potential buyer(s) with matching budget & location.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setMatchingDialogProperty(null)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lead Drawer for viewing matching buyer details */}
+      <LeadDrawer
+        lead={selectedLead}
+        open={!!selectedLead}
+        onOpenChange={(open) => !open && setSelectedLead(null)}
       />
     </div>
   );

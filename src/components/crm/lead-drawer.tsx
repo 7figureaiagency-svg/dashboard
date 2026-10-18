@@ -6,15 +6,18 @@ import {
   CalendarX,
   CheckCircle2,
   History,
+  MessageSquare,
   MessageSquareText,
   Phone,
   RotateCcw,
   Save,
   Send,
+  Sparkles,
   Trash2,
   Trophy,
   UserCheck,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -25,6 +28,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogFooter as DialogFooter,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -47,7 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
-import { useInventory, useUpdateLead } from "@/lib/crm-data";
+import { useInventory, useLeadEvents, useUpdateLead } from "@/lib/crm-data";
 import {
   LEAD_STATUSES,
   STATUS_MAP,
@@ -213,6 +217,47 @@ export function LeadDrawer({
   const run = (values: Partial<Lead>, message: string, action: string) =>
     update.mutate({ leadId: lead.lead_id, values, message, lead, action, note: notes || null });
 
+  const { data: rawEvents = [], isLoading: eventsLoading } = useLeadEvents(lead.lead_id);
+
+  const chatMessages = useMemo(() => {
+    const list: Array<{ sender: "user" | "bot"; text: string; time: string; badge?: string }> = [];
+    for (const ev of rawEvents) {
+      const p = ev.payload || {};
+      if (p.userText) {
+        list.push({ sender: "user", text: p.userText, time: ev.created_at });
+      }
+      if (p.replySent || p.replyText) {
+        list.push({
+          sender: "bot",
+          text: p.replySent || p.replyText,
+          time: ev.created_at,
+          badge: p.state || ev.event_type,
+        });
+      }
+    }
+    return list;
+  }, [rawEvents]);
+
+  const matchingProperties = useMemo(() => {
+    if (!inventory || inventory.length === 0) return [];
+    const loc = (field("location") || "").toLowerCase().trim();
+    const budget = toNumber(field("budget") as never);
+    const cat = (field("property_type") || "").toLowerCase().trim();
+
+    return inventory
+      .filter((p) => {
+        let score = 0;
+        if (loc && (p.location?.toLowerCase().includes(loc) || loc.includes(p.location?.toLowerCase() || ""))) score += 3;
+        if (cat && (p.configuration?.toLowerCase().includes(cat) || p.property_category?.toLowerCase().includes(cat))) score += 2;
+        if (budget > 0 && p.price) {
+          const diff = Math.abs(Number(p.price) - budget);
+          if (diff / budget <= 0.3) score += 2;
+        }
+        return score > 0;
+      })
+      .slice(0, 4);
+  }, [inventory, profile.location, profile.budget, profile.property_type, lead]);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
@@ -224,6 +269,21 @@ export function LeadDrawer({
           <div className="flex flex-wrap gap-2 pt-1">
             <StatusBadge value={lead.status} />
             <PropertyStateBadge value={lead.property_state} />
+          </div>
+
+          {/* ── Direct Phone Call CTA (Strict Call-Only Policy) ── */}
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            {lead.phone ? (
+              <Button asChild size="sm" variant="default" className="h-8 gap-1.5 font-medium shadow-xs">
+                <a href={`tel:${lead.phone}`}>
+                  <Phone className="size-3.5" /> Call Client ({lead.phone})
+                </a>
+              </Button>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2.5 py-1 rounded-md border border-sky-200 dark:border-sky-800 font-mono">
+                Telegram ID: {lead.lead_id}
+              </span>
+            )}
           </div>
         </SheetHeader>
 
@@ -249,11 +309,14 @@ export function LeadDrawer({
 
           <Tabs defaultValue="ai">
             <TabsList className="w-full">
-              <TabsTrigger value="ai" className="flex flex-1 items-center gap-1.5">
-                <Bot className="size-3.5" /> AI activity &amp; follow-ups
+              <TabsTrigger value="ai" className="flex flex-1 items-center gap-1.5 text-xs">
+                <Bot className="size-3.5" /> Workflow
               </TabsTrigger>
-              <TabsTrigger value="exec" className="flex flex-1 items-center gap-1.5">
-                <History className="size-3.5" /> Sales Executive actions
+              <TabsTrigger value="chat" className="flex flex-1 items-center gap-1.5 text-xs">
+                <MessageSquare className="size-3.5" /> Chat Messages ({chatMessages.length})
+              </TabsTrigger>
+              <TabsTrigger value="exec" className="flex flex-1 items-center gap-1.5 text-xs">
+                <History className="size-3.5" /> History
               </TabsTrigger>
             </TabsList>
 
@@ -286,6 +349,48 @@ export function LeadDrawer({
                   </li>
                 ))}
               </ul>
+            </TabsContent>
+
+            <TabsContent value="chat" className="mt-3 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Actual conversation messages exchanged between the client and Nextgen AI Bot.
+              </p>
+              {eventsLoading && (
+                <p className="py-6 text-center text-xs text-muted-foreground">Loading chat history…</p>
+              )}
+              {!eventsLoading && chatMessages.length === 0 && (
+                <p className="py-6 text-center text-xs text-muted-foreground">No chat messages recorded yet.</p>
+              )}
+              {!eventsLoading && chatMessages.length > 0 && (
+                <div className="space-y-3 rounded-xl border bg-muted/30 p-3 max-h-[360px] overflow-y-auto">
+                  {chatMessages.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`flex flex-col ${msg.sender === "user" ? "items-start" : "items-end"}`}
+                    >
+                      <span className="text-[10px] text-muted-foreground mb-0.5 px-1 font-medium">
+                        {msg.sender === "user" ? (lead.name || lead.first_name || "Client") : "🤖 Nextgen AI Bot"}
+                      </span>
+                      <div
+                        className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
+                          msg.sender === "user"
+                            ? "bg-card border text-card-foreground rounded-tl-xs shadow-2xs"
+                            : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-950 dark:text-emerald-200 rounded-tr-xs shadow-2xs"
+                        }`}
+                      >
+                        <div
+                          dangerouslySetInnerHTML={{
+                            __html: msg.text.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>"),
+                          }}
+                        />
+                      </div>
+                      <span className="text-[9px] text-muted-foreground mt-0.5 px-1">
+                        {formatDate(msg.time)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="exec" className="mt-3 space-y-2">
@@ -647,6 +752,49 @@ export function LeadDrawer({
               <Save /> Save Updates
             </Button>
           </section>
+
+          {/* ── ⚡ Realtor Matchmaker: Top Matching Inventory ── */}
+          {matchingProperties.length > 0 && (
+            <section className="space-y-3 rounded-xl border border-primary/20 bg-primary/[0.02] p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Sparkles className="size-4 text-primary" /> Top Matching Inventory ({matchingProperties.length})
+                </h3>
+                <span className="text-[11px] text-muted-foreground">Auto-matched from live units</span>
+              </div>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {matchingProperties.map((prop) => (
+                  <div
+                    key={prop.property_id}
+                    className="flex flex-col justify-between rounded-lg border bg-card p-3 shadow-2xs"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-1">
+                        <p className="font-semibold text-sm leading-tight text-foreground">{prop.project_name}</p>
+                        <span className="text-xs font-bold text-primary">{formatMoney(prop.price)}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {prop.property_category} · {prop.configuration} · 📍 {prop.location}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center gap-1.5 pt-2 border-t border-border/50">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-7 text-xs flex-1"
+                        onClick={() => {
+                          set("selected_property_name", prop.project_name);
+                          toast.success(`Selected "${prop.project_name}" for this lead!`);
+                        }}
+                      >
+                        Select Unit
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <Separator />
 

@@ -974,6 +974,12 @@ async function classifyLeadIntent(
 
   if (lower === "stop" || lower.includes("unsubscribe") || lower.includes("not interested")) {
     fallbackIntent = "OPT_OUT";
+  } else if (lead?.post_visit_feedback_sent) {
+    if (/(?:^|\b)(?:2|2️⃣|two|option\s*2)\b/i.test(lower) || /^(?:nahi|nhi|na|no|nope|nathi|missed|couldn't|cancel)/i.test(lower.trim())) {
+      fallbackIntent = "CANNOT_ATTEND_VISIT";
+    } else if (/(?:^|\b)(?:1|1️⃣|one|option\s*1)\b/i.test(lower) || /^(?:ha|haan|ji\s*haan|yes|yep|yeah|attended)/i.test(lower.trim())) {
+      fallbackIntent = "CONFIRM_VISIT";
+    }
   } else if (lead?.state === "CRITERIA_CONFIRMATION_PENDING") {
     if (/^(1|1️⃣|first|1st|ha|haan|ha ji|yes|same|isi me|yahi|yahi criteria|dikhao|sure|chalo|done|ok|okay|sahi hai|barobar|saras)$/i.test(lower) || lower.includes("isi criteria") || lower.includes("same criteria") || lower.includes("yahi")) {
       fallbackIntent = "CONFIRM_SAME_CRITERIA";
@@ -2389,7 +2395,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v40-property-sync-and-visit-audit-fix",
+        version: "v41-post-visit-attendance-and-reschedule-overhaul",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -2710,7 +2716,10 @@ Deno.serve(async (req: Request) => {
         /(નથી\s*આવી\s*શકાય|નહી\s*આવાય|નહીં\s*આવી\s*શકાય|શક્ય\s*નથી|આવી\s*શકું\s*તેમ\s*નથી)/i.test(lower) ||
         /(?:cannot|can't|cant|won't|wont|will\s*not|wouldn't|would\s*not|unable\s*to|not\s*able\s*to)(?:\s+be\s*able\s*to)?\s*(?:come|attend|make\s*it|reach|visit|be\s*there)/i.test(lower) ||
         // Option 2 or direct negative replies to post-visit attendance confirmation
-        (Boolean(lead.post_visit_feedback_sent) && /^(?:2|2️⃣|two|option\s*2|nahi|nhi|na|no|nope|nathi|nathi\s*thai|nathi\s*gayo|nathi\s*aavi\s*sakyo|nahi\s*ho\s*payi|nahi\s*ho\s*paayi|nahi\s*gaya|nahi\s*gaye|nahi\s*gayi|missed|not\s*yet|couldn't|attend\s*nahi\s*ki|attend\s*nathi\s*kari|reschedule|cancel)$/i.test(lower.trim())) ||
+        (Boolean(lead.post_visit_feedback_sent) && (
+          /(?:^|\b)(?:2|2️⃣|two|option\s*2)\b/i.test(lower) ||
+          /^(?:2|2️⃣|two|option\s*2|nahi|nhi|na|no|nope|nathi|nathi\s*thai|nathi\s*gayo|nathi\s*aavi\s*sakyo|nahi\s*ho\s*payi|nahi\s*ho\s*paayi|nahi\s*gaya|nahi\s*gaye|nahi\s*gayi|missed|not\s*yet|couldn't|attend\s*nahi\s*ki|attend\s*nathi\s*kari|reschedule|cancel)/i.test(lower.trim())
+        )) ||
         /(not\s*possible\s*today|not\s*possible\s*for\s*me|cannot\s*make\s*it|could\s*not\s*make\s*it|missed\s*the\s*visit|won't\s*make\s*it|wont\s*make\s*it)/i.test(lower)
       );
 
@@ -2868,7 +2877,8 @@ Deno.serve(async (req: Request) => {
     else if (
       (lead.post_visit_feedback_sent || ["SITE_VISIT_BOOKED", "VISIT_BOOKED", "SITE_VISIT_DONE", "VISIT_DONE"].includes(lead.state)) &&
       (
-        /^(?:1|1️⃣|one|option\s*1|ha|haan|ji\s*haan|yes|yep|yeah|attended|visit\s*attend\s*ki|visit\s*attend\s*kari|attend\s*kari|gaya\s*tha|gaye\s*the|gayo\s*hato|visit\s*ho\s*gayi|visit\s*thai\s*gai|dekh\s*liya|joee\s*lidhi)$/i.test(lower.trim()) ||
+        /(?:^|\b)(?:1|1️⃣|one|option\s*1)\b/i.test(lower) ||
+        /^(?:ha|haan|ji\s*haan|yes|yep|yeah|attended|visit\s*attend\s*ki|visit\s*attend\s*kari|attend\s*kari|gaya\s*tha|gaye\s*the|gayo\s*hato|visit\s*ho\s*gayi|visit\s*thai\s*gai|dekh\s*liya|joee\s*lidhi)/i.test(lower.trim()) ||
         /(acha|achha|saras|badiya|good|nice|liked|pasand|mast|average|theek|bhav|price|budget|discount|negotiat|loan|bank|emi|interest|builder|developer|sitting|baithak|owner|meeting|offer|process|token|kharab|bekar|nathi\s*gamyu|gamyu|pasand\s*nathi|bahut\s*acha|visit\s*ho\s*gayi|visit\s*done|gaya\s*tha|dekh\s*liya|joee\s*lidhi|gayo\s*hato|visit\s*thai\s*gai|completed|attended|dekh\s*aaye|dekh\s*kar\s*aaye|dekhne\s*gaye)/i.test(lower) ||
         /(kaisa|kaisi|lagyo|lagi|kem|rate|kharch|cost|query|sawal|prashna)/i.test(lower)
       )
@@ -2905,8 +2915,9 @@ Deno.serve(async (req: Request) => {
         });
 
         const isLoan = /(loan|bank|emi|interest|finance)/i.test(lower);
-        const isNegotiation = /(bhav|price|discount|negotiat|kam|ochho|kamti|builder|developer|sitting|baithak|owner|meeting|kam\s*karo)/i.test(lower);
-        const isSimpleAttendanceOnly = /^(?:1|1️⃣|one|option\s*1|ha|haan|ji\s*haan|yes|yep|yeah|attended|visit\s*attend\s*ki|visit\s*attend\s*kari|attend\s*kari|gaya\s*tha|gaye\s*the|gayo\s*hato|visit\s*ho\s*gayi|visit\s*thai\s*gai|dekh\s*liya|joee\s*lidhi)$/i.test(lower.trim());
+        const isSimpleAttendanceOnly =
+          /(?:^|\b)(?:1|1️⃣|one|option\s*1)\b/i.test(lower) ||
+          /^(?:ha|haan|ji\s*haan|yes|yep|yeah|attended|visit\s*attend\s*ki|visit\s*attend\s*kari|attend\s*kari|gaya\s*tha|gaye\s*the|gayo\s*hato|visit\s*ho\s*gayi|visit\s*thai\s*gai|dekh\s*liya|joee\s*lidhi)/i.test(lower.trim());
 
         if (isNegotiation) {
           replyText =

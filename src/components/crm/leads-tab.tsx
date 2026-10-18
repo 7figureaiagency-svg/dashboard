@@ -1,5 +1,19 @@
 import { useMemo, useState } from "react";
-import { Phone, Search, Send, SlidersHorizontal } from "lucide-react";
+import {
+  AlertTriangle,
+  Building2,
+  CalendarCheck,
+  CheckCircle2,
+  Columns3,
+  LayoutList,
+  MapPin,
+  Phone,
+  Search,
+  Send,
+  SlidersHorizontal,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -28,6 +42,7 @@ import { useActivity, useUpdateLead } from "@/lib/crm-data";
 import {
   formatDate,
   formatMoney,
+  inDatePreset,
   isVisitBookedStatus,
   isVisitDoneStatus,
   STATUS_MAP,
@@ -66,6 +81,7 @@ export function LeadsTab({
   const [profile, setProfile] = useState<string | null>(null);
   const [profilePeriod, setProfilePeriod] = useState<Period>("30d");
   const [sweeping, setSweeping] = useState(false);
+  const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const update = useUpdateLead();
 
   const handleRunSweep = async () => {
@@ -114,9 +130,84 @@ export function LeadsTab({
     [leads],
   );
 
+  type ActionFilter = "ALL" | "TODAY_VISITS" | "ACTION_NEEDED" | "QUALIFIED" | "FRESH";
+  const [actionFilter, setActionFilter] = useState<ActionFilter>("ALL");
+
+  const todayVisitsCount = useMemo(
+    () =>
+      leads.filter(
+        (l) =>
+          inDatePreset(l.site_visit_datetime, "today") ||
+          inDatePreset(l.site_visit_at, "today"),
+      ).length,
+    [leads],
+  );
+
+  const actionNeededCount = useMemo(
+    () =>
+      leads.filter(
+        (l) =>
+          l.status === "VISIT_MISSED" ||
+          l.status === "HUMAN_HANDOVER" ||
+          l.property_state === "HUMAN_HANDOVER",
+      ).length,
+    [leads],
+  );
+
+  const qualifiedCount = useMemo(
+    () =>
+      leads.filter(
+        (l) =>
+          l.status === "QUALIFIED" ||
+          l.status === "SITE_VISIT_BOOKED" ||
+          l.status === "VISIT_BOOKED",
+      ).length,
+    [leads],
+  );
+
+  const freshCount = useMemo(
+    () =>
+      leads.filter(
+        (l) =>
+          l.status === "NEW" ||
+          l.status === "FRESH" ||
+          l.status === "QUALIFYING",
+      ).length,
+    [leads],
+  );
+
   const rows = useMemo(
     () =>
       leads.filter((l) => {
+        if (actionFilter === "TODAY_VISITS") {
+          if (
+            !inDatePreset(l.site_visit_datetime, "today") &&
+            !inDatePreset(l.site_visit_at, "today")
+          )
+            return false;
+        } else if (actionFilter === "ACTION_NEEDED") {
+          if (
+            l.status !== "VISIT_MISSED" &&
+            l.status !== "HUMAN_HANDOVER" &&
+            l.property_state !== "HUMAN_HANDOVER"
+          )
+            return false;
+        } else if (actionFilter === "QUALIFIED") {
+          if (
+            l.status !== "QUALIFIED" &&
+            l.status !== "SITE_VISIT_BOOKED" &&
+            l.status !== "VISIT_BOOKED"
+          )
+            return false;
+        } else if (actionFilter === "FRESH") {
+          if (
+            l.status !== "NEW" &&
+            l.status !== "FRESH" &&
+            l.status !== "QUALIFYING"
+          )
+            return false;
+        }
+
         if (executive !== ALL && l.assigned_executive_name !== executive) return false;
         if (status !== ALL) {
           if (status === "SITE_VISIT_BOOKED") {
@@ -138,11 +229,184 @@ export function LeadsTab({
         }
         return true;
       }),
-    [leads, executive, status, source, from, to, search],
+    [leads, executive, status, source, from, to, search, actionFilter],
   );
+
+  const pipelineColumns = useMemo(() => {
+    return [
+      {
+        id: "qualifying",
+        title: "In Qualifying",
+        headerBg: "border-sky-500/20 bg-sky-500/5 text-sky-700 dark:text-sky-300",
+        countBg: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+        leads: rows.filter(
+          (l) =>
+            l.status === "NEW" ||
+            l.status === "FRESH" ||
+            l.status === "QUALIFYING" ||
+            l.status === "CRITERIA_CONFIRMATION_PENDING" ||
+            l.status === "REQUIREMENT_GATHERED"
+        ),
+      },
+      {
+        id: "qualified",
+        title: "Qualified Prospects",
+        headerBg: "border-indigo-500/20 bg-indigo-500/5 text-indigo-700 dark:text-indigo-300",
+        countBg: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300",
+        leads: rows.filter((l) => l.status === "QUALIFIED"),
+      },
+      {
+        id: "scheduled",
+        title: "Visit Scheduled",
+        headerBg: "border-emerald-500/20 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300",
+        countBg: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+        leads: rows.filter((l) => isVisitBookedStatus(l.status)),
+      },
+      {
+        id: "action_needed",
+        title: "Action Needed / Alert",
+        headerBg: "border-amber-500/20 bg-amber-500/5 text-amber-700 dark:text-amber-300",
+        countBg: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+        leads: rows.filter(
+          (l) =>
+            l.status === "VISIT_MISSED" ||
+            l.status === "HUMAN_HANDOVER" ||
+            l.property_state === "HUMAN_HANDOVER" ||
+            l.status === "RESCHEDULE_REQUESTED"
+        ),
+      },
+      {
+        id: "decision",
+        title: "Visited / Closing",
+        headerBg: "border-teal-500/20 bg-teal-500/5 text-teal-700 dark:text-teal-300",
+        countBg: "bg-teal-500/15 text-teal-700 dark:text-teal-300",
+        leads: rows.filter(
+          (l) => l.status === "DEAL_WON" || isVisitDoneStatus(l.status)
+        ),
+      },
+      {
+        id: "dropped",
+        title: "Dropped / Junk",
+        headerBg: "border-muted-foreground/20 bg-muted/40 text-muted-foreground",
+        countBg: "bg-muted-foreground/15 text-muted-foreground",
+        leads: rows.filter(
+          (l) => l.status === "NOT_INTERESTED" || l.status === "DROPPED"
+        ),
+      },
+    ];
+  }, [rows]);
 
   return (
     <div className="space-y-4">
+      {/* ── 🚀 Realtor Operational Triage Strip ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <button
+          type="button"
+          onClick={() => setActionFilter(actionFilter === "TODAY_VISITS" ? "ALL" : "TODAY_VISITS")}
+          className={`flex flex-col text-left rounded-xl border p-3.5 transition-all ${
+            actionFilter === "TODAY_VISITS"
+              ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/20 shadow-sm"
+              : "bg-card hover:bg-muted/50 border-border"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <CalendarCheck className="size-3.5 text-emerald-600" /> Visits Today
+            </span>
+            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-600">
+              {todayVisitsCount}
+            </span>
+          </div>
+          <p className="mt-2 text-xl font-bold tracking-tight text-foreground">{todayVisitsCount}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Scheduled for today</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActionFilter(actionFilter === "ACTION_NEEDED" ? "ALL" : "ACTION_NEEDED")}
+          className={`flex flex-col text-left rounded-xl border p-3.5 transition-all ${
+            actionFilter === "ACTION_NEEDED"
+              ? "border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/20 shadow-sm"
+              : "bg-card hover:bg-muted/50 border-border"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <AlertTriangle className="size-3.5 text-amber-600" /> Action Needed
+            </span>
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-bold text-amber-600">
+              {actionNeededCount}
+            </span>
+          </div>
+          <p className="mt-2 text-xl font-bold tracking-tight text-foreground">{actionNeededCount}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Missed visits & handovers</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActionFilter(actionFilter === "QUALIFIED" ? "ALL" : "QUALIFIED")}
+          className={`flex flex-col text-left rounded-xl border p-3.5 transition-all ${
+            actionFilter === "QUALIFIED"
+              ? "border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500/20 shadow-sm"
+              : "bg-card hover:bg-muted/50 border-border"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <CheckCircle2 className="size-3.5 text-indigo-600" /> Qualified Leads
+            </span>
+            <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-xs font-bold text-indigo-600">
+              {qualifiedCount}
+            </span>
+          </div>
+          <p className="mt-2 text-xl font-bold tracking-tight text-foreground">{qualifiedCount}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Budget & area verified</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActionFilter(actionFilter === "FRESH" ? "ALL" : "FRESH")}
+          className={`flex flex-col text-left rounded-xl border p-3.5 transition-all ${
+            actionFilter === "FRESH"
+              ? "border-sky-500 bg-sky-500/10 ring-2 ring-sky-500/20 shadow-sm"
+              : "bg-card hover:bg-muted/50 border-border"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-sky-600" /> In Qualifying
+            </span>
+            <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-bold text-sky-600">
+              {freshCount}
+            </span>
+          </div>
+          <p className="mt-2 text-xl font-bold tracking-tight text-foreground">{freshCount}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Active AI conversations</p>
+        </button>
+      </div>
+
+      {actionFilter !== "ALL" && (
+        <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1.5 text-xs text-muted-foreground">
+          <span>
+            Active quick filter:{" "}
+            <strong className="text-foreground">
+              {actionFilter === "TODAY_VISITS" && "Today's Site Visits"}
+              {actionFilter === "ACTION_NEEDED" && "Action Needed (Missed Visits / Handover)"}
+              {actionFilter === "QUALIFIED" && "Qualified Prospects"}
+              {actionFilter === "FRESH" && "In Qualifying"}
+            </strong>{" "}
+            ({rows.length} leads shown)
+          </span>
+          <button
+            type="button"
+            onClick={() => setActionFilter("ALL")}
+            className="ml-auto inline-flex items-center gap-1 text-primary hover:underline font-medium"
+          >
+            <X className="size-3" /> Clear quick filter
+          </button>
+        </div>
+      )}
+
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 pt-6">
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -206,115 +470,295 @@ export function LeadsTab({
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Executive</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>AI bot</TableHead>
-                <TableHead>Selected property</TableHead>
-                <TableHead>Budget</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading && (
-                <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                    Loading leads…
-                  </TableCell>
-                </TableRow>
-              )}
-              {!loading && rows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                    No leads match these filters.
-                  </TableCell>
-                </TableRow>
-              )}
-              {rows.map((lead) => (
-                <TableRow key={lead.lead_id}>
-                  <TableCell className="font-medium">{lead.name || "Unnamed"}</TableCell>
-                  <TableCell>
-                    {lead.assigned_executive_name ? (
-                      <button
-                        className="font-medium text-primary hover:underline"
-                        onClick={() => setProfile(lead.assigned_executive_name)}
-                      >
-                        {lead.assigned_executive_name}
-                      </button>
-                    ) : (
-                      <span className="text-muted-foreground">Unassigned</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{lead.phone || "—"}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <StatusBadge value={lead.status} />
-                      {lead.property_state === "HUMAN_HANDOVER" && (
-                        <PropertyStateBadge value="HUMAN_HANDOVER" />
-                      )}
-                      {lead.pre_visit_reminder_sent && (
-                        <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                          ⏰ Reminder Sent
-                        </span>
-                      )}
-                      {lead.post_visit_feedback_sent && (
-                        <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">
-                          💬 Survey Sent
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={!!lead.bot_active}
-                        aria-label="Toggle AI bot"
-                        onCheckedChange={(v) =>
-                          update.mutate({
-                            leadId: lead.lead_id,
-                            values: { bot_active: v },
-                            message: v ? "AI bot activated" : "AI bot paused",
-                            lead,
-                            action: "BOT_TOGGLED",
-                          })
-                        }
-                      />
-                      <ToneBadge
-                        tone={lead.bot_active ? "green" : "gray"}
-                        label={lead.bot_active ? "AI Active" : "AI Paused"}
-                      />
-                    </div>
-                  </TableCell>
-                  <TableCell>{lead.selected_property_name || "—"}</TableCell>
-                  <TableCell>{formatMoney(lead.budget)}</TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {formatDate(lead.created_at)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button asChild size="sm" variant="outline" disabled={!lead.phone}>
-                        <a href={`tel:${lead.phone ?? ""}`}>
-                          <Phone /> Call Now
-                        </a>
-                      </Button>
-                      <Button size="sm" onClick={() => setSelected(lead)}>
-                        Open
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+      {/* ── 📊 View Switcher Bar (Table View ⟷ Pipeline Board) ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1 shadow-2xs">
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === "table" ? "default" : "ghost"}
+            className="h-8 gap-1.5 text-xs font-medium"
+            onClick={() => setViewMode("table")}
+          >
+            <LayoutList className="size-3.5" /> Table View ({rows.length})
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === "kanban" ? "default" : "ghost"}
+            className="h-8 gap-1.5 text-xs font-medium"
+            onClick={() => setViewMode("kanban")}
+          >
+            <Columns3 className="size-3.5" /> Pipeline Board
+          </Button>
         </div>
-      </Card>
+
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>
+            Showing <b>{rows.length}</b> {rows.length === 1 ? "lead" : "leads"}
+          </span>
+          {viewMode === "kanban" && (
+            <span className="hidden sm:inline-block text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+              6 Pipeline Stages
+            </span>
+          )}
+        </div>
+      </div>
+
+      {viewMode === "kanban" ? (
+        <div className="overflow-x-auto pb-4">
+          <div className="flex min-w-[1250px] gap-3.5 items-start">
+            {pipelineColumns.map((col) => (
+              <div
+                key={col.id}
+                className="flex flex-1 flex-col rounded-xl border bg-card/60 backdrop-blur-xs shadow-2xs min-w-[200px]"
+              >
+                {/* Column Header */}
+                <div
+                  className={`flex items-center justify-between border-b px-3.5 py-2.5 rounded-t-xl ${col.headerBg}`}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-semibold text-xs tracking-tight truncate">
+                      {col.title}
+                    </span>
+                  </div>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${col.countBg}`}
+                  >
+                    {col.leads.length}
+                  </span>
+                </div>
+
+                {/* Column Card Body */}
+                <div className="flex-1 space-y-2.5 p-2.5 min-h-[350px] max-h-[72vh] overflow-y-auto">
+                  {loading && (
+                    <p className="py-8 text-center text-xs text-muted-foreground">Loading…</p>
+                  )}
+                  {!loading && col.leads.length === 0 && (
+                    <div className="flex h-32 flex-col items-center justify-center rounded-lg border border-dashed border-border/60 text-center p-3 text-xs text-muted-foreground">
+                      <span>No leads in this stage</span>
+                    </div>
+                  )}
+                  {!loading &&
+                    col.leads.map((lead) => (
+                      <div
+                        key={lead.lead_id}
+                        onClick={() => setSelected(lead)}
+                        className="group relative flex flex-col justify-between rounded-lg border bg-card p-3 shadow-2xs hover:border-primary/40 hover:shadow-xs transition-all cursor-pointer"
+                      >
+                        {/* Top: Customer Name & Budget */}
+                        <div className="flex items-start justify-between gap-1.5">
+                          <span className="font-semibold text-sm leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                            {lead.name || lead.first_name || "Unnamed"}
+                          </span>
+                          <span className="shrink-0 text-xs font-bold text-primary">
+                            {formatMoney(lead.budget)}
+                          </span>
+                        </div>
+
+                        {/* Middle Info */}
+                        <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
+                          {(lead.property_type || lead.location) && (
+                            <p className="flex items-center gap-1.5 truncate text-[11px]">
+                              <MapPin className="size-3 shrink-0 text-muted-foreground/70" />
+                              <span className="truncate">
+                                {[lead.property_type, lead.location].filter(Boolean).join(" · ")}
+                              </span>
+                            </p>
+                          )}
+
+                          {lead.selected_property_name && (
+                            <p className="flex items-center gap-1.5 text-[11px] font-medium text-foreground/90 truncate">
+                              <Building2 className="size-3 shrink-0 text-primary" />
+                              <span className="truncate">{lead.selected_property_name}</span>
+                            </p>
+                          )}
+
+                          {(lead.site_visit_datetime || lead.site_visit_at) && (
+                            <div className="flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                              <CalendarCheck className="size-3 shrink-0" />
+                              <span>{formatDate(lead.site_visit_datetime || lead.site_visit_at)}</span>
+                            </div>
+                          )}
+
+                          {lead.pre_visit_reminder_sent && !lead.post_visit_feedback_sent && (
+                            <span className="inline-block text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                              ⏰ Reminder Dispatched
+                            </span>
+                          )}
+
+                          {lead.post_visit_feedback_sent && (
+                            <span className="inline-block text-[10px] text-teal-600 dark:text-teal-400 font-medium">
+                              💬 Survey Dispatched
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Card Footer: Executive & Call CTA */}
+                        <div
+                          className="mt-3 flex items-center justify-between gap-1 border-t border-border/50 pt-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-[10px] text-muted-foreground truncate max-w-[85px]">
+                            {lead.assigned_executive_name || "Unassigned"}
+                          </span>
+
+                          <div className="flex items-center gap-1">
+                            {lead.phone ? (
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-2 text-[11px] gap-1 border-primary/20 text-primary hover:bg-primary/5 shadow-2xs font-medium"
+                                title={`Call ${lead.name || "Client"}`}
+                              >
+                                <a href={`tel:${lead.phone}`}>
+                                  <Phone className="size-2.5" />
+                                  <span>Call</span>
+                                </a>
+                              </Button>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                TG
+                              </span>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-1.5 text-[11px]"
+                              onClick={() => setSelected(lead)}
+                            >
+                              Open
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Executive</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>AI bot</TableHead>
+                  <TableHead>Selected property</TableHead>
+                  <TableHead>Budget</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                      Loading leads…
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!loading && rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                      No leads match these filters.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {rows.map((lead) => (
+                  <TableRow key={lead.lead_id}>
+                    <TableCell className="font-medium">{lead.name || "Unnamed"}</TableCell>
+                    <TableCell>
+                      {lead.assigned_executive_name ? (
+                        <button
+                          className="font-medium text-primary hover:underline"
+                          onClick={() => setProfile(lead.assigned_executive_name)}
+                        >
+                          {lead.assigned_executive_name}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground">Unassigned</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {lead.phone ? (
+                        <span className="font-mono text-xs">{lead.phone}</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800 font-mono">
+                          TG: {lead.lead_id}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <StatusBadge value={lead.status} />
+                        {lead.property_state === "HUMAN_HANDOVER" && (
+                          <PropertyStateBadge value="HUMAN_HANDOVER" />
+                        )}
+                        {lead.pre_visit_reminder_sent && (
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                            ⏰ Reminder Sent
+                          </span>
+                        )}
+                        {lead.post_visit_feedback_sent && (
+                          <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">
+                            💬 Survey Sent
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={!!lead.bot_active}
+                          aria-label="Toggle AI bot"
+                          onCheckedChange={(v) =>
+                            update.mutate({
+                              leadId: lead.lead_id,
+                              values: { bot_active: v },
+                              message: v ? "AI bot activated" : "AI bot paused",
+                              lead,
+                              action: "BOT_TOGGLED",
+                            })
+                          }
+                        />
+                        <ToneBadge
+                          tone={lead.bot_active ? "green" : "gray"}
+                          label={lead.bot_active ? "AI Active" : "AI Paused"}
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell>{lead.selected_property_name || "—"}</TableCell>
+                    <TableCell>{formatMoney(lead.budget)}</TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDate(lead.created_at)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end items-center gap-1.5">
+                        <Button asChild size="sm" variant="outline" className="h-8 gap-1.5" disabled={!lead.phone}>
+                          <a href={`tel:${lead.phone ?? ""}`}>
+                            <Phone className="size-3.5 text-primary" />
+                            <span>Call</span>
+                          </a>
+                        </Button>
+                        <Button size="sm" className="h-8" onClick={() => setSelected(lead)}>
+                          Open
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
 
       <LeadDrawer
         lead={selected ? (leads.find((l) => l.lead_id === selected.lead_id) ?? selected) : null}

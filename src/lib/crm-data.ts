@@ -110,6 +110,33 @@ export function useActivity() {
   });
 }
 
+export function useLeadEvents(leadId?: string | null) {
+  return useQuery({
+    queryKey: ["lead_events", leadId],
+    queryFn: async () => {
+      if (!leadId) return [];
+      const { data, error } = await supabase
+        .from("lead_events" as any)
+        .select("*")
+        .eq("lead_id", leadId)
+        .order("created_at", { ascending: true })
+        .limit(50);
+      if (error) {
+        console.warn("fetch lead_events error:", error);
+        return [];
+      }
+      return (data ?? []) as Array<{
+        id: string;
+        event_type: string;
+        created_at: string;
+        payload: any;
+      }>;
+    },
+    enabled: !!leadId,
+    refetchInterval: 15000,
+  });
+}
+
 async function fetchInventoryLiteMap(): Promise<
   Map<string, { project_name: string; price: number; map_url?: string }>
 > {
