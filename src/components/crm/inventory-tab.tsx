@@ -1148,7 +1148,7 @@ function OwnerSubmissionsView({
                       <span className="font-semibold text-sm leading-tight text-foreground">
                         {buyer.name || "Unnamed Buyer"}
                       </span>
-                      <StatusBadge status={buyer.status} />
+                      <StatusBadge value={buyer.status} />
                       {buyer.ai_score !== undefined && (
                         <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                           Score: {buyer.ai_score}

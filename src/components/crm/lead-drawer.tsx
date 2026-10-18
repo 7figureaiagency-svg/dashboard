@@ -191,6 +191,49 @@ export function LeadDrawer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects]);
 
+  // Lead Events & Chat Messages (called unconditionally on every render)
+  const { data: rawEvents = [], isLoading: eventsLoading } = useLeadEvents(lead?.lead_id);
+
+  const chatMessages = useMemo(() => {
+    if (!lead) return [];
+    const list: Array<{ sender: "user" | "bot"; text: string; time: string; badge?: string }> = [];
+    for (const ev of rawEvents) {
+      const p = ev.payload || {};
+      if (p.userText) {
+        list.push({ sender: "user", text: p.userText, time: ev.created_at });
+      }
+      if (p.replySent || p.replyText) {
+        list.push({
+          sender: "bot",
+          text: p.replySent || p.replyText,
+          time: ev.created_at,
+          badge: p.state || ev.event_type,
+        });
+      }
+    }
+    return list;
+  }, [rawEvents, lead]);
+
+  const matchingProperties = useMemo(() => {
+    if (!inventory || inventory.length === 0 || !lead) return [];
+    const loc = ((profile.location !== undefined ? profile.location : lead.location) || "").toLowerCase().trim();
+    const budget = toNumber((profile.budget !== undefined ? profile.budget : lead.budget) as never);
+    const cat = ((profile.property_type !== undefined ? profile.property_type : lead.property_type) || "").toLowerCase().trim();
+
+    return inventory
+      .filter((p) => {
+        let score = 0;
+        if (loc && (p.location?.toLowerCase().includes(loc) || loc.includes(p.location?.toLowerCase() || ""))) score += 3;
+        if (cat && (p.configuration?.toLowerCase().includes(cat) || p.property_category?.toLowerCase().includes(cat))) score += 2;
+        if (budget > 0 && p.price) {
+          const diff = Math.abs(Number(p.price) - budget);
+          if (diff / budget <= 0.3) score += 2;
+        }
+        return score > 0;
+      })
+      .slice(0, 4);
+  }, [inventory, profile.location, profile.budget, profile.property_type, lead]);
+
   if (!lead) return null;
   const dropped = lead.status === "NOT_INTERESTED";
   const dealWon = lead.status === "DEAL_WON";
@@ -216,47 +259,6 @@ export function LeadDrawer({
 
   const run = (values: Partial<Lead>, message: string, action: string) =>
     update.mutate({ leadId: lead.lead_id, values, message, lead, action, note: notes || null });
-
-  const { data: rawEvents = [], isLoading: eventsLoading } = useLeadEvents(lead.lead_id);
-
-  const chatMessages = useMemo(() => {
-    const list: Array<{ sender: "user" | "bot"; text: string; time: string; badge?: string }> = [];
-    for (const ev of rawEvents) {
-      const p = ev.payload || {};
-      if (p.userText) {
-        list.push({ sender: "user", text: p.userText, time: ev.created_at });
-      }
-      if (p.replySent || p.replyText) {
-        list.push({
-          sender: "bot",
-          text: p.replySent || p.replyText,
-          time: ev.created_at,
-          badge: p.state || ev.event_type,
-        });
-      }
-    }
-    return list;
-  }, [rawEvents]);
-
-  const matchingProperties = useMemo(() => {
-    if (!inventory || inventory.length === 0) return [];
-    const loc = (field("location") || "").toLowerCase().trim();
-    const budget = toNumber(field("budget") as never);
-    const cat = (field("property_type") || "").toLowerCase().trim();
-
-    return inventory
-      .filter((p) => {
-        let score = 0;
-        if (loc && (p.location?.toLowerCase().includes(loc) || loc.includes(p.location?.toLowerCase() || ""))) score += 3;
-        if (cat && (p.configuration?.toLowerCase().includes(cat) || p.property_category?.toLowerCase().includes(cat))) score += 2;
-        if (budget > 0 && p.price) {
-          const diff = Math.abs(Number(p.price) - budget);
-          if (diff / budget <= 0.3) score += 2;
-        }
-        return score > 0;
-      })
-      .slice(0, 4);
-  }, [inventory, profile.location, profile.budget, profile.property_type, lead]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
