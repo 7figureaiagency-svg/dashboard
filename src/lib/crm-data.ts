@@ -364,7 +364,7 @@ export function useApprovePropertySubmission() {
         ? Number(submission.super_built_up_sqft)
         : null;
 
-      // Extract numeric BHK count for inventory.bhk_num
+      // Extract numeric BHK count for attributes.bhk_num
       const bhkMatch = (submission.configuration || "").match(/\b([1-5])\s*bhk\b/i);
       const bhk_num = bhkMatch ? Number(bhkMatch[1]) : null;
 
@@ -373,14 +373,15 @@ export function useApprovePropertySubmission() {
         ? (submission.attributes as Record<string, unknown>)
         : {};
 
-      // 3. Insert into inventory
+      const resolvedClientId = submission.client_id || clientId || "8699dca1-2b97-4367-85b8-8a0db2fd51f5";
+
+      // 3. Insert into inventory (note: bhk_num lives inside attributes jsonb, not as a top-level column)
       const { error: insertError } = await supabase.from("inventory").insert({
         property_id: propertyId,
-        client_id: submission.client_id || clientId || null,
+        client_id: resolvedClientId,
         project_name: submission.project_name || submission.society_name || "Direct Owner Property",
         property_category: propertyCategory,
         configuration: submission.configuration || "2BHK",
-        bhk_num,
         location: submission.location || "Vadodara",
         city: "Vadodara",
         price,
@@ -393,9 +394,12 @@ export function useApprovePropertySubmission() {
         transaction_type: listingType === "RENT" ? "RENTAL" : "RESALE",
         furnished_status: submission.furnishing_status || "UNFURNISHED",
         possession_status: submission.possession_status || "READY_TO_MOVE",
+        price_negotiable: false,
+        amenities: [],
         image_urls: submission.images ?? [],
         attributes: {
           ...rawAttrs,
+          bhk_num,
           floor_number: rawAttrs.floor_number ?? null,
           total_floors: rawAttrs.total_floors ?? null,
           bathrooms: rawAttrs.bathrooms ?? null,
