@@ -71,10 +71,14 @@ export function LeadsTab({
   /** When set, the executive filter is locked to this person. */
   lockedExecutive?: string | null;
 }) {
-  const [executive, setExecutive] = useState(ALL);
+  const [executive, setExecutive] = useState(lockedExecutive ?? ALL);
   const [status, setStatus] = useState(ALL);
   const [source, setSource] = useState(ALL);
   const [from, setFrom] = useState("");
+
+  useEffect(() => {
+    if (lockedExecutive) setExecutive(lockedExecutive);
+  }, [lockedExecutive]);
   const [to, setTo] = useState("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Lead | null>(null);
@@ -454,19 +458,21 @@ export function LeadsTab({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex items-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRunSweep}
-              disabled={sweeping}
-              className="h-9 gap-1.5 font-medium border-primary/20 text-primary hover:bg-primary/5"
-              title="Run Automated Pre-Visit Reminders, Post-Visit Feedback & Daily Qualification Follow-Up"
-            >
-              <Send className={`size-3.5 ${sweeping ? "animate-spin" : ""}`} />
-              {sweeping ? "Sweeping..." : "Run Follow-Up Sweep"}
-            </Button>
-          </div>
+          {!lockedExecutive && (
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRunSweep}
+                disabled={sweeping}
+                className="h-9 gap-1.5 font-medium border-primary/20 text-primary hover:bg-primary/5"
+                title="Run Automated Pre-Visit Reminders, Post-Visit Feedback & Daily Qualification Follow-Up (Admin Only)"
+              >
+                <Send className={`size-3.5 ${sweeping ? "animate-spin" : ""}`} />
+                {sweeping ? "Sweeping..." : "Run Follow-Up Sweep"}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

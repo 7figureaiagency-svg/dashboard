@@ -380,11 +380,7 @@ export function LeadDrawer({
                             : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-950 dark:text-emerald-200 rounded-tr-xs shadow-2xs"
                         }`}
                       >
-                        <div
-                          dangerouslySetInnerHTML={{
-                            __html: msg.text.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>"),
-                          }}
-                        />
+                        <div className="whitespace-pre-wrap break-words">{msg.text}</div>
                       </div>
                       <span className="text-[9px] text-muted-foreground mt-0.5 px-1">
                         {formatDate(msg.time)}
