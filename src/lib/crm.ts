@@ -601,11 +601,18 @@ export function isVisitDoneStatus(status?: string | null): boolean {
   );
 }
 
-export function hydrateLead(row: LeadRow, executivesById: Map<string, ExecutiveLite>): Lead {
+export function hydrateLead(
+  row: LeadRow,
+  executivesById: Map<string, ExecutiveLite>,
+  inventoryById?: Map<string, { project_name: string; price: number; map_url?: string }>,
+): Lead {
   const raw = row as Record<string, unknown>;
   const meta = ((raw.metadata as Record<string, unknown> | null) ?? {}) as Record<string, unknown>;
   const exec = row.assigned_executive_id
     ? executivesById.get(row.assigned_executive_id)
+    : undefined;
+  const matchedProp = row.selected_property_id && inventoryById
+    ? inventoryById.get(row.selected_property_id)
     : undefined;
 
   const firstName = (raw.first_name as string) || (raw.name as string)?.split(" ")[0] || "Lead";
@@ -652,10 +659,17 @@ export function hydrateLead(row: LeadRow, executivesById: Map<string, ExecutiveL
     followup_type: metaStr(meta, "followup_type"),
     followup_message: metaStr(meta, "followup_message"),
     selected_property_name:
-      metaStr(meta, "selected_property_name") || (raw.selected_property_id as string) || null,
+      metaStr(meta, "selected_property_name") ||
+      matchedProp?.project_name ||
+      (raw.selected_property_id as string) ||
+      null,
     selected_property_price:
-      metaNum(meta, "selected_property_price") || (raw.budget as number) || null,
-    selected_property_map_url: metaStr(meta, "selected_property_map_url"),
+      metaNum(meta, "selected_property_price") ||
+      matchedProp?.price ||
+      (raw.budget as number) ||
+      null,
+    selected_property_map_url:
+      metaStr(meta, "selected_property_map_url") || matchedProp?.map_url || null,
     selected_property_brochure_url: metaStr(meta, "selected_property_brochure_url"),
     portal_property_id: metaStr(meta, "portal_property_id"),
   };

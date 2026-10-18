@@ -99,7 +99,13 @@ function Dashboard() {
   }, [leadsQuery.data, me, isAdmin, myExecutiveId]);
 
   const leads = useMemo(
-    () => myLeads.filter((l) => inDatePreset(l.created_at, preset)),
+    () =>
+      myLeads.filter(
+        (l) =>
+          inDatePreset(l.created_at, preset) ||
+          inDatePreset(l.site_visit_datetime, preset) ||
+          inDatePreset(l.site_visit_at, preset),
+      ),
     [myLeads, preset],
   );
 

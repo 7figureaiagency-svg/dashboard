@@ -133,7 +133,7 @@ export function LeadsTab({
           return false;
         if (search) {
           const q = search.toLowerCase();
-          const hay = `${l.name ?? ""} ${l.phone ?? ""} ${l.selected_property_name ?? ""}`;
+          const hay = `${l.name ?? ""} ${l.first_name ?? ""} ${l.phone ?? ""} ${l.selected_property_name ?? ""} ${l.location ?? ""} ${l.lead_id ?? ""}`;
           if (!hay.toLowerCase().includes(q)) return false;
         }
         return true;

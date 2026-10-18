@@ -110,16 +110,39 @@ export function useActivity() {
   });
 }
 
+async function fetchInventoryLiteMap(): Promise<
+  Map<string, { project_name: string; price: number; map_url?: string }>
+> {
+  const { data, error } = await supabase
+    .from("inventory")
+    .select("property_id, project_name, price, map_url");
+  if (error) {
+    console.warn("fetchInventoryLiteMap warning:", error);
+    return new Map();
+  }
+  return new Map(
+    (data ?? []).map((p: any) => [
+      p.property_id,
+      {
+        project_name: p.project_name,
+        price: Number(p.price) || 0,
+        map_url: p.map_url ?? undefined,
+      },
+    ]),
+  );
+}
+
 export function useLeads() {
   return useQuery({
     queryKey: ["leads"],
     queryFn: async (): Promise<Lead[]> => {
-      const [{ data, error }, execMap] = await Promise.all([
+      const [{ data, error }, execMap, invMap] = await Promise.all([
         supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(1000),
         fetchExecutivesMap(),
+        fetchInventoryLiteMap(),
       ]);
       if (error) throw error;
-      return (data ?? []).map((row) => hydrateLead(row, execMap));
+      return (data ?? []).map((row) => hydrateLead(row, execMap, invMap));
     },
     refetchInterval: POLL_MS,
     refetchOnWindowFocus: false,

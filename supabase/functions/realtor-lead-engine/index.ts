@@ -2389,7 +2389,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v39-post-visit-attendance-and-reschedule-flow",
+        version: "v40-property-sync-and-visit-audit-fix",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -3001,7 +3001,27 @@ Deno.serve(async (req: Request) => {
           const newSlot = slotResult.isoUtc;
           const isInitialBooking = !lead.site_visit_booked && lead.state !== "VISIT_BOOKED" && lead.state !== "SITE_VISIT_BOOKED" && lead.state !== "VISIT_RESCHEDULED";
 
-          // Update lead
+          // Clean DB: Update EXISTING active visit record or insert new one!
+          const { data: existingVisits } = await supabase
+            .from("site_visits")
+            .select("id, property_id")
+            .eq("lead_id", lead.id)
+            .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED", "MISSED"])
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+          const finalPropId = existingVisits?.[0]?.property_id || lead.selected_property_id || "PROP-NXG-001";
+          let resolvedPropName = "the property";
+          if (finalPropId) {
+            const { data: p } = await supabase
+              .from("inventory")
+              .select("project_name")
+              .eq("property_id", finalPropId)
+              .maybeSingle();
+            if (p?.project_name) resolvedPropName = p.project_name;
+          }
+
+          // Update lead with complete property synchronization
           nextState = isInitialBooking ? "SITE_VISIT_BOOKED" : "VISIT_RESCHEDULED";
           await supabase
             .from("leads")
@@ -3009,20 +3029,16 @@ Deno.serve(async (req: Request) => {
               site_visit_at: newSlot,
               site_visit_datetime: newSlot,
               site_visit_booked: true,
+              selected_property_id: finalPropId,
+              metadata: {
+                ...(lead.metadata || {}),
+                selected_property_name: resolvedPropName,
+              },
               pre_visit_reminder_sent: false,
               post_visit_feedback_sent: false,
               state: nextState,
             })
             .eq("id", lead.id);
-
-          // Clean DB: Update EXISTING active visit record or insert new one!
-          const { data: existingVisits } = await supabase
-            .from("site_visits")
-            .select("id")
-            .eq("lead_id", lead.id)
-            .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED", "MISSED"])
-            .order("created_at", { ascending: false })
-            .limit(1);
 
           if (existingVisits && existingVisits.length > 0) {
             await supabase
@@ -3033,7 +3049,7 @@ Deno.serve(async (req: Request) => {
             await supabase.from("site_visits").insert({
               lead_id: lead.id,
               client_id: defaultTenantId,
-              property_id: lead.selected_property_id || "PROP-NXG-001",
+              property_id: finalPropId,
               scheduled_at: newSlot,
               status: isInitialBooking ? "SCHEDULED" : "RESCHEDULED",
             });
@@ -3612,22 +3628,9 @@ Deno.serve(async (req: Request) => {
             const scheduledAt = slotResult.isoUtc;
             nextState = "SITE_VISIT_BOOKED";
 
-            await supabase
-              .from("leads")
-              .update({
-                site_visit_booked: true,
-                site_visit_at: scheduledAt,
-                site_visit_datetime: scheduledAt,
-                selected_property_id: propToBookId || lead.selected_property_id,
-                state: "SITE_VISIT_BOOKED",
-                pre_visit_reminder_sent: false,
-                post_visit_feedback_sent: false,
-              })
-              .eq("id", lead.id);
-
             // Fetch property details for site visit
             let propDetails: any = null;
-            const finalPropId = propToBookId || lead.selected_property_id;
+            const finalPropId = propToBookId || lead.selected_property_id || "PROP-NXG-001";
             if (finalPropId) {
               const { data: prop } = await supabase
                 .from("inventory")
@@ -3637,11 +3640,28 @@ Deno.serve(async (req: Request) => {
               propDetails = prop;
             }
 
+            await supabase
+              .from("leads")
+              .update({
+                site_visit_booked: true,
+                site_visit_at: scheduledAt,
+                site_visit_datetime: scheduledAt,
+                selected_property_id: finalPropId,
+                metadata: {
+                  ...(lead.metadata || {}),
+                  selected_property_name: propDetails?.project_name || "the property",
+                },
+                state: "SITE_VISIT_BOOKED",
+                pre_visit_reminder_sent: false,
+                post_visit_feedback_sent: false,
+              })
+              .eq("id", lead.id);
+
             // Insert into site_visits
             await supabase.from("site_visits").insert({
               lead_id: lead.id,
               client_id: defaultTenantId,
-              property_id: finalPropId || "PROP-NXG-001",
+              property_id: finalPropId,
               scheduled_at: scheduledAt,
               status: "SCHEDULED",
             });
