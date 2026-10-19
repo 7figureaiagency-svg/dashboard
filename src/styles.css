@@ -5,19 +5,23 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Modern PropTech Design System (Architectural Slate & Warm Champagne)
- * Built with high-performance OKLCH color tokens, crisp typography,
- * and zero runtime JS overhead.
+ * Apple Human Interface Guidelines (HIG) Design System
+ * Built with Apple System Materials, continuous curvature squircles,
+ * OKLCH native system tints, and ultra-crisp SF Pro typography.
+ * 0 runtime JS overhead.
  */
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 28px;
+  --radius-4xl: 32px;
+  --radius-full: 9999px;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -51,13 +55,22 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
-  --radius: 0.625rem;
+  /* Apple Continuous Curvature Squircle Scale */
+  --radius: 12px;
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
 
-  /* Surfaces & Typography */
+  /* Surfaces & Typography (Apple System Gray 6 Canvas: #F5F5F7) */
   --background: oklch(0.985 0.003 240);
   --foreground: oklch(0.18 0.03 250);
   --card: oklch(1 0 0);
@@ -65,60 +78,70 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.18 0.03 250);
 
-  /* Brand: Architectural Obsidian Slate */
+  /* Brand / Primary: Apple Slate */
   --primary: oklch(0.19 0.03 255);
   --primary-foreground: oklch(0.99 0.002 240);
-  --secondary: oklch(0.96 0.008 240);
+  --secondary: oklch(0.96 0.006 240);
   --secondary-foreground: oklch(0.24 0.04 250);
-  --muted: oklch(0.965 0.006 240);
-  --muted-foreground: oklch(0.50 0.03 250);
+  --muted: oklch(0.965 0.005 240);
+  --muted-foreground: oklch(0.52 0.02 250);
 
   /* Accent: Warm Champagne Gold / Amber */
   --accent: oklch(0.72 0.15 75);
   --accent-foreground: oklch(0.20 0.05 60);
 
+  /* Apple System Accent Tints (OKLCH HIG Approximations) */
+  --system-blue: oklch(0.55 0.22 255);
+  --system-green: oklch(0.68 0.20 145);
+  --system-orange: oklch(0.68 0.19 50);
+  --system-purple: oklch(0.58 0.22 305);
+  --system-red: oklch(0.60 0.22 25);
+  --system-yellow: oklch(0.72 0.17 80);
+  --system-teal: oklch(0.65 0.15 195);
+  --system-indigo: oklch(0.52 0.20 280);
+
   /* Status Tokens */
-  --destructive: oklch(0.58 0.22 25);
+  --destructive: oklch(0.60 0.22 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.92 0.008 245);
-  --input: oklch(0.92 0.008 245);
-  --ring: oklch(0.25 0.04 255);
+  --border: oklch(0.91 0.006 240);
+  --input: oklch(0.91 0.006 240);
+  --ring: oklch(0.55 0.22 255);
 
   /* Charts */
-  --chart-1: oklch(0.55 0.16 155);
-  --chart-2: oklch(0.50 0.16 250);
-  --chart-3: oklch(0.72 0.15 75);
-  --chart-4: oklch(0.58 0.18 300);
-  --chart-5: oklch(0.58 0.22 25);
+  --chart-1: oklch(0.68 0.20 145);
+  --chart-2: oklch(0.55 0.22 255);
+  --chart-3: oklch(0.68 0.19 50);
+  --chart-4: oklch(0.58 0.22 305);
+  --chart-5: oklch(0.60 0.22 25);
 
   /* Sidebar */
   --sidebar: oklch(0.99 0.002 240);
   --sidebar-foreground: oklch(0.18 0.03 250);
   --sidebar-primary: oklch(0.19 0.03 255);
   --sidebar-primary-foreground: oklch(0.99 0.002 240);
-  --sidebar-accent: oklch(0.96 0.008 240);
+  --sidebar-accent: oklch(0.96 0.006 240);
   --sidebar-accent-foreground: oklch(0.19 0.03 255);
-  --sidebar-border: oklch(0.92 0.008 245);
-  --sidebar-ring: oklch(0.25 0.04 255);
+  --sidebar-border: oklch(0.91 0.006 240);
+  --sidebar-ring: oklch(0.55 0.22 255);
 
-  /* Semantic Lead Status Colors */
-  --tone-gray: oklch(0.48 0.02 250);
-  --tone-gray-bg: oklch(0.96 0.005 250);
-  --tone-blue: oklch(0.46 0.15 250);
-  --tone-blue-bg: oklch(0.95 0.03 250);
-  --tone-purple: oklch(0.46 0.17 300);
-  --tone-purple-bg: oklch(0.95 0.035 300);
-  --tone-yellow: oklch(0.56 0.15 80);
-  --tone-yellow-bg: oklch(0.965 0.04 85);
-  --tone-green: oklch(0.48 0.14 155);
-  --tone-green-bg: oklch(0.95 0.035 155);
-  --tone-red: oklch(0.52 0.20 25);
+  /* Semantic Lead Status Colors (Apple HIG System Tones) */
+  --tone-gray: oklch(0.52 0.02 250);
+  --tone-gray-bg: oklch(0.95 0.005 250);
+  --tone-blue: oklch(0.55 0.22 255);
+  --tone-blue-bg: oklch(0.95 0.035 255);
+  --tone-purple: oklch(0.58 0.22 305);
+  --tone-purple-bg: oklch(0.95 0.035 305);
+  --tone-yellow: oklch(0.68 0.17 80);
+  --tone-yellow-bg: oklch(0.96 0.04 85);
+  --tone-green: oklch(0.68 0.20 145);
+  --tone-green-bg: oklch(0.95 0.035 145);
+  --tone-red: oklch(0.60 0.22 25);
   --tone-red-bg: oklch(0.96 0.035 25);
-  --tone-orange: oklch(0.55 0.15 55);
-  --tone-orange-bg: oklch(0.96 0.04 60);
-  --tone-indigo: oklch(0.44 0.16 275);
-  --tone-indigo-bg: oklch(0.95 0.035 275);
-  --tone-teal: oklch(0.46 0.11 195);
+  --tone-orange: oklch(0.68 0.19 50);
+  --tone-orange-bg: oklch(0.96 0.04 50);
+  --tone-indigo: oklch(0.52 0.20 280);
+  --tone-indigo-bg: oklch(0.95 0.035 280);
+  --tone-teal: oklch(0.65 0.15 195);
   --tone-teal-bg: oklch(0.95 0.03 195);
 }
 
@@ -139,17 +162,36 @@
   --accent-foreground: oklch(0.14 0.03 255);
   --destructive: oklch(0.65 0.20 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.72 0.15 75);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.55 0.22 255);
   --sidebar: oklch(0.14 0.03 255);
   --sidebar-foreground: oklch(0.98 0.003 240);
   --sidebar-primary: oklch(0.72 0.15 75);
   --sidebar-primary-foreground: oklch(0.14 0.03 255);
   --sidebar-accent: oklch(0.20 0.03 255);
   --sidebar-accent-foreground: oklch(0.98 0.003 240);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.72 0.15 75);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.55 0.22 255);
+
+  --tone-gray: oklch(0.75 0.02 250);
+  --tone-gray-bg: oklch(0.22 0.02 250);
+  --tone-blue: oklch(0.70 0.18 255);
+  --tone-blue-bg: oklch(0.22 0.06 255);
+  --tone-purple: oklch(0.72 0.18 305);
+  --tone-purple-bg: oklch(0.22 0.06 305);
+  --tone-yellow: oklch(0.78 0.15 80);
+  --tone-yellow-bg: oklch(0.24 0.06 80);
+  --tone-green: oklch(0.74 0.18 145);
+  --tone-green-bg: oklch(0.22 0.06 145);
+  --tone-red: oklch(0.72 0.18 25);
+  --tone-red-bg: oklch(0.22 0.06 25);
+  --tone-orange: oklch(0.74 0.17 50);
+  --tone-orange-bg: oklch(0.24 0.06 50);
+  --tone-indigo: oklch(0.70 0.18 280);
+  --tone-indigo-bg: oklch(0.22 0.06 280);
+  --tone-teal: oklch(0.74 0.14 195);
+  --tone-teal-bg: oklch(0.22 0.05 195);
 }
 
 @layer base {
@@ -165,6 +207,39 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+}
+
+/* ── Apple HIG Materials & Squircles ─────────────────────────── */
+.apple-glass {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.dark .apple-glass {
+  background: color-mix(in srgb, var(--card) 75%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.apple-button {
+  transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.15s ease, opacity 0.15s ease;
+}
+.apple-button:active {
+  transform: scale(0.98);
+}
+
+.apple-card {
+  border-radius: var(--radius-xl, 20px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--card);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+.dark .apple-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 /* ── Modern Dot-Pill CRM Status Badges ───────────────────────── */
