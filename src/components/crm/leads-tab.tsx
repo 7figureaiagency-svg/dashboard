@@ -302,95 +302,107 @@ export function LeadsTab({
 
   return (
     <div className="space-y-4">
-      {/* ── 🚀 Realtor Operational Triage Strip ── */}
+      {/* ── 🚀 Apple HIG Complication Triage Widgets ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <button
           type="button"
           onClick={() => setActionFilter(actionFilter === "TODAY_VISITS" ? "ALL" : "TODAY_VISITS")}
-          className={`flex flex-col text-left rounded-xl border p-3.5 transition-all ${
+          className={`apple-button flex flex-col text-left rounded-2xl border p-4 transition-all shadow-xs ${
             actionFilter === "TODAY_VISITS"
-              ? "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/20 shadow-sm"
-              : "bg-card hover:bg-muted/50 border-border"
+              ? "border-emerald-500/50 bg-emerald-500/10 ring-2 ring-emerald-500/30"
+              : "bg-card hover:bg-muted/40 border-border/50"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <CalendarCheck className="size-3.5 text-emerald-600" /> Visits Today
-            </span>
-            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-600">
+            <div className="flex size-9 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+              <CalendarCheck className="size-4" />
+            </div>
+            <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 tabular-nums">
               {todayVisitsCount}
             </span>
           </div>
-          <p className="mt-2 text-xl font-bold tracking-tight text-foreground">{todayVisitsCount}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Scheduled for today</p>
+          <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">{todayVisitsCount}</p>
+          <div className="mt-1">
+            <span className="text-xs font-semibold text-foreground">Visits Today</span>
+            <p className="text-[11px] text-muted-foreground">Scheduled site tours</p>
+          </div>
         </button>
 
         <button
           type="button"
           onClick={() => setActionFilter(actionFilter === "ACTION_NEEDED" ? "ALL" : "ACTION_NEEDED")}
-          className={`flex flex-col text-left rounded-xl border p-3.5 transition-all ${
+          className={`apple-button flex flex-col text-left rounded-2xl border p-4 transition-all shadow-xs ${
             actionFilter === "ACTION_NEEDED"
-              ? "border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/20 shadow-sm"
-              : "bg-card hover:bg-muted/50 border-border"
+              ? "border-amber-500/50 bg-amber-500/10 ring-2 ring-amber-500/30"
+              : "bg-card hover:bg-muted/40 border-border/50"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <AlertTriangle className="size-3.5 text-amber-600" /> Action Needed
-            </span>
-            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-bold text-amber-600">
+            <div className="flex size-9 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="size-4" />
+            </div>
+            <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300 tabular-nums">
               {actionNeededCount}
             </span>
           </div>
-          <p className="mt-2 text-xl font-bold tracking-tight text-foreground">{actionNeededCount}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Missed visits & handovers</p>
+          <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">{actionNeededCount}</p>
+          <div className="mt-1">
+            <span className="text-xs font-semibold text-foreground">Action Needed</span>
+            <p className="text-[11px] text-muted-foreground">Missed visits & handovers</p>
+          </div>
         </button>
 
         <button
           type="button"
           onClick={() => setActionFilter(actionFilter === "QUALIFIED" ? "ALL" : "QUALIFIED")}
-          className={`flex flex-col text-left rounded-xl border p-3.5 transition-all ${
+          className={`apple-button flex flex-col text-left rounded-2xl border p-4 transition-all shadow-xs ${
             actionFilter === "QUALIFIED"
-              ? "border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500/20 shadow-sm"
-              : "bg-card hover:bg-muted/50 border-border"
+              ? "border-indigo-500/50 bg-indigo-500/10 ring-2 ring-indigo-500/30"
+              : "bg-card hover:bg-muted/40 border-border/50"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <CheckCircle2 className="size-3.5 text-indigo-600" /> Qualified Leads
-            </span>
-            <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-xs font-bold text-indigo-600">
+            <div className="flex size-9 items-center justify-center rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+              <CheckCircle2 className="size-4" />
+            </div>
+            <span className="rounded-full bg-indigo-500/15 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums">
               {qualifiedCount}
             </span>
           </div>
-          <p className="mt-2 text-xl font-bold tracking-tight text-foreground">{qualifiedCount}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Budget & area verified</p>
+          <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">{qualifiedCount}</p>
+          <div className="mt-1">
+            <span className="text-xs font-semibold text-foreground">Qualified Leads</span>
+            <p className="text-[11px] text-muted-foreground">Budget & area verified</p>
+          </div>
         </button>
 
         <button
           type="button"
           onClick={() => setActionFilter(actionFilter === "FRESH" ? "ALL" : "FRESH")}
-          className={`flex flex-col text-left rounded-xl border p-3.5 transition-all ${
+          className={`apple-button flex flex-col text-left rounded-2xl border p-4 transition-all shadow-xs ${
             actionFilter === "FRESH"
-              ? "border-sky-500 bg-sky-500/10 ring-2 ring-sky-500/20 shadow-sm"
-              : "bg-card hover:bg-muted/50 border-border"
+              ? "border-purple-500/50 bg-purple-500/10 ring-2 ring-purple-500/30"
+              : "bg-card hover:bg-muted/40 border-border/50"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <Sparkles className="size-3.5 text-sky-600" /> In Qualifying
-            </span>
-            <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-bold text-sky-600">
+            <div className="flex size-9 items-center justify-center rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400">
+              <Sparkles className="size-4" />
+            </div>
+            <span className="rounded-full bg-purple-500/15 px-2.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 tabular-nums">
               {freshCount}
             </span>
           </div>
-          <p className="mt-2 text-xl font-bold tracking-tight text-foreground">{freshCount}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Active AI conversations</p>
+          <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">{freshCount}</p>
+          <div className="mt-1">
+            <span className="text-xs font-semibold text-foreground">In Qualifying</span>
+            <p className="text-[11px] text-muted-foreground">Active AI conversations</p>
+          </div>
         </button>
       </div>
 
       {actionFilter !== "ALL" && (
-        <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-xl bg-muted/60 border border-border/40 px-3.5 py-2 text-xs text-muted-foreground">
           <span>
             Active quick filter:{" "}
             <strong className="text-foreground">
@@ -404,15 +416,15 @@ export function LeadsTab({
           <button
             type="button"
             onClick={() => setActionFilter("ALL")}
-            className="ml-auto inline-flex items-center gap-1 text-primary hover:underline font-medium"
+            className="apple-button ml-auto inline-flex items-center gap-1 text-primary hover:underline font-medium"
           >
             <X className="size-3" /> Clear quick filter
           </button>
         </div>
       )}
 
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-3 pt-6">
+      <Card className="rounded-2xl border border-border/50 bg-card shadow-xs">
+        <CardContent className="flex flex-wrap items-end gap-3 pt-5 pb-5">
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <SlidersHorizontal className="size-4" /> Filters
           </div>
@@ -653,22 +665,22 @@ export function LeadsTab({
               Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={`m-skel-${i}`}
-                  className="animate-pulse rounded-xl border border-border/60 bg-card p-4 space-y-3 shadow-2xs"
+                  className="animate-pulse rounded-2xl border border-border/50 bg-card p-4 space-y-3 shadow-xs"
                 >
                   <div className="flex justify-between items-center">
-                    <div className="h-4.5 w-32 rounded bg-muted/60" />
+                    <div className="h-4.5 w-32 rounded-lg bg-muted/60" />
                     <div className="h-5 w-20 rounded-full bg-muted/50" />
                   </div>
-                  <div className="h-3.5 w-48 rounded bg-muted/40" />
+                  <div className="h-3.5 w-48 rounded-lg bg-muted/40" />
                   <div className="flex gap-2 pt-2 border-t border-border/40">
-                    <div className="h-8.5 flex-1 rounded-lg bg-muted/50" />
-                    <div className="h-8.5 flex-1 rounded-lg bg-muted/50" />
+                    <div className="h-11 flex-1 rounded-xl bg-muted/50" />
+                    <div className="h-11 flex-1 rounded-xl bg-muted/50" />
                   </div>
                 </div>
               ))}
 
             {!loading && rows.length === 0 && (
-              <div className="rounded-xl border border-dashed border-border/80 p-8 text-center bg-card/60">
+              <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center bg-card/60">
                 <Search className="mx-auto size-6 text-muted-foreground mb-2" />
                 <p className="text-xs font-semibold text-foreground">No leads found</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -681,12 +693,12 @@ export function LeadsTab({
               rows.map((lead) => (
                 <div
                   key={`m-${lead.lead_id}`}
-                  className="rounded-xl border border-border/80 bg-card p-4 shadow-2xs space-y-3 transition-all active:scale-[0.99]"
+                  className="rounded-2xl border border-border/50 bg-card p-4 shadow-xs space-y-3 transition-all"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <h4
-                        className="font-bold text-sm text-foreground truncate cursor-pointer hover:text-primary"
+                        className="font-bold text-sm text-foreground truncate cursor-pointer hover:text-primary transition-colors"
                         onClick={() => setSelected(lead)}
                       >
                         {lead.name || "Unnamed Client"}
@@ -702,7 +714,7 @@ export function LeadsTab({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs bg-muted/40 rounded-lg px-2.5 py-1.5 border border-border/50">
+                  <div className="flex items-center justify-between text-xs bg-muted/40 rounded-xl px-3 py-2 border border-border/40">
                     <div className="truncate font-medium text-foreground">
                       {lead.selected_property_name ? (
                         <span className="flex items-center gap-1.5">
@@ -718,14 +730,15 @@ export function LeadsTab({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+                  {/* 44pt Touch Targets for iOS/Mobile Ergonomics */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-border/40">
                     {lead.phone ? (
                       <>
                         <Button
                           asChild
                           size="sm"
                           variant="outline"
-                          className="h-8.5 flex-1 gap-1.5 text-xs font-semibold rounded-lg"
+                          className="apple-button min-h-[44px] h-11 flex-1 gap-2 text-xs font-semibold rounded-xl border-border/60 bg-card hover:bg-muted/60 shadow-2xs"
                         >
                           <a href={`tel:${lead.phone}`}>
                             <Phone className="size-3.5 text-primary" /> Call
@@ -735,7 +748,7 @@ export function LeadsTab({
                           asChild
                           size="sm"
                           variant="outline"
-                          className="h-8.5 flex-1 gap-1.5 text-xs font-semibold rounded-lg border-emerald-500/30 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20"
+                          className="apple-button min-h-[44px] h-11 flex-1 gap-2 text-xs font-semibold rounded-xl border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-2xs"
                         >
                           <a
                             href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`}
@@ -750,7 +763,7 @@ export function LeadsTab({
                     <Button
                       size="sm"
                       variant="default"
-                      className="h-8.5 px-3.5 text-xs font-semibold rounded-lg"
+                      className="apple-button min-h-[44px] h-11 px-4 text-xs font-semibold rounded-xl shadow-2xs"
                       onClick={() => setSelected(lead)}
                     >
                       Open
@@ -760,36 +773,36 @@ export function LeadsTab({
               ))}
           </div>
 
-          {/* ── 💻 Full Table View (Desktop & Tablet >= 768px) ── */}
-          <Card className="hidden md:block overflow-hidden shadow-2xs border-border/80">
+          {/* ── 💻 Apple Inset Grouped Table View (Desktop & Tablet >= 768px) ── */}
+          <div className="hidden md:block overflow-hidden rounded-2xl border border-border/50 bg-card shadow-xs">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Executive</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>AI bot</TableHead>
-                    <TableHead>Selected property</TableHead>
-                    <TableHead>Budget</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                  <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
+                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Customer</TableHead>
+                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Executive</TableHead>
+                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Phone</TableHead>
+                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Status</TableHead>
+                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">AI Bot</TableHead>
+                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Selected Property</TableHead>
+                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Budget</TableHead>
+                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Created</TableHead>
+                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading &&
                     Array.from({ length: 5 }).map((_, i) => (
-                      <TableRow key={`skeleton-${i}`} className="animate-pulse border-border/40">
-                        <TableCell><div className="h-4 w-28 rounded bg-muted/60" /></TableCell>
-                        <TableCell><div className="h-4 w-20 rounded bg-muted/50" /></TableCell>
-                        <TableCell><div className="h-4 w-24 rounded bg-muted/50" /></TableCell>
+                      <TableRow key={`skeleton-${i}`} className="animate-pulse border-b border-border/30">
+                        <TableCell><div className="h-4 w-28 rounded-lg bg-muted/60" /></TableCell>
+                        <TableCell><div className="h-4 w-20 rounded-lg bg-muted/50" /></TableCell>
+                        <TableCell><div className="h-4 w-24 rounded-lg bg-muted/50" /></TableCell>
                         <TableCell><div className="h-5 w-20 rounded-full bg-muted/60" /></TableCell>
                         <TableCell><div className="h-5 w-24 rounded-full bg-muted/50" /></TableCell>
-                        <TableCell><div className="h-4 w-32 rounded bg-muted/50" /></TableCell>
-                        <TableCell><div className="h-4 w-16 rounded bg-muted/50" /></TableCell>
-                        <TableCell><div className="h-4 w-16 rounded bg-muted/50" /></TableCell>
-                        <TableCell className="text-right"><div className="ml-auto h-7 w-20 rounded bg-muted/60" /></TableCell>
+                        <TableCell><div className="h-4 w-32 rounded-lg bg-muted/50" /></TableCell>
+                        <TableCell><div className="h-4 w-16 rounded-lg bg-muted/50" /></TableCell>
+                        <TableCell><div className="h-4 w-16 rounded-lg bg-muted/50" /></TableCell>
+                        <TableCell className="text-right"><div className="ml-auto h-7 w-20 rounded-lg bg-muted/60" /></TableCell>
                       </TableRow>
                     ))}
                   {!loading && rows.length === 0 && (
@@ -807,7 +820,7 @@ export function LeadsTab({
                             <Button
                               variant="outline"
                               size="sm"
-                              className="mt-3 h-7 text-xs"
+                              className="apple-button mt-3 h-8 rounded-lg text-xs"
                               onClick={() => {
                                 setSearch("");
                                 setStatus(ALL);
@@ -824,9 +837,9 @@ export function LeadsTab({
                     </TableRow>
                   )}
                   {rows.map((lead) => (
-                    <TableRow key={lead.lead_id} className="hover:bg-muted/40 transition-colors">
-                      <TableCell className="font-semibold text-foreground">{lead.name || "Unnamed"}</TableCell>
-                      <TableCell>
+                    <TableRow key={lead.lead_id} className="border-b border-border/30 hover:bg-muted/35 transition-colors">
+                      <TableCell className="font-semibold text-foreground py-3.5">{lead.name || "Unnamed"}</TableCell>
+                      <TableCell className="py-3.5">
                         {lead.assigned_executive_name ? (
                           <button
                             className="font-medium text-primary hover:underline"
@@ -838,34 +851,34 @@ export function LeadsTab({
                           <span className="text-muted-foreground text-xs">Unassigned</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-muted-foreground py-3.5">
                         {lead.phone ? (
-                          <span className="font-mono text-xs">{lead.phone}</span>
+                          <span className="font-mono text-xs tabular-nums">{lead.phone}</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800 font-mono">
+                          <span className="inline-flex items-center gap-1 text-[11px] text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2 py-0.5 rounded-md border border-sky-200 dark:border-sky-800 font-mono">
                             TG: {lead.lead_id}
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
+                      <TableCell className="py-3.5">
+                        <div className="flex flex-col gap-1 items-start">
                           <StatusBadge value={lead.status} />
                           {lead.property_state === "HUMAN_HANDOVER" && (
                             <PropertyStateBadge value="HUMAN_HANDOVER" />
                           )}
                           {lead.pre_visit_reminder_sent && (
-                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                            <span className="text-[10px] text-muted-foreground font-medium">
                               ⏰ Reminder Sent
                             </span>
                           )}
                           {lead.post_visit_feedback_sent && (
-                            <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">
+                            <span className="text-[10px] text-muted-foreground font-medium">
                               💬 Survey Sent
                             </span>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3.5">
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={!!lead.bot_active}
@@ -886,20 +899,25 @@ export function LeadsTab({
                           />
                         </div>
                       </TableCell>
-                      <TableCell>{lead.selected_property_name || "—"}</TableCell>
-                      <TableCell className="font-bold tabular-nums">{formatMoney(lead.budget)}</TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground text-xs tabular-nums">
+                      <TableCell className="py-3.5">{lead.selected_property_name || "—"}</TableCell>
+                      <TableCell className="font-bold tabular-nums py-3.5">{formatMoney(lead.budget)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground text-xs tabular-nums py-3.5">
                         {formatDate(lead.created_at)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right py-3.5">
                         <div className="flex justify-end items-center gap-1.5">
-                          <Button asChild size="sm" variant="outline" className="h-8 gap-1.5" disabled={!lead.phone}>
+                          <Button asChild size="sm" variant="outline" className="apple-button h-8 rounded-lg gap-1.5 shadow-2xs" disabled={!lead.phone}>
                             <a href={`tel:${lead.phone ?? ""}`}>
                               <Phone className="size-3.5 text-primary" />
                               <span>Call</span>
                             </a>
                           </Button>
-                          <Button size="sm" className="h-8" onClick={() => setSelected(lead)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="apple-button h-8 rounded-lg text-xs"
+                            onClick={() => setSelected(lead)}
+                          >
                             Open
                           </Button>
                         </div>
@@ -909,7 +927,7 @@ export function LeadsTab({
                 </TableBody>
               </Table>
             </div>
-          </Card>
+          </div>
         </div>
       )}
 
