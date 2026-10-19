@@ -582,17 +582,20 @@ export function useUpdateExecutive() {
       name,
       email,
       phone,
+      telegram_id,
       role,
     }: {
       id: string;
       name: string;
       email?: string;
       phone?: string;
+      telegram_id?: string;
       role?: string;
     }) => {
       const payload: Record<string, unknown> = {
         name: name.trim(),
         phone: phone?.trim() || null,
+        telegram_id: telegram_id !== undefined ? (telegram_id.trim() || null) : undefined,
         role: role || "sales_executive",
       };
       if (email) payload["email"] = email.trim().toLowerCase();

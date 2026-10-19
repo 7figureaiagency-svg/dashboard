@@ -703,6 +703,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [telegramId, setTelegramId] = useState("");
   const [role, setRole] = useState("sales_executive");
 
   // Edit dialog state
@@ -710,6 +711,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editTelegramId, setEditTelegramId] = useState("");
   const [editRole, setEditRole] = useState("sales_executive");
 
   // Delete confirm state
@@ -720,6 +722,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
     setEditName(ex.name);
     setEditEmail(ex.email ?? "");
     setEditPhone(ex.phone ?? "");
+    setEditTelegramId(ex.telegram_id ?? "");
     setEditRole((ex as Executive & { role?: string }).role ?? "sales_executive");
   };
 
@@ -741,13 +744,21 @@ function TeamManager({ clientId }: { clientId: string | null }) {
       return;
     }
     add.mutate(
-      { clientId, name: name.trim(), email: email.trim(), phone: phone.trim(), role },
+      {
+        clientId,
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        telegram_id: telegramId.trim() || undefined,
+        role,
+      },
       {
         onSuccess: () => {
           setOpen(false);
           setName("");
           setEmail("");
           setPhone("");
+          setTelegramId("");
           setRole("sales_executive");
         },
       },
@@ -767,7 +778,14 @@ function TeamManager({ clientId }: { clientId: string | null }) {
       return;
     }
     update.mutate(
-      { id: editEx.id, name: editName, email: editEmail, phone: editPhone, role: editRole },
+      {
+        id: editEx.id,
+        name: editName,
+        email: editEmail,
+        phone: editPhone,
+        telegram_id: editTelegramId.trim() || undefined,
+        role: editRole,
+      },
       { onSuccess: () => setEditEx(null) },
     );
   };
@@ -797,7 +815,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
             <div className="min-w-0">
               <p className="font-semibold text-sm text-foreground">{ex.name}</p>
               <p className="truncate text-xs text-muted-foreground mt-0.5">
-                {ex.email || "—"} · {ex.phone || "—"}
+                {ex.email || "—"} · {ex.phone || "—"}{ex.telegram_id ? ` · TG: ${ex.telegram_id}` : ""}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -862,13 +880,25 @@ function TeamManager({ clientId }: { clientId: string | null }) {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="add-phone">Phone (optional)</Label>
+              <Label htmlFor="add-phone">Phone (WhatsApp Alerts)</Label>
               <Input
                 id="add-phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="e.g. +91 98765 43210"
               />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-telegram">Telegram Chat ID (Testing Alerts)</Label>
+              <Input
+                id="add-telegram"
+                value={telegramId}
+                onChange={(e) => setTelegramId(e.target.value)}
+                placeholder="e.g. 5117510624"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Enter your numeric Telegram Chat ID. First message the bot from this ID so Telegram allows alerts.
+              </p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="add-role">Role</Label>
@@ -920,12 +950,24 @@ function TeamManager({ clientId }: { clientId: string | null }) {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="edit-phone">Phone</Label>
+              <Label htmlFor="edit-phone">Phone (WhatsApp Alerts)</Label>
               <Input
                 id="edit-phone"
                 value={editPhone}
                 onChange={(e) => setEditPhone(e.target.value)}
               />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-telegram">Telegram Chat ID (Testing Alerts)</Label>
+              <Input
+                id="edit-telegram"
+                value={editTelegramId}
+                onChange={(e) => setEditTelegramId(e.target.value)}
+                placeholder="e.g. 5117510624"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Enter your numeric Telegram Chat ID. First message the bot from this ID so Telegram allows alerts.
+              </p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="edit-role">Role</Label>

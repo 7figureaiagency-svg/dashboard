@@ -64,10 +64,10 @@ async function dispatchSalesAlert(
   tenantId: string,
   alertType: string,
   lead: any,
-  extra: { scheduledAt?: string; property?: any; userText?: string } = {}
+  extra: { scheduledAt?: string; property?: any; userText?: string; submission?: any; hint?: string } = {}
 ) {
   try {
-    // 1. Fetch assigned executive or tenant manager
+    // 1. Fetch assigned executive, tenant manager, or any active executive
     let targetExecutive: any = null;
     if (lead?.assigned_executive_id && alertType !== "NO_PROPERTY_MATCH") {
       const { data: exec } = await supabase
@@ -85,9 +85,23 @@ async function dispatchSalesAlert(
         .select("*")
         .eq("client_id", tenantId)
         .eq("role", "manager")
+        .eq("is_active", true)
         .limit(1)
         .maybeSingle();
       targetExecutive = mgr;
+    }
+
+    if (!targetExecutive) {
+      // Fallback: any active executive for this tenant who has telegram_id or phone configured
+      const { data: anyExec } = await supabase
+        .from("executives")
+        .select("*")
+        .eq("client_id", tenantId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      targetExecutive = anyExec;
     }
 
     // 2. Category badge & pitch hint matrix
@@ -180,18 +194,65 @@ ${extra.scheduledAt ? `⏰ <b>Scheduled Slot:</b> ${new Date(extra.scheduledAt).
 👉 <i>Assigned to: ${targetExecutive?.name || "General Sales Desk"}</i>
 `.trim();
 
-    // 4. Send to executive Telegram if telegram_id exists
-    if (targetExecutive?.telegram_id) {
-      await sendTelegramMessage(defaultBotToken, targetExecutive.telegram_id, alertHtml);
+    // 4. Resolve Telegram Chat ID (check telegram_id first, then fallback to phone if numeric ID)
+    let telegramChatId: string | null = null;
+    const cleanTelId = (targetExecutive?.telegram_id || "").trim();
+    const cleanPhone = (targetExecutive?.phone || "").replace(/\D/g, "");
+
+    if (/^-?\d+$/.test(cleanTelId)) {
+      telegramChatId = cleanTelId;
+    } else if (cleanPhone.length >= 8 && cleanPhone.length <= 15) {
+      telegramChatId = cleanPhone;
     }
 
-    // 5. Log sales alert event
+    if (telegramChatId) {
+      console.log(`[SalesAlert] Dispatching Telegram alert to ${targetExecutive?.name || "Desk"} (Chat ID: ${telegramChatId})`);
+      const tgRes = await sendTelegramMessage(defaultBotToken, telegramChatId, alertHtml);
+      if (tgRes?.ok === false) {
+        console.warn(`[SalesAlert] Telegram dispatch failed for chat_id ${telegramChatId}:`, tgRes?.description);
+      }
+    } else {
+      console.warn(`[SalesAlert] No valid Telegram Chat ID found for executive ${targetExecutive?.name || "None"}. Set numeric telegram_id or phone.`);
+    }
+
+    // 5. WhatsApp Sales Alert (Production Mode)
+    // If client has active WhatsApp Business API and executive has a mobile phone number
+    try {
+      const { data: clientRec } = await supabase
+        .from("clients")
+        .select("access_token, phone_number_id")
+        .eq("id", tenantId)
+        .maybeSingle();
+
+      if (clientRec?.access_token && clientRec?.phone_number_id && targetExecutive?.phone) {
+        const waPhone = targetExecutive.phone.replace(/\D/g, "");
+        if (waPhone.length >= 10 && waPhone.length <= 13) {
+          const formattedWaPhone = waPhone.startsWith("91") && waPhone.length === 12
+            ? waPhone
+            : waPhone.length === 10
+            ? `91${waPhone}`
+            : waPhone;
+          const plainAlertText = alertHtml
+            .replace(/<b>(.*?)<\/b>/g, "*$1*")
+            .replace(/<i>(.*?)<\/i>/g, "_$1_")
+            .replace(/<code>(.*?)<\/code>/g, "`$1`")
+            .replace(/<[^>]*>/g, "");
+          console.log(`[SalesAlert] Dispatching WhatsApp alert to ${targetExecutive.name} (${formattedWaPhone})`);
+          await sendWhatsAppMessage(clientRec.phone_number_id, clientRec.access_token, formattedWaPhone, plainAlertText);
+        }
+      }
+    } catch (waErr: any) {
+      console.warn("[SalesAlert] WhatsApp executive alert error:", waErr.message);
+    }
+
+    // 6. Log sales alert event in database
     await supabase.from("lead_events").insert({
       client_id: tenantId,
       lead_id: lead?.lead_id,
       event_type: alertType,
       payload: {
         assigned_to: targetExecutive?.name,
+        telegram_chat_id: telegramChatId,
         badge,
         pitchHint,
         extra,
@@ -199,10 +260,12 @@ ${extra.scheduledAt ? `⏰ <b>Scheduled Slot:</b> ${new Date(extra.scheduledAt).
     });
 
     // Update alert_sent_at on lead
-    await supabase
-      .from("leads")
-      .update({ alert_sent_at: new Date().toISOString() })
-      .eq("id", lead.id);
+    if (lead?.id) {
+      await supabase
+        .from("leads")
+        .update({ alert_sent_at: new Date().toISOString() })
+        .eq("id", lead.id);
+    }
   } catch (err: any) {
     console.error("Sales alert dispatch error:", err.message);
   }
@@ -2712,7 +2775,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v46-dual-role-fresh-greeting-fork",
+        version: "v47-dual-channel-alerts-and-tg-fallback",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
