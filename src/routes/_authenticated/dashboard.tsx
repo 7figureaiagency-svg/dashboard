@@ -113,10 +113,10 @@ function Dashboard() {
 
   return (
     <main className="min-h-screen bg-background">
-      <header className="border-b bg-card shadow-2xs">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
+      <header className="sticky top-0 z-30 apple-glass border-b border-border/40">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
           <div className="flex items-center gap-3.5">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs ring-1 ring-border/50">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-xs ring-1 ring-border/50">
               <Building2 className="size-5" />
             </div>
             <div>
@@ -124,7 +124,7 @@ function Dashboard() {
                 <h1 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
                   {client?.company_name || "Nextgn Realtors"}
                 </h1>
-                <span className="hidden sm:inline-flex items-center rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent-foreground border border-accent/25">
+                <span className="hidden sm:inline-flex items-center rounded-full bg-accent/15 px-2.5 py-0.5 text-[10px] font-semibold text-accent-foreground border border-accent/25">
                   {isAdmin ? "Admin Console" : "Executive View"}
                 </span>
               </div>
@@ -136,14 +136,14 @@ function Dashboard() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex rounded-lg border border-border/80 bg-muted/40 p-1">
+            <div className="flex items-center rounded-xl border border-border/30 bg-muted/60 p-1 shadow-2xs backdrop-blur-xs">
               {PRESETS.map((p) => (
                 <button
                   key={p.key}
                   onClick={() => setPreset(p.key)}
-                  className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${
+                  className={`apple-button rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
                     preset === p.key
-                      ? "bg-card text-foreground shadow-2xs"
+                      ? "bg-card text-foreground shadow-xs"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -154,7 +154,7 @@ function Dashboard() {
             <Button
               variant="outline"
               size="icon"
-              className="size-8.5 rounded-lg border-border/80 bg-card hover:bg-muted"
+              className="apple-button size-8.5 rounded-xl border-border/40 bg-card/80 hover:bg-muted shadow-2xs"
               onClick={() => {
                 leadsQuery.refetch();
                 inventoryQuery.refetch();
@@ -166,7 +166,7 @@ function Dashboard() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-8.5 text-xs text-muted-foreground hover:text-destructive gap-1.5"
+              className="apple-button h-8.5 rounded-xl text-xs text-muted-foreground hover:text-destructive gap-1.5"
               onClick={async () => {
                 await signOut();
                 navigate({ to: "/auth", replace: true });
@@ -188,12 +188,12 @@ function Dashboard() {
                   <TabsTrigger
                     key={item.value}
                     value={item.value}
-                    className="shrink-0 justify-start gap-2.5 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border data-[state=active]:border-border/80 text-muted-foreground hover:text-foreground hover:bg-card/40 md:w-full"
+                    className="shrink-0 justify-start gap-2.5 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-medium transition-all apple-button data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border data-[state=active]:border-border/60 text-muted-foreground hover:text-foreground hover:bg-card/50 md:w-full"
                   >
                     <Icon className="size-4 shrink-0 text-muted-foreground" />
                     <span className="flex-1 text-left">{item.label}</span>
                     {item.value === "leads" && leads.length > 0 && (
-                      <span className="ml-auto rounded-full bg-muted/80 px-2 py-0.5 text-[11px] font-bold text-foreground tabular-nums">
+                      <span className="ml-auto rounded-full bg-muted/80 px-2 py-0.5 text-[11px] font-semibold text-foreground tabular-nums">
                         {leads.length}
                       </span>
                     )}
