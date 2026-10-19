@@ -146,52 +146,66 @@
 }
 
 .dark {
-  --background: oklch(0.12 0.03 255);
-  --foreground: oklch(0.98 0.003 240);
-  --card: oklch(0.16 0.03 255);
-  --card-foreground: oklch(0.98 0.003 240);
-  --popover: oklch(0.16 0.03 255);
-  --popover-foreground: oklch(0.98 0.003 240);
-  --primary: oklch(0.98 0.003 240);
-  --primary-foreground: oklch(0.14 0.03 255);
-  --secondary: oklch(0.22 0.03 255);
-  --secondary-foreground: oklch(0.98 0.003 240);
-  --muted: oklch(0.20 0.03 255);
-  --muted-foreground: oklch(0.68 0.03 250);
-  --accent: oklch(0.72 0.15 75);
-  --accent-foreground: oklch(0.14 0.03 255);
-  --destructive: oklch(0.65 0.20 25);
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.55 0.22 255);
-  --sidebar: oklch(0.14 0.03 255);
-  --sidebar-foreground: oklch(0.98 0.003 240);
-  --sidebar-primary: oklch(0.72 0.15 75);
-  --sidebar-primary-foreground: oklch(0.14 0.03 255);
-  --sidebar-accent: oklch(0.20 0.03 255);
-  --sidebar-accent-foreground: oklch(0.98 0.003 240);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.55 0.22 255);
+  /* Apple System Obsidian Canvas (#0C1017) */
+  --background: oklch(0.14 0.022 260);
+  --foreground: oklch(0.985 0.003 240);
 
-  --tone-gray: oklch(0.75 0.02 250);
-  --tone-gray-bg: oklch(0.22 0.02 250);
-  --tone-blue: oklch(0.70 0.18 255);
-  --tone-blue-bg: oklch(0.22 0.06 255);
-  --tone-purple: oklch(0.72 0.18 305);
-  --tone-purple-bg: oklch(0.22 0.06 305);
-  --tone-yellow: oklch(0.78 0.15 80);
-  --tone-yellow-bg: oklch(0.24 0.06 80);
-  --tone-green: oklch(0.74 0.18 145);
-  --tone-green-bg: oklch(0.22 0.06 145);
-  --tone-red: oklch(0.72 0.18 25);
-  --tone-red-bg: oklch(0.22 0.06 25);
-  --tone-orange: oklch(0.74 0.17 50);
-  --tone-orange-bg: oklch(0.24 0.06 50);
-  --tone-indigo: oklch(0.70 0.18 280);
-  --tone-indigo-bg: oklch(0.22 0.06 280);
-  --tone-teal: oklch(0.74 0.14 195);
-  --tone-teal-bg: oklch(0.22 0.05 195);
+  /* Apple Elevated Surface (#182030) - 8% lightness contrast above background */
+  --card: oklch(0.22 0.028 260);
+  --card-foreground: oklch(0.985 0.003 240);
+  --popover: oklch(0.24 0.028 260);
+  --popover-foreground: oklch(0.985 0.003 240);
+
+  /* Primary Brand Tint (Crisp High-Contrast Slate-White) */
+  --primary: oklch(0.985 0.003 240);
+  --primary-foreground: oklch(0.14 0.03 255);
+
+  /* Secondary & Muted Surfaces (#222B3D) */
+  --secondary: oklch(0.26 0.026 260);
+  --secondary-foreground: oklch(0.985 0.003 240);
+  --muted: oklch(0.26 0.026 260);
+  --muted-foreground: oklch(0.72 0.025 250);
+
+  /* Accent: Warm Luminous Gold */
+  --accent: oklch(0.74 0.16 75);
+  --accent-foreground: oklch(0.14 0.03 255);
+
+  --destructive: oklch(0.68 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  /* Visible Crisp Borders & Rings */
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.65 0.20 255);
+
+  --sidebar: oklch(0.16 0.025 260);
+  --sidebar-foreground: oklch(0.985 0.003 240);
+  --sidebar-primary: oklch(0.74 0.16 75);
+  --sidebar-primary-foreground: oklch(0.14 0.03 255);
+  --sidebar-accent: oklch(0.24 0.026 260);
+  --sidebar-accent-foreground: oklch(0.985 0.003 240);
+  --sidebar-border: oklch(1 0 0 / 14%);
+  --sidebar-ring: oklch(0.65 0.20 255);
+
+  /* Vibrant, high-contrast semantic tones in Dark Mode */
+  --tone-gray: oklch(0.80 0.02 250);
+  --tone-gray-bg: oklch(0.28 0.025 250);
+  --tone-blue: oklch(0.75 0.18 255);
+  --tone-blue-bg: oklch(0.28 0.06 255);
+  --tone-purple: oklch(0.76 0.18 305);
+  --tone-purple-bg: oklch(0.28 0.06 305);
+  --tone-yellow: oklch(0.82 0.16 80);
+  --tone-yellow-bg: oklch(0.30 0.06 80);
+  --tone-green: oklch(0.78 0.18 145);
+  --tone-green-bg: oklch(0.28 0.06 145);
+  --tone-red: oklch(0.75 0.19 25);
+  --tone-red-bg: oklch(0.28 0.06 25);
+  --tone-orange: oklch(0.78 0.17 50);
+  --tone-orange-bg: oklch(0.30 0.06 50);
+  --tone-indigo: oklch(0.75 0.18 280);
+  --tone-indigo-bg: oklch(0.28 0.06 280);
+  --tone-teal: oklch(0.78 0.15 195);
+  --tone-teal-bg: oklch(0.28 0.05 195);
 }
 
 @layer base {
@@ -219,9 +233,9 @@
 }
 
 .dark .apple-glass {
-  background: color-mix(in srgb, var(--card) 75%, transparent);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  background: rgba(22, 28, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .apple-button {
@@ -238,8 +252,9 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 .dark .apple-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--card);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 /* ── Modern Dot-Pill CRM Status Badges ───────────────────────── */

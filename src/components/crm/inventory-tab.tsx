@@ -862,26 +862,26 @@ export function InventoryTab({
                     <div className="p-4 pt-0">
                       <div className="flex flex-wrap gap-2 pt-2.5 border-t border-border/40">
                         {p.brochure_url && (
-                          <Button asChild size="sm" variant="outline" className="apple-button h-8 rounded-lg text-xs shadow-2xs">
+                          <Button asChild size="sm" variant="outline" className="apple-button min-h-[38px] sm:min-h-[32px] rounded-xl text-xs shadow-2xs">
                             <a href={p.brochure_url} target="_blank" rel="noreferrer">
                               <FileText className="size-3.5 mr-1" /> Brochure
                             </a>
                           </Button>
                         )}
                         {p.map_url && (
-                          <Button asChild size="sm" variant="outline" className="apple-button h-8 rounded-lg text-xs shadow-2xs">
+                          <Button asChild size="sm" variant="outline" className="apple-button min-h-[38px] sm:min-h-[32px] rounded-xl text-xs shadow-2xs">
                             <a href={p.map_url} target="_blank" rel="noreferrer">
                               <MapPin className="size-3.5 mr-1" /> Map
                             </a>
                           </Button>
                         )}
-                        <Button size="sm" variant="secondary" className="apple-button h-8 rounded-lg text-xs shadow-2xs" onClick={() => openEdit(p)}>
+                        <Button size="sm" variant="secondary" className="apple-button min-h-[38px] sm:min-h-[32px] rounded-xl text-xs shadow-2xs font-semibold" onClick={() => openEdit(p)}>
                           <Pencil className="size-3.5 mr-1" /> Edit
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="apple-button h-8 rounded-lg text-xs text-destructive hover:bg-destructive/10"
+                          className="apple-button min-h-[38px] sm:min-h-[32px] rounded-xl text-xs text-destructive hover:bg-destructive/10"
                           onClick={() => setDeleteId(p.property_id)}
                         >
                           <Trash2 className="size-3.5" />
@@ -894,11 +894,131 @@ export function InventoryTab({
             </div>
           )}
 
-          {/* ── List view (Apple Inset-Grouped Table) ── */}
+          {/* ── List view (Responsive: Mobile Cards + Desktop Inset Table) ── */}
           {view === "list" && (
-            <div className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-xs">
-              <div className="overflow-x-auto">
-                <Table>
+            <div className="space-y-3">
+              {/* 📱 Mobile Inventory Cards (< 768px) */}
+              <div className="space-y-3 md:hidden">
+                {filteredProperties.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center bg-card/60">
+                    <p className="text-xs font-semibold text-foreground">No properties match your filter</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Try clearing your search or filter criteria.
+                    </p>
+                  </div>
+                )}
+                {filteredProperties.map((p) => {
+                  const isRent =
+                    (p.listing_type || "").toUpperCase() === "RENT" ||
+                    (p.listing_type || "").toUpperCase() === "LEASE" ||
+                    (p.transaction_type || "").toUpperCase().includes("RENT");
+                  const ratePerSqft = formatRatePerSqft(p.price, p.area_sqft || p.carpet_area_sqft);
+                  const matchingBuyers = matchingBuyersMap.get(p.property_id) || [];
+
+                  return (
+                    <div
+                      key={`m-list-${p.property_id}`}
+                      className="rounded-2xl border border-border/50 bg-card p-4 shadow-xs space-y-3 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {p.image_urls && p.image_urls.length > 0 ? (
+                            <img
+                              src={p.image_urls[0]}
+                              alt={p.project_name}
+                              className="size-12 rounded-xl object-cover shrink-0 shadow-2xs border border-border/40"
+                            />
+                          ) : (
+                            <div className="flex size-12 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground shrink-0 border border-border/40">
+                              <Building2 className="size-5" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-sm text-foreground truncate">{p.project_name}</h4>
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">
+                              {p.configuration?.replaceAll("_", " ") || "—"} · {p.location}
+                            </p>
+                          </div>
+                        </div>
+                        <ToneBadge
+                          tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
+                          label={p.status ?? "—"}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs bg-muted/40 rounded-xl px-3 py-2 border border-border/40">
+                        <div>
+                          <span className="font-bold text-base text-foreground tabular-nums">
+                            {formatMoney(p.price)}
+                          </span>
+                          {isRent && <span className="text-[11px] text-muted-foreground font-normal"> /mo</span>}
+                        </div>
+                        {ratePerSqft && (
+                          <span className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                            {ratePerSqft}
+                          </span>
+                        )}
+                        <span className="text-muted-foreground text-[11px] tabular-nums">
+                          {p.area_sqft ? `${p.area_sqft} sq.ft` : "—"}
+                        </span>
+                      </div>
+
+                      {matchingBuyers.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setDemandModalProp(p)}
+                          className="apple-button w-full flex items-center justify-between px-3 py-2 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 text-xs font-semibold shadow-2xs"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Flame className="size-3.5 fill-orange-500" />
+                            <span>{matchingBuyers.length} Matching {matchingBuyers.length === 1 ? "Buyer" : "Buyers"}</span>
+                          </span>
+                          <span className="text-[11px] underline">View Leads</span>
+                        </button>
+                      )}
+
+                      <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                        {p.brochure_url && (
+                          <Button asChild size="sm" variant="outline" className="apple-button min-h-[40px] flex-1 rounded-xl text-xs font-semibold shadow-2xs">
+                            <a href={p.brochure_url} target="_blank" rel="noreferrer">
+                              <FileText className="size-3.5 mr-1" /> Brochure
+                            </a>
+                          </Button>
+                        )}
+                        {p.map_url && (
+                          <Button asChild size="sm" variant="outline" className="apple-button min-h-[40px] flex-1 rounded-xl text-xs font-semibold shadow-2xs">
+                            <a href={p.map_url} target="_blank" rel="noreferrer">
+                              <MapPin className="size-3.5 mr-1" /> Map
+                            </a>
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="apple-button min-h-[40px] flex-1 rounded-xl text-xs font-semibold shadow-2xs"
+                          onClick={() => openEdit(p)}
+                        >
+                          <Pencil className="size-3.5 mr-1" /> Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="apple-button min-h-[40px] px-3 rounded-xl text-xs text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteId(p.property_id)}
+                          aria-label="Delete property"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 💻 Desktop Table (>= 768px) */}
+              <div className="hidden md:block overflow-hidden rounded-2xl border border-border/50 bg-card shadow-xs">
+                <div className="overflow-x-auto">
+                  <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
                       <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Property</TableHead>
@@ -1048,7 +1168,8 @@ export function InventoryTab({
                 </Table>
               </div>
             </div>
-          )}
+          </div>
+        )}
         </>
       )}
 
@@ -1345,11 +1466,105 @@ function OwnerSubmissionsView({
       )}
 
       {!isLoading && filtered.length > 0 && (
-        <div className="rounded-lg border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40">
-                <TableHead className="w-[200px]">Owner</TableHead>
+        <div className="space-y-3">
+          {/* 📱 Mobile Owner Submissions Cards (< 768px) */}
+          <div className="space-y-3 md:hidden">
+            {filtered.map((s) => {
+              const isConverted = s.status === "CONVERTED_TO_INVENTORY";
+              const isRejected = s.status === "REJECTED";
+              const isPending = !s.status || s.status === "PENDING_VERIFICATION";
+              const priceDisplay = s.expected_price
+                ? formatMoney(Number(s.expected_price))
+                : s.expected_rent
+                ? `${formatMoney(Number(s.expected_rent))}/mo`
+                : "Price on request";
+
+              return (
+                <div key={`m-sub-${s.id}`} className="rounded-2xl border border-border/50 bg-card p-4 shadow-xs space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-sm text-foreground">{s.owner_name || "Owner Listing"}</h4>
+                      {s.owner_phone && (
+                        <a href={`tel:${s.owner_phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-mono font-medium mt-0.5">
+                          <Phone className="size-3" /> {s.owner_phone}
+                        </a>
+                      )}
+                    </div>
+                    <ToneBadge
+                      tone={PROPERTY_SUBMISSION_STATUS_MAP[s.status || "PENDING_VERIFICATION"]?.tone ?? "yellow"}
+                      label={PROPERTY_SUBMISSION_STATUS_MAP[s.status || "PENDING_VERIFICATION"]?.label ?? (s.status || "Pending")}
+                    />
+                  </div>
+
+                  <div className="text-xs bg-muted/40 rounded-xl p-3 border border-border/40 space-y-1">
+                    <div className="font-semibold text-foreground text-sm flex items-center justify-between">
+                      <span className="truncate pr-2">{s.project_name || s.society_name || "Direct Owner Listing"}</span>
+                      <span className="font-bold shrink-0 tabular-nums">{priceDisplay}</span>
+                    </div>
+                    <p className="text-muted-foreground text-[11px]">
+                      {s.property_category || "RESIDENTIAL"} · {s.configuration?.replaceAll("_", " ") || "—"} · 📍 {s.location || "Vadodara"}
+                    </p>
+                    <p className="text-muted-foreground text-[11px]">
+                      {s.carpet_area_sqft ? `${s.carpet_area_sqft} sq.ft carpet` : s.super_built_up_sqft ? `${s.super_built_up_sqft} sq.ft built-up` : "Area not specified"}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                    {s.owner_phone && (
+                      <Button asChild size="sm" variant="outline" className="apple-button min-h-[40px] flex-1 rounded-xl text-xs font-semibold">
+                        <a href={`tel:${s.owner_phone}`}>
+                          <Phone className="size-3.5 mr-1 text-primary" /> Call
+                        </a>
+                      </Button>
+                    )}
+                    {isPending && (
+                      <>
+                        <Button
+                          size="sm"
+                          className="apple-button min-h-[40px] flex-1 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
+                          disabled={approveMutation.isPending}
+                          onClick={() => approveMutation.mutate({ submission: s, clientId })}
+                        >
+                          <CheckCircle2 className="size-3.5 mr-1" /> Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="apple-button min-h-[40px] px-3 rounded-xl text-xs text-destructive hover:bg-destructive/10"
+                          disabled={updateMutation.isPending}
+                          onClick={() => updateMutation.mutate({ id: s.id, values: { status: "REJECTED" } })}
+                          aria-label="Reject submission"
+                        >
+                          <XCircle className="size-3.5" />
+                        </Button>
+                      </>
+                    )}
+                    {isConverted && (
+                      <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Live in Inventory
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="apple-button min-h-[40px] px-2.5 rounded-xl text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setDetailsSubmission(s)}
+                      aria-label="View details"
+                    >
+                      <Eye className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 💻 Desktop Table (>= 768px) */}
+          <div className="hidden md:block rounded-2xl border border-border/50 bg-card overflow-hidden shadow-xs">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40">
+                  <TableHead className="w-[200px]">Owner</TableHead>
                 <TableHead>Property Specs</TableHead>
                 <TableHead>Area & Price</TableHead>
                 <TableHead>Status</TableHead>
@@ -1511,7 +1726,8 @@ function OwnerSubmissionsView({
             </TableBody>
           </Table>
         </div>
-      )}
+      </div>
+    )}
 
       {/* Details Dialog */}
       {detailsSubmission && (

@@ -54,15 +54,16 @@ const PRESETS: { key: DatePreset; label: string }[] = [
 ];
 
 const NAV_ITEMS = [
-  { value: "leads", label: "Leads CRM", icon: LayoutList, adminOnly: false },
-  { value: "budget", label: "Budget & Properties", icon: Wallet, adminOnly: true },
-  { value: "team", label: "Team Performance", icon: LineChart, adminOnly: true },
-  { value: "inventory", label: "Inventory", icon: Building2, adminOnly: true },
-  { value: "integrations", label: "Lead Sources & WhatsApp", icon: Share2, adminOnly: true },
-  { value: "profile", label: "Profile", icon: UserCircle, adminOnly: false },
+  { value: "leads", label: "Leads CRM", shortLabel: "Leads", icon: LayoutList, adminOnly: false },
+  { value: "inventory", label: "Live Inventory", shortLabel: "Inventory", icon: Building2, adminOnly: true },
+  { value: "team", label: "Team Performance", shortLabel: "Team", icon: LineChart, adminOnly: true },
+  { value: "budget", label: "Budget & Pipeline", shortLabel: "Budget", icon: Wallet, adminOnly: true },
+  { value: "integrations", label: "Lead Sources & Channels", shortLabel: "Channels", icon: Share2, adminOnly: true },
+  { value: "profile", label: "Profile & Settings", shortLabel: "Profile", icon: UserCircle, adminOnly: false },
 ] as const;
 
 function Dashboard() {
+  const [activeTab, setActiveTab] = useState("leads");
   const [preset, setPreset] = useState<DatePreset>("all");
   const leadsQuery = useLeads();
   const inventoryQuery = useInventory();
@@ -115,36 +116,92 @@ function Dashboard() {
   return (
     <main className="min-h-screen bg-background">
       <header className="sticky top-0 z-30 apple-glass border-b border-border/40">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
-          <div className="flex items-center gap-3.5">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-xs ring-1 ring-border/50">
-              <Building2 className="size-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
-                  {client?.company_name || "Nextgn Realtors"}
-                </h1>
-                <span className="hidden sm:inline-flex items-center rounded-full bg-accent/15 px-2.5 py-0.5 text-[10px] font-semibold text-accent-foreground border border-accent/25">
-                  {isAdmin ? "Admin Console" : "Executive View"}
-                </span>
+        <div className="mx-auto max-w-7xl px-3.5 py-2.5 sm:px-6 sm:py-3.5">
+          {/* Main Header Bar */}
+          <div className="flex items-center justify-between gap-3">
+            {/* Left: Brand / Tenant Identity */}
+            <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+              <div className="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-xs ring-1 ring-border/50">
+                <Building2 className="size-4.5 sm:size-5" />
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {me
-                  ? `${me.fullName || me.email} · ${isAdmin ? "Lead & Inventory Management" : "Field Executive"}`
-                  : "Loading…"}
-              </p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <h1 className="text-sm sm:text-lg font-bold tracking-tight text-foreground truncate max-w-[160px] xs:max-w-[220px] sm:max-w-none">
+                    {client?.company_name || "Nextgn Realtors"}
+                  </h1>
+                  <span className="hidden xs:inline-flex items-center rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent-foreground border border-accent/25 shrink-0">
+                    {isAdmin ? "Admin" : "Executive"}
+                  </span>
+                </div>
+                <p className="text-[11px] sm:text-xs text-muted-foreground truncate max-w-[190px] xs:max-w-xs sm:max-w-none mt-0.5">
+                  {me
+                    ? `${me.fullName || me.email} · ${isAdmin ? "Lead & Inventory Management" : "Field Executive"}`
+                    : "Loading…"}
+                </p>
+              </div>
+            </div>
+
+            {/* Right: Actions Cluster */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* Desktop Presets Inline */}
+              <div className="hidden sm:flex items-center rounded-xl border border-border/30 bg-muted/60 p-1 shadow-2xs backdrop-blur-xs">
+                {PRESETS.map((p) => (
+                  <button
+                    key={p.key}
+                    onClick={() => setPreset(p.key)}
+                    className={`apple-button rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
+                      preset === p.key
+                        ? "bg-card text-foreground shadow-xs font-bold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              <ThemeToggle />
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="apple-button size-8.5 rounded-xl border-border/40 bg-card/80 hover:bg-muted shadow-2xs"
+                onClick={() => {
+                  leadsQuery.refetch();
+                  inventoryQuery.refetch();
+                }}
+                aria-label="Refresh data"
+                title="Refresh dashboard data"
+              >
+                <RefreshCw className={`size-3.5 ${leadsQuery.isFetching ? "animate-spin text-primary" : "text-muted-foreground"}`} />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="apple-button h-8.5 rounded-xl text-xs text-muted-foreground hover:text-destructive gap-1.5 px-2 sm:px-3"
+                onClick={async () => {
+                  await signOut();
+                  navigate({ to: "/auth", replace: true });
+                }}
+                aria-label="Sign out"
+                title="Sign out"
+              >
+                <LogOut className="size-3.5" /> <span className="hidden sm:inline">Sign out</span>
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-xl border border-border/30 bg-muted/60 p-1 shadow-2xs backdrop-blur-xs">
+
+          {/* Mobile Presets Segmented Control Row (< 640px) */}
+          <div className="mt-2.5 sm:hidden">
+            <div className="grid grid-cols-3 rounded-xl border border-border/40 bg-muted/70 p-1 shadow-2xs">
               {PRESETS.map((p) => (
                 <button
                   key={p.key}
                   onClick={() => setPreset(p.key)}
-                  className={`apple-button rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
+                  className={`apple-button rounded-lg py-1.5 text-xs font-semibold transition-all text-center ${
                     preset === p.key
-                      ? "bg-card text-foreground shadow-xs"
+                      ? "bg-card text-foreground shadow-xs font-bold"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -152,45 +209,23 @@ function Dashboard() {
                 </button>
               ))}
             </div>
-            <ThemeToggle />
-            <Button
-              variant="outline"
-              size="icon"
-              className="apple-button size-8.5 rounded-xl border-border/40 bg-card/80 hover:bg-muted shadow-2xs"
-              onClick={() => {
-                leadsQuery.refetch();
-                inventoryQuery.refetch();
-              }}
-              aria-label="Refresh data"
-            >
-              <RefreshCw className={`size-3.5 ${leadsQuery.isFetching ? "animate-spin text-primary" : "text-muted-foreground"}`} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="apple-button h-8.5 rounded-xl text-xs text-muted-foreground hover:text-destructive gap-1.5"
-              onClick={async () => {
-                await signOut();
-                navigate({ to: "/auth", replace: true });
-              }}
-            >
-              <LogOut className="size-3.5" /> <span className="hidden sm:inline">Sign out</span>
-            </Button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <Tabs defaultValue="leads">
+      {/* Main Content Area */}
+      <div className="mx-auto max-w-7xl px-3 sm:px-6 py-4 sm:py-6 pb-28 md:pb-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="flex flex-col gap-6 md:flex-row md:items-start">
-            <TabsList className="touch-scroll flex h-auto w-full shrink-0 gap-1.5 overflow-x-auto bg-transparent p-0 pb-1 md:w-60 md:flex-col md:items-stretch md:overflow-visible">
+            {/* Desktop Navigation Sidebar (>= 768px) */}
+            <TabsList className="hidden md:flex touch-scroll h-auto w-60 shrink-0 flex-col items-stretch gap-1.5 bg-transparent p-0 overflow-visible">
               {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) => {
                 const Icon = item.icon;
                 return (
                   <TabsTrigger
                     key={item.value}
                     value={item.value}
-                    className="shrink-0 justify-start gap-2.5 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-medium transition-all apple-button data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border data-[state=active]:border-border/60 text-muted-foreground hover:text-foreground hover:bg-card/50 md:w-full"
+                    className="justify-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all apple-button data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border data-[state=active]:border-border/60 text-muted-foreground hover:text-foreground hover:bg-card/50 w-full"
                   >
                     <Icon className="size-4 shrink-0 text-muted-foreground" />
                     <span className="flex-1 text-left">{item.label}</span>
@@ -250,6 +285,41 @@ function Dashboard() {
           </div>
         </Tabs>
       </div>
+
+      {/* ── 📱 Mobile Floating Thumb Dock (Native Phone Navigation < 768px) ── */}
+      <nav
+        aria-label="Mobile Navigation"
+        className="fixed bottom-0 left-0 right-0 z-40 md:hidden apple-glass border-t border-border/60 pb-[max(env(safe-area-inset-bottom),8px)] pt-1.5 px-2 shadow-2xl backdrop-blur-xl"
+      >
+        <div className="flex items-center justify-around gap-1 max-w-md mx-auto">
+          {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.value;
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setActiveTab(item.value)}
+                className={`apple-button relative flex flex-1 flex-col items-center justify-center py-1 px-1 rounded-xl text-[10px] font-semibold transition-all min-h-[46px] ${
+                  isActive
+                    ? "text-primary bg-primary/12 font-bold shadow-2xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <div className="relative">
+                  <Icon className={`size-5 transition-transform ${isActive ? "text-primary scale-110" : "text-muted-foreground"}`} />
+                  {item.value === "leads" && leads.length > 0 && (
+                    <span className="absolute -top-1 -right-2.5 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground shadow-xs">
+                      {leads.length > 99 ? "99+" : leads.length}
+                    </span>
+                  )}
+                </div>
+                <span className="mt-1 truncate max-w-[56px] tracking-tight">{item.shortLabel}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </main>
   );
 }
