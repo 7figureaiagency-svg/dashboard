@@ -830,19 +830,22 @@ function formatLeadCriteriaSummary(lead: any, lang: "GUJLISH" | "HINGLISH" | "EN
     budgetStr = `~₹${l} Lakh`;
   }
 
+  const isFlex = !loc || loc === "FLEXIBLE" || loc.toLowerCase() === "flexible";
+  const displayLoc = isFlex ? "Vadodara" : loc;
+
   if (lang === "GUJLISH") {
     // e.g. "Waghodia Road ma ~₹1 Cr na budget ma 3BHK Flat"
-    const locPart = loc ? `${loc} ma` : "";
+    const locPart = `${displayLoc} ma`;
     const bPart = budgetStr ? `${budgetStr} na budget ma` : "";
     return [locPart, bPart, pType].filter(Boolean).join(" ");
   } else if (lang === "ENGLISH") {
     // e.g. "3BHK Flat in Waghodia Road with budget ~₹1 Cr"
-    const locPart = loc ? `in ${loc}` : "";
+    const locPart = `in ${displayLoc}`;
     const bPart = budgetStr ? `with a budget of ${budgetStr}` : "";
     return [pType, locPart, bPart].filter(Boolean).join(" ");
   } else {
     // Hinglish: e.g. "Waghodia Road par ~₹1 Cr ke budget me 3BHK Flat"
-    const locPart = loc ? `${loc} par` : "";
+    const locPart = isFlex ? "Vadodara me" : `${displayLoc} par`;
     const bPart = budgetStr ? `${budgetStr} ke budget me` : "";
     return [locPart, bPart, pType].filter(Boolean).join(" ");
   }
@@ -1252,7 +1255,7 @@ async function classifyLeadIntent(
   } else if (lower.includes("cancel")) {
     fallbackIntent = "CANCEL_VISIT";
   } else if (
-    /(nayi\s*requirement|navi\s*requirement|naya\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|kuch\s*naya\s*dekhna)/i.test(lower)
+    /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|kuch\s*naya\s*dekhna|nayi\s*chahiye|navi\s*joiye)/i.test(lower)
   ) {
     fallbackIntent = "CHANGE_CRITERIA";
   } else if (/(dusri\s*property|aur\s*option|aur\s*flat|kuch\s*aur|kuch\s*naya|biji\s*property|more\s*options|other\s*options|different\s*property)/i.test(lower)) {
@@ -1270,6 +1273,7 @@ async function classifyLeadIntent(
   const isOwnerMsg = fallbackIntent === "OWNER_LISTING" || lead?.lead_type === "PROVIDER";
   const userRole: "OWNER" | "SEEKER" | "UNKNOWN" = isOwnerMsg ? "OWNER" : (fallbackIntent === "GREETING" || fallbackIntent === "OPT_OUT" ? "UNKNOWN" : "SEEKER");
   const parsedPrice = parseBudgetFromText(messageText);
+  const isFlexLoc = /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|kahi\s*pan|koi\s*pan|gamete|any\s*location|any\s*area|anywhere|all\s*over|no\s*preference|flexible|kuch\s*bhi|koi\s*fix\s*nathi|koi\s*fix\s*nahi|chalegi|chalega|chalse)\b/i.test(lower);
 
   return {
     user_role: userRole,
@@ -1277,8 +1281,8 @@ async function classifyLeadIntent(
     language: detectLanguage(messageText, lead?.user_language),
     transaction_type: /(?:rent|bhadu|bhaade|bhade|kiraya)/i.test(lower) ? "RENT" : /(?:buy|kharid|purchase)/i.test(lower) ? "BUY" : /(?:bechna|sell|vech)/i.test(lower) ? "SELL" : null,
     property_type: parsePropertyTypeFromText(messageText) || null,
-    location: (/(?:koi\s*bhi|kahi\s*bhi|any\s*location|flexible|chalegi|chalega|chalse)/i.test(lower) ? "FLEXIBLE" : null),
-    is_flexible_location: /(?:koi\s*bhi|kahi\s*bhi|any\s*location|flexible|chalegi|chalega|chalse)/i.test(lower),
+    location: isFlexLoc ? "FLEXIBLE" : null,
+    is_flexible_location: isFlexLoc,
     price_or_budget: parsedPrice > 0 ? parsedPrice : null,
     provider_used: "DETERMINISTIC_FALLBACK",
     latency_ms: Date.now() - start,
@@ -2775,7 +2779,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v47-dual-channel-alerts-and-tg-fallback",
+        version: "v48-fix-flexible-location-budget-cascade",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -3782,7 +3786,7 @@ Deno.serve(async (req: Request) => {
       (
         lead.state === "CRITERIA_CONFIRMATION_PENDING" ||
         aiAnalysis.intent === "CHANGE_CRITERIA" ||
-        /(nayi\s*requirement|navi\s*requirement|naya\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni)/i.test(lower)
+        /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|nayi\s*chahiye|navi\s*joiye)/i.test(lower)
       )
     ) {
       const isConfirmSame =
@@ -3793,9 +3797,9 @@ Deno.serve(async (req: Request) => {
 
       const isChangeCriteria =
         aiAnalysis.intent === "CHANGE_CRITERIA" ||
-        /^(2|2️⃣|second|2nd|nahi|no|change|badalna|dusra|naya|different|modify)$/i.test(lower) ||
-        /(nayi\s*requirement|navi\s*requirement|naya\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni)/i.test(lower) ||
-        lower.includes("change") || lower.includes("badalna") || lower.includes("naya") ||
+        /^(2|2️⃣|second|2nd|nahi|no|change|badalna|dusra|naya|nayi|navi|different|modify)$/i.test(lower) ||
+        /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|nayi\s*chahiye|navi\s*joiye)/i.test(lower) ||
+        lower.includes("change") || lower.includes("badalna") || lower.includes("naya") || lower.includes("nayi") || lower.includes("navi") ||
         Boolean(parsePropertyTypeFromText(messageText)) ||
         Boolean(parseBudgetFromText(messageText));
 
@@ -4515,11 +4519,10 @@ Deno.serve(async (req: Request) => {
         location = String(aiAnalysis.location);
       }
 
-      // Flexible location detection (e.g. "location koi bhi chalegi", "kahi bhi chalega", "any location", "gamete location")
+      // Flexible location detection (e.g. "koi bhi", "location koi bhi chalegi", "kahi bhi chalega", "any location", "gamete location")
       const isFlexibleLoc =
         Boolean(aiAnalysis?.is_flexible_location) ||
-        (/(?:koi\s*bhi|kahi\s*bhi|any\s*location|any\s*area|flexible|chalegi|chalega|chalse|gamete|anywhere|all\s*over)\b/i.test(lower) &&
-        /(?:location|area|jagah|vistar|kahi|koi)/i.test(lower));
+        /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|kahi\s*pan|koi\s*pan|gamete|any\s*location|any\s*area|anywhere|all\s*over|no\s*preference|flexible|kuch\s*bhi|koi\s*fix\s*nathi|koi\s*fix\s*nahi|chalegi|chalega|chalse)\b/i.test(lower);
 
       if (!location && isFlexibleLoc) {
         location = "FLEXIBLE";
@@ -4567,7 +4570,7 @@ Deno.serve(async (req: Request) => {
                                  Boolean(budget && Math.abs(budget - Number(lead?.budget || 0)) > 1000) ||
                                  isCategoryChanged ||
                                  aiAnalysis.intent === "CHANGE_CRITERIA" ||
-                                 /(nayi\s*requirement|navi\s*requirement|naya\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria)/i.test(lower);
+                                 /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|nayi\s*chahiye|navi\s*joiye)/i.test(lower);
 
       // Active Booked Visit Safeguard Circuit Breaker:
       // If the lead already has an active booked site visit and did not explicitly initiate a new property search,
@@ -4655,95 +4658,31 @@ Deno.serve(async (req: Request) => {
         const { data: currentLead } = await supabase.from("leads").select("*").eq("id", lead.id).single();
 
         // =========================================================================
-        // INVENTORY-AWARE PROACTIVE SMART PITCH (Option 1)
-        // When lead has property_type and location, check if matching inventory exists in that location.
-        // If user hasn't explicitly specified requirement (Buy vs Rent) with a budget,
-        // proactively pitch the verified available property!
+        // 4. Strict 6-Field Missing Cascade in Sequential Order:
+        // 1. property_type -> 2. requirement -> 3. purpose -> 4. location -> 5. budget -> 6. timeline
+        // If any essential qualification field is missing, ask exactly ONE crisp question.
+        // Never show inventory before budget is qualified!
         // =========================================================================
-        let proactivePitchHandled = false;
-        const activeLoc = currentLead?.location;
-        const activePropType = currentLead?.property_type;
-        const explicitReqInMsg = parseRequirementFromText(messageText);
-
-        if (activeLoc && activePropType && !explicitReqInMsg && !currentLead?.site_visit_booked) {
-          const { data: allProps } = await supabase
-            .from("inventory")
-            .select("*")
-            .eq("client_id", defaultTenantId)
-            .eq("status", "AVAILABLE");
-
-          const locationMatches = (allProps || []).filter((p: any) => {
-            if (!matchesLocation(activeLoc, p.location, p.landmarks)) return false;
-            if (!matchesPropertyType(activePropType, p.property_category, p.configuration, p.project_name)) return false;
-            return true;
-          });
-
-          if (locationMatches.length > 0) {
-            proactivePitchHandled = true;
-            nextState = "OPTIONS_SENT";
-
-            const topProps = locationMatches.slice(0, 3);
-            const optionIds = topProps.map((p) => p.property_id);
-            const firstProp = topProps[0];
-            const isRentListing = firstProp.listing_type === "RENT" || firstProp.listing_type === "LEASE";
-
-            await supabase.from("leads").update({
-              state: "OPTIONS_SENT",
-              last_option_ids: optionIds,
-              selected_property_id: firstProp.property_id,
-              requirement: isRentListing ? firstProp.listing_type : "BUY",
-              budget: Number(firstProp.price || 0),
-            }).eq("id", lead.id);
-
-            const optionsCards = topProps.map((p, idx) => formatN8nPropertyCard(p, idx, false)).join("\n\n---\n\n");
-
-            const heading =
-              lang === "GUJLISH"
-                ? `🌟 <b>${activeLoc} ma Amari Paas Prime Verified ${firstProp.configuration || activePropType} Upalabdha Chhe!</b>\n\n${senderName ? `<b>${senderName} bhai</b>, ` : ""}`
-                : lang === "ENGLISH"
-                ? `🌟 <b>Prime Verified ${firstProp.configuration || activePropType} Available in ${activeLoc}!</b>\n\n${senderName ? `<b>${senderName}</b>, ` : ""}`
-                : `🌟 <b>${activeLoc} me Hamare Paas Prime Verified ${firstProp.configuration || activePropType} Available Hai!</b>\n\n${senderName ? `<b>${senderName} ji</b>, ` : ""}`;
-
-            const trailerQuestion =
-              topProps.length === 1
-                ? (lang === "GUJLISH"
-                    ? `👉 <i>Tame aani <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho — <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?</i>`
-                    : lang === "ENGLISH"
-                    ? `👉 <i>When would you like to schedule a <b>VIP Site Visit 🚗</b> for this — <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?</i>`
-                    : `👉 <i>Aap iski <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge — <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?</i>`)
-                : (lang === "GUJLISH"
-                    ? `👉 <i>Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho — <b>Option 1</b>, <b>Option 2</b> ke <b>Option 3</b>?</i>`
-                    : lang === "ENGLISH"
-                    ? `👉 <i>Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for — <b>Option 1</b>, <b>Option 2</b>, or <b>Option 3</b>?</i>`
-                    : `👉 <i>Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge — <b>Option 1</b>, <b>Option 2</b> ya <b>Option 3</b>?</i>`);
-
-            replyText = `${heading}${optionsCards}\n\n${trailerQuestion}`;
-          }
+        let missingField: string | null = null;
+        if (!currentLead?.property_type) {
+          missingField = "PROPERTY_TYPE";
+        } else if (!currentLead?.requirement) {
+          missingField = "REQUIREMENT";
+        } else if (!currentLead?.purpose) {
+          // Auto-default purpose for residential and commercial to reduce friction!
+          const isRes = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(String(currentLead.property_type || ""));
+          const defPurpose = isRes ? "SELF_USE" : "BUSINESS";
+          await supabase.from("leads").update({ purpose: defPurpose }).eq("id", lead.id);
+          currentLead.purpose = defPurpose;
         }
 
-        if (!proactivePitchHandled) {
-          // 4. Strict 6-Field Missing Cascade in Sequential Order:
-          // 1. property_type -> 2. requirement -> 3. purpose -> 4. location (skipped if purpose === 'INVESTMENT') -> 5. budget -> 6. timeline
-          let missingField: string | null = null;
-          if (!currentLead?.property_type) {
-            missingField = "PROPERTY_TYPE";
-          } else if (!currentLead?.requirement) {
-            missingField = "REQUIREMENT";
-          } else if (!currentLead?.purpose) {
-            // Auto-default purpose for residential and commercial to reduce friction!
-            const isRes = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(String(currentLead.property_type || ""));
-            const defPurpose = isRes ? "SELF_USE" : "BUSINESS";
-            await supabase.from("leads").update({ purpose: defPurpose }).eq("id", lead.id);
-            currentLead.purpose = defPurpose;
+        if (!missingField) {
+          if (!currentLead?.location && currentLead?.purpose !== "INVESTMENT") {
+            missingField = "LOCATION";
+          } else if (!currentLead?.budget || Number(currentLead.budget) === 0) {
+            missingField = "BUDGET";
           }
-
-          if (!missingField) {
-            if (!currentLead?.location && currentLead?.purpose !== "INVESTMENT") {
-              missingField = "LOCATION";
-            } else if (!currentLead?.budget || Number(currentLead.budget) === 0) {
-              missingField = "BUDGET";
-            }
-          }
+        }
 
           // IF ANY ESSENTIAL FIELD IS MISSING, ASK AT A TIME EXACTLY ONE CRISP QUESTION (2 lines max!)
           if (missingField !== null) {
@@ -4845,7 +4784,17 @@ Deno.serve(async (req: Request) => {
         });
 
         // NEVER show nearby properties from other locations! Strict match only
+        // Sort matches by proximity to user's budget so closest budget options are prioritized
+        strictMatches.sort((a: any, b: any) => {
+          if (leadBudget > 0) {
+            const diffA = Math.abs(Number(a.price || 0) - leadBudget);
+            const diffB = Math.abs(Number(b.price || 0) - leadBudget);
+            return diffA - diffB;
+          }
+          return 0;
+        });
         const properties = strictMatches.slice(0, 3);
+        const displayLoc = (currentLead.location && currentLead.location !== "FLEXIBLE") ? currentLead.location : "Vadodara";
 
         if (properties.length === 0) {
           // Check if properties exist in this location for this type with alternate listing type (e.g. RENT available when BUY asked)
@@ -4862,28 +4811,27 @@ Deno.serve(async (req: Request) => {
 
             await dispatchSalesAlert(defaultTenantId, "NO_PROPERTY_MATCH", currentLead, {
               userText: messageText,
-              hint: `Customer wants to BUY ${currentLead.property_type} in ${currentLead.location}. Only Rental available (${alt.project_name} at ${altPrice}). Source off-market sale or convert to rental.`
+              hint: `Customer wants to BUY ${currentLead.property_type} in ${displayLoc}. Only Rental available (${alt.project_name} at ${altPrice}). Source off-market sale or convert to rental.`
             });
 
             const altTypeDesc = alt.configuration ? `${alt.configuration} (${altPrice})` : `Rental Space (${altPrice})`;
             replyText =
               lang === "GUJLISH"
-                ? `${nameStr}<b>${currentLead.location}</b> ma filhal <b>${alt.project_name}</b> ma verified <b>${altTypeDesc}</b> available chhe. Amara senior sales executive tamara mate exclusive <b>Purchase (Buy) options</b> arrange kari rahya chhe ane jaldi direct <b>call par connect karshe</b>. 📞`
+                ? `${nameStr}<b>${displayLoc}</b> ma filhal <b>${alt.project_name}</b> ma verified <b>${altTypeDesc}</b> available chhe. Amara senior sales executive tamara mate exclusive <b>Purchase (Buy) options</b> arrange kari rahya chhe ane jaldi direct <b>call par connect karshe</b>. 📞`
                 : lang === "ENGLISH"
-                ? `${nameStr}in <b>${currentLead.location}</b>, we currently have verified <b>${altTypeDesc}</b> at <b>${alt.project_name}</b>. Our senior sales team is sourcing exclusive <b>Purchase (Sale) options</b> for you and will <b>connect with you directly over a call</b>. 📞`
-                : `${nameStr}<b>${currentLead.location}</b> me filhal <b>${alt.project_name}</b> me verified <b>${altTypeDesc}</b> available hai. Hamare senior sales executive aapke liye exclusive <b>Purchase (Buy) options</b> arrange kar rahe hain aur jaldi direct <b>call par connect karenge</b>. 📞`;
+                ? `${nameStr}in <b>${displayLoc}</b>, we currently have verified <b>${altTypeDesc}</b> at <b>${alt.project_name}</b>. Our senior sales team is sourcing exclusive <b>Purchase (Sale) options</b> for you and will <b>connect with you directly over a call</b>. 📞`
+                : `${nameStr}<b>${displayLoc}</b> me filhal <b>${alt.project_name}</b> me verified <b>${altTypeDesc}</b> available hai. Hamare senior sales executive aapke liye exclusive <b>Purchase (Buy) options</b> arrange kar rahe hain aur jaldi direct <b>call par connect karenge</b>. 📞`;
           } else {
             await dispatchSalesAlert(defaultTenantId, "NO_PROPERTY_MATCH", currentLead, { userText: messageText });
-            const loc = currentLead.location || "Vadodara";
             const pType = currentLead.property_type || "property";
             const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>, ` : `<b>${senderName} ji</b>, `) : "";
 
             replyText =
               lang === "GUJLISH"
-                ? `${nameStr}tamari requirement (<b>${pType}</b> in <b>${loc}</b>) mujab matching property mate amara senior sales executive specialized options arrange kari rahya chhe ane jaldi thi tamari sathe direct <b>call par connect karshe</b>. 📞`
+                ? `${nameStr}tamari requirement (<b>${pType}</b> in <b>${displayLoc}</b>) mujab matching property mate amara senior sales executive specialized options arrange kari rahya chhe ane jaldi thi tamari sathe direct <b>call par connect karshe</b>. 📞`
                 : lang === "ENGLISH"
-                ? `${nameStr}our senior sales executives are sourcing specialized options matching your requirement (<b>${pType}</b> in <b>${loc}</b>) and will <b>connect with you directly over a call</b> shortly. 📞`
-                : `${nameStr}aapki requirement (<b>${pType}</b> in <b>${loc}</b>) ke mutabiq matching property ke liye hamare senior sales executive specialized options arrange kar rahe hain aur jaldi hi aapse direct <b>call par connect karenge</b>. 📞`;
+                ? `${nameStr}our senior sales executives are sourcing specialized options matching your requirement (<b>${pType}</b> in <b>${displayLoc}</b>) and will <b>connect with you directly over a call</b> shortly. 📞`
+                : `${nameStr}aapki requirement (<b>${pType}</b> in <b>${displayLoc}</b>) ke mutabiq matching property ke liye hamare senior sales executive specialized options arrange kar rahe hain aur jaldi hi aapse direct <b>call par connect karenge</b>. 📞`;
           }
         } else {
           // Store option IDs on lead
@@ -4923,7 +4871,6 @@ Deno.serve(async (req: Request) => {
 
           replyText = `${heading}\n\n${optionsCards}\n\n${trailerQuestion}`;
         }
-      }
       }
       }
     }
