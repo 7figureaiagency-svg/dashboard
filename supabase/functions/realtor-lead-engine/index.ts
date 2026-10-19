@@ -1111,7 +1111,7 @@ async function classifyLeadIntent(
 
 // 8b. Robust Inventory Matchers (Location, Listing Type, Category)
 function matchesLocation(leadLoc?: string | null, propLoc?: string | null, landmarks: string[] = []): boolean {
-  if (!leadLoc || !propLoc) return true;
+  if (!leadLoc || !propLoc || leadLoc === "FLEXIBLE" || leadLoc.toLowerCase() === "flexible") return true;
   const l1 = String(leadLoc).toLowerCase().trim();
   const l2 = String(propLoc).toLowerCase().trim();
   
@@ -2496,7 +2496,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v42-anti-derailment-and-fuzzy-matching",
+        version: "v43-fix-map-request-and-flexible-location",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -3854,29 +3854,34 @@ Deno.serve(async (req: Request) => {
     // 9. BROCHURE & MAP REQUEST
     // =========================================================================
     else if (
-      /\b(brochure|brocher|brochar|broshur|brochur|pamphlet|pdf|catalog|catalogue|deck)\b/i.test(lower) ||
-      /\b(map|naksho|google\s*map)\b/i.test(lower) ||
-      ((lower.includes("bhejo") || lower.includes("bhej") || lower.includes("moklo") || lower.includes("mokli") || lower.includes("send") || lower.includes("share") || lower.includes("joiye") || lower.includes("chahiye")) &&
-       (lower.includes("detail") || lower.includes("info") || lower.includes("mahiti") || lower.includes("link") || lower.includes("location") || lower.includes("broch") || lower.includes("brocher")))
+      !/(budget|lakh|crore|hazar|thousand|rent|buy|\d+k|chalegi|chalega|chalse|gamete|bhadu|bhade|kharid|flat|bhk|villa|shop|office|commercial|residential|plot)/i.test(lower) &&
+      (
+        /\b(brochure|brocher|brochar|broshur|brochur|pamphlet|pdf|catalog|catalogue|deck)\b/i.test(lower) ||
+        /\b(naksho|google\s*map|location\s*pin|location\s*map|map\s*link)\b/i.test(lower) ||
+        (/\bmap\b/i.test(lower) && !/(roadmap|map\s*karo)/i.test(lower)) ||
+        ((lower.includes("bhejo") || lower.includes("bhej") || lower.includes("moklo") || lower.includes("mokli") || lower.includes("send") || lower.includes("share")) &&
+         (lower.includes("detail") || lower.includes("info") || lower.includes("mahiti") || lower.includes("link") || lower.includes("location pin") || lower.includes("location link") || lower.includes("broch") || lower.includes("brocher")))
+      )
     ) {
       let prop: any = null;
-      let hasBookedVisit = lead.site_visit_booked || lead.state === "SITE_VISIT_BOOKED" || lead.state === "VISIT_BOOKED";
+      let hasBookedVisit = Boolean((lead.site_visit_booked || lead.state === "SITE_VISIT_BOOKED" || lead.state === "VISIT_BOOKED") && lead.state !== "QUALIFYING");
 
       // 1. If lead has an active booked visit, fetch the exact booked property from site_visits
-      const { data: latestVisit } = await supabase
-        .from("site_visits")
-        .select("property_id")
-        .eq("lead_id", lead.id)
-        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      if (hasBookedVisit) {
+        const { data: latestVisit } = await supabase
+          .from("site_visits")
+          .select("property_id")
+          .eq("lead_id", lead.id)
+          .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (latestVisit?.property_id) {
-        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", latestVisit.property_id).maybeSingle();
-        if (p) {
-          prop = p;
-          hasBookedVisit = true;
+        if (latestVisit?.property_id) {
+          const { data: p } = await supabase.from("inventory").select("*").eq("property_id", latestVisit.property_id).maybeSingle();
+          if (p) {
+            prop = p;
+          }
         }
       }
 
@@ -4108,15 +4113,27 @@ Deno.serve(async (req: Request) => {
     // 10. SEQUENTIAL 6-FIELD QUALIFICATION CASCADE (Workflow 1: iRqYxBAeMGIduXRM)
     // =========================================================================
     else {
-      // 1. Extract values from current message
-      const propType = parsePropertyTypeFromText(messageText);
+      // 1. Extract values from current message (with AI analysis fallback)
+      let propType = parsePropertyTypeFromText(messageText);
+      if (!propType && aiAnalysis?.property_type) {
+        propType = String(aiAnalysis.property_type);
+      }
       let requirement = parseRequirementFromText(messageText);
+      if (!requirement && aiAnalysis?.requirement) {
+        requirement = String(aiAnalysis.requirement);
+      }
       let purpose = parsePurposeFromText(messageText);
+      if (!purpose && aiAnalysis?.purpose) {
+        purpose = String(aiAnalysis.purpose);
+      }
       let budget = parseBudgetFromText(messageText);
       if (!budget && aiAnalysis?.budget_str) {
         budget = parseBudgetFromText(aiAnalysis.budget_str);
       }
-      const timeline = parseTimelineFromText(messageText);
+      let timeline = parseTimelineFromText(messageText);
+      if (!timeline && aiAnalysis?.timeline) {
+        timeline = String(aiAnalysis.timeline);
+      }
 
       // If budget is >= 15 Lakhs and requirement was not explicitly mentioned, infer BUY
       if (!requirement && budget >= 1500000) {
@@ -4131,6 +4148,15 @@ Deno.serve(async (req: Request) => {
         .eq("status", "AVAILABLE");
 
       let location = extractLocationFromText(messageText, allTenantInventory || []);
+
+      // Flexible location detection (e.g. "location koi bhi chalegi", "kahi bhi chalega", "any location", "gamete location")
+      const isFlexibleLoc =
+        /(?:koi\s*bhi|kahi\s*bhi|any\s*location|any\s*area|flexible|chalegi|chalega|chalse|gamete|anywhere|all\s*over)\b/i.test(lower) &&
+        /(?:location|area|jagah|vistar|kahi|koi)/i.test(lower);
+
+      if (!location && isFlexibleLoc) {
+        location = "FLEXIBLE";
+      }
 
       // If user is specifically answering location step and gave a valid locality name (guarded against false selection)
       if (
