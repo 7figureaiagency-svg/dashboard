@@ -550,7 +550,13 @@ function parseBudgetFromText(text: string): number {
   if (kMatch) return parseFloat(kMatch[1]) * 1000;
 
   const numMatch = lower.match(/\b(\d{4,8})\b/);
-  if (numMatch) return parseInt(numMatch[1], 10);
+  if (numMatch) {
+    const val = parseInt(numMatch[1], 10);
+    const hasPriceContext = /(?:rent|kiraya|bhadu|budget|rs\.?|₹|inr|per\s*month|\/month|mahina|price|cost|demand)/i.test(lower);
+    if (val >= 3000 || hasPriceContext) {
+      return val;
+    }
+  }
 
   const shortNumMatch = lower.match(/^(?:around|approx|budget|lagbhag|andaje|max|under)?\s*(\d{2,3})\s*$/i);
   if (shortNumMatch) {
@@ -861,9 +867,20 @@ INTENTS:
 
 IMPORTANT OWNER vs SEEKER RULES:
 - If LEAD STATUS indicates Lead Type is PROVIDER/OWNER or In-Progress Owner Intake is YES:
-  The user is an OWNER answering property intake. Their answers like "office he", "ye alkapuri me he", "30k rent", "khali he", "500 sqft" MUST have user_role: "OWNER" and intent: "OWNER_LISTING". DO NOT classify as SEEKER or CHANGE_CRITERIA.
+  The user is an OWNER answering property intake. Their answers like "office he", "ye alkapuri me he", "30k rent", "khali he", "500 sqft", "1250" MUST have user_role: "OWNER" and intent: "OWNER_LISTING". DO NOT classify as SEEKER or CHANGE_CRITERIA.
 - "bhade pe chadhana", "rent par dena", "bhaade aalvu", "kiraye pe dena", "rent out" = OWNER with transaction_type: "RENT".
 - "chahiye", "joiye", "kharidna", "rent pe chahiye", "buy" = SEEKER with transaction_type: "RENT" or "BUY".
+
+STATE-BASED NUMERIC DISAMBIGUATION RULES:
+- When "Bot Question Waiting For" is CARPET_AREA_SQFT (state OWNER_AREA_PENDING):
+  A numeric answer (e.g. "1250", "800", "1500 sqft", "500", "1200") MUST be placed into "carpet_sqft": <number>.
+  "price_or_budget" MUST be null unless explicit price keywords like "rent", "kiraya", "lakh", "cr", "rs", "₹", "/month" are in the user message!
+- When "Bot Question Waiting For" is PRICE_OR_RENT (state OWNER_PRICE_PENDING):
+  A numeric answer (e.g. "30000", "30k", "75 lakh", "1.2 cr") MUST be placed into "price_or_budget": <number>.
+  "carpet_sqft" MUST be null unless "sqft" is explicitly in the user message.
+- Minimum Rent Floor: Rent in Vadodara is at least ₹3,000/month. Any standalone 3-4 digit number like 1200 or 1250 without rent words is carpet area in sq.ft, NOT rent!
+- When "Bot Question Waiting For" is SOCIETY_OR_ROAD (state OWNER_SOCIETY_PENDING):
+  If user mentions a road, complex, or area (e.g. "Ye harni main road pe he"), extract project_or_society and location.
 
 LANGUAGE RULES:
 - "GUJARATI_SCRIPT": if written in Gujarati script.
@@ -891,6 +908,55 @@ Return ONLY a single valid JSON object:
   "faq_topic": "AMENITIES" | "RERA" | "LOAN" | "POSSESSION" | "BROKERAGE" | "LANDMARKS" | null
 }`;
 
+function buildLeadContextForClassifier(lead: any, messageText: string): string {
+  const isInProgressOwner = [
+    "OWNER_CONFIG_PENDING",
+    "OWNER_SOCIETY_PENDING",
+    "OWNER_LOCATION_PENDING",
+    "OWNER_AREA_PENDING",
+    "OWNER_SIZE_PENDING",
+    "OWNER_PRICE_PENDING",
+    "OWNER_POSSESSION_PENDING",
+    "OWNER_FURNISHING_PENDING",
+  ].includes(lead?.state);
+
+  let currentPendingQuestion = "NONE";
+  if (lead?.state === "OWNER_CONFIG_PENDING") {
+    currentPendingQuestion = "PROPERTY_CONFIG (Bot asked for property type / configuration: Flat, Villa, Commercial Office, Shop, Plot)";
+  } else if (lead?.state === "OWNER_SOCIETY_PENDING") {
+    currentPendingQuestion = "SOCIETY_OR_ROAD (Bot asked for Commercial Complex, Business Hub, Society, or Road name)";
+  } else if (lead?.state === "OWNER_LOCATION_PENDING") {
+    currentPendingQuestion = "LOCATION_AREA (Bot asked for exact area / locality in Vadodara)";
+  } else if (lead?.state === "OWNER_AREA_PENDING" || lead?.state === "OWNER_SIZE_PENDING") {
+    currentPendingQuestion = "CARPET_AREA_SQFT (CRITICAL: Bot specifically asked for Carpet Area in sq.ft! If user replies with a number like '1250', '800', '1500', it MUST be extracted as carpet_sqft, NEVER as price_or_budget unless words like 'rent', 'lakh', 'k', 'rs' are explicitly stated!)";
+  } else if (lead?.state === "OWNER_PRICE_PENDING") {
+    currentPendingQuestion = "PRICE_OR_RENT (Bot asked for expected selling price or monthly rent. Pure number like '30000', '30k' is price_or_budget)";
+  } else if (lead?.state === "OWNER_POSSESSION_PENDING") {
+    currentPendingQuestion = "POSSESSION_STATUS (Bot asked for Ready to Move vs Under Construction)";
+  } else if (lead?.state === "OWNER_FURNISHING_PENDING") {
+    currentPendingQuestion = "FURNISHING_STATUS (Bot asked for Unfurnished, Semi-Furnished, or Fully Furnished)";
+  } else if (lead?.state === "QUALIFYING") {
+    if (!lead?.property_type) currentPendingQuestion = "SEEKER_PROPERTY_TYPE";
+    else if (!lead?.requirement) currentPendingQuestion = "SEEKER_REQUIREMENT (Buy or Rent)";
+    else if (!lead?.location) currentPendingQuestion = "SEEKER_LOCATION";
+    else if (!lead?.budget) currentPendingQuestion = "SEEKER_BUDGET (A numeric reply is price_or_budget)";
+    else if (!lead?.timeline) currentPendingQuestion = "SEEKER_TIMELINE";
+  }
+
+  return `LEAD STATUS:
+- Lead Type: ${lead?.lead_type || "UNKNOWN"}
+- State: ${lead?.state || "FRESH"}
+- In-Progress Owner Intake: ${isInProgressOwner ? "YES" : "NO"}
+- Bot Question Waiting For: ${currentPendingQuestion}
+- Known Property Type: ${lead?.property_type || lead?.metadata?.owner_draft?.property_type || "None"}
+- Known Location: ${lead?.location || lead?.metadata?.owner_draft?.location || "None"}
+- Known Budget/Rent: ${lead?.budget || lead?.metadata?.owner_draft?.expected_rent || lead?.metadata?.owner_draft?.expected_price || "None"}
+- Known Carpet Area: ${lead?.metadata?.owner_draft?.carpet_area_sqft ? `${lead.metadata.owner_draft.carpet_area_sqft} sq.ft` : "None"}
+- Has Active Site Visit: ${lead?.site_visit_booked ? "YES" : "NO"}
+
+USER MESSAGE: "${messageText}"`;
+}
+
 function parseJsonSafely(str: string): any {
   if (!str) return null;
   const clean = str.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
@@ -914,26 +980,7 @@ async function classifyLeadIntentWithGemini(
   lead: any
 ): Promise<ClassifiedIntent | null> {
   const cleanKey = apiKey.trim().replace(/^["']|["']$/g, "");
-  const isInProgressOwner = [
-    "OWNER_CONFIG_PENDING",
-    "OWNER_SOCIETY_PENDING",
-    "OWNER_LOCATION_PENDING",
-    "OWNER_AREA_PENDING",
-    "OWNER_PRICE_PENDING",
-    "OWNER_POSSESSION_PENDING",
-    "OWNER_FURNISHING_PENDING"
-  ].includes(lead?.state);
-
-  const userContent = `LEAD STATUS:
-- Lead Type: ${lead?.lead_type || "UNKNOWN"}
-- State: ${lead?.state || "FRESH"}
-- In-Progress Owner Intake: ${isInProgressOwner ? "YES" : "NO"}
-- Known Property Type: ${lead?.property_type || lead?.metadata?.owner_draft?.property_type || "None"}
-- Known Location: ${lead?.location || lead?.metadata?.owner_draft?.location || "None"}
-- Known Budget/Rent: ${lead?.budget || lead?.metadata?.owner_draft?.expected_rent || lead?.metadata?.owner_draft?.expected_price || "None"}
-- Has Active Site Visit: ${lead?.site_visit_booked ? "YES" : "NO"}
-
-USER MESSAGE: "${messageText}"`;
+  const userContent = buildLeadContextForClassifier(lead, messageText);
 
   const fullPrompt = `${INTENT_CLASSIFICATION_SYSTEM_PROMPT}\n\n${userContent}`;
 
@@ -992,26 +1039,7 @@ async function classifyLeadIntentWithGroq(
   lead: any
 ): Promise<ClassifiedIntent | null> {
   const cleanKey = apiKey.trim().replace(/^["']|["']$/g, "");
-  const isInProgressOwner = [
-    "OWNER_CONFIG_PENDING",
-    "OWNER_SOCIETY_PENDING",
-    "OWNER_LOCATION_PENDING",
-    "OWNER_AREA_PENDING",
-    "OWNER_PRICE_PENDING",
-    "OWNER_POSSESSION_PENDING",
-    "OWNER_FURNISHING_PENDING"
-  ].includes(lead?.state);
-
-  const userContent = `LEAD STATUS:
-- Lead Type: ${lead?.lead_type || "UNKNOWN"}
-- State: ${lead?.state || "FRESH"}
-- In-Progress Owner Intake: ${isInProgressOwner ? "YES" : "NO"}
-- Known Property Type: ${lead?.property_type || lead?.metadata?.owner_draft?.property_type || "None"}
-- Known Location: ${lead?.location || lead?.metadata?.owner_draft?.location || "None"}
-- Known Budget/Rent: ${lead?.budget || lead?.metadata?.owner_draft?.expected_rent || lead?.metadata?.owner_draft?.expected_price || "None"}
-- Has Active Site Visit: ${lead?.site_visit_booked ? "YES" : "NO"}
-
-USER MESSAGE: "${messageText}"`;
+  const userContent = buildLeadContextForClassifier(lead, messageText);
 
   const models = [
     "llama-3.3-70b-versatile",
@@ -2175,8 +2203,9 @@ function extractOwnerDetailsWithState(text: string, currentDraft: any = {}, curr
       if (draft.transaction_type === "SELL") draft.expected_price = val;
       else draft.expected_rent = val;
     } else {
+      const hasExplicitRentKeyword = /(?:rent|kiraya|bhadu|per\s*month|\/month|mahina|rs\.?|₹|inr)/i.test(lower);
       const rentMatch = lower.match(/\b(\d{4,6})\s*(?:rent|kiraya|per\s*month|\/month|mahina)?\b/i);
-      if (rentMatch && (draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT" || lower.includes("rent") || lower.includes("month") || currentState === "OWNER_PRICE_PENDING")) {
+      if (rentMatch && (currentState === "OWNER_PRICE_PENDING" || hasExplicitRentKeyword)) {
         const val = parseInt(rentMatch[1], 10);
         if (val >= 3000 && val <= 1000000) draft.expected_rent = val;
       } else if (currentState === "OWNER_PRICE_PENDING") {
@@ -2186,7 +2215,7 @@ function extractOwnerDetailsWithState(text: string, currentDraft: any = {}, curr
           if (draft.transaction_type === "SELL") {
             draft.expected_price = val < 500 ? val * 100000 : val;
           } else {
-            draft.expected_rent = val;
+            draft.expected_rent = val < 500 ? val * 1000 : val;
           }
         }
       }
@@ -2201,9 +2230,9 @@ function extractOwnerDetailsWithState(text: string, currentDraft: any = {}, curr
   } else if (/(rented|tenant|tenanted|bhada)/i.test(lower)) {
     draft.possession_status = "TENANTED";
   } else if (currentState === "OWNER_POSSESSION_PENDING" || currentState === "OWNER_STATUS_PENDING") {
-    if (lower.includes("move") || lower.includes("ready") || lower.includes("rtm")) {
+    if (lower.includes("move") || lower.includes("ready") || lower.includes("rtm") || lower === "1" || lower === "1️⃣" || lower === "option 1") {
       draft.possession_status = "READY_TO_MOVE";
-    } else if (lower.includes("construction") || lower.includes("under") || lower.includes("progress")) {
+    } else if (lower.includes("construction") || lower.includes("under") || lower.includes("progress") || lower === "2" || lower === "2️⃣" || lower === "option 2") {
       draft.possession_status = "UNDER_CONSTRUCTION";
     }
   }
@@ -2216,9 +2245,13 @@ function extractOwnerDetailsWithState(text: string, currentDraft: any = {}, curr
   } else if (/(unfurnished|raw|kora|khali|un-furnished|none|no)/i.test(lower) && !lower.includes("semi") && !lower.includes("fully")) {
     draft.furnishing_status = "UNFURNISHED";
   } else if (currentState === "OWNER_FURNISHING_PENDING") {
-    if (lower.includes("semi")) draft.furnishing_status = "SEMI_FURNISHED";
-    else if (lower.includes("full")) draft.furnishing_status = "FURNISHED";
-    else if (lower.includes("un") || lower.includes("none") || lower.includes("no") || lower.includes("raw")) draft.furnishing_status = "UNFURNISHED";
+    if (lower === "1" || lower === "1️⃣" || lower === "option 1" || lower.includes("un") || lower.includes("none") || lower.includes("no") || lower.includes("raw")) {
+      draft.furnishing_status = "UNFURNISHED";
+    } else if (lower === "2" || lower === "2️⃣" || lower === "option 2" || lower.includes("semi")) {
+      draft.furnishing_status = "SEMI_FURNISHED";
+    } else if (lower === "3" || lower === "3️⃣" || lower === "option 3" || lower.includes("full")) {
+      draft.furnishing_status = "FURNISHED";
+    }
   }
 
   // 9. Society / Project Name
@@ -2290,7 +2323,7 @@ async function handleOwnerFlow({
   const existingMeta = lead.metadata || {};
   let draft = existingMeta.owner_draft || {};
 
-  // 1b. Direct accumulative AI entities merge (Zero-Regex Contract):
+  // 1b. Direct accumulative AI entities merge (Zero-Regex Contract with State Protection):
   if (aiAnalysis) {
     if (aiAnalysis.transaction_type) {
       draft.transaction_type = (aiAnalysis.transaction_type === "RENT" || aiAnalysis.transaction_type === "LEASE") ? "RENT_OUT" : "SELL";
@@ -2303,27 +2336,81 @@ async function handleOwnerFlow({
       draft.property_category = aiAnalysis.property_category;
     }
     if (aiAnalysis.project_or_society) {
-      draft.society_name = aiAnalysis.project_or_society;
-      draft.project_name = aiAnalysis.project_or_society;
+      const cleanSoc = aiAnalysis.project_or_society.replace(/^(?:ye|meri|mera|maro|mari|in|at)\s+/i, "").trim();
+      draft.society_name = cleanSoc;
+      draft.project_name = cleanSoc;
     }
     if (aiAnalysis.location) {
       draft.location = aiAnalysis.location;
-    }
-    if (aiAnalysis.carpet_sqft) {
-      draft.carpet_area_sqft = aiAnalysis.carpet_sqft;
-    }
-    if (aiAnalysis.price_or_budget) {
-      if (draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT") {
-        draft.expected_rent = aiAnalysis.price_or_budget;
-      } else {
-        draft.expected_price = aiAnalysis.price_or_budget;
-      }
     }
     if (aiAnalysis.possession_status) {
       draft.possession_status = aiAnalysis.possession_status;
     }
     if (aiAnalysis.furnishing_status) {
       draft.furnishing_status = aiAnalysis.furnishing_status;
+    }
+
+    const hasExplicitPriceKeyword = /(?:rent|kiraya|bhadu|lakh|crore|karod|cr|lac|bhav|demand|rs\.?|₹|inr|per\s*month|\/month|mahina|k\b)/i.test(lower);
+    const hasExplicitAreaKeyword = /(?:sq\s*ft|sqft|square\s*feet|varga\s*foot|var|carpet|area)/i.test(lower);
+
+    // STATE-AWARE DISAMBIGUATION:
+    // If state is OWNER_AREA_PENDING:
+    if (lead?.state === "OWNER_AREA_PENDING" || lead?.state === "OWNER_SIZE_PENDING") {
+      if (aiAnalysis.carpet_sqft) {
+        draft.carpet_area_sqft = aiAnalysis.carpet_sqft;
+      } else if (!hasExplicitPriceKeyword && aiAnalysis.price_or_budget && aiAnalysis.price_or_budget >= 50 && aiAnalysis.price_or_budget <= 50000) {
+        // Redirection: AI mistook carpet area (e.g. 1250) as price_or_budget!
+        draft.carpet_area_sqft = aiAnalysis.price_or_budget;
+      }
+
+      // ONLY accept price if explicit price keywords were in user's message
+      if (hasExplicitPriceKeyword && aiAnalysis.price_or_budget) {
+        if (draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT") {
+          if (aiAnalysis.price_or_budget >= 3000) draft.expected_rent = aiAnalysis.price_or_budget;
+        } else {
+          draft.expected_price = aiAnalysis.price_or_budget;
+        }
+      }
+    } else if (lead?.state === "OWNER_PRICE_PENDING") {
+      // Waiting for Price / Rent
+      if (aiAnalysis.price_or_budget) {
+        if (draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT") {
+          if (aiAnalysis.price_or_budget >= 3000) {
+            draft.expected_rent = aiAnalysis.price_or_budget;
+          } else if (aiAnalysis.price_or_budget < 500) {
+            draft.expected_rent = aiAnalysis.price_or_budget * 1000;
+          }
+        } else {
+          if (aiAnalysis.price_or_budget < 500) {
+            draft.expected_price = aiAnalysis.price_or_budget * 100000;
+          } else {
+            draft.expected_price = aiAnalysis.price_or_budget;
+          }
+        }
+      }
+      if (hasExplicitAreaKeyword && aiAnalysis.carpet_sqft) {
+        draft.carpet_area_sqft = aiAnalysis.carpet_sqft;
+      }
+    } else {
+      // General turn (e.g. Turn 1 or combined multi-fact statement)
+      if (aiAnalysis.carpet_sqft) {
+        draft.carpet_area_sqft = aiAnalysis.carpet_sqft;
+      }
+      if (aiAnalysis.price_or_budget) {
+        if (draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT") {
+          if (aiAnalysis.price_or_budget >= 3000) {
+            draft.expected_rent = aiAnalysis.price_or_budget;
+          } else if (hasExplicitPriceKeyword && aiAnalysis.price_or_budget < 500) {
+            draft.expected_rent = aiAnalysis.price_or_budget * 1000;
+          }
+        } else {
+          if (aiAnalysis.price_or_budget < 500 && (hasExplicitPriceKeyword || aiAnalysis.price_or_budget >= 15)) {
+            draft.expected_price = aiAnalysis.price_or_budget * 100000;
+          } else {
+            draft.expected_price = aiAnalysis.price_or_budget;
+          }
+        }
+      }
     }
   }
 
@@ -2434,7 +2521,7 @@ async function handleOwnerFlow({
 
   // Step 5: Expected Price / Rent
   const isRent = draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT";
-  if ((isRent && !draft.expected_rent) || (!isRent && !draft.expected_price)) {
+  if ((isRent && (!draft.expected_rent || draft.expected_rent < 3000)) || (!isRent && (!draft.expected_price || draft.expected_price < 100000))) {
     const targetProp = `${draft.configuration || draft.property_type || "Property"} (${draft.carpet_area_sqft} sq.ft)`;
     const replyText =
       lang === "GUJLISH"
@@ -2459,10 +2546,10 @@ async function handleOwnerFlow({
       : `₹${Number(draft.expected_price || 0).toLocaleString("en-IN")}`;
     const replyText =
       lang === "GUJLISH"
-        ? `Noted — <b>${priceStr} Demand</b>. 💰\n\n👉 <b>Property no Possession status shu chhe — Ready to Move chhe ke Under Construction?</b> 🔑`
+        ? `Noted — <b>${priceStr} Demand</b>. 💰\n\n👉 <b>Property no Possession status shu chhe — Ready to Move chhe ke Under Construction? (1 ya 2)</b> 🔑\n\n1️⃣ <b>Ready to Move</b>\n2️⃣ <b>Under Construction</b>`
         : lang === "ENGLISH"
-        ? `Noted — <b>${priceStr} Demand</b>. 💰\n\n👉 <b>What is the possession status — is it Ready to Move or Under Construction?</b> 🔑`
-        : `Noted — <b>${priceStr} Demand</b>. 💰\n\n👉 <b>Property ka Possession status kya hai — Ready to Move hai ya Under Construction?</b> 🔑`;
+        ? `Noted — <b>${priceStr} Demand</b>. 💰\n\n👉 <b>What is the possession status — Ready to Move or Under Construction? (Reply 1 or 2)</b> 🔑\n\n1️⃣ <b>Ready to Move</b>\n2️⃣ <b>Under Construction</b>`
+        : `Noted — <b>${priceStr} Demand</b>. 💰\n\n👉 <b>Property ka Possession status kya hai — Ready to Move hai ya Under Construction? (Aap 1 ya 2 likh sakte hain)</b> 🔑\n\n1️⃣ <b>Ready to Move</b>\n2️⃣ <b>Under Construction</b>`;
 
     await supabase.from("leads").update({
       lead_type: "PROVIDER",
@@ -2478,10 +2565,10 @@ async function handleOwnerFlow({
     const possLabel = draft.possession_status === "READY_TO_MOVE" ? "Ready to Move" : "Under Construction";
     const replyText =
       lang === "GUJLISH"
-        ? `Noted — <b>${possLabel}</b>! 🔑\n\n👉 <b>Property nu Furnishing status shu chhe — Unfurnished, Semi-Furnished ke Fully Furnished?</b> 🛋️`
+        ? `Noted — <b>${possLabel}</b>! 🔑\n\n👉 <b>Property nu Furnishing status shu chhe — Unfurnished, Semi-Furnished ke Fully Furnished? (1, 2 ya 3)</b> 🛋️\n\n1️⃣ <b>Unfurnished</b>\n2️⃣ <b>Semi-Furnished</b>\n3️⃣ <b>Fully Furnished</b>`
         : lang === "ENGLISH"
-        ? `Noted — <b>${possLabel}</b>! 🔑\n\n👉 <b>What is the furnishing status — Unfurnished, Semi-Furnished, or Fully Furnished?</b> 🛋️`
-        : `Noted — <b>${possLabel}</b>! 🔑\n\n👉 <b>Property ka Furnishing status kya hai — Unfurnished, Semi-Furnished ya Fully Furnished?</b> 🛋️`;
+        ? `Noted — <b>${possLabel}</b>! 🔑\n\n👉 <b>What is the furnishing status — Unfurnished, Semi-Furnished, or Fully Furnished? (Reply 1, 2 or 3)</b> 🛋️\n\n1️⃣ <b>Unfurnished</b>\n2️⃣ <b>Semi-Furnished</b>\n3️⃣ <b>Fully Furnished</b>`
+        : `Noted — <b>${possLabel}</b>! 🔑\n\n👉 <b>Property ka Furnishing status kya hai — Unfurnished, Semi-Furnished ya Fully Furnished? (Aap 1, 2 ya 3 likh sakte hain)</b> 🛋️\n\n1️⃣ <b>Unfurnished</b>\n2️⃣ <b>Semi-Furnished</b>\n3️⃣ <b>Fully Furnished</b>`;
 
     await supabase.from("leads").update({
       lead_type: "PROVIDER",
@@ -2620,7 +2707,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v44-100-percent-regex-free-ai-engine",
+        version: "v45-fix-area-rent-numeric-disambiguation",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
