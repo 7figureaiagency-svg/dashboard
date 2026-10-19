@@ -399,17 +399,70 @@ const GUJARATI_HINDI_LOCATION_MAP: Record<string, string> = {
   "સમા": "Sama",
 };
 
+function levenshteinDistance(a: string, b: string): number {
+  const an = a ? a.length : 0;
+  const bn = b ? b.length : 0;
+  if (an === 0) return bn;
+  if (bn === 0) return an;
+  const matrix: number[][] = Array.from({ length: bn + 1 }, (_, i) => [i]);
+  for (let j = 0; j <= an; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= bn; i++) {
+    for (let j = 1; j <= an; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[bn][an];
+}
+
+function stringSimilarity(s1: string, s2: string): number {
+  const longer = s1.length >= s2.length ? s1 : s2;
+  const shorter = s1.length < s2.length ? s1 : s2;
+  if (longer.length === 0) return 1.0;
+  return (longer.length - levenshteinDistance(longer, shorter)) / longer.length;
+}
+
+function normalizePhoneticLocation(str: string): string {
+  return str
+    .toLowerCase()
+    .trim()
+    .replace(/[,\-_.\/]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b(?:road|rd|area|near|cross|circle|chokdi|rasta|highway|expressway)\b/gi, "")
+    .replace(/w/g, "v")
+    .replace(/ee/g, "i")
+    .replace(/oo/g, "u")
+    .replace(/sh/g, "s")
+    .replace(/gh/g, "g")
+    .replace(/dh/g, "d")
+    .replace(/bh/g, "b")
+    .trim();
+}
+
+const NON_LOCATION_BLACKLIST = /(?:^|\b)(?:kuch\s*bhi|koi\s*bhi|aap\s*batao|tame\s*kaho|nahi\s*pata|khabar\s*nathi|nathi\s*khabar|any|anywhere|kahi\s*bhi|best|sasta|achha|koi\s*pan|gamete|all|any\s*area|no\s*preference|flexible|badhiya|theek)\b/i;
+
 function extractLocationFromText(text: string, inventory: any[] = []): string {
   if (!text) return "";
-  const raw = text.toLowerCase();
+  const raw = text.toLowerCase().trim();
+
+  // Guard: Blacklist check (never extract generic unhelpful phrases as a location)
+  if (NON_LOCATION_BLACKLIST.test(raw)) {
+    return "";
+  }
 
   // 1. Check direct multi-lingual dictionary (handles Gujarati and Hindi Unicode!)
   for (const [key, mappedLoc] of Object.entries(GUJARATI_HINDI_LOCATION_MAP)) {
     if (raw.includes(key.toLowerCase())) {
       const matchInInv = inventory.find((item: any) =>
-        (item.location || "").toLowerCase().replace(/[-_]/g, " ") === mappedLoc.toLowerCase().replace(/[-_]/g, " ") ||
-        (item.location || "").toLowerCase().includes(mappedLoc.toLowerCase()) ||
-        mappedLoc.toLowerCase().includes((item.location || "").toLowerCase())
+        matchesLocation(mappedLoc, item.location, item.landmarks)
       );
       return matchInInv ? matchInInv.location : mappedLoc;
     }
@@ -418,6 +471,8 @@ function extractLocationFromText(text: string, inventory: any[] = []): string {
   // 2. Check directly against active inventory locations and landmarks
   if (Array.isArray(inventory) && inventory.length > 0) {
     const cleanLower = raw.replace(/[-_]/g, " ");
+
+    // 2a. Exact or Substring match in active inventory
     for (const item of inventory) {
       const invLoc = (item.location || "").toLowerCase().replace(/[-_]/g, " ");
       const invWords = invLoc.split(/\s+/).filter((w: string) => w.length >= 4 && !["road", "area", "near", "highway"].includes(w));
@@ -433,6 +488,38 @@ function extractLocationFromText(text: string, inventory: any[] = []): string {
           }
         }
       }
+    }
+
+    // 2b. Fuzzy & Phonetic match against inventory locations (typo tolerance)
+    const rawPhonetic = normalizePhoneticLocation(cleanLower);
+    const inputWords = cleanLower.split(/\s+/).filter((w: string) => w.length >= 4 && !["chahiye", "joiye", "me", "ma", "near", "road", "flat", "plot", "villa"].includes(w));
+
+    let bestMatch: { location: string; score: number } | null = null;
+
+    for (const item of inventory) {
+      if (!item.location) continue;
+      const invPhonetic = normalizePhoneticLocation(item.location);
+
+      // Full phonetic comparison
+      const fullSim = stringSimilarity(rawPhonetic, invPhonetic);
+      if (fullSim >= 0.80 && (!bestMatch || fullSim > bestMatch.score)) {
+        bestMatch = { location: item.location, score: fullSim };
+      }
+
+      // Word-by-word comparison
+      const invWords = (item.location || "").toLowerCase().replace(/[-_]/g, " ").split(/\s+/).filter((w: string) => w.length >= 4 && !["road", "area", "near"].includes(w));
+      for (const iw of invWords) {
+        for (const inw of inputWords) {
+          const sim = stringSimilarity(inw, iw);
+          if (sim >= 0.78 && (!bestMatch || sim > bestMatch.score)) {
+            bestMatch = { location: item.location, score: sim };
+          }
+        }
+      }
+    }
+
+    if (bestMatch && bestMatch.score >= 0.78) {
+      return bestMatch.location;
     }
   }
 
@@ -1039,11 +1126,25 @@ function matchesLocation(leadLoc?: string | null, propLoc?: string | null, landm
     }
   }
 
-  // Strip vowels & common suffixes ("bhayli" -> "bhyl", "bhayali" -> "bhyl", "waghodia" -> "waghodia road")
-  const clean1 = l1.replace(/road|rd|area|near|\s+/g, "").replace(/[aeiou]/g, "");
-  const clean2 = l2.replace(/road|rd|area|near|\s+/g, "").replace(/[aeiou]/g, "");
-  
-  return clean1.length >= 3 && clean2.length >= 3 && (clean1.includes(clean2) || clean2.includes(clean1));
+  // Phonetic & Fuzzy check
+  const p1 = normalizePhoneticLocation(l1);
+  const p2 = normalizePhoneticLocation(l2);
+  if (p1 === p2 || (p1.length >= 3 && p2.length >= 3 && (p1.includes(p2) || p2.includes(p1)))) {
+    return true;
+  }
+
+  // Levenshtein similarity on primary words
+  const words1 = l1.replace(/[-_]/g, " ").split(/\s+/).filter((w) => w.length >= 4 && !["road", "area", "near"].includes(w));
+  const words2 = l2.replace(/[-_]/g, " ").split(/\s+/).filter((w) => w.length >= 4 && !["road", "area", "near"].includes(w));
+  for (const w1 of words1) {
+    for (const w2 of words2) {
+      if (stringSimilarity(w1, w2) >= 0.78) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function matchesListingType(leadReq?: string | null, propListingType?: string | null, propPrice?: number): boolean {
@@ -2395,7 +2496,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v41-post-visit-attendance-and-reschedule-overhaul",
+        version: "v42-anti-derailment-and-fuzzy-matching",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -2465,7 +2566,10 @@ Deno.serve(async (req: Request) => {
           "dual-engine-intent-bifurcation",
           "owner-listing-intake-state-machine",
           "property-submissions-table-sync",
-          "acquisition-team-real-time-alert"
+          "acquisition-team-real-time-alert",
+          "fuzzy-typo-tolerant-location-matcher",
+          "conversational-anti-derailment-steer",
+          "short-bifurcated-buyer-rental-flows"
         ],
         timestamp: new Date().toISOString(),
       }),
@@ -2498,7 +2602,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v29 Ready", { status: 200 });
+    return new Response("Realtor Lead Engine v42 Ready", { status: 200 });
   }
 
   try {
@@ -2780,6 +2884,45 @@ Deno.serve(async (req: Request) => {
           : lang === "ENGLISH"
           ? `I am Nextgen Realty's AI property assistant, and I can only assist you with property search, site visits, and real estate details. 😊🏢\n\nPlease let me know what kind of residential or commercial property you are looking for!`
           : `Main Nextgen Realty ka AI property assistant hu aur main sirf property search, site visits aur real estate queries me hi aapki help kar sakta hu. 😊🏢\n\nKripya batayein, aap kis type ki property search kar rahe hain - Residential ya Commercial?`;
+    }
+
+    // =========================================================================
+    // 1c. DIRECT HUMAN CALL REQUEST INTERCEPTOR ("Call me", "Call karo", "Phone karo")
+    // =========================================================================
+    else if (
+      /(?:call\s*karo|call\s*kariye|call\s*karjo|call\s*me|phone\s*karo|phone\s*kariye|phone\s*karjo|baat\s*karni|baat\s*karvi|speak\s*to|connect\s*call|number\s*do|contact\s*me|call\s*please|executive\s*se\s*baat)\b/i.test(lower) &&
+      !/(site\s*visit|schedule\s*visit)/i.test(lower)
+    ) {
+      await dispatchSalesAlert(defaultTenantId, "CALL_REQUEST", lead, {
+        userText: messageText,
+        reason: "Lead explicitly requested immediate phone call with executive.",
+      });
+
+      const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+
+      replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul ${nameStr}! Amara senior property advisor agami <b>5-10 minute ma direct tamne call karshe</b>. 📞\n\nCall pehla kripya janavjo — tamaro preferred area ke budget ketlo chhe jethi teo best options ready rakhi shake?`
+          : lang === "ENGLISH"
+          ? `Certainly ${nameStr}! Our senior property advisor will <b>call you directly within 5-10 minutes</b>. 📞\n\nBefore they connect, could you share your preferred location or budget range so they have tailored options ready?`
+          : `Ji bilkul ${nameStr}! Hamare senior property advisor aapko agle <b>5-10 minutes me direct call par connect kar rahe hain</b>. 📞\n\nCall se pehle bas bata dijiye — aapka preferred area ya budget kya hai taaki wo ready options open rakhein?`;
+    }
+
+    // =========================================================================
+    // 1d. MARKET ADVISORY & TRENDING INTERCEPTOR ("Tum batao kya sasta hai", "Kya rates hain")
+    // =========================================================================
+    else if (
+      /(?:tum\s*batao|tame\s*kaho|aap\s*batao|kya\s*sasta\s*hai|kya\s*acha\s*hai|rates\s*kya\s*hai|bhav\s*shu\s*chhe|market\s*rate|suggest\s*karo|kuch\s*batao|recommend\s*karo)\b/i.test(lower) &&
+      !/(flat|villa|bhk|shop|office|plot)/i.test(lower)
+    ) {
+      const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : "";
+
+      replyText =
+        lang === "GUJLISH"
+          ? `Ji ${nameStr}! Hal ma 2 & 3 BHK premium apartments ane gated villas ma sabse high demand chhe, jya pricing <b>₹45 Lakhs thi shuru</b> thay chhe. 🏡\n\nTame property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe?`
+          : lang === "ENGLISH"
+          ? `Hello ${nameStr}! Currently, 2 & 3 BHK premium apartments and villas are in highest demand, with verified options starting from <b>₹45 Lakhs</b>. 🏡\n\nAre you looking to <b>Buy</b> or <b>Rent</b>?`
+          : `Ji ${nameStr}! Abhi market me 2 & 3 BHK premium apartments aur villas ki sabse high demand hai, jinki pricing <b>₹45 Lakhs se shuru</b> hoti hai. 🏡\n\nAap property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye?`;
     }
 
     // =========================================================================
@@ -3261,10 +3404,10 @@ Deno.serve(async (req: Request) => {
           const leadName = senderName || "Friend";
           replyText =
             lang === "GUJLISH"
-              ? `Namaste <b>${leadName}</b>! 🏡 Hu Nextgen Realty Assistant chhu. ✨\n\nTamne kaya type ni property joiye chhe?\n\n🏡 <b>Residential</b>: 2BHK / 3BHK Flat, Villa\n🏢 <b>Commercial</b>: Shop, Showroom, Office, Co-working Space, Restaurant, Hotel, Warehouse, Godown, Industrial Shed\n📐 <b>Plot / Land</b>`
+              ? `Namaste <b>${leadName}</b>! NextGen Realty ma aapnu swagat chhe. 🏡\n\nTame property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe?`
               : lang === "ENGLISH"
-              ? `Hi <b>${leadName}</b>! 🏡 I am Nextgen Realty Assistant. ✨\n\nWhat type of property are you looking for?\n\n🏡 <b>Residential</b>: 2BHK / 3BHK Flat, Villa\n🏢 <b>Commercial</b>: Shop, Showroom, Office, Co-working Space, Restaurant, Hotel, Warehouse, Godown, Industrial Shed\n📐 <b>Plot / Land</b>`
-              : `Hi <b>${leadName}</b>! 🏡 Main Nextgen Realty Assistant hu. ✨\n\nAapko kis type ki property chahiye?\n\n🏡 <b>Residential</b>: 2BHK / 3BHK Flat, Villa\n🏢 <b>Commercial</b>: Shop, Showroom, Office, Co-working Space, Restaurant, Hotel, Warehouse, Godown, Industrial Shed\n📐 <b>Plot / Land</b>`;
+              ? `Hello <b>${leadName}</b>! Welcome to NextGen Realty. 🏡\n\nAre you looking to <b>Buy</b> or <b>Rent</b> a property?`
+              : `Namaste <b>${leadName}</b>! NextGen Realty me aapka swagat hai. 🏡\n\nAap property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye?`;
         }
       }
     }
@@ -3336,10 +3479,10 @@ Deno.serve(async (req: Request) => {
         } else {
           replyText =
             lang === "GUJLISH"
-              ? `Ji bilkul <b>${leadName}</b>! Ame tamari navi requirement mate fresh search shuru kari rahya chiye. 🏡\n\nTamne kaya type ni property joiye chhe?\n\n🏡 <b>Residential</b>: 2BHK / 3BHK Flat, Villa\n🏢 <b>Commercial</b>: Shop, Showroom, Office, Co-working Space\n📐 <b>Plot / Land</b>`
+              ? `Ji bilkul <b>${leadName}</b>! Tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial</b>? 🏡`
               : lang === "ENGLISH"
-              ? `Certainly <b>${senderName || "Friend"}</b>! Let's start a fresh search for your new requirement. 🏡\n\nWhat type of property are you looking for?\n\n🏡 <b>Residential</b>: 2BHK / 3BHK Flat, Villa\n🏢 <b>Commercial</b>: Shop, Showroom, Office, Co-working Space\n📐 <b>Plot / Land</b>`
-              : `Ji bilkul <b>${leadName}</b>! Hum aapki nayi requirement ke liye fresh search shuru kar rahe hain. 🏡\n\nAapko kis type ki property chahiye?\n\n🏡 <b>Residential</b>: 2BHK / 3BHK Flat, Villa\n🏢 <b>Commercial</b>: Shop, Showroom, Office, Co-working Space\n📐 <b>Plot / Land</b>`;
+              ? `Certainly <b>${senderName || "Friend"}</b>! What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial</b>? 🏡`
+              : `Ji bilkul <b>${leadName}</b>! Aap kis type ki property dekhna chahte hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial</b>? 🏡`;
         }
       } else if (isConfirmSame) {
         // If lead already had a specific selected property anchored (from greeting re-engagement):
@@ -3989,8 +4132,18 @@ Deno.serve(async (req: Request) => {
 
       let location = extractLocationFromText(messageText, allTenantInventory || []);
 
-      // If user is specifically answering Step 4 (location) and gave a locality without other fields
-      if (!location && lead?.property_type && lead?.requirement && lead?.purpose && !lead?.location && !budget && !propType && !requirement) {
+      // If user is specifically answering location step and gave a valid locality name (guarded against false selection)
+      if (
+        !location &&
+        !NON_LOCATION_BLACKLIST.test(messageText) &&
+        lead?.property_type &&
+        !lead?.location &&
+        !budget &&
+        !propType &&
+        !requirement &&
+        messageText.trim().length <= 35 &&
+        !/(hi|hello|hey|namaste|kem cho|kya|kyu|kaise|rates|bhav|discount|call|phone|baat)/i.test(messageText)
+      ) {
         location = messageText.trim();
       }
 
@@ -4184,135 +4337,90 @@ Deno.serve(async (req: Request) => {
           } else if (!currentLead?.requirement) {
             missingField = "REQUIREMENT";
           } else if (!currentLead?.purpose) {
-            missingField = "PURPOSE";
-          } else if (!currentLead?.location && currentLead?.purpose !== "INVESTMENT") {
-            missingField = "LOCATION";
-          } else if (!currentLead?.budget || Number(currentLead.budget) === 0) {
-            missingField = "BUDGET";
-          } else if (!currentLead?.timeline) {
-            missingField = "TIMELINE";
+            // Auto-default purpose for residential and commercial to reduce friction!
+            const isRes = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(String(currentLead.property_type || ""));
+            const defPurpose = isRes ? "SELF_USE" : "BUSINESS";
+            await supabase.from("leads").update({ purpose: defPurpose }).eq("id", lead.id);
+            currentLead.purpose = defPurpose;
           }
 
-          // IF ANY FIELD IS MISSING, ASK AT A TIME EXACTLY ONE MISSING FIELD!
+          if (!missingField) {
+            if (!currentLead?.location && currentLead?.purpose !== "INVESTMENT") {
+              missingField = "LOCATION";
+            } else if (!currentLead?.budget || Number(currentLead.budget) === 0) {
+              missingField = "BUDGET";
+            }
+          }
+
+          // IF ANY ESSENTIAL FIELD IS MISSING, ASK AT A TIME EXACTLY ONE CRISP QUESTION (2 lines max!)
           if (missingField !== null) {
-        nextState = "QUALIFYING";
+            nextState = "QUALIFYING";
 
-        const propTypeStr = String(currentLead.property_type || "").toLowerCase();
-        const leadReqStr = String(currentLead.requirement || "").toLowerCase();
-        const COMMERCIAL_KEYWORDS = [
-          "shop", "showroom", "office", "co_working", "coworking", "co-working",
-          "studio_office", "studio office", "restaurant", "hotel", "guest_house",
-          "guesthouse", "warehouse", "godown", "industrial_shed", "industrial shed",
-          "factory", "commercial", "dukaan", "space", "pre-leased", "preleased", "retail"
-        ];
-        const isComm = COMMERCIAL_KEYWORDS.some((w) => propTypeStr.includes(w));
-        const isPlot = ["plot", "land", "zameen", "vasta", "ploting"].some((w) => propTypeStr.includes(w));
-        const isRentOrLease = leadReqStr.includes("rent") || leadReqStr.includes("lease");
+            const propTypeStr = String(currentLead.property_type || "").toLowerCase();
+            const leadReqStr = String(currentLead.requirement || "").toLowerCase();
+            const isComm = /(commercial|shop|office|showroom|warehouse|godown|industrial|shed|space)/i.test(propTypeStr);
+            const isRentOrLease = leadReqStr.includes("rent") || leadReqStr.includes("lease");
 
-        if (missingField === "PROPERTY_TYPE") {
-          replyText =
-            lang === "GUJLISH"
-              ? `Tame kaya type ni property shodhva mango chho?\n\n🏡 <b>Residential</b>: 2BHK / 3BHK Flat, Villa\n🏢 <b>Commercial</b>: Shop, Showroom, Office, Co-working Space, Restaurant, Hotel, Warehouse, Godown, Industrial Shed\n📐 <b>Plot / Land</b>`
-              : lang === "ENGLISH"
-              ? `What type of property are you looking for?\n\n🏡 <b>Residential</b>: 2BHK / 3BHK Flat, Villa\n🏢 <b>Commercial</b>: Shop, Showroom, Office, Co-working Space, Restaurant, Hotel, Warehouse, Godown, Industrial Shed\n📐 <b>Plot / Land</b>`
-              : `Aapko kis type ki property chahiye?\n\n🏡 <b>Residential</b>: 2BHK / 3BHK Flat, Villa\n🏢 <b>Commercial</b>: Shop, Showroom, Office, Co-working Space, Restaurant, Hotel, Warehouse, Godown, Industrial Shed\n📐 <b>Plot / Land</b>`;
-        } else if (missingField === "REQUIREMENT") {
-          if (isComm) {
-            replyText =
-              lang === "GUJLISH"
-                ? `Commercial space <b>Buy</b> 💼, <b>Rent</b> 🔑 ke <b>Lease</b> par joiye chhe?`
-                : lang === "ENGLISH"
-                ? `Are you looking to <b>Buy</b> 💼, <b>Rent</b> 🔑 or <b>Lease</b> commercial space?`
-                : `Commercial space <b>Buy</b> 💼, <b>Rent</b> 🔑 ya <b>Lease</b> par chahiye?`;
-          } else if (isPlot) {
-            replyText =
-              lang === "GUJLISH"
-                ? `Plot <b>Buy</b> 📈 karvo chhe ke koi property <b>Sell</b> 🏷️ karvi chhe?`
-                : lang === "ENGLISH"
-                ? `Are you looking to <b>Buy</b> 📈 a plot or <b>Sell</b> 🏷️ property?`
-                : `Plot <b>Buy</b> 📈 karna chahte hain ya koi property <b>Sell</b> 🏷️ karni hai?`;
+            if (missingField === "PROPERTY_TYPE") {
+              replyText =
+                lang === "GUJLISH"
+                  ? `Tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? 🏡`
+                  : lang === "ENGLISH"
+                  ? `What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? 🏡`
+                  : `Aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial Shop/Office</b>? 🏡`;
+            } else if (missingField === "REQUIREMENT") {
+              if (isComm) {
+                replyText =
+                  lang === "GUJLISH"
+                    ? `Commercial space <b>Buy</b> 💼 karvo chhe ke <b>Rent / Lease</b> 🔑 par joiye chhe?`
+                    : lang === "ENGLISH"
+                    ? `Are you looking to <b>Buy</b> 💼 or <b>Rent/Lease</b> 🔑 commercial space?`
+                    : `Commercial space <b>Buy</b> 💼 karna chahte hain ya <b>Rent / Lease</b> 🔑 par chahiye?`;
+              } else {
+                replyText =
+                  lang === "GUJLISH"
+                    ? `Tame property <b>Buy (Kharidva)</b> 🏠 mango chho ke <b>Rent</b> 🔑 par joiye chhe?`
+                    : lang === "ENGLISH"
+                    ? `Are you looking to <b>Buy</b> 🏠 or <b>Rent</b> 🔑 a property?`
+                    : `Aap property <b>Buy (Kharidna)</b> 🏠 chahte hain ya <b>Rent</b> 🔑 par chahiye?`;
+              }
+            } else if (missingField === "LOCATION") {
+              // Dynamic location suggestions from tenant's active inventory (City-Agnostic!)
+              const { data: invLocs } = await supabase
+                .from("inventory")
+                .select("location, city")
+                .eq("client_id", defaultTenantId)
+                .eq("status", "AVAILABLE")
+                .limit(10);
+
+              const uniqueLocs = Array.from(new Set((invLocs || []).map((i) => i.location).filter(Boolean))).slice(0, 3);
+              const city = invLocs?.[0]?.city || "Vadodara";
+              const availStr = uniqueLocs.length > 0 ? ` (e.g. <b>${uniqueLocs.join(", ")}</b>)` : "";
+
+              replyText =
+                lang === "GUJLISH"
+                  ? `${city} ma tamari preferred <b>location</b> kayi chhe 📍${availStr}?`
+                  : lang === "ENGLISH"
+                  ? `Which preferred <b>location</b> in ${city} are you looking for 📍${availStr}?`
+                  : `${city} me aapki preferred <b>location</b> konsi hai 📍${availStr}?`;
+            } else if (missingField === "BUDGET") {
+              if (isRentOrLease) {
+                replyText =
+                  lang === "GUJLISH"
+                    ? `Tamari monthly rent budget range ketli raheshe 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
+                    : lang === "ENGLISH"
+                    ? `What is your monthly rent budget range 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
+                    : `Monthly rent budget range kya rahegi 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`;
+              } else {
+                replyText =
+                  lang === "GUJLISH"
+                    ? `Best options filter karva mate tamaro budget ketlo raheshe 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
+                    : lang === "ENGLISH"
+                    ? `To filter the best options, what is your comfortable budget range 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
+                    : `Best options filter karne ke liye aapka comfortable budget range kya rahega 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`;
+              }
+            }
           } else {
-            replyText =
-              lang === "GUJLISH"
-                ? `Tame property <b>Buy</b> 🏠 karva mango chho ke <b>Rent</b> 🔑 par joiye chhe?`
-                : lang === "ENGLISH"
-                ? `Are you looking to <b>Buy</b> 🏠 or <b>Rent</b> 🔑 property?`
-                : `Aap property <b>Buy</b> 🏠 karna chahte hain ya <b>Rent</b> 🔑 par chahiye?`;
-          }
-        } else if (missingField === "PURPOSE") {
-          if (isComm) {
-            replyText =
-              lang === "GUJLISH"
-                ? `Aa space <b>Business</b> 💼 mate joiye chhe ke <b>Investment</b> 📈 mate?`
-                : lang === "ENGLISH"
-                ? `Is this space for your own <b>Business</b> 💼 or for <b>Investment</b> 📈?`
-                : `Ye space <b>Business</b> 💼 ke liye dekh rahe hain ya <b>Investment</b> 📈 ke liye?`;
-          } else if (isPlot) {
-            replyText =
-              lang === "GUJLISH"
-                ? `Plot par <b>Immediate Construction</b> 🏗️ no plan chhe ke <b>Long-term Investment</b> 📈 no?`
-                : lang === "ENGLISH"
-                ? `Are you planning <b>Immediate Construction</b> 🏗️ on the plot or <b>Long-term Investment</b> 📈?`
-                : `Plot par <b>Immediate Construction</b> 🏗️ ka plan hai ya <b>Long-term Investment</b> 📈 ka?`;
-          } else {
-            replyText =
-              lang === "GUJLISH"
-                ? `Aa property <b>Self-use</b> 🏡 mate joiye chhe ke <b>Investment</b> 📈 mate?`
-                : lang === "ENGLISH"
-                ? `Is this property for <b>Self-use</b> 🏡 or for <b>Investment</b> 📈?`
-                : `Ye property <b>Self-use</b> 🏡 ke liye chahiye ya <b>Investment</b> 📈 ke liye?`;
-          }
-        } else if (missingField === "LOCATION") {
-          // Dynamic location suggestions from tenant's active inventory (City-Agnostic!)
-          const { data: invLocs } = await supabase
-            .from("inventory")
-            .select("location, city")
-            .eq("client_id", defaultTenantId)
-            .eq("status", "AVAILABLE")
-            .limit(10);
-
-          const uniqueLocs = Array.from(new Set((invLocs || []).map((i) => i.location).filter(Boolean))).slice(0, 4);
-          const city = invLocs?.[0]?.city || "Vadodara";
-          const availStr = uniqueLocs.length > 0 ? ` (Available: <b>${uniqueLocs.join(", ")}</b>)` : "";
-
-          replyText =
-            lang === "GUJLISH"
-              ? `${city} ma tamari preferred location kayi chhe 📍${availStr}?`
-              : lang === "ENGLISH"
-              ? `Which preferred location in ${city} are you looking for 📍${availStr}?`
-              : `${city} me aapki preferred location konsi hai 📍${availStr}?`;
-        } else if (missingField === "BUDGET") {
-          if (isComm && isRentOrLease) {
-            replyText =
-              lang === "GUJLISH"
-                ? `Commercial space mate tamaro monthly rent budget ketlo raheshe 💰 (e.g. <b>₹15,000 thi ₹50,000/month</b> ya vadhare)?`
-                : lang === "ENGLISH"
-                ? `What is your monthly rent budget range for commercial space 💰 (e.g. <b>₹15,000 to ₹50,000/month</b> or more)?`
-                : `Commercial space ke liye aapka monthly rent budget kitna rahega 💰 (e.g. <b>₹15,000 se ₹50,000/month</b> ya usse zyada)?`;
-          } else if (isRentOrLease) {
-            replyText =
-              lang === "GUJLISH"
-                ? `Tamari monthly rent budget range ketli raheshe 💰 (e.g. <b>₹15,000</b>, <b>₹30,000/month</b>)?`
-                : lang === "ENGLISH"
-                ? `What is your monthly rent budget range 💰 (e.g. <b>₹15,000</b>, <b>₹30,000/month</b>)?`
-                : `Monthly rent budget range kya rahegi 💰 (e.g. <b>₹15,000</b>, <b>₹30,000/month</b>)?`;
-          } else {
-            replyText =
-              lang === "GUJLISH"
-                ? `Best options filter karva mate tamaro comfortable budget ketlo raheshe 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
-                : lang === "ENGLISH"
-                ? `To filter the best options, what is your comfortable budget range 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
-                : `Best options filter karne ke liye aapka comfortable budget range kya rahega 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`;
-          }
-        } else if (missingField === "TIMELINE") {
-          replyText =
-            lang === "GUJLISH"
-              ? `Prime options fast-sell thai rahya chhe — kyare sudhi finalize karva mango chho ⏱️ (e.g. <b>1 week</b>, <b>1 Month</b>)?`
-              : lang === "ENGLISH"
-              ? `Prime options are moving fast — by when are you looking to finalize ⏱️ (e.g. <b>1 week</b>, <b>1 Month</b>)?`
-              : `Prime options fast-sell ho rahe hain — kab tak finalize karna chahenge ⏱️ (e.g. <b>1 week</b>, <b>1 Month</b>)?`;
-        }
-      } else {
         // =========================================================================
         // ALL 6 FIELDS QUALIFIED! Query Inventory with Dual Search & Framing
         // =========================================================================
