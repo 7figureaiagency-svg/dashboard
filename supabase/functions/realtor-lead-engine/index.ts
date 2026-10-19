@@ -734,7 +734,7 @@ function parsePropertyTypeFromText(text: string): string {
   if (lower.includes("shop") || lower.includes("dukaan") || lower.includes("dukan") || lower.includes("retail") || lower.includes("દુકાન") || lower.includes("સ્ટોર")) return "Commercial Shop";
   if (lower.includes("office") || lower.includes("corporate") || lower.includes("ઓફિસ") || lower.includes("ઑફિસ") || lower.includes("કોર્પોરેટ")) return "Commercial Office";
   if (lower.includes("warehouse") || lower.includes("godown") || lower.includes("logistics") || lower.includes("ગોડાઉન") || lower.includes("વેરહાઉસ")) return "Commercial Warehouse";
-  if (lower.includes("industrial shed") || lower.includes("factory") || lower.includes("shed") || lower.includes("workshop") || lower.includes("ફેક્ટરી") || lower.includes("શેડ")) return "Commercial Industrial Shed";
+  if (lower.includes("industrial shed") || lower.includes("factory") || /\bshed\b/i.test(lower) || lower.includes("workshop") || lower.includes("ફેક્ટરી") || lower.includes("શેડ")) return "Commercial Industrial Shed";
   if (lower.includes("pre-leased") || lower.includes("preleased") || lower.includes("પ્રી લીઝ્ડ") || lower.includes("પ્રીલીઝ્ડ")) return "Commercial Pre-Leased";
   if (lower.includes("restaurant") || lower.includes("cloud kitchen") || lower.includes("cafe") || lower.includes("food court") || lower.includes("રેસ્ટોરન્ટ") || lower.includes("કાફે")) return "Commercial Restaurant";
   if (lower.includes("hotel") || lower.includes("guest house") || lower.includes("guesthouse") || lower.includes("resort") || lower.includes("હોટેલ") || lower.includes("રિસોર્ટ")) return "Commercial Hotel";
@@ -1392,6 +1392,15 @@ async function classifyLeadIntent(
     fallbackIntent = "OWNER_LISTING";
   } else if (/\b(hi|hello|hey|kem cho|namaste)\b/i.test(lower)) {
     fallbackIntent = "GREETING";
+  }
+
+  // Handle explicit 1 vs 2 in ROLE_SELECTION_PENDING
+  if (lead?.state === "ROLE_SELECTION_PENDING") {
+    if (/^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim())) {
+      fallbackIntent = "OWNER_LISTING";
+    } else if (/^(1|1️⃣|option\s*1|first|1st|leni|lene|kharidna|buy|rent\s*pe\s*chahiye|search)\b/i.test(lower.trim())) {
+      fallbackIntent = "SEEKER_QUALIFICATION";
+    }
   }
 
   const isOwnerMsg = fallbackIntent === "OWNER_LISTING" || lead?.lead_type === "PROVIDER";
@@ -2366,7 +2375,7 @@ function extractOwnerDetailsWithState(text: string, currentDraft: any = {}, curr
   } else if (/(plot|land|zameen|jamin)/i.test(lower)) {
     draft.property_category = "PLOT";
     draft.property_type = "Plot";
-  } else if (/(warehouse|godown|industrial\s*shed|shed)/i.test(lower)) {
+  } else if (/(warehouse|godown|industrial\s*shed|\bshed\b)/i.test(lower)) {
     draft.property_category = "COMMERCIAL";
     draft.property_type = "Warehouse";
   }
@@ -2953,7 +2962,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v49-multi-tenant-city-agnostic-matching",
+        version: "v50-e2e-hardened-edge-guards",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -3064,7 +3073,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v49 Ready", { status: 200 });
+    return new Response("Realtor Lead Engine v50 Ready", { status: 200 });
   }
 
   try {
@@ -3238,6 +3247,7 @@ Deno.serve(async (req: Request) => {
             status: "ignored",
             reason: "passive_ack_silent_terminal_state",
             silent: true,
+            reply_sent: null,
             state: lead.state,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -3934,19 +3944,24 @@ Deno.serve(async (req: Request) => {
     // Triggers when lead.state === "ROLE_SELECTION_PENDING"
     // =========================================================================
     else if (lead.state === "ROLE_SELECTION_PENDING") {
+      const hasExplicit2 = /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|rent\s*out|rent\s*pe\s*deni|list|listing|property\s*deni|bhade\s*pe)\b/i.test(lower.trim());
+      const hasExplicit1 = /^(1|1️⃣|option\s*1|first|1st|leni|lene|kharidna|buy|rent\s*pe\s*chahiye|search|flat\s*chahiye|ghar\s*chahiye)\b/i.test(lower.trim());
+
       const isOption2Owner =
+        hasExplicit2 ||
         aiAnalysis.user_role === "OWNER" ||
         aiAnalysis.intent === "OWNER_LISTING" ||
-        /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|rent\s*out|rent\s*pe\s*deni|list|listing|property\s*deni|bhade\s*pe)/i.test(lower) ||
         lower.includes("deni") || lower.includes("bechn") || lower.includes("rent pe deni") || lower.includes("bhaade aalvu") || lower.includes("bhade pe");
 
       const isOption1Seeker =
-        aiAnalysis.user_role === "SEEKER" ||
-        aiAnalysis.intent === "SEEKER_QUALIFICATION" ||
-        /^(1|1️⃣|option\s*1|first|1st|leni|lene|kharidna|buy|rent\s*pe\s*chahiye|search|flat\s*chahiye|ghar\s*chahiye|chahiye|joiye)/i.test(lower) ||
-        lower.includes("leni") || lower.includes("kharid") || lower.includes("rent chahiye") || lower.includes("chahiye");
+        !hasExplicit2 && (
+          hasExplicit1 ||
+          aiAnalysis.user_role === "SEEKER" ||
+          aiAnalysis.intent === "SEEKER_QUALIFICATION" ||
+          lower.includes("leni") || lower.includes("kharid") || lower.includes("rent chahiye") || lower.includes("chahiye")
+        );
 
-      if (isOption2Owner && !isOption1Seeker) {
+      if (hasExplicit2 || (isOption2Owner && !isOption1Seeker)) {
         // Option 2: Lead is an OWNER / PROVIDER
         nextState = "OWNER_CONFIG_PENDING";
         const initialDraft: any = {
@@ -4184,8 +4199,9 @@ Deno.serve(async (req: Request) => {
     // 6b.2: RE-SEARCH & ALTERNATE PROPERTY REQUEST (When Qualified or Booked Lead asks for properties)
     // =========================================================================
     else if (
-      aiAnalysis.intent === "ASK_MORE_OPTIONS" ||
-      /(koi\s*dusri|dusri\s*property|dusra\s*option|koi\s*aur\s*property|koi\s*aur\s*option|aur\s*options|aur\s*property|dusre\s*options|biji\s*property|bijo\s*option|biji\s*options|other\s*propert|different\s*propert|more\s*options|other\s*options|koi\s*biji|aur\s*flat|aur\s*dekhna|aur\s*dikhao|kuch\s*aur|kuch\s*naya|property\s*dekhni|flat\s*dekhna|flat\s*dekhne|options\s*dikhao|options\s*batavo)/i.test(lower)
+      (aiAnalysis.intent === "ASK_MORE_OPTIONS" ||
+      /(koi\s*dusri|dusri\s*property|dusra\s*option|koi\s*aur\s*property|koi\s*aur\s*option|aur\s*options|aur\s*property|dusre\s*options|biji\s*property|bijo\s*option|biji\s*options|other\s*propert|different\s*propert|more\s*options|other\s*options|koi\s*biji|aur\s*flat|aur\s*dekhna|aur\s*dikhao|kuch\s*aur|kuch\s*naya|property\s*dekhni|flat\s*dekhna|flat\s*dekhne|options\s*dikhao|options\s*batavo)/i.test(lower)) &&
+      (!parseBudgetFromText(messageText) && !parseRequirementFromText(messageText) && !parsePropertyTypeFromText(messageText))
     ) {
       const hasExistingCriteria = Boolean((lead.property_type && (lead.location || lead.budget)) || lead.site_visit_booked || ["QUALIFIED", "OPTIONS_SENT", "SITE_VISIT_BOOKED", "VISIT_BOOKED", "VISIT_RESCHEDULED"].includes(lead.state));
 
