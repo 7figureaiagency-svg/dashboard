@@ -7,8 +7,12 @@ import {
   Handshake,
   Pencil,
   Plus,
+  Target,
   Trash2,
+  TrendingUp,
+  Trophy,
   Users,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,14 +57,13 @@ import { ToneBadge } from "@/components/crm/badges";
 import { ExecutiveDrawer } from "@/components/crm/executive-drawer";
 import { useActivity, useAddExecutive, useDeleteExecutive, useExecutives, useUpdateExecutive } from "@/lib/crm-data";
 import type { Executive } from "@/lib/crm";
-import { buildExecStats, dailyActivity, type ExecStats } from "@/lib/crm-metrics";
+import { buildExecStats, buildTeamSummary, dailyActivity, type ExecStats } from "@/lib/crm-metrics";
 import {
   ACTION_LABELS,
   PERIODS,
   actionLabel,
+  formatMoney,
   inPeriod,
-  isVisitBookedStatus,
-  isVisitDoneStatus,
   formatMinutes,
   slaTone,
   timeAgo,
@@ -68,7 +71,14 @@ import {
   type Period,
 } from "@/lib/crm";
 
-type SortKey = "visitsDone" | "assigned" | "conversion" | "actions" | "avgSla";
+type SortKey =
+  | "visitsDone"
+  | "pipelineValue"
+  | "visitShowupRate"
+  | "conversion"
+  | "avgSla"
+  | "assigned"
+  | "actions";
 
 export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: string | null }) {
   const { data: activity = [] } = useActivity();
@@ -86,26 +96,22 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
     [activity, period],
   );
 
-  const kpis = useMemo(
-    () => ({
-      total: periodLeads.length,
-      visits: periodLeads.filter((l) => isVisitBookedStatus(l.status)).length,
-      handovers: periodLeads.filter((l) => l.property_state === "HUMAN_HANDOVER").length,
-      unattended: periodLeads.filter(
-        (l) => l.alert_sent_at && !isVisitDoneStatus(l.status),
-      ).length,
-    }),
-    [periodLeads],
-  );
+  const summary = useMemo(() => buildTeamSummary(leads, period), [leads, period]);
 
   const board = useMemo(() => {
     const rows = buildExecStats(leads, activity, period);
-    const value = (r: ExecStats) =>
-      sort === "avgSla" ? (r.avgSla === null ? Number.MAX_SAFE_INTEGER : r.avgSla) : r[sort];
+    const value = (r: ExecStats) => {
+      if (sort === "avgSla") return r.avgSla === null ? Number.MAX_SAFE_INTEGER : r.avgSla;
+      return r[sort] ?? 0;
+    };
     return [...rows].sort((a, b) =>
       sort === "avgSla" ? Number(value(a)) - Number(value(b)) : Number(value(b)) - Number(value(a)),
     );
   }, [leads, activity, period, sort]);
+
+  const topCloser = useMemo(() => board.find((r) => r.isTopCloser), [board]);
+  const speedChamp = useMemo(() => board.find((r) => r.isSpeedChampion), [board]);
+  const bestShowup = useMemo(() => board.find((r) => r.isBestConversion), [board]);
 
   const chart = useMemo(() => dailyActivity(activity, period), [activity, period]);
   const maxDay = Math.max(1, ...chart.map((c) => c.count));
@@ -123,15 +129,18 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
       <TeamManager clientId={clientId} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Showing team performance for the selected period.
-        </p>
+        <div>
+          <h3 className="text-base font-semibold tracking-tight">Team Performance & Revenue Pipeline</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Monitor sales executive response times, active deal values, and physical site visit completions.
+          </p>
+        </div>
         <div className="flex rounded-lg border bg-background p-1">
           {PERIODS.map((p) => (
             <button
               key={p.key}
               onClick={() => setPeriod(p.key)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors ${
                 period === p.key
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"
@@ -143,43 +152,157 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
         </div>
       </div>
 
+      {/* ── 4 Realtor Business KPI Cards ── */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi icon={<Users className="size-5" />} label="Total Leads" value={kpis.total} />
         <Kpi
-          icon={<CalendarCheck className="size-5" />}
-          label="Site Visits Booked"
-          value={kpis.visits}
+          icon={<TrendingUp className="size-5" />}
+          label="Active Deal Pipeline"
+          value={formatMoney(summary.totalPipelineValue)}
+          subtext={`${periodLeads.length} active leads in period`}
         />
         <Kpi
-          icon={<Handshake className="size-5" />}
-          label="Pending Handovers"
-          value={kpis.handovers}
+          icon={<CalendarCheck className="size-5" />}
+          label="Site Visits Completed"
+          value={summary.totalVisitsDone}
+          subtext={`${summary.teamShowupRate}% Show-up (${summary.totalVisitsBooked} booked)`}
+        />
+        <Kpi
+          icon={<Zap className="size-5" />}
+          label="Speed-to-Call (<15m SLA)"
+          value={summary.teamSlaCompliance !== null ? `${summary.teamSlaCompliance}%` : "—"}
+          subtext={`Avg: ${summary.teamAvgSla !== null ? formatMinutes(summary.teamAvgSla) : "No alerts"} response`}
         />
         <Kpi
           icon={<AlertTriangle className="size-5" />}
-          label="Unattended Alerts"
-          value={kpis.unattended}
-          danger
+          label="Revenue at Risk"
+          value={summary.unattendedAlerts}
+          subtext={summary.unattendedAlerts > 0 ? "Leads waiting > 30m without call" : "All alerts attended on-time"}
+          danger={summary.unattendedAlerts > 0}
         />
       </div>
 
+      {/* ── ⚠️ Revenue-at-Risk Alert Banner (Overdue Leads) ── */}
+      {summary.unattendedAlerts > 0 && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-950 dark:text-rose-100 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-rose-500/20 p-2 text-rose-600 dark:text-rose-400 shrink-0">
+                <AlertTriangle className="size-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm">
+                  ⚠️ {summary.unattendedAlerts} High-Intent Lead{summary.unattendedAlerts > 1 ? "s" : ""} Overdue for Call (&gt;30 mins)!
+                </h4>
+                <p className="text-xs opacity-90 mt-0.5">
+                  These clients requested a VIP site visit or executive phone call more than 30 minutes ago. In real estate, buyers reach out to 2-3 brokers simultaneously — delay causes direct deal loss.
+                </p>
+                <div className="mt-2.5 flex flex-wrap gap-2 text-xs">
+                  {summary.overdueLeads.slice(0, 4).map((l) => (
+                    <div
+                      key={l.id}
+                      className="flex items-center gap-1.5 rounded-md border border-rose-500/20 bg-background/80 px-2 py-1 text-foreground"
+                    >
+                      <span className="font-semibold">{l.name || l.first_name || "Lead"}</span>
+                      <span className="text-muted-foreground text-[11px]">
+                        ({l.property_type || "Property"} · {formatMoney(l.budget)})
+                      </span>
+                      <span className="rounded bg-rose-500/10 px-1 text-[10px] text-rose-600 dark:text-rose-400 font-medium">
+                        Assigned: {l.assigned_executive_name || "Unassigned"}
+                      </span>
+                    </div>
+                  ))}
+                  {summary.overdueLeads.length > 4 && (
+                    <span className="text-xs text-muted-foreground self-center">
+                      +{summary.overdueLeads.length - 4} more leads
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 🏆 Top Performer Spotlight Podium ── */}
+      {(topCloser || speedChamp || bestShowup) && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {topCloser && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex items-center gap-3">
+              <div className="rounded-lg bg-amber-500/20 p-2.5 text-amber-600 dark:text-amber-400 shrink-0">
+                <Trophy className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 block">
+                  🏆 Top Closer
+                </span>
+                <p className="font-bold text-sm text-foreground truncate">{topCloser.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  <b>{topCloser.visitsDone}</b> Visits Completed ({formatMoney(topCloser.pipelineValue)} Pipeline)
+                </p>
+              </div>
+            </div>
+          )}
+
+          {speedChamp && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 flex items-center gap-3">
+              <div className="rounded-lg bg-emerald-500/20 p-2.5 text-emerald-600 dark:text-emerald-400 shrink-0">
+                <Zap className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 block">
+                  ⚡ Speed Champion
+                </span>
+                <p className="font-bold text-sm text-foreground truncate">{speedChamp.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  <b>{formatMinutes(speedChamp.avgSla)}</b> Avg Response ({speedChamp.slaComplianceRate ?? 100}% on-time)
+                </p>
+              </div>
+            </div>
+          )}
+
+          {bestShowup && (
+            <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3.5 flex items-center gap-3">
+              <div className="rounded-lg bg-blue-500/20 p-2.5 text-blue-600 dark:text-blue-400 shrink-0">
+                <Target className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300 block">
+                  🎯 Best Show-Up Rate
+                </span>
+                <p className="font-bold text-sm text-foreground truncate">{bestShowup.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  <b>{bestShowup.visitShowupRate}%</b> Show-Up ({bestShowup.visitsDone}/{bestShowup.visitsBooked} Visits)
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Executive Scorecard Card ── */}
       <Card className="overflow-hidden">
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-base">Executive scorecard</CardTitle>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base">Sales Executive Scorecard</CardTitle>
+            <CardDescription className="text-xs">
+              Ranked by deal volume, visit completions, and client response speeds.
+            </CardDescription>
+          </div>
           <div className="flex flex-wrap gap-1 text-xs">
             {(
               [
-                ["visitsDone", "Visits done"],
+                ["visitsDone", "Visits Done"],
+                ["pipelineValue", "Pipeline (₹)"],
+                ["visitShowupRate", "Show-up Rate"],
                 ["conversion", "Conversion"],
-                ["actions", "Activity"],
-                ["assigned", "Leads"],
-                ["avgSla", "Fastest response"],
+                ["avgSla", "Fastest Response"],
+                ["assigned", "Total Leads"],
               ] as [SortKey, string][]
             ).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setSort(key)}
-                className={`rounded-md border px-2 py-1 font-medium transition-colors ${
+                className={`rounded-md border px-2.5 py-1 font-medium transition-colors ${
                   sort === key
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-muted"
@@ -205,13 +328,25 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-bold text-sm text-foreground">{row.name}</h4>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="font-bold text-sm text-foreground">{row.name}</h4>
+                      {row.isTopCloser && (
+                        <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          🏆 Top Closer
+                        </span>
+                      )}
+                      {row.isSpeedChampion && (
+                        <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          ⚡ Speed Star
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Active: {timeAgo(row.lastActiveAt)}
                     </p>
                   </div>
                   <button
-                    className="rounded-lg border border-border/80 px-2.5 py-1 text-xs font-semibold hover:bg-muted"
+                    className="rounded-lg border border-border/80 px-2.5 py-1 text-xs font-semibold hover:bg-muted shrink-0"
                     onClick={() => setProfile(row.name)}
                   >
                     Profile
@@ -229,26 +364,33 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                   {row.staleLeads > 0 && (
                     <ToneBadge tone="yellow" label={`${row.staleLeads} untouched 7d+`} />
                   )}
+                  {row.isAtRisk && !row.silent && row.openAlerts === 0 && (
+                    <ToneBadge tone="red" label="SLA Risk" />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-2.5 rounded-lg border border-border/50">
                   <div>
-                    <span className="text-[11px] text-muted-foreground block">Leads Assigned</span>
-                    <span className="font-bold text-foreground text-sm tabular-nums">{row.assigned}</span>
+                    <span className="text-[11px] text-muted-foreground block">Active Pipeline</span>
+                    <span className="font-bold text-foreground text-sm tabular-nums">
+                      {formatMoney(row.pipelineValue)}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[11px] text-muted-foreground block">Visits Completed</span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm tabular-nums">{row.visitsDone}</span>
+                    <span className="text-[11px] text-muted-foreground block">Site Visits Done</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm tabular-nums">
+                      {row.visitsDone} / {row.visitsBooked} ({row.visitShowupRate}%)
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-muted-foreground block">Response Speed</span>
+                    <span className="font-bold text-foreground text-sm tabular-nums">
+                      {row.avgSla === null ? "—" : formatMinutes(row.avgSla)}
+                    </span>
                   </div>
                   <div>
                     <span className="text-[11px] text-muted-foreground block">Conversion Rate</span>
                     <span className="font-bold text-foreground text-sm tabular-nums">{row.conversion}%</span>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-muted-foreground block">Avg Response</span>
-                    <span className="font-bold text-foreground text-sm tabular-nums">
-                      {row.avgSla === null ? "—" : formatMinutes(row.avgSla)}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -261,20 +403,19 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
               <TableHeader>
                 <TableRow>
                   <TableHead>Executive</TableHead>
-                  <TableHead>Leads</TableHead>
-                  <TableHead>Visits booked</TableHead>
-                  <TableHead>Visits done</TableHead>
+                  <TableHead>Active Pipeline</TableHead>
+                  <TableHead>Site Visits (Done/Booked)</TableHead>
+                  <TableHead>Speed to Call (SLA)</TableHead>
                   <TableHead>Conversion</TableHead>
-                  <TableHead>Avg response</TableHead>
-                  <TableHead>Actions</TableHead>
-                  <TableHead>Last active</TableHead>
-                  <TableHead className="text-right">History</TableHead>
+                  <TableHead>Client Mix</TableHead>
+                  <TableHead>Last Active</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {board.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                       No executive data yet.
                     </TableCell>
                   </TableRow>
@@ -284,7 +425,7 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                     <TableRow>
                       <TableCell>
                         <button
-                          className="flex items-center gap-1 font-medium hover:underline"
+                          className="flex items-center gap-1.5 font-semibold text-foreground hover:underline"
                           onClick={() => setExpanded((e) => (e === row.name ? null : row.name))}
                         >
                           {expanded === row.name ? (
@@ -292,7 +433,17 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                           ) : (
                             <ChevronRight className="size-4" />
                           )}
-                          {row.name}
+                          <span>{row.name}</span>
+                          {row.isTopCloser && (
+                            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                              🏆 Closer
+                            </span>
+                          )}
+                          {row.isSpeedChampion && (
+                            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              ⚡ Fast
+                            </span>
+                          )}
                         </button>
                         <div className="mt-1 flex flex-wrap gap-1">
                           {row.silent && <ToneBadge tone="red" label="Silent 48 hrs" />}
@@ -301,7 +452,7 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                               tone="orange"
                               label={`${row.openAlerts} open alert${row.openAlerts > 1 ? "s" : ""}${
                                 row.oldestAlertHours !== null
-                                  ? ` · ${Math.round(row.oldestAlertHours)} hr old`
+                                  ? ` · ${Math.round(row.oldestAlertHours)}h old`
                                   : ""
                               }`}
                             />
@@ -311,28 +462,58 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>{row.assigned}</TableCell>
-                      <TableCell>{row.visitsBooked}</TableCell>
-                      <TableCell className="font-semibold">{row.visitsDone}</TableCell>
-                      <TableCell>{row.conversion}%</TableCell>
+                      <TableCell>
+                        <span className="font-bold text-foreground text-sm">
+                          {formatMoney(row.pipelineValue)}
+                        </span>
+                        <p className="text-[11px] text-muted-foreground">{row.assigned} leads total</p>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm tabular-nums">
+                            {row.visitsDone} <span className="text-xs text-muted-foreground font-normal">/ {row.visitsBooked}</span>
+                          </span>
+                          <div>
+                            <ToneBadge
+                              tone={row.visitShowupRate >= 70 ? "green" : row.visitShowupRate >= 45 ? "yellow" : "red"}
+                              label={`${row.visitShowupRate}% Show-up`}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           <ToneBadge
                             tone={slaTone(row.avgSla)}
-                            label={row.avgSla === null ? "No data" : formatMinutes(row.avgSla)}
+                            label={row.avgSla === null ? "No alerts" : `⚡ ${formatMinutes(row.avgSla)}`}
                           />
                           <p className="text-[11px] text-muted-foreground">
                             {row.fast} fast · {row.ok} ok · {row.slow} slow
                           </p>
                         </div>
                       </TableCell>
-                      <TableCell>{row.actions}</TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                      <TableCell>
+                        <span className="font-semibold text-sm tabular-nums">{row.conversion}%</span>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {row.luxuryLeads > 0 && (
+                          <span className="text-purple-600 dark:text-purple-400 font-medium">
+                            {row.luxuryLeads} Luxury ·{" "}
+                          </span>
+                        )}
+                        {row.premiumLeads > 0 && (
+                          <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+                            {row.premiumLeads} Prem ·{" "}
+                          </span>
+                        )}
+                        <span>{row.assigned} Active</span>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                         {timeAgo(row.lastActiveAt)}
                       </TableCell>
                       <TableCell className="text-right">
                         <button
-                          className="rounded-md border px-2 py-1 text-xs font-medium hover:bg-muted"
+                          className="rounded-md border px-2.5 py-1 text-xs font-semibold hover:bg-muted"
                           onClick={() => setProfile(row.name)}
                         >
                           View profile
@@ -341,7 +522,7 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                     </TableRow>
                     {expanded === row.name && (
                       <TableRow className="bg-muted/40">
-                        <TableCell colSpan={9}>
+                        <TableCell colSpan={8}>
                           {row.recent.length === 0 ? (
                             <p className="text-sm text-muted-foreground">
                               No recorded actions in this period.
@@ -381,10 +562,14 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
         </CardContent>
       </Card>
 
+      {/* ── Daily Activity & Feed ── */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Daily team activity</CardTitle>
+            <CardTitle className="text-base">Daily Team Touchpoints</CardTitle>
+            <CardDescription className="text-xs">
+              Client calls, WhatsApp updates, and status adjustments per day.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex h-40 items-end gap-1">
@@ -407,12 +592,15 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Latest team actions</CardTitle>
+            <CardTitle className="text-base">Live Activity Feed</CardTitle>
+            <CardDescription className="text-xs">
+              Real-time executive actions and milestone updates.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {feed.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No actions recorded yet. Every executive action from now on appears here.
+                No actions recorded yet. Every executive action appears here.
               </p>
             )}
             {feed.map((a) => (
@@ -420,7 +608,7 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                 key={a.id}
                 className="flex flex-wrap items-center gap-2 border-b pb-2 text-sm last:border-0"
               >
-                <span className="font-medium">{a.executive_name || "Unassigned"}</span>
+                <span className="font-semibold text-foreground">{a.executive_name || "Unassigned"}</span>
                 <ToneBadge
                   tone={ACTION_LABELS[a.action]?.tone ?? "gray"}
                   label={actionLabel(a.action)}
@@ -452,25 +640,34 @@ function Kpi({
   icon,
   label,
   value,
+  subtext,
   danger,
 }: {
   icon: React.ReactNode;
   label: string;
-  value: number;
+  value: React.ReactNode;
+  subtext?: string;
   danger?: boolean;
 }) {
   return (
-    <Card>
-      <CardContent className="flex items-center gap-4 pt-6">
-        <div className="rounded-xl bg-secondary p-3 text-primary">{icon}</div>
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
+    <Card className="shadow-xs transition-shadow hover:shadow-sm">
+      <CardContent className="flex items-start gap-4 pt-6">
+        <div
+          className={`rounded-xl p-3 shrink-0 ${
+            danger ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "bg-primary/10 text-primary"
+          }`}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
           <p
-            className="text-2xl font-bold"
-            style={danger && value > 0 ? { color: "var(--tone-red)" } : undefined}
+            className="text-2xl font-bold tracking-tight text-foreground"
+            style={danger ? { color: "var(--tone-red, #e11d48)" } : undefined}
           >
             {value}
           </p>
+          {subtext && <p className="mt-1 text-[11px] text-muted-foreground truncate">{subtext}</p>}
         </div>
       </CardContent>
     </Card>
@@ -478,9 +675,7 @@ function Kpi({
 }
 
 /**
- * Lets an admin add/remove sales executives for their tenant. Adding one
- * here just reserves their email — the next time that person signs in
- * (Facebook or email/password), they're bound to this team automatically.
+ * Lets an admin add/remove sales executives for their tenant.
  */
 function TeamManager({ clientId }: { clientId: string | null }) {
   const { data: executives = [] } = useExecutives();
@@ -566,10 +761,9 @@ function TeamManager({ clientId }: { clientId: string | null }) {
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div className="flex-1">
-          <CardTitle className="text-base">Team</CardTitle>
-          <CardDescription>
-            Add a sales executive's email here — their account is linked to your workspace the
-            moment they sign in with that email.
+          <CardTitle className="text-base">Sales Team & Access Management</CardTitle>
+          <CardDescription className="text-xs">
+            Add team executives and managers. Account binding occurs automatically when signing in with the designated email.
           </CardDescription>
         </div>
         <Button size="sm" onClick={() => setOpen(true)} className="w-full sm:w-auto">
@@ -586,7 +780,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
             className="flex flex-col gap-2 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="min-w-0">
-              <p className="font-medium">{ex.name}</p>
+              <p className="font-semibold text-sm">{ex.name}</p>
               <p className="truncate text-xs text-muted-foreground">
                 {ex.email || "—"} · {ex.phone || "—"}
               </p>
@@ -598,15 +792,25 @@ function TeamManager({ clientId }: { clientId: string | null }) {
               />
               <ToneBadge
                 tone={ex.user_id ? "green" : "yellow"}
-                label={ex.user_id ? "Active" : "Pending sign-in"}
+                label={ex.user_id ? "Linked" : "Pending sign-in"}
               />
-              <Button size="sm" variant="outline" onClick={() => openEdit(ex)}>
-                <Pencil className="size-3.5" />
-                <span className="hidden sm:inline">Edit</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="size-8 p-0"
+                onClick={() => openEdit(ex)}
+                title="Edit member"
+              >
+                <Pencil className="size-4" />
               </Button>
-              <Button size="sm" variant="destructive" onClick={() => setDeleteId(ex.id)}>
-                <Trash2 className="size-3.5" />
-                <span className="hidden sm:inline">Remove</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="size-8 p-0 text-destructive hover:text-destructive"
+                onClick={() => setDeleteId(ex.id)}
+                title="Remove member"
+              >
+                <Trash2 className="size-4" />
               </Button>
             </div>
           </div>
@@ -615,39 +819,53 @@ function TeamManager({ clientId }: { clientId: string | null }) {
 
       {/* Add dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Add team member</DialogTitle>
             <DialogDescription>
-              They'll be linked automatically on their first sign-in.
+              Assign a role and contact info. When they sign in with this email, they'll join your workspace.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Role</Label>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="add-name">Full name</Label>
+              <Input
+                id="add-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Ramesh Patel"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-email">Email</Label>
+              <Input
+                id="add-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="e.g. ramesh@example.com"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-phone">Phone (optional)</Label>
+              <Input
+                id="add-phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="e.g. +91 98765 43210"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-role">Role</Label>
               <Select value={role} onValueChange={setRole}>
-                <SelectTrigger>
+                <SelectTrigger id="add-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="sales_executive">Sales Executive</SelectItem>
-                  <SelectItem value="manager" disabled={hasManager}>
-                    Manager{hasManager ? " (already assigned)" : ""}
-                  </SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Phone (optional)</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
@@ -655,7 +873,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
               Cancel
             </Button>
             <Button onClick={submitAdd} disabled={add.isPending}>
-              Add
+              {add.isPending ? "Adding..." : "Add member"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -663,48 +881,48 @@ function TeamManager({ clientId }: { clientId: string | null }) {
 
       {/* Edit dialog */}
       <Dialog open={!!editEx} onOpenChange={(v) => !v && setEditEx(null)}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit team member details</DialogTitle>
-            <DialogDescription>
-              Update the role, name, email, or phone for this team member.
-            </DialogDescription>
+            <DialogTitle>Edit team member</DialogTitle>
+            <DialogDescription>Update contact information or role.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Role</Label>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="edit-name">Full name</Label>
+              <Input
+                id="edit-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-role">Role</Label>
               <Select value={editRole} onValueChange={setEditRole}>
-                <SelectTrigger>
+                <SelectTrigger id="edit-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="sales_executive">Sales Executive</SelectItem>
-                  <SelectItem
-                    value="manager"
-                    disabled={
-                      hasManager &&
-                      (editEx as Executive & { role?: string })?.role !== "manager"
-                    }
-                  >
-                    Manager
-                    {hasManager && (editEx as Executive & { role?: string })?.role !== "manager"
-                      ? " (already assigned)"
-                      : ""}
-                  </SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Phone (optional)</Label>
-              <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
@@ -712,24 +930,25 @@ function TeamManager({ clientId }: { clientId: string | null }) {
               Cancel
             </Button>
             <Button onClick={submitEdit} disabled={update.isPending}>
-              Save changes
+              {update.isPending ? "Saving..." : "Save changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Remove confirm */}
+      {/* Delete confirm dialog */}
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove this executive?</AlertDialogTitle>
+            <AlertDialogTitle>Remove team member?</AlertDialogTitle>
             <AlertDialogDescription>
-              Leads already assigned to them keep their history — this only removes their access.
+              This will unlink the executive from this workspace. Their assigned leads will remain in the CRM and can be reassigned.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 if (deleteId) del.mutate(deleteId);
                 setDeleteId(null);
