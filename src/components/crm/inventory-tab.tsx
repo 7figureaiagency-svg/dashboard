@@ -645,8 +645,8 @@ export function InventoryTab({
 
             {/* Quick Filter Pills Row (BHK & Price brackets) */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t text-xs">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] text-muted-foreground font-medium mr-1">BHK:</span>
+              <div className="touch-scroll flex items-center gap-1.5 overflow-x-auto pb-0.5 w-full sm:w-auto">
+                <span className="text-[11px] text-muted-foreground font-medium mr-1 shrink-0">BHK:</span>
                 {[
                   { id: "ALL", label: "All" },
                   { id: "1BHK", label: "1 BHK" },
@@ -660,10 +660,10 @@ export function InventoryTab({
                     key={c.id}
                     type="button"
                     onClick={() => setConfigFilter(c.id)}
-                    className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all ${
+                    className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
                       configFilter === c.id
                         ? "bg-primary text-primary-foreground shadow-2xs"
-                        : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
                     {c.label}
@@ -671,8 +671,8 @@ export function InventoryTab({
                 ))}
               </div>
 
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] text-muted-foreground font-medium mr-1">Price:</span>
+              <div className="touch-scroll flex items-center gap-1.5 overflow-x-auto pb-0.5 w-full sm:w-auto">
+                <span className="text-[11px] text-muted-foreground font-medium mr-1 shrink-0">Price:</span>
                 {[
                   { id: "ALL", label: "Any" },
                   { id: "UNDER_40L", label: "< ₹40 L" },
@@ -684,10 +684,10 @@ export function InventoryTab({
                     key={b.id}
                     type="button"
                     onClick={() => setPriceBracket(b.id)}
-                    className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all ${
+                    className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
                       priceBracket === b.id
                         ? "bg-emerald-600 text-white shadow-2xs"
-                        : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
                     {b.label}

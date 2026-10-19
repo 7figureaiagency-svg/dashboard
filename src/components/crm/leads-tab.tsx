@@ -646,124 +646,271 @@ export function LeadsTab({
           </div>
         </div>
       ) : (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Executive</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>AI bot</TableHead>
-                  <TableHead>Selected property</TableHead>
-                  <TableHead>Budget</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading && (
-                  <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                      Loading leads…
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!loading && rows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                      No leads match these filters.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {rows.map((lead) => (
-                  <TableRow key={lead.lead_id}>
-                    <TableCell className="font-medium">{lead.name || "Unnamed"}</TableCell>
-                    <TableCell>
-                      {lead.assigned_executive_name ? (
-                        <button
-                          className="font-medium text-primary hover:underline"
-                          onClick={() => setProfile(lead.assigned_executive_name)}
-                        >
-                          {lead.assigned_executive_name}
-                        </button>
-                      ) : (
-                        <span className="text-muted-foreground">Unassigned</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {lead.phone ? (
-                        <span className="font-mono text-xs">{lead.phone}</span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800 font-mono">
-                          TG: {lead.lead_id}
+        <div className="space-y-3">
+          {/* ── 📱 Mobile Responsive Cards (Visible on Phones < 768px) ── */}
+          <div className="space-y-3 md:hidden">
+            {loading &&
+              Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={`m-skel-${i}`}
+                  className="animate-pulse rounded-xl border border-border/60 bg-card p-4 space-y-3 shadow-2xs"
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="h-4.5 w-32 rounded bg-muted/60" />
+                    <div className="h-5 w-20 rounded-full bg-muted/50" />
+                  </div>
+                  <div className="h-3.5 w-48 rounded bg-muted/40" />
+                  <div className="flex gap-2 pt-2 border-t border-border/40">
+                    <div className="h-8.5 flex-1 rounded-lg bg-muted/50" />
+                    <div className="h-8.5 flex-1 rounded-lg bg-muted/50" />
+                  </div>
+                </div>
+              ))}
+
+            {!loading && rows.length === 0 && (
+              <div className="rounded-xl border border-dashed border-border/80 p-8 text-center bg-card/60">
+                <Search className="mx-auto size-6 text-muted-foreground mb-2" />
+                <p className="text-xs font-semibold text-foreground">No leads found</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Try clearing your search or filter tags.
+                </p>
+              </div>
+            )}
+
+            {!loading &&
+              rows.map((lead) => (
+                <div
+                  key={`m-${lead.lead_id}`}
+                  className="rounded-xl border border-border/80 bg-card p-4 shadow-2xs space-y-3 transition-all active:scale-[0.99]"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h4
+                        className="font-bold text-sm text-foreground truncate cursor-pointer hover:text-primary"
+                        onClick={() => setSelected(lead)}
+                      >
+                        {lead.name || "Unnamed Client"}
+                      </h4>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                        <span className="font-medium text-foreground/80">{lead.assigned_executive_name || "Unassigned"}</span>
+                        <span>·</span>
+                        <span className="font-mono text-[11px]">{lead.phone || `TG:${lead.lead_id}`}</span>
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      <StatusBadge value={lead.status} />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs bg-muted/40 rounded-lg px-2.5 py-1.5 border border-border/50">
+                    <div className="truncate font-medium text-foreground">
+                      {lead.selected_property_name ? (
+                        <span className="flex items-center gap-1.5">
+                          <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+                          <span className="truncate">{lead.selected_property_name}</span>
                         </span>
+                      ) : (
+                        <span className="text-muted-foreground italic">No property selected</span>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <StatusBadge value={lead.status} />
-                        {lead.property_state === "HUMAN_HANDOVER" && (
-                          <PropertyStateBadge value="HUMAN_HANDOVER" />
-                        )}
-                        {lead.pre_visit_reminder_sent && (
-                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                            ⏰ Reminder Sent
-                          </span>
-                        )}
-                        {lead.post_visit_feedback_sent && (
-                          <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">
-                            💬 Survey Sent
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={!!lead.bot_active}
-                          aria-label="Toggle AI bot"
-                          onCheckedChange={(v) =>
-                            update.mutate({
-                              leadId: lead.lead_id,
-                              values: { bot_active: v },
-                              message: v ? "AI bot activated" : "AI bot paused",
-                              lead,
-                              action: "BOT_TOGGLED",
-                            })
-                          }
-                        />
-                        <ToneBadge
-                          tone={lead.bot_active ? "green" : "gray"}
-                          label={lead.bot_active ? "AI Active" : "AI Paused"}
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell>{lead.selected_property_name || "—"}</TableCell>
-                    <TableCell>{formatMoney(lead.budget)}</TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatDate(lead.created_at)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end items-center gap-1.5">
-                        <Button asChild size="sm" variant="outline" className="h-8 gap-1.5" disabled={!lead.phone}>
-                          <a href={`tel:${lead.phone ?? ""}`}>
-                            <Phone className="size-3.5 text-primary" />
-                            <span>Call</span>
+                    </div>
+                    <span className="font-bold text-foreground tabular-nums shrink-0 ml-2">
+                      {formatMoney(lead.budget)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+                    {lead.phone ? (
+                      <>
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="outline"
+                          className="h-8.5 flex-1 gap-1.5 text-xs font-semibold rounded-lg"
+                        >
+                          <a href={`tel:${lead.phone}`}>
+                            <Phone className="size-3.5 text-primary" /> Call
                           </a>
                         </Button>
-                        <Button size="sm" className="h-8" onClick={() => setSelected(lead)}>
-                          Open
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="outline"
+                          className="h-8.5 flex-1 gap-1.5 text-xs font-semibold rounded-lg border-emerald-500/30 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20"
+                        >
+                          <a
+                            href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <Send className="size-3.5" /> WhatsApp
+                          </a>
                         </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      </>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="h-8.5 px-3.5 text-xs font-semibold rounded-lg"
+                      onClick={() => setSelected(lead)}
+                    >
+                      Open
+                    </Button>
+                  </div>
+                </div>
+              ))}
           </div>
-        </Card>
+
+          {/* ── 💻 Full Table View (Desktop & Tablet >= 768px) ── */}
+          <Card className="hidden md:block overflow-hidden shadow-2xs border-border/80">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Executive</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>AI bot</TableHead>
+                    <TableHead>Selected property</TableHead>
+                    <TableHead>Budget</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading &&
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={`skeleton-${i}`} className="animate-pulse border-border/40">
+                        <TableCell><div className="h-4 w-28 rounded bg-muted/60" /></TableCell>
+                        <TableCell><div className="h-4 w-20 rounded bg-muted/50" /></TableCell>
+                        <TableCell><div className="h-4 w-24 rounded bg-muted/50" /></TableCell>
+                        <TableCell><div className="h-5 w-20 rounded-full bg-muted/60" /></TableCell>
+                        <TableCell><div className="h-5 w-24 rounded-full bg-muted/50" /></TableCell>
+                        <TableCell><div className="h-4 w-32 rounded bg-muted/50" /></TableCell>
+                        <TableCell><div className="h-4 w-16 rounded bg-muted/50" /></TableCell>
+                        <TableCell><div className="h-4 w-16 rounded bg-muted/50" /></TableCell>
+                        <TableCell className="text-right"><div className="ml-auto h-7 w-20 rounded bg-muted/60" /></TableCell>
+                      </TableRow>
+                    ))}
+                  {!loading && rows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={9} className="py-14 text-center">
+                        <div className="mx-auto flex max-w-sm flex-col items-center justify-center text-center">
+                          <div className="mb-2.5 flex size-10 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
+                            <Search className="size-4" />
+                          </div>
+                          <h4 className="text-sm font-semibold text-foreground">No leads match filters</h4>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Try adjusting your search query, status, or date filters.
+                          </p>
+                          {(search || status !== ALL || executive !== ALL || source !== ALL || actionFilter !== "ALL") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-3 h-7 text-xs"
+                              onClick={() => {
+                                setSearch("");
+                                setStatus(ALL);
+                                setExecutive(lockedExecutive ?? ALL);
+                                setSource(ALL);
+                                setActionFilter("ALL");
+                              }}
+                            >
+                              Reset filters
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {rows.map((lead) => (
+                    <TableRow key={lead.lead_id} className="hover:bg-muted/40 transition-colors">
+                      <TableCell className="font-semibold text-foreground">{lead.name || "Unnamed"}</TableCell>
+                      <TableCell>
+                        {lead.assigned_executive_name ? (
+                          <button
+                            className="font-medium text-primary hover:underline"
+                            onClick={() => setProfile(lead.assigned_executive_name)}
+                          >
+                            {lead.assigned_executive_name}
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">Unassigned</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {lead.phone ? (
+                          <span className="font-mono text-xs">{lead.phone}</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800 font-mono">
+                            TG: {lead.lead_id}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <StatusBadge value={lead.status} />
+                          {lead.property_state === "HUMAN_HANDOVER" && (
+                            <PropertyStateBadge value="HUMAN_HANDOVER" />
+                          )}
+                          {lead.pre_visit_reminder_sent && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                              ⏰ Reminder Sent
+                            </span>
+                          )}
+                          {lead.post_visit_feedback_sent && (
+                            <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">
+                              💬 Survey Sent
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={!!lead.bot_active}
+                            aria-label="Toggle AI bot"
+                            onCheckedChange={(v) =>
+                              update.mutate({
+                                leadId: lead.lead_id,
+                                values: { bot_active: v },
+                                message: v ? "AI bot activated" : "AI bot paused",
+                                lead,
+                                action: "BOT_TOGGLED",
+                              })
+                            }
+                          />
+                          <ToneBadge
+                            tone={lead.bot_active ? "green" : "gray"}
+                            label={lead.bot_active ? "AI Active" : "AI Paused"}
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell>{lead.selected_property_name || "—"}</TableCell>
+                      <TableCell className="font-bold tabular-nums">{formatMoney(lead.budget)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground text-xs tabular-nums">
+                        {formatDate(lead.created_at)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end items-center gap-1.5">
+                          <Button asChild size="sm" variant="outline" className="h-8 gap-1.5" disabled={!lead.phone}>
+                            <a href={`tel:${lead.phone ?? ""}`}>
+                              <Phone className="size-3.5 text-primary" />
+                              <span>Call</span>
+                            </a>
+                          </Button>
+                          <Button size="sm" className="h-8" onClick={() => setSelected(lead)}>
+                            Open
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </div>
       )}
 
       <LeadDrawer

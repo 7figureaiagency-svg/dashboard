@@ -362,17 +362,17 @@ export function BudgetTab({
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Deal Type Switcher */}
-          <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-lg">
+          <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-lg overflow-x-auto w-full sm:w-auto shrink-0">
             <button
               type="button"
               onClick={() => setDealFilter("ALL")}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+              className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
                 dealFilter === "ALL"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-card text-foreground shadow-2xs"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              All Demands ({leads.length})
+              All ({leads.length})
             </button>
             <button
               type="button"

@@ -134,6 +134,8 @@ export function useLeadEvents(leadId?: string | null) {
     },
     enabled: !!leadId,
     refetchInterval: 15000,
+    refetchOnWindowFocus: false,
+    staleTime: 15000,
   });
 }
 

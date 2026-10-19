@@ -190,8 +190,73 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
             ))}
           </div>
         </CardHeader>
-        <CardContent className="px-0">
-          <div className="overflow-x-auto">
+        <CardContent className="px-0 sm:px-6">
+          {/* ── 📱 Mobile Executive Scorecard (Phones < 768px) ── */}
+          <div className="space-y-3 px-4 md:hidden">
+            {board.length === 0 && (
+              <div className="rounded-xl border border-dashed border-border/80 p-8 text-center text-xs text-muted-foreground">
+                No executive data yet.
+              </div>
+            )}
+            {board.map((row) => (
+              <div
+                key={`m-exec-${row.name}`}
+                className="rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="font-bold text-sm text-foreground">{row.name}</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Active: {timeAgo(row.lastActiveAt)}
+                    </p>
+                  </div>
+                  <button
+                    className="rounded-lg border border-border/80 px-2.5 py-1 text-xs font-semibold hover:bg-muted"
+                    onClick={() => setProfile(row.name)}
+                  >
+                    Profile
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  {row.silent && <ToneBadge tone="red" label="Silent 48 hrs" />}
+                  {row.openAlerts > 0 && (
+                    <ToneBadge
+                      tone="orange"
+                      label={`${row.openAlerts} open alert${row.openAlerts > 1 ? "s" : ""}`}
+                    />
+                  )}
+                  {row.staleLeads > 0 && (
+                    <ToneBadge tone="yellow" label={`${row.staleLeads} untouched 7d+`} />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-2.5 rounded-lg border border-border/50">
+                  <div>
+                    <span className="text-[11px] text-muted-foreground block">Leads Assigned</span>
+                    <span className="font-bold text-foreground text-sm tabular-nums">{row.assigned}</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-muted-foreground block">Visits Completed</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm tabular-nums">{row.visitsDone}</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-muted-foreground block">Conversion Rate</span>
+                    <span className="font-bold text-foreground text-sm tabular-nums">{row.conversion}%</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-muted-foreground block">Avg Response</span>
+                    <span className="font-bold text-foreground text-sm tabular-nums">
+                      {row.avgSla === null ? "—" : formatMinutes(row.avgSla)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── 💻 Desktop Executive Scorecard Table (>= 768px) ── */}
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

@@ -273,14 +273,25 @@ export function LeadDrawer({
             <PropertyStateBadge value={lead.property_state} />
           </div>
 
-          {/* ── Direct Phone Call CTA (Strict Call-Only Policy) ── */}
+          {/* ── Direct Contact CTAs ── */}
           <div className="flex flex-wrap items-center gap-2 pt-2">
             {lead.phone ? (
-              <Button asChild size="sm" variant="default" className="h-8 gap-1.5 font-medium shadow-xs">
-                <a href={`tel:${lead.phone}`}>
-                  <Phone className="size-3.5" /> Call Client ({lead.phone})
-                </a>
-              </Button>
+              <>
+                <Button asChild size="sm" variant="default" className="h-8 gap-1.5 font-medium shadow-xs">
+                  <a href={`tel:${lead.phone}`}>
+                    <Phone className="size-3.5" /> Call ({lead.phone})
+                  </a>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 font-medium border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10">
+                  <a
+                    href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <MessageSquare className="size-3.5" /> WhatsApp
+                  </a>
+                </Button>
+              </>
             ) : (
               <span className="inline-flex items-center gap-1 text-xs text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2.5 py-1 rounded-md border border-sky-200 dark:border-sky-800 font-mono">
                 Telegram ID: {lead.lead_id}
