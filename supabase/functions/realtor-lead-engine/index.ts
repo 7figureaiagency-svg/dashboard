@@ -872,6 +872,9 @@ IMPORTANT OWNER vs SEEKER RULES:
 - "chahiye", "joiye", "kharidna", "rent pe chahiye", "buy" = SEEKER with transaction_type: "RENT" or "BUY".
 
 STATE-BASED NUMERIC DISAMBIGUATION RULES:
+- When "Bot Question Waiting For" is ROLE_SELECTION (state ROLE_SELECTION_PENDING):
+  - If user replies "1", "1️⃣", "option 1", "first", "leni", "lene", "kharidna", "buy", "rent chahiye", "search" -> user_role: "SEEKER", intent: "SEEKER_QUALIFICATION".
+  - If user replies "2", "2️⃣", "option 2", "second", "deni", "dene", "sell", "bechna", "rent out", "rent pe deni", "listing" -> user_role: "OWNER", intent: "OWNER_LISTING".
 - When "Bot Question Waiting For" is CARPET_AREA_SQFT (state OWNER_AREA_PENDING):
   A numeric answer (e.g. "1250", "800", "1500 sqft", "500", "1200") MUST be placed into "carpet_sqft": <number>.
   "price_or_budget" MUST be null unless explicit price keywords like "rent", "kiraya", "lakh", "cr", "rs", "₹", "/month" are in the user message!
@@ -921,7 +924,9 @@ function buildLeadContextForClassifier(lead: any, messageText: string): string {
   ].includes(lead?.state);
 
   let currentPendingQuestion = "NONE";
-  if (lead?.state === "OWNER_CONFIG_PENDING") {
+  if (lead?.state === "ROLE_SELECTION_PENDING") {
+    currentPendingQuestion = "ROLE_SELECTION (Bot asked user: 1 or 'Leni hai' to Buy/Rent properties, 2 or 'Deni hai' to Sell/Rent Out their property)";
+  } else if (lead?.state === "OWNER_CONFIG_PENDING") {
     currentPendingQuestion = "PROPERTY_CONFIG (Bot asked for property type / configuration: Flat, Villa, Commercial Office, Shop, Plot)";
   } else if (lead?.state === "OWNER_SOCIETY_PENDING") {
     currentPendingQuestion = "SOCIETY_OR_ROAD (Bot asked for Commercial Complex, Business Hub, Society, or Road name)";
@@ -2707,7 +2712,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v45-fix-area-rent-numeric-disambiguation",
+        version: "v46-dual-role-fresh-greeting-fork",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -3056,15 +3061,18 @@ Deno.serve(async (req: Request) => {
       ].includes(lead?.state);
 
     const isExplicitOwnerMessage =
-      aiAnalysis.user_role === "OWNER" ||
-      aiAnalysis.intent === "OWNER_LISTING" ||
-      isInProgressOwnerIntake ||
-      /(?:mera|meri|maro|mari|mere|mara|amaro|apna|own|paas)\s+(?:flat|makan|ghar|house|villa|plot|zameen|jamin|shop|dukan|office|showroom|shed|godown|warehouse|property)\s+(?:bechna|bechni|vechvu|vechvo|vechva|sell|bikri|rent\s+par|bhadu|bhaade|kiraya|kiraye|lease)/i.test(lower) ||
-      /(?:bechna|bechni|vechvu|vechva|bikri|sell\s+my|sell\s+property|want\s+to\s+sell|property\s+sell|rent\s+par\s+den|bhaade\s+aap|kiraye\s+par\s+den|lease\s+par\s+den|list\s+karvi|list\s+karna|owner\s+listing)/i.test(lower) ||
-      /(?:property\s+deni\s+hai|shop\s+deni\s+hai|flat\s+dena\s+hai|office\s+dena\s+hai|office\s+deni\s+hai|ghar\s+bechna)/i.test(lower);
+      lead?.state !== "ROLE_SELECTION_PENDING" && (
+        aiAnalysis.user_role === "OWNER" ||
+        aiAnalysis.intent === "OWNER_LISTING" ||
+        isInProgressOwnerIntake ||
+        /(?:mera|meri|maro|mari|mere|mara|amaro|apna|own|paas)\s+(?:flat|makan|ghar|house|villa|plot|zameen|jamin|shop|dukan|office|showroom|shed|godown|warehouse|property)\s+(?:bechna|bechni|vechvu|vechvo|vechva|sell|bikri|rent\s+par|bhadu|bhaade|kiraya|kiraye|lease)/i.test(lower) ||
+        /(?:bechna|bechni|vechvu|vechva|bikri|sell\s+my|sell\s+property|want\s+to\s+sell|property\s+sell|rent\s+par\s+den|bhaade\s+aap|kiraye\s+par\s+den|lease\s+par\s+den|list\s+karvi|list\s+karna|owner\s+listing)/i.test(lower) ||
+        /(?:property\s+deni\s+hai|shop\s+deni\s+hai|flat\s+dena\s+hai|office\s+dena\s+hai|office\s+deni\s+hai|ghar\s+bechna)/i.test(lower)
+      );
 
     // CRITICAL: An in-progress owner answering location, area, or rent/price must NEVER be treated as an explicit buyer!
     const isExplicitBuyerMessage =
+      lead?.state !== "ROLE_SELECTION_PENDING" &&
       !isInProgressOwnerIntake && (
         aiAnalysis.user_role === "SEEKER" && (
           aiAnalysis.intent === "SEEKER_QUALIFICATION" ||
@@ -3599,11 +3607,11 @@ Deno.serve(async (req: Request) => {
               ? `Hello <b>${senderName || "Friend"}</b>! 👋 Your property listing is under active review on our desk. Can we assist you with finding any new property to buy or rent (Flat, Villa, Office)? 🏡`
               : `Namaste <b>${leadName}</b>! 👋 Aapki listed property verification desk par active review me hai. Kya hum aapke liye koi nayi property (Flat, Villa, Office) search karne me madad karein? 🏡`;
         } else {
-          // Fresh qualification reset
+          // Dual-Role Greeting Fork for Fresh Leads
           await supabase
             .from("leads")
             .update({
-              state: "QUALIFYING",
+              state: "ROLE_SELECTION_PENDING",
               property_type: null,
               requirement: null,
               purpose: null,
@@ -3618,15 +3626,83 @@ Deno.serve(async (req: Request) => {
             })
             .eq("id", lead.id);
 
-          nextState = "QUALIFYING";
-          const leadName = senderName || "Friend";
+          nextState = "ROLE_SELECTION_PENDING";
+          const leadName = senderName || (lang === "GUJLISH" ? "Mitra" : "Friend");
           replyText =
             lang === "GUJLISH"
-              ? `Namaste <b>${leadName}</b>! NextGen Realty ma aapnu swagat chhe. 🏡\n\nTame property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe?`
+              ? `Namaste <b>${leadName}</b>! NextGen Realty ma aapnu swagat chhe. 🏢✨\n\nTame NextGen Realty sathe shu karva mango chho?\n\n1️⃣ <b>Property Leni chhe</b> (Kharidva / Rent par joiye chhe) 🏡\n2️⃣ <b>Property Deni chhe</b> (Vechva / Rent par aapvi chhe) 📋\n\n<i>(Tame 1 ke 2 lakhi ne reply kari shako chho)</i>`
               : lang === "ENGLISH"
-              ? `Hello <b>${leadName}</b>! Welcome to NextGen Realty. 🏡\n\nAre you looking to <b>Buy</b> or <b>Rent</b> a property?`
-              : `Namaste <b>${leadName}</b>! NextGen Realty me aapka swagat hai. 🏡\n\nAap property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye?`;
+              ? `Hello <b>${leadName}</b>! Welcome to NextGen Realty. 🏢✨\n\nHow can we assist you today?\n\n1️⃣ <b>Looking for a Property</b> (Buy / Rent) 🏡\n2️⃣ <b>List / Offer a Property</b> (Sell / Rent Out) 📋\n\n<i>(You can reply with 1 or 2)</i>`
+              : `Namaste <b>${leadName}</b>! NextGen Realty me aapka swagat hai. 🏢✨\n\nAap NextGen Realty ke sath kya karna chahte hain?\n\n1️⃣ <b>Property Leni hai</b> (Buy / Rent par chahiye) 🏡\n2️⃣ <b>Property Deni hai</b> (Bechni / Rent par deni hai) 📋\n\n<i>(Aap 1 ya 2 likh kar reply kar sakte hain)</i>`;
         }
+      }
+    }
+
+    // =========================================================================
+    // 6a: DUAL-ROLE GREETING FORK HANDLER
+    // Triggers when lead.state === "ROLE_SELECTION_PENDING"
+    // =========================================================================
+    else if (lead.state === "ROLE_SELECTION_PENDING") {
+      const isOption2Owner =
+        aiAnalysis.user_role === "OWNER" ||
+        aiAnalysis.intent === "OWNER_LISTING" ||
+        /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|rent\s*out|rent\s*pe\s*deni|list|listing|property\s*deni|bhade\s*pe)/i.test(lower) ||
+        lower.includes("deni") || lower.includes("bechn") || lower.includes("rent pe deni") || lower.includes("bhaade aalvu") || lower.includes("bhade pe");
+
+      const isOption1Seeker =
+        aiAnalysis.user_role === "SEEKER" ||
+        aiAnalysis.intent === "SEEKER_QUALIFICATION" ||
+        /^(1|1️⃣|option\s*1|first|1st|leni|lene|kharidna|buy|rent\s*pe\s*chahiye|search|flat\s*chahiye|ghar\s*chahiye|chahiye|joiye)/i.test(lower) ||
+        lower.includes("leni") || lower.includes("kharid") || lower.includes("rent chahiye") || lower.includes("chahiye");
+
+      if (isOption2Owner && !isOption1Seeker) {
+        // Option 2: Lead is an OWNER / PROVIDER
+        nextState = "OWNER_CONFIG_PENDING";
+        const initialDraft: any = {
+          started_at: new Date().toISOString(),
+          ...(aiAnalysis.transaction_type ? { transaction_type: (aiAnalysis.transaction_type === "RENT" || aiAnalysis.transaction_type === "LEASE") ? "RENT_OUT" : "SELL" } : {}),
+          ...(aiAnalysis.property_type ? { property_type: aiAnalysis.property_type, configuration: aiAnalysis.property_type } : {}),
+          ...(aiAnalysis.property_category ? { property_category: aiAnalysis.property_category } : {}),
+          ...(aiAnalysis.location ? { location: aiAnalysis.location } : {}),
+        };
+
+        await supabase
+          .from("leads")
+          .update({
+            lead_type: "PROVIDER",
+            state: "OWNER_CONFIG_PENDING",
+            metadata: {
+              ...(lead.metadata || {}),
+              owner_draft: initialDraft,
+            },
+          })
+          .eq("id", lead.id);
+
+        const leadName = senderName || (lang === "GUJLISH" ? "Mitra" : "ji");
+        replyText =
+          lang === "GUJLISH"
+            ? `Namaste <b>${leadName}</b>! 🙏 NextGen Realty par tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
+            : lang === "ENGLISH"
+            ? `Thank you <b>${leadName}</b>! 🙏 We would be delighted to assist you in listing your property with NextGen Realty.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
+            : `Namaste <b>${leadName}</b>! 🙏 NextGen Realty par apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
+      } else {
+        // Option 1 (or Default): Lead is a SEEKER / BUYER
+        nextState = "QUALIFYING";
+        await supabase
+          .from("leads")
+          .update({
+            lead_type: "SEEKER",
+            state: "QUALIFYING",
+          })
+          .eq("id", lead.id);
+
+        const leadName = senderName || "Friend";
+        replyText =
+          lang === "GUJLISH"
+            ? `Namaste <b>${leadName}</b>! 🏡 Tame Vadodara ma property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe? Ane kai type ni property joiye chhe (e.g. <b>2BHK/3BHK Flat, Villa, ya Commercial Office</b>)?`
+            : lang === "ENGLISH"
+            ? `Great <b>${leadName}</b>! 🏡 Are you looking to <b>Buy</b> or <b>Rent</b> a property in Vadodara? And what type of property are you interested in (e.g. <b>2BHK/3BHK Flat, Villa, or Commercial Office</b>)?`
+            : `Zaroor <b>${leadName}</b>! 🏡 Aap Vadodara me property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye? Aur kis type ki property dekh rahe hain (e.g. <b>2BHK/3BHK Flat, Villa, ya Commercial Office</b>)?`;
       }
     }
 
