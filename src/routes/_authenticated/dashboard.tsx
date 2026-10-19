@@ -209,7 +209,7 @@ function Dashboard() {
               {isAdmin && (
                 <>
                   <TabsContent value="budget" className="mt-0">
-                    <BudgetTab leads={leads} />
+                    <BudgetTab leads={leads} inventory={inventoryQuery.data ?? []} />
                   </TabsContent>
                   <TabsContent value="team" className="mt-0">
                     <PerformanceTab leads={leadsQuery.data ?? []} clientId={clientId} />

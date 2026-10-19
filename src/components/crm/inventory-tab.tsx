@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Eye,
   FileText,
+  Flame,
   ImageOff,
   LayoutGrid,
   LayoutList,
@@ -83,6 +84,7 @@ import {
   configurationsForCategory,
   FACING_OPTIONS,
   formatMoney,
+  formatRatePerSqft,
   FURNISHED_STATUSES,
   INVENTORY_STATUSES,
   isValidUrl,
@@ -230,6 +232,13 @@ export function InventoryTab({
   } | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
+  // ── Filters & Sorting state ──
+  const [search, setSearch] = useState("");
+  const [dealTypeFilter, setDealTypeFilter] = useState<"ALL" | "SALE" | "RENT">("ALL");
+  const [configFilter, setConfigFilter] = useState<string>("ALL");
+  const [priceBracket, setPriceBracket] = useState<string>("ALL");
+  const [sortBy, setSortBy] = useState<"DEMAND" | "PRICE_ASC" | "PRICE_DESC" | "AREA_DESC" | "NEWEST">("DEMAND");
+
   const matchingBuyersMap = useMemo(() => {
     const map = new Map<string, Lead[]>();
     for (const p of properties) {
@@ -267,6 +276,135 @@ export function InventoryTab({
     }
     return map;
   }, [properties, allLeads]);
+
+  // ── Portfolio Overview KPIs ──
+  const portfolioStats = useMemo(() => {
+    let totalSaleValue = 0;
+    let saleCount = 0;
+    let rentCount = 0;
+    let highDemandCount = 0;
+
+    for (const p of properties) {
+      const pPrice = Number(p.price) || 0;
+      const isRent =
+        (p.listing_type || "").toUpperCase() === "RENT" ||
+        (p.listing_type || "").toUpperCase() === "LEASE" ||
+        (p.transaction_type || "").toUpperCase().includes("RENT");
+
+      if (isRent) {
+        rentCount++;
+      } else {
+        saleCount++;
+        totalSaleValue += pPrice;
+      }
+
+      const matches = matchingBuyersMap.get(p.property_id)?.length || 0;
+      if (matches > 0) {
+        highDemandCount++;
+      }
+    }
+
+    return {
+      totalCount: properties.length,
+      totalSaleValue,
+      saleCount,
+      rentCount,
+      highDemandCount,
+    };
+  }, [properties, matchingBuyersMap]);
+
+  // ── Filtered and Sorted Properties ──
+  const filteredProperties = useMemo(() => {
+    const list = properties.filter((p) => {
+      // 1. Search Query
+      if (search.trim()) {
+        const q = search.toLowerCase().trim();
+        const matchName = p.project_name?.toLowerCase().includes(q);
+        const matchLoc = p.location?.toLowerCase().includes(q);
+        const matchCity = (p as { city?: string | null }).city?.toLowerCase().includes(q);
+        const matchConfig = p.configuration?.toLowerCase().includes(q);
+        const matchId = p.property_id?.toLowerCase().includes(q);
+        const matchLandmarks = Array.isArray((p as { landmarks?: string[] }).landmarks)
+          ? (p as { landmarks?: string[] }).landmarks?.some((lm) => lm.toLowerCase().includes(q))
+          : false;
+        if (!matchName && !matchLoc && !matchCity && !matchConfig && !matchId && !matchLandmarks) {
+          return false;
+        }
+      }
+
+      // 2. Deal Type
+      const isRent =
+        (p.listing_type || "").toUpperCase() === "RENT" ||
+        (p.listing_type || "").toUpperCase() === "LEASE" ||
+        (p.transaction_type || "").toUpperCase().includes("RENT");
+      if (dealTypeFilter === "SALE" && isRent) return false;
+      if (dealTypeFilter === "RENT" && !isRent) return false;
+
+      // 3. Configuration / BHK
+      if (configFilter !== "ALL") {
+        const cfg = (p.configuration || "").toLowerCase();
+        const cat = (p.property_category || "").toLowerCase();
+        if (configFilter === "1BHK" && !(cfg.includes("1") && cfg.includes("bhk"))) return false;
+        if (configFilter === "2BHK" && !(cfg.includes("2") && cfg.includes("bhk"))) return false;
+        if (configFilter === "3BHK" && !(cfg.includes("3") && cfg.includes("bhk"))) return false;
+        if (configFilter === "4BHK+" && !(cfg.includes("4") || cfg.includes("5") || cfg.includes("penthouse"))) return false;
+        if (configFilter === "VILLA" && !(cat.includes("villa") || cfg.includes("villa") || cfg.includes("bungalow") || cfg.includes("duplex"))) return false;
+        if (configFilter === "COMMERCIAL" && !(cat.includes("commercial") || cat.includes("plot") || cat.includes("land") || cfg.includes("shop") || cfg.includes("office"))) return false;
+      }
+
+      // 4. Price Bracket
+      if (priceBracket !== "ALL") {
+        const pr = Number(p.price) || 0;
+        if (priceBracket === "UNDER_40L" && pr >= 4000000) return false;
+        if (priceBracket === "40L_75L" && (pr < 4000000 || pr > 7500000)) return false;
+        if (priceBracket === "75L_15CR" && (pr < 7500000 || pr > 15000000)) return false;
+        if (priceBracket === "ABOVE_15CR" && pr <= 15000000) return false;
+      }
+
+      return true;
+    });
+
+    list.sort((a, b) => {
+      if (sortBy === "DEMAND") {
+        const demA = matchingBuyersMap.get(a.property_id)?.length || 0;
+        const demB = matchingBuyersMap.get(b.property_id)?.length || 0;
+        if (demB !== demA) return demB - demA;
+        return (Number(b.price) || 0) - (Number(a.price) || 0);
+      }
+      if (sortBy === "PRICE_ASC") {
+        return (Number(a.price) || 0) - (Number(b.price) || 0);
+      }
+      if (sortBy === "PRICE_DESC") {
+        return (Number(b.price) || 0) - (Number(a.price) || 0);
+      }
+      if (sortBy === "AREA_DESC") {
+        const areaA = Number(a.area_sqft || a.carpet_area_sqft) || 0;
+        const areaB = Number(b.area_sqft || b.carpet_area_sqft) || 0;
+        return areaB - areaA;
+      }
+      if (sortBy === "NEWEST") {
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      }
+      return 0;
+    });
+
+    return list;
+  }, [properties, search, dealTypeFilter, configFilter, priceBracket, sortBy, matchingBuyersMap]);
+
+  const isFilterActive =
+    search !== "" ||
+    dealTypeFilter !== "ALL" ||
+    configFilter !== "ALL" ||
+    priceBracket !== "ALL" ||
+    sortBy !== "DEMAND";
+
+  const resetFilters = () => {
+    setSearch("");
+    setDealTypeFilter("ALL");
+    setConfigFilter("ALL");
+    setPriceBracket("ALL");
+    setSortBy("DEMAND");
+  };
 
   const { data: submissions = [] } = usePropertySubmissions();
   const pendingSubmissionsCount = submissions.filter(
@@ -356,275 +494,551 @@ export function InventoryTab({
         <OwnerSubmissionsView clientId={clientId} />
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">{properties.length} properties</p>
-        <div className="flex items-center gap-2">
-          {/* View toggle */}
-          <div className="flex rounded-lg border bg-background p-1">
-            <button
-              onClick={() => setView("grid")}
-              className={`rounded-md p-1.5 transition-colors ${view === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-              title="Grid view"
-            >
-              <LayoutGrid className="size-4" />
-            </button>
-            <button
-              onClick={() => setView("list")}
-              className={`rounded-md p-1.5 transition-colors ${view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-              title="List view"
-            >
-              <LayoutList className="size-4" />
-            </button>
+          {/* ── Top Portfolio Overview Strip ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="rounded-lg border bg-card p-3 shadow-2xs">
+              <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+                <Building2 className="size-3.5 text-primary" />
+                <span>Total Inventory</span>
+              </p>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-bold tracking-tight text-foreground">{portfolioStats.totalCount}</span>
+                <span className="text-[11px] text-muted-foreground">units</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                {formatMoney(portfolioStats.totalSaleValue)} total value
+              </p>
+            </div>
+
+            <div className="rounded-lg border bg-card p-3 shadow-2xs">
+              <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+                <span className="inline-block size-2 rounded-full bg-emerald-500" />
+                <span>For Sale</span>
+              </p>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">{portfolioStats.saleCount}</span>
+                <span className="text-[11px] text-muted-foreground">properties</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Ready for booking</p>
+            </div>
+
+            <div className="rounded-lg border bg-card p-3 shadow-2xs">
+              <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+                <span className="inline-block size-2 rounded-full bg-sky-500" />
+                <span>For Rent</span>
+              </p>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-bold tracking-tight text-sky-600 dark:text-sky-400">{portfolioStats.rentCount}</span>
+                <span className="text-[11px] text-muted-foreground">units</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Rental yield</p>
+            </div>
+
+            <div className="rounded-lg border bg-card p-3 shadow-2xs bg-amber-500/5 border-amber-500/20">
+              <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                <Flame className="size-3.5 fill-amber-500 text-amber-500" />
+                <span>Hot Buyer Demand</span>
+              </p>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-bold tracking-tight text-amber-700 dark:text-amber-300">{portfolioStats.highDemandCount}</span>
+                <span className="text-[11px] text-muted-foreground">units</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">Active buyers in CRM</p>
+            </div>
           </div>
-          <Button
-            onClick={() => {
-              setIsNew(true);
-              setEditing({ ...EMPTY });
-            }}
-          >
-            <Plus /> Add property
-          </Button>
-        </div>
-      </div>
 
-      {loading && <p className="text-sm text-muted-foreground">Loading inventory…</p>}
-
-      {/* ── Grid view ── */}
-      {view === "grid" && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {properties.map((p) => (
-            <Card key={p.property_id} className="overflow-hidden">
-              {p.image_urls && p.image_urls.length > 0 ? (
-                <img
-                  src={p.image_urls[0]}
-                  alt={p.project_name}
-                  className="h-40 w-full object-cover"
+          {/* ── Filter & Search Toolbar ── */}
+          <div className="space-y-2.5 rounded-lg border bg-card/60 p-3 shadow-2xs">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+              {/* Search Input */}
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search by project name, locality, landmarks, ID..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9 pr-8 h-9 text-xs bg-background"
                 />
-              ) : (
-                <div className="flex h-40 w-full items-center justify-center bg-muted text-muted-foreground">
-                  <ImageOff className="size-6" />
-                </div>
-              )}
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-start justify-between gap-2 text-base">
-                  <span>{p.project_name}</span>
-                  <ToneBadge
-                    tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
-                    label={p.status ?? "—"}
-                  />
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"} · {p.location}
-                  {p.city ? `, ${p.city}` : ""}
-                </p>
-                {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
-                  <p className="line-clamp-1 text-xs text-muted-foreground">
-                    📍 {p.landmarks.join(", ")}
-                  </p>
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
                 )}
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-lg font-semibold">{formatMoney(p.price)}</span>
-                  <span className="text-muted-foreground">{p.area_sqft ?? "—"} sq.ft</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Stock: {p.stock_type} · {p.possession_status || "Possession N/A"}
-                </p>
-                <div className="rounded-lg bg-muted/60 p-2 text-xs">
-                  <p className="font-medium">{p.assigned_executive_name || "No executive"}</p>
-                  <p className="text-muted-foreground">
-                    {p.assigned_executive_phone || "—"} · {p.assigned_executive_telegram_id || "—"}
-                  </p>
-                  <p className="text-muted-foreground">{p.assigned_executive_email || "—"}</p>
-                </div>
+              </div>
 
-                {/* ── 🎯 Reverse Matchmaker: Matching Buyers Pill ── */}
-                {(() => {
-                  const matchingBuyers = matchingBuyersMap.get(p.property_id) ?? [];
-                  return matchingBuyers.length > 0 ? (
-                    <Button
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                {/* Deal Type Switcher */}
+                <div className="flex rounded-md border bg-muted/40 p-0.5 text-xs shrink-0">
+                  {(["ALL", "SALE", "RENT"] as const).map((t) => (
+                    <button
+                      key={t}
                       type="button"
-                      size="sm"
-                      variant="outline"
-                      className="w-full justify-between border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 font-medium h-8 text-xs shadow-2xs"
-                      onClick={() =>
-                        setMatchingDialogProperty({ property: p, buyers: matchingBuyers })
-                      }
+                      onClick={() => setDealTypeFilter(t)}
+                      className={`px-2.5 py-1 rounded font-medium transition-colors ${
+                        dealTypeFilter === t
+                          ? "bg-background text-foreground shadow-2xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
                     >
-                      <span className="flex items-center gap-1.5">
-                        <Sparkles className="size-3.5 text-primary" />
-                        <span><b>{matchingBuyers.length}</b> Matching {matchingBuyers.length === 1 ? "Buyer" : "Buyers"}</span>
-                      </span>
-                      <span className="text-[10px] text-muted-foreground underline">View & Call</span>
-                    </Button>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground italic px-1">
-                      No matching buyers in CRM yet
-                    </p>
-                  );
-                })()}
-
-                <div className="flex flex-wrap gap-2">
-                  {p.brochure_url && (
-                    <Button asChild size="sm" variant="outline">
-                      <a href={p.brochure_url} target="_blank" rel="noreferrer">
-                        <FileText /> Brochure
-                      </a>
-                    </Button>
-                  )}
-                  {p.map_url && (
-                    <Button asChild size="sm" variant="outline">
-                      <a href={p.map_url} target="_blank" rel="noreferrer">
-                        <MapPin /> Map
-                      </a>
-                    </Button>
-                  )}
-                  <Button size="sm" variant="secondary" onClick={() => openEdit(p)}>
-                    <Pencil /> Edit
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => setDeleteId(p.property_id)}>
-                    <Trash2 /> Delete
-                  </Button>
+                      {t === "ALL" ? "All Deals" : t === "SALE" ? "For Sale" : "For Rent"}
+                    </button>
+                  ))}
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
 
-      {/* ── List view ── */}
-      {view === "list" && (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Property</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Area</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Executive</TableHead>
-                <TableHead>Matching Demand</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {properties.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                    No properties yet.
-                  </TableCell>
-                </TableRow>
-              )}
-              {properties.map((p) => (
-                <TableRow key={p.property_id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {p.image_urls && p.image_urls.length > 0 ? (
-                        <img
-                          src={p.image_urls[0]}
-                          alt={p.project_name}
-                          className="size-10 rounded-md object-cover"
-                        />
-                      ) : (
-                        <div className="flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                          <ImageOff className="size-4" />
-                        </div>
-                      )}
-                      <div>
-                        <p className="font-medium leading-tight">{p.project_name}</p>
-                        <p className="text-xs text-muted-foreground">{p.property_id}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">
-                    {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"}
-                  </TableCell>
-                  <TableCell className="text-sm">
+                {/* Sort Select */}
+                <div className="w-[180px] shrink-0">
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as never)}>
+                    <SelectTrigger className="h-9 text-xs bg-background">
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DEMAND">🔥 Highest Demand</SelectItem>
+                      <SelectItem value="PRICE_ASC">💰 Price: Low to High</SelectItem>
+                      <SelectItem value="PRICE_DESC">💎 Price: High to Low</SelectItem>
+                      <SelectItem value="AREA_DESC">📐 Area: High to Low</SelectItem>
+                      <SelectItem value="NEWEST">🕒 Recently Added</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* View Mode Toggle */}
+                <div className="flex rounded-lg border bg-background p-1 shrink-0">
+                  <button
+                    onClick={() => setView("grid")}
+                    className={`rounded-md p-1.5 transition-colors ${
+                      view === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    }`}
+                    title="Grid view"
+                  >
+                    <LayoutGrid className="size-4" />
+                  </button>
+                  <button
+                    onClick={() => setView("list")}
+                    className={`rounded-md p-1.5 transition-colors ${
+                      view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    }`}
+                    title="List view"
+                  >
+                    <LayoutList className="size-4" />
+                  </button>
+                </div>
+
+                {/* Add Property Button */}
+                <Button
+                  size="sm"
+                  className="h-9 text-xs gap-1.5 shadow-2xs shrink-0"
+                  onClick={() => {
+                    setIsNew(true);
+                    setEditing({ ...EMPTY });
+                  }}
+                >
+                  <Plus className="size-3.5" />
+                  <span>Add Property</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Quick Filter Pills Row (BHK & Price brackets) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t text-xs">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-muted-foreground font-medium mr-1">BHK:</span>
+                {[
+                  { id: "ALL", label: "All" },
+                  { id: "1BHK", label: "1 BHK" },
+                  { id: "2BHK", label: "2 BHK" },
+                  { id: "3BHK", label: "3 BHK" },
+                  { id: "4BHK+", label: "4+ BHK" },
+                  { id: "VILLA", label: "Villa" },
+                  { id: "COMMERCIAL", label: "Commercial" },
+                ].map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setConfigFilter(c.id)}
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all ${
+                      configFilter === c.id
+                        ? "bg-primary text-primary-foreground shadow-2xs"
+                        : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-muted-foreground font-medium mr-1">Price:</span>
+                {[
+                  { id: "ALL", label: "Any" },
+                  { id: "UNDER_40L", label: "< ₹40 L" },
+                  { id: "40L_75L", label: "₹40 L - ₹75 L" },
+                  { id: "75L_15CR", label: "₹75 L - ₹1.5 Cr" },
+                  { id: "ABOVE_15CR", label: "> ₹1.5 Cr" },
+                ].map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => setPriceBracket(b.id)}
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-all ${
+                      priceBracket === b.id
+                        ? "bg-emerald-600 text-white shadow-2xs"
+                        : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+
+                {isFilterActive && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="text-[11px] text-destructive hover:underline ml-1 font-medium"
+                  >
+                    Reset filters
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground px-0.5">
+            <p>
+              Showing <b>{filteredProperties.length}</b> of {properties.length} properties
+              {isFilterActive && " (filtered)"}
+            </p>
+          </div>
+
+          {loading && <p className="text-sm text-muted-foreground">Loading inventory…</p>}
+
+          {/* Empty Filter State */}
+          {!loading && filteredProperties.length === 0 && properties.length > 0 && (
+            <div className="rounded-lg border border-dashed p-8 text-center bg-card/40 space-y-2">
+              <p className="text-sm font-semibold text-foreground">No properties match your current filters</p>
+              <p className="text-xs text-muted-foreground">
+                Try adjusting your search query, configuration, or price bracket.
+              </p>
+              <Button size="sm" variant="outline" className="mt-2 text-xs" onClick={resetFilters}>
+                Clear All Filters
+              </Button>
+            </div>
+          )}
+
+          {/* ── Grid view ── */}
+          {view === "grid" && (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {filteredProperties.map((p) => {
+                const isRent =
+                  (p.listing_type || "").toUpperCase() === "RENT" ||
+                  (p.listing_type || "").toUpperCase() === "LEASE" ||
+                  (p.transaction_type || "").toUpperCase().includes("RENT");
+                const ratePerSqft = formatRatePerSqft(p.price, p.area_sqft || p.carpet_area_sqft);
+                const matchingBuyers = matchingBuyersMap.get(p.property_id) ?? [];
+
+                return (
+                  <Card
+                    key={p.property_id}
+                    className="overflow-hidden flex flex-col justify-between hover:border-primary/40 transition-colors shadow-2xs"
+                  >
                     <div>
-                      {p.location}
-                      {p.city ? `, ${p.city}` : ""}
-                    </div>
-                    {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
-                      <div className="line-clamp-1 text-xs text-muted-foreground">
-                        📍 {p.landmarks.slice(0, 2).join(", ")}
+                      <div className="relative">
+                        {p.image_urls && p.image_urls.length > 0 ? (
+                          <img
+                            src={p.image_urls[0]}
+                            alt={p.project_name}
+                            className="h-40 w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-40 w-full items-center justify-center bg-muted text-muted-foreground">
+                            <ImageOff className="size-6" />
+                          </div>
+                        )}
+                        <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm ${
+                              isRent ? "bg-sky-600 text-white" : "bg-emerald-600 text-white"
+                            }`}
+                          >
+                            {isRent ? "FOR RENT" : "FOR SALE"}
+                          </span>
+                          {p.stock_type === "PREMIUM" && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 shadow-sm">
+                              PREMIUM
+                            </span>
+                          )}
+                        </div>
+                        {ratePerSqft && (
+                          <span className="absolute top-2 right-2 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-white border border-white/20 shadow-sm">
+                            {ratePerSqft}
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap font-semibold">
-                    {formatMoney(p.price)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                    {p.area_sqft ?? "—"} sq.ft
-                  </TableCell>
-                  <TableCell>
-                    <ToneBadge
-                      tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
-                      label={p.status ?? "—"}
-                    />
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {p.assigned_executive_name || (
-                      <span className="text-muted-foreground">Unassigned</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {(() => {
-                      const matchingBuyers = matchingBuyersMap.get(p.property_id) || [];
-                      return matchingBuyers.length > 0 ? (
+
+                      <CardHeader className="pb-2">
+                        <CardTitle className="flex items-start justify-between gap-2 text-base">
+                          <span className="truncate">{p.project_name}</span>
+                          <ToneBadge
+                            tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
+                            label={p.status ?? "—"}
+                          />
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                          {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"} · {p.location}
+                          {p.city ? `, ${p.city}` : ""}
+                        </p>
+                        {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
+                          <p className="line-clamp-1 text-xs text-muted-foreground">
+                            📍 {p.landmarks.join(", ")}
+                          </p>
+                        )}
+                      </CardHeader>
+
+                      <CardContent className="space-y-3 text-sm">
+                        <div className="flex items-baseline justify-between">
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span className="text-xl font-bold tracking-tight text-foreground">
+                              {formatMoney(p.price, { isRent })}
+                            </span>
+                            {ratePerSqft && (
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                                ({ratePerSqft})
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground font-medium">
+                            {p.area_sqft ?? p.carpet_area_sqft ?? "—"} sq.ft
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-muted-foreground">
+                          Stock: {p.stock_type} · {p.possession_status || "Possession N/A"}
+                        </p>
+
+                        <div className="rounded-lg bg-muted/50 p-2 text-xs flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-foreground">{p.assigned_executive_name || "Unassigned"}</p>
+                            <p className="text-muted-foreground text-[11px]">{p.assigned_executive_phone || "No phone"}</p>
+                          </div>
+                          <span className="text-[10px] font-mono text-muted-foreground px-1.5 py-0.5 rounded bg-background border">
+                            {p.property_id}
+                          </span>
+                        </div>
+
+                        {/* ── 🎯 Reverse Matchmaker: Matching Buyers Banner ── */}
+                        {matchingBuyers.length > 0 ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="w-full justify-between bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-medium h-8 text-xs shadow-2xs"
+                            onClick={() =>
+                              setMatchingDialogProperty({ property: p, buyers: matchingBuyers })
+                            }
+                          >
+                            <span className="flex items-center gap-1.5 font-bold">
+                              <Flame className="size-3.5 fill-emerald-600 text-emerald-600 dark:fill-emerald-400 dark:text-emerald-400" />
+                              <span>{matchingBuyers.length} Matching {matchingBuyers.length === 1 ? "Buyer" : "Buyers"} Ready</span>
+                            </span>
+                            <span className="text-[11px] underline font-semibold">View Leads</span>
+                          </Button>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground italic px-1">
+                            No matching buyers in CRM yet
+                          </p>
+                        )}
+                      </CardContent>
+                    </div>
+
+                    <div className="p-6 pt-0">
+                      <div className="flex flex-wrap gap-2 pt-2 border-t">
+                        {p.brochure_url && (
+                          <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                            <a href={p.brochure_url} target="_blank" rel="noreferrer">
+                              <FileText className="size-3.5 mr-1" /> Brochure
+                            </a>
+                          </Button>
+                        )}
+                        {p.map_url && (
+                          <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                            <a href={p.map_url} target="_blank" rel="noreferrer">
+                              <MapPin className="size-3.5 mr-1" /> Map
+                            </a>
+                          </Button>
+                        )}
+                        <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={() => openEdit(p)}>
+                          <Pencil className="size-3.5 mr-1" /> Edit
+                        </Button>
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="h-7 px-2.5 border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-medium text-xs gap-1.5 shadow-2xs"
-                          onClick={() =>
-                            setMatchingDialogProperty({ property: p, buyers: matchingBuyers })
-                          }
-                          title={`View ${matchingBuyers.length} matching buyer leads`}
+                          variant="ghost"
+                          className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteId(p.property_id)}
                         >
-                          <Sparkles className="size-3 text-primary" />
-                          <span><b>{matchingBuyers.length}</b> {matchingBuyers.length === 1 ? "Buyer" : "Buyers"}</span>
+                          <Trash2 className="size-3.5" />
                         </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">None yet</span>
-                      );
-                    })()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      {p.brochure_url && (
-                        <Button asChild size="sm" variant="outline">
-                          <a href={p.brochure_url} target="_blank" rel="noreferrer">
-                            <FileText />
-                          </a>
-                        </Button>
-                      )}
-                      {p.map_url && (
-                        <Button asChild size="sm" variant="outline">
-                          <a href={p.map_url} target="_blank" rel="noreferrer">
-                            <MapPin />
-                          </a>
-                        </Button>
-                      )}
-                      <Button size="sm" variant="secondary" onClick={() => openEdit(p)}>
-                        <Pencil />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => setDeleteId(p.property_id)}
-                      >
-                        <Trash2 />
-                      </Button>
+                      </div>
                     </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── List view ── */}
+          {view === "list" && (
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Property</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Rate/Sq.ft</TableHead>
+                    <TableHead>Area</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Executive</TableHead>
+                    <TableHead>Matching Demand</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProperties.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
+                        No properties match your filter.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {filteredProperties.map((p) => {
+                    const isRent =
+                      (p.listing_type || "").toUpperCase() === "RENT" ||
+                      (p.listing_type || "").toUpperCase() === "LEASE" ||
+                      (p.transaction_type || "").toUpperCase().includes("RENT");
+                    const ratePerSqft = formatRatePerSqft(p.price, p.area_sqft || p.carpet_area_sqft);
+                    const matchingBuyers = matchingBuyersMap.get(p.property_id) || [];
+
+                    return (
+                      <TableRow key={p.property_id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {p.image_urls && p.image_urls.length > 0 ? (
+                              <img
+                                src={p.image_urls[0]}
+                                alt={p.project_name}
+                                className="size-10 rounded-md object-cover"
+                              />
+                            ) : (
+                              <div className="flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                                <ImageOff className="size-4" />
+                              </div>
+                            )}
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-medium leading-tight">{p.project_name}</p>
+                                <span
+                                  className={`text-[9px] font-bold px-1 rounded ${
+                                    isRent ? "bg-sky-500/15 text-sky-700 dark:text-sky-300" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                  }`}
+                                >
+                                  {isRent ? "RENT" : "SALE"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">{p.property_id}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div>
+                            {p.location}
+                            {p.city ? `, ${p.city}` : ""}
+                          </div>
+                          {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
+                            <div className="line-clamp-1 text-xs text-muted-foreground">
+                              📍 {p.landmarks.slice(0, 2).join(", ")}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-semibold">
+                          {formatMoney(p.price, { isRent })}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                          {ratePerSqft || "—"}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                          {p.area_sqft ?? p.carpet_area_sqft ?? "—"} sq.ft
+                        </TableCell>
+                        <TableCell>
+                          <ToneBadge
+                            tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
+                            label={p.status ?? "—"}
+                          />
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {p.assigned_executive_name || (
+                            <span className="text-muted-foreground">Unassigned</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {matchingBuyers.length > 0 ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2.5 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-medium text-xs gap-1.5 shadow-2xs"
+                              onClick={() =>
+                                setMatchingDialogProperty({ property: p, buyers: matchingBuyers })
+                              }
+                              title={`View ${matchingBuyers.length} matching buyer leads`}
+                            >
+                              <Flame className="size-3 fill-emerald-600 text-emerald-600 dark:fill-emerald-400 dark:text-emerald-400" />
+                              <span><b>{matchingBuyers.length}</b> {matchingBuyers.length === 1 ? "Buyer" : "Buyers"}</span>
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">None yet</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            {p.brochure_url && (
+                              <Button asChild size="sm" variant="outline">
+                                <a href={p.brochure_url} target="_blank" rel="noreferrer">
+                                  <FileText className="size-3.5" />
+                                </a>
+                              </Button>
+                            )}
+                            {p.map_url && (
+                              <Button asChild size="sm" variant="outline">
+                                <a href={p.map_url} target="_blank" rel="noreferrer">
+                                  <MapPin className="size-3.5" />
+                                </a>
+                              </Button>
+                            )}
+                            <Button size="sm" variant="secondary" onClick={() => openEdit(p)}>
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => setDeleteId(p.property_id)}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </>
       )}
 

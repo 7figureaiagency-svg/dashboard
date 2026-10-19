@@ -354,11 +354,37 @@ export function toNumber(value: string | number | null | undefined): number | nu
   return Number.isFinite(n) ? n : null;
 }
 
-export function formatMoney(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "—";
-  if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`;
-  if (value >= 100000) return `₹${(value / 100000).toFixed(2)} L`;
-  return `₹${value.toLocaleString("en-IN")}`;
+export function formatMoney(
+  value: number | null | undefined,
+  opts?: { isRent?: boolean }
+): string {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  const num = Number(value);
+  if (num <= 0) return "₹0";
+
+  const suffix = opts?.isRent ? " /mo" : "";
+
+  if (num >= 10000000) {
+    const cr = (num / 10000000).toFixed(2).replace(/\.?0+$/, "");
+    return `₹${cr} Cr${suffix}`;
+  }
+  if (num >= 100000) {
+    const l = (num / 100000).toFixed(2).replace(/\.?0+$/, "");
+    return `₹${l} L${suffix}`;
+  }
+  return `₹${num.toLocaleString("en-IN")}${suffix}`;
+}
+
+/** Auto-calculates and formats rate per sq.ft (e.g. ₹4,250/sq.ft) */
+export function formatRatePerSqft(
+  price: number | null | undefined,
+  areaSqft: number | null | undefined
+): string | null {
+  const p = Number(price);
+  const a = Number(areaSqft);
+  if (!p || !a || p <= 0 || a <= 0) return null;
+  const rate = Math.round(p / a);
+  return `₹${rate.toLocaleString("en-IN")}/sq.ft`;
 }
 
 export function formatDate(value: string | null | undefined): string {
@@ -562,11 +588,21 @@ export function slaTone(mins: number | null): Tone {
   return "red";
 }
 
-export const BUDGET_TIERS = [
-  { key: "luxury", label: "Luxury", hint: "Above ₹60 L", min: 6000000, max: Infinity },
-  { key: "middle", label: "Middle", hint: "₹25 L – ₹60 L", min: 2500000, max: 6000000 },
-  { key: "lower", label: "Lower", hint: "Below ₹25 L", min: 0, max: 2500000 },
+export const SALE_BUDGET_TIERS = [
+  { key: "luxury", label: "Luxury & HNW", hint: "₹1.75 Cr+", min: 17500000, max: Infinity, tone: "purple" as const },
+  { key: "premium", label: "Premium", hint: "₹90 L – ₹1.75 Cr", min: 9000000, max: 17500000, tone: "indigo" as const },
+  { key: "mid", label: "Mid-Segment", hint: "₹45 L – ₹90 L", min: 4500000, max: 9000000, tone: "blue" as const },
+  { key: "affordable", label: "Affordable", hint: "Under ₹45 L", min: 0, max: 4500000, tone: "teal" as const },
 ] as const;
+
+export const RENT_BUDGET_TIERS = [
+  { key: "luxury_rent", label: "Luxury / Commercial", hint: "₹75K+ /mo", min: 75000, max: Infinity, tone: "purple" as const },
+  { key: "premium_rent", label: "Executive Rental", hint: "₹35K – ₹75K /mo", min: 35000, max: 75000, tone: "indigo" as const },
+  { key: "mid_rent", label: "Family Rental", hint: "₹15K – ₹35K /mo", min: 15000, max: 35000, tone: "blue" as const },
+  { key: "budget_rent", label: "Budget Rental", hint: "Under ₹15K /mo", min: 0, max: 15000, tone: "teal" as const },
+] as const;
+
+export const BUDGET_TIERS = SALE_BUDGET_TIERS;
 
 /* ------------------------------------------------------------------ */
 /* Hydration — merge normalized executive_id / metadata jsonb columns  */
