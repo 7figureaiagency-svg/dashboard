@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Building2, Upload, User } from "lucide-react";
+import { Building2, Monitor, Moon, Sun, Upload, User } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useTheme } from "@/hooks/use-theme";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { uploadClientLogo, useClient } from "@/lib/crm-data";
@@ -15,6 +16,7 @@ export function ProfileTab() {
   const { data: me } = useCurrentUser();
   const { data: client } = useClient(me?.clientId);
   const qc = useQueryClient();
+  const { theme, resolvedTheme, setTheme } = useTheme();
 
   const [fullName, setFullName] = useState(me?.fullName ?? "");
   const [companyName, setCompanyName] = useState(client?.company_name ?? "");
@@ -220,6 +222,86 @@ export function ProfileTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Appearance & Theme */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Sun className="size-4 text-amber-500" /> Appearance & Theme
+          </CardTitle>
+          <CardDescription>
+            Choose your preferred dashboard interface appearance or match your system settings.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={() => setTheme("light")}
+              className={`apple-button flex items-center justify-between p-3.5 rounded-xl border text-left transition-all ${
+                theme === "light"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                  : "border-border/60 bg-card hover:bg-muted/40"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${theme === "light" ? "bg-amber-500/10 text-amber-600" : "bg-muted text-muted-foreground"}`}>
+                  <Sun className="size-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium leading-none">Light</div>
+                  <div className="text-xs text-muted-foreground mt-1">Apple HIG light canvas</div>
+                </div>
+              </div>
+              {theme === "light" && <div className="size-2 rounded-full bg-primary" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTheme("dark")}
+              className={`apple-button flex items-center justify-between p-3.5 rounded-xl border text-left transition-all ${
+                theme === "dark"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                  : "border-border/60 bg-card hover:bg-muted/40"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${theme === "dark" ? "bg-indigo-500/10 text-indigo-400" : "bg-muted text-muted-foreground"}`}>
+                  <Moon className="size-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium leading-none">Dark</div>
+                  <div className="text-xs text-muted-foreground mt-1">Deep Apple dark space</div>
+                </div>
+              </div>
+              {theme === "dark" && <div className="size-2 rounded-full bg-primary" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTheme("system")}
+              className={`apple-button flex items-center justify-between p-3.5 rounded-xl border text-left transition-all ${
+                theme === "system"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                  : "border-border/60 bg-card hover:bg-muted/40"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${theme === "system" ? "bg-blue-500/10 text-blue-500" : "bg-muted text-muted-foreground"}`}>
+                  <Monitor className="size-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium leading-none">System</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Auto ({resolvedTheme === "dark" ? "Dark" : "Light"})
+                  </div>
+                </div>
+              </div>
+              {theme === "system" && <div className="size-2 rounded-full bg-primary" />}
+            </button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex justify-end">
         <Button onClick={save} disabled={busy}>

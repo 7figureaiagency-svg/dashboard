@@ -19,6 +19,7 @@ import { IntegrationsTab } from "@/components/crm/integrations-tab";
 import { LeadsTab } from "@/components/crm/leads-tab";
 import { PerformanceTab } from "@/components/crm/performance-tab";
 import { ProfileTab } from "@/components/crm/profile-tab";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { WhatsAppConnectCard } from "@/components/crm/whatsapp-connect";
 import { useClient, useExecutives, useInventory, useLeads } from "@/lib/crm-data";
 import { useCurrentUser, useSignOut } from "@/lib/auth";
@@ -151,6 +152,7 @@ function Dashboard() {
                 </button>
               ))}
             </div>
+            <ThemeToggle />
             <Button
               variant="outline"
               size="icon"
