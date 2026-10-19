@@ -135,15 +135,15 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
             Monitor sales executive response times, active deal values, and physical site visit completions.
           </p>
         </div>
-        <div className="flex rounded-lg border bg-background p-1">
+        <div className="flex items-center rounded-xl border border-border/30 bg-muted/60 p-1 shadow-2xs backdrop-blur-xs">
           {PERIODS.map((p) => (
             <button
               key={p.key}
               onClick={() => setPeriod(p.key)}
-              className={`rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors ${
+              className={`apple-button rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                 period === p.key
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted"
+                  ? "bg-card text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {p.label}
@@ -152,25 +152,28 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
         </div>
       </div>
 
-      {/* ── 4 Realtor Business KPI Cards ── */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* ── 4 Realtor Business KPI Cards (Apple Complication Widgets) ── */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
           icon={<TrendingUp className="size-5" />}
           label="Active Deal Pipeline"
           value={formatMoney(summary.totalPipelineValue)}
           subtext={`${periodLeads.length} active leads in period`}
+          variant="blue"
         />
         <Kpi
           icon={<CalendarCheck className="size-5" />}
           label="Site Visits Completed"
           value={summary.totalVisitsDone}
           subtext={`${summary.teamShowupRate}% Show-up (${summary.totalVisitsBooked} booked)`}
+          variant="green"
         />
         <Kpi
           icon={<Zap className="size-5" />}
           label="Speed-to-Call (<15m SLA)"
           value={summary.teamSlaCompliance !== null ? `${summary.teamSlaCompliance}%` : "—"}
           subtext={`Avg: ${summary.teamAvgSla !== null ? formatMinutes(summary.teamAvgSla) : "No alerts"} response`}
+          variant="amber"
         />
         <Kpi
           icon={<AlertTriangle className="size-5" />}
@@ -183,36 +186,36 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
 
       {/* ── ⚠️ Revenue-at-Risk Alert Banner (Overdue Leads) ── */}
       {summary.unattendedAlerts > 0 && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-950 dark:text-rose-100 shadow-2xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="rounded-lg bg-rose-500/20 p-2 text-rose-600 dark:text-rose-400 shrink-0">
+        <div className="rounded-2xl border border-rose-500/25 bg-rose-500/5 p-4.5 text-rose-950 dark:text-rose-100 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+            <div className="flex items-start gap-3.5">
+              <div className="size-10 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
                 <AlertTriangle className="size-5" />
               </div>
               <div>
-                <h4 className="font-bold text-sm">
+                <h4 className="font-bold text-sm tracking-tight">
                   ⚠️ {summary.unattendedAlerts} High-Intent Lead{summary.unattendedAlerts > 1 ? "s" : ""} Overdue for Call (&gt;30 mins)!
                 </h4>
-                <p className="text-xs opacity-90 mt-0.5">
-                  These clients requested a VIP site visit or executive phone call more than 30 minutes ago. In real estate, buyers reach out to 2-3 brokers simultaneously — delay causes direct deal loss.
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  These clients requested a VIP site visit or executive phone call more than 30 minutes ago. In real estate, buyers reach out to multiple brokers simultaneously — delay causes direct deal loss.
                 </p>
-                <div className="mt-2.5 flex flex-wrap gap-2 text-xs">
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
                   {summary.overdueLeads.slice(0, 4).map((l) => (
                     <div
                       key={l.id}
-                      className="flex items-center gap-1.5 rounded-md border border-rose-500/20 bg-background/80 px-2 py-1 text-foreground"
+                      className="flex items-center gap-1.5 rounded-xl border border-rose-500/20 bg-background/90 px-2.5 py-1 text-foreground shadow-2xs"
                     >
                       <span className="font-semibold">{l.name || l.first_name || "Lead"}</span>
-                      <span className="text-muted-foreground text-[11px]">
+                      <span className="text-muted-foreground text-[11px] tabular-nums">
                         ({l.property_type || "Property"} · {formatMoney(l.budget)})
                       </span>
-                      <span className="rounded bg-rose-500/10 px-1 text-[10px] text-rose-600 dark:text-rose-400 font-medium">
+                      <span className="rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] text-rose-600 dark:text-rose-400 font-medium">
                         Assigned: {l.assigned_executive_name || "Unassigned"}
                       </span>
                     </div>
                   ))}
                   {summary.overdueLeads.length > 4 && (
-                    <span className="text-xs text-muted-foreground self-center">
+                    <span className="text-xs text-muted-foreground self-center tabular-nums">
                       +{summary.overdueLeads.length - 4} more leads
                     </span>
                   )}
@@ -223,37 +226,37 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
         </div>
       )}
 
-      {/* ── 🏆 Top Performer Spotlight Podium ── */}
+      {/* ── 🏆 Top Performer Spotlight Podium (Apple Highlight Cards) ── */}
       {(topCloser || speedChamp || bestShowup) && (
         <div className="grid gap-3 sm:grid-cols-3">
           {topCloser && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex items-center gap-3">
-              <div className="rounded-lg bg-amber-500/20 p-2.5 text-amber-600 dark:text-amber-400 shrink-0">
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 shadow-xs apple-button transition-all flex items-center gap-3.5 hover:bg-amber-500/15">
+              <div className="size-10 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                 <Trophy className="size-5" />
               </div>
               <div className="min-w-0">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 block">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 block">
                   🏆 Top Closer
                 </span>
-                <p className="font-bold text-sm text-foreground truncate">{topCloser.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  <b>{topCloser.visitsDone}</b> Visits Completed ({formatMoney(topCloser.pipelineValue)} Pipeline)
+                <p className="font-bold text-sm text-foreground truncate mt-0.5">{topCloser.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                  <b>{topCloser.visitsDone}</b> Visits Done · {formatMoney(topCloser.pipelineValue)} Pipeline
                 </p>
               </div>
             </div>
           )}
 
           {speedChamp && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 flex items-center gap-3">
-              <div className="rounded-lg bg-emerald-500/20 p-2.5 text-emerald-600 dark:text-emerald-400 shrink-0">
+            <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 shadow-xs apple-button transition-all flex items-center gap-3.5 hover:bg-emerald-500/15">
+              <div className="size-10 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                 <Zap className="size-5" />
               </div>
               <div className="min-w-0">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 block">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 block">
                   ⚡ Speed Champion
                 </span>
-                <p className="font-bold text-sm text-foreground truncate">{speedChamp.name}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="font-bold text-sm text-foreground truncate mt-0.5">{speedChamp.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
                   <b>{formatMinutes(speedChamp.avgSla)}</b> Avg Response ({speedChamp.slaComplianceRate ?? 100}% on-time)
                 </p>
               </div>
@@ -261,16 +264,16 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
           )}
 
           {bestShowup && (
-            <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3.5 flex items-center gap-3">
-              <div className="rounded-lg bg-blue-500/20 p-2.5 text-blue-600 dark:text-blue-400 shrink-0">
+            <div className="rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 shadow-xs apple-button transition-all flex items-center gap-3.5 hover:bg-blue-500/15">
+              <div className="size-10 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                 <Target className="size-5" />
               </div>
               <div className="min-w-0">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300 block">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300 block">
                   🎯 Best Show-Up Rate
                 </span>
-                <p className="font-bold text-sm text-foreground truncate">{bestShowup.name}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="font-bold text-sm text-foreground truncate mt-0.5">{bestShowup.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
                   <b>{bestShowup.visitShowupRate}%</b> Show-Up ({bestShowup.visitsDone}/{bestShowup.visitsBooked} Visits)
                 </p>
               </div>
@@ -279,16 +282,16 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
         </div>
       )}
 
-      {/* ── Executive Scorecard Card ── */}
-      <Card className="overflow-hidden">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      {/* ── Executive Scorecard (Apple Inset-Grouped Table) ── */}
+      <div className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-xs">
+        <div className="flex flex-col gap-3 p-4 sm:p-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between border-b border-border/40">
           <div>
-            <CardTitle className="text-base">Sales Executive Scorecard</CardTitle>
-            <CardDescription className="text-xs">
+            <h3 className="text-base font-bold tracking-tight text-foreground">Sales Executive Scorecard</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Ranked by deal volume, visit completions, and client response speeds.
-            </CardDescription>
+            </p>
           </div>
-          <div className="flex flex-wrap gap-1 text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/30">
             {(
               [
                 ["visitsDone", "Visits Done"],
@@ -302,42 +305,42 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
               <button
                 key={key}
                 onClick={() => setSort(key)}
-                className={`rounded-md border px-2.5 py-1 font-medium transition-colors ${
+                className={`apple-button rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
                   sort === key
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted"
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {label}
               </button>
             ))}
           </div>
-        </CardHeader>
-        <CardContent className="px-0 sm:px-6">
+        </div>
+        <div className="p-0">
           {/* ── 📱 Mobile Executive Scorecard (Phones < 768px) ── */}
-          <div className="space-y-3 px-4 md:hidden">
+          <div className="space-y-3 p-4 md:hidden">
             {board.length === 0 && (
-              <div className="rounded-xl border border-dashed border-border/80 p-8 text-center text-xs text-muted-foreground">
+              <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center text-xs text-muted-foreground">
                 No executive data yet.
               </div>
             )}
             {board.map((row) => (
               <div
                 key={`m-exec-${row.name}`}
-                className="rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs space-y-3"
+                className="rounded-2xl border border-border/50 bg-card p-4 shadow-xs space-y-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <h4 className="font-bold text-sm text-foreground">{row.name}</h4>
                       {row.isTopCloser && (
-                        <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                          🏆 Top Closer
+                        <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          🏆 Closer
                         </span>
                       )}
                       {row.isSpeedChampion && (
-                        <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                          ⚡ Speed Star
+                        <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          ⚡ Speed
                         </span>
                       )}
                     </div>
@@ -346,7 +349,7 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                     </p>
                   </div>
                   <button
-                    className="rounded-lg border border-border/80 px-2.5 py-1 text-xs font-semibold hover:bg-muted shrink-0"
+                    className="apple-button min-h-[44px] h-11 px-4 rounded-xl border border-border/60 bg-muted/30 text-xs font-semibold hover:bg-muted text-foreground shrink-0 shadow-2xs"
                     onClick={() => setProfile(row.name)}
                   >
                     Profile
@@ -369,7 +372,7 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-2.5 rounded-lg border border-border/50">
+                <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-3 rounded-xl border border-border/40">
                   <div>
                     <span className="text-[11px] text-muted-foreground block">Active Pipeline</span>
                     <span className="font-bold text-foreground text-sm tabular-nums">
@@ -401,46 +404,46 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
           <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Executive</TableHead>
-                  <TableHead>Active Pipeline</TableHead>
-                  <TableHead>Site Visits (Done/Booked)</TableHead>
-                  <TableHead>Speed to Call (SLA)</TableHead>
-                  <TableHead>Conversion</TableHead>
-                  <TableHead>Client Mix</TableHead>
-                  <TableHead>Last Active</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
+                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Executive</TableHead>
+                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Active Pipeline</TableHead>
+                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Site Visits (Done/Booked)</TableHead>
+                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Speed to Call (SLA)</TableHead>
+                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Conversion</TableHead>
+                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Client Mix</TableHead>
+                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Last Active</TableHead>
+                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3 text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {board.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="py-12 text-center text-muted-foreground text-xs">
                       No executive data yet.
                     </TableCell>
                   </TableRow>
                 )}
                 {board.map((row) => (
                   <Fragment key={row.name}>
-                    <TableRow>
-                      <TableCell>
+                    <TableRow className="border-b border-border/30 hover:bg-muted/35 transition-colors">
+                      <TableCell className="py-3.5">
                         <button
-                          className="flex items-center gap-1.5 font-semibold text-foreground hover:underline"
+                          className="flex items-center gap-1.5 font-semibold text-foreground hover:text-primary transition-colors"
                           onClick={() => setExpanded((e) => (e === row.name ? null : row.name))}
                         >
                           {expanded === row.name ? (
-                            <ChevronDown className="size-4" />
+                            <ChevronDown className="size-4 text-muted-foreground" />
                           ) : (
-                            <ChevronRight className="size-4" />
+                            <ChevronRight className="size-4 text-muted-foreground" />
                           )}
                           <span>{row.name}</span>
                           {row.isTopCloser && (
-                            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                            <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/20">
                               🏆 Closer
                             </span>
                           )}
                           {row.isSpeedChampion && (
-                            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                               ⚡ Fast
                             </span>
                           )}
@@ -462,13 +465,13 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <span className="font-bold text-foreground text-sm">
+                      <TableCell className="py-3.5">
+                        <span className="font-bold text-foreground text-sm tabular-nums">
                           {formatMoney(row.pipelineValue)}
                         </span>
-                        <p className="text-[11px] text-muted-foreground">{row.assigned} leads total</p>
+                        <p className="text-[11px] text-muted-foreground tabular-nums">{row.assigned} leads total</p>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3.5">
                         <div className="space-y-1">
                           <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm tabular-nums">
                             {row.visitsDone} <span className="text-xs text-muted-foreground font-normal">/ {row.visitsBooked}</span>
@@ -481,39 +484,39 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3.5">
                         <div className="space-y-1">
                           <ToneBadge
                             tone={slaTone(row.avgSla)}
                             label={row.avgSla === null ? "No alerts" : `⚡ ${formatMinutes(row.avgSla)}`}
                           />
-                          <p className="text-[11px] text-muted-foreground">
+                          <p className="text-[11px] text-muted-foreground tabular-nums">
                             {row.fast} fast · {row.ok} ok · {row.slow} slow
                           </p>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3.5">
                         <span className="font-semibold text-sm tabular-nums">{row.conversion}%</span>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="text-xs text-muted-foreground py-3.5">
                         {row.luxuryLeads > 0 && (
-                          <span className="text-purple-600 dark:text-purple-400 font-medium">
+                          <span className="text-purple-600 dark:text-purple-400 font-medium tabular-nums">
                             {row.luxuryLeads} Luxury ·{" "}
                           </span>
                         )}
                         {row.premiumLeads > 0 && (
-                          <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+                          <span className="text-indigo-600 dark:text-indigo-400 font-medium tabular-nums">
                             {row.premiumLeads} Prem ·{" "}
                           </span>
                         )}
-                        <span>{row.assigned} Active</span>
+                        <span className="tabular-nums">{row.assigned} Active</span>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground py-3.5">
                         {timeAgo(row.lastActiveAt)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right py-3.5">
                         <button
-                          className="rounded-md border px-2.5 py-1 text-xs font-semibold hover:bg-muted"
+                          className="apple-button rounded-lg border border-border/60 px-3 py-1.5 text-xs font-semibold hover:bg-muted shadow-2xs"
                           onClick={() => setProfile(row.name)}
                         >
                           View profile
@@ -521,10 +524,10 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                       </TableCell>
                     </TableRow>
                     {expanded === row.name && (
-                      <TableRow className="bg-muted/40">
-                        <TableCell colSpan={8}>
+                      <TableRow className="bg-muted/30 border-b border-border/30">
+                        <TableCell colSpan={8} className="p-4">
                           {row.recent.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               No recorded actions in this period.
                             </p>
                           ) : (
@@ -532,19 +535,19 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                               {row.recent.map((a) => (
                                 <li
                                   key={a.id}
-                                  className="flex flex-wrap items-center gap-2 text-sm"
+                                  className="flex flex-wrap items-center gap-2 text-xs"
                                 >
                                   <ToneBadge
                                     tone={ACTION_LABELS[a.action]?.tone ?? "gray"}
                                     label={actionLabel(a.action)}
                                   />
-                                  <span className="font-medium">{a.lead_name || a.lead_id}</span>
+                                  <span className="font-medium text-foreground">{a.lead_name || a.lead_id}</span>
                                   {a.field && (
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="text-muted-foreground">
                                       {a.field}: {a.old_value ?? "empty"} → {a.new_value ?? "empty"}
                                     </span>
                                   )}
-                                  <span className="text-xs text-muted-foreground">
+                                  <span className="text-muted-foreground/75 tabular-nums ml-auto">
                                     {timeAgo(a.created_at)}
                                   </span>
                                 </li>
@@ -559,68 +562,68 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* ── Daily Activity & Feed ── */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Daily Team Touchpoints</CardTitle>
-            <CardDescription className="text-xs">
+        <div className="rounded-2xl border border-border/50 bg-card p-5 shadow-xs">
+          <div className="mb-4">
+            <h3 className="text-base font-bold tracking-tight text-foreground">Daily Team Touchpoints</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Client calls, WhatsApp updates, and status adjustments per day.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex h-40 items-end gap-1">
+            </p>
+          </div>
+          <div>
+            <div className="flex h-40 items-end gap-1.5 pt-2">
               {chart.map((c) => (
                 <div key={c.day} className="flex flex-1 flex-col items-center gap-1">
                   <div
-                    className="w-full rounded-t bg-primary/80"
+                    className="w-full rounded-t-sm bg-primary/80 hover:bg-primary transition-colors cursor-pointer"
                     style={{ height: `${(c.count / maxDay) * 100}%`, minHeight: c.count ? 4 : 1 }}
                     title={`${c.label}: ${c.count} actions`}
                   />
                 </div>
               ))}
             </div>
-            <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+            <div className="mt-3 flex justify-between text-[11px] text-muted-foreground tabular-nums">
               <span>{chart[0]?.label}</span>
               <span>{chart[chart.length - 1]?.label}</span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Live Activity Feed</CardTitle>
-            <CardDescription className="text-xs">
+        <div className="rounded-2xl border border-border/50 bg-card p-5 shadow-xs flex flex-col">
+          <div className="mb-3">
+            <h3 className="text-base font-bold tracking-tight text-foreground">Live Activity Feed</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Real-time executive actions and milestone updates.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
+            </p>
+          </div>
+          <div className="space-y-2.5 flex-1 max-h-[220px] overflow-y-auto pr-1">
             {feed.length === 0 && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground py-8 text-center">
                 No actions recorded yet. Every executive action appears here.
               </p>
             )}
             {feed.map((a) => (
               <div
                 key={a.id}
-                className="flex flex-wrap items-center gap-2 border-b pb-2 text-sm last:border-0"
+                className="flex flex-wrap items-center gap-2 border-b border-border/30 pb-2 text-xs last:border-0"
               >
                 <span className="font-semibold text-foreground">{a.executive_name || "Unassigned"}</span>
                 <ToneBadge
                   tone={ACTION_LABELS[a.action]?.tone ?? "gray"}
                   label={actionLabel(a.action)}
                 />
-                <span className="text-muted-foreground">{a.lead_name || a.lead_id}</span>
-                <span className="ml-auto text-xs text-muted-foreground">
+                <span className="text-muted-foreground truncate max-w-[160px]">{a.lead_name || a.lead_id}</span>
+                <span className="ml-auto text-[11px] text-muted-foreground/75 tabular-nums">
                   {timeAgo(a.created_at)}
                 </span>
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       <ExecutiveDrawer
@@ -641,36 +644,48 @@ function Kpi({
   label,
   value,
   subtext,
+  variant = "blue",
   danger,
 }: {
   icon: React.ReactNode;
   label: string;
   value: React.ReactNode;
   subtext?: string;
+  variant?: "blue" | "green" | "amber" | "rose";
   danger?: boolean;
 }) {
+  const iconTheme = {
+    blue: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+    green: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+    amber: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+    rose: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+  }[danger ? "rose" : variant];
+
   return (
-    <Card className="shadow-xs transition-shadow hover:shadow-sm">
-      <CardContent className="flex items-start gap-4 pt-6">
-        <div
-          className={`rounded-xl p-3 shrink-0 ${
-            danger ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "bg-primary/10 text-primary"
-          }`}
-        >
+    <div
+      className={`rounded-2xl border p-4.5 shadow-xs transition-all hover:bg-muted/30 ${
+        danger
+          ? "border-rose-500/30 bg-rose-500/5 ring-1 ring-rose-500/20"
+          : "border-border/50 bg-card"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className={`size-10 items-center justify-center rounded-full flex shrink-0 ${iconTheme}`}>
           {icon}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-muted-foreground">{label}</p>
-          <p
-            className="text-2xl font-bold tracking-tight text-foreground"
-            style={danger ? { color: "var(--tone-red, #e11d48)" } : undefined}
-          >
-            {value}
-          </p>
-          {subtext && <p className="mt-1 text-[11px] text-muted-foreground truncate">{subtext}</p>}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+      <p
+        className={`mt-3.5 text-2xl sm:text-3xl font-bold tracking-tight tabular-nums ${
+          danger ? "text-rose-600 dark:text-rose-400" : "text-foreground"
+        }`}
+      >
+        {value}
+      </p>
+      <div className="mt-1">
+        <span className="text-xs font-semibold text-foreground">{label}</span>
+        {subtext && <p className="text-[11px] text-muted-foreground mt-0.5 truncate tabular-nums">{subtext}</p>}
+      </div>
+    </div>
   );
 }
 
@@ -758,30 +773,30 @@ function TeamManager({ clientId }: { clientId: string | null }) {
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+    <div className="rounded-2xl border border-border/50 bg-card p-5 shadow-xs">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between mb-4">
         <div className="flex-1">
-          <CardTitle className="text-base">Sales Team & Access Management</CardTitle>
-          <CardDescription className="text-xs">
+          <h3 className="text-base font-bold tracking-tight text-foreground">Sales Team & Access Management</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Add team executives and managers. Account binding occurs automatically when signing in with the designated email.
-          </CardDescription>
+          </p>
         </div>
-        <Button size="sm" onClick={() => setOpen(true)} className="w-full sm:w-auto">
-          <Plus /> Add team member
+        <Button size="sm" onClick={() => setOpen(true)} className="apple-button rounded-xl h-10 px-4 text-xs font-semibold shadow-2xs w-full sm:w-auto">
+          <Plus className="size-4" /> Add team member
         </Button>
-      </CardHeader>
-      <CardContent className="space-y-2">
+      </div>
+      <div className="space-y-2.5">
         {executives.length === 0 && (
-          <p className="text-sm text-muted-foreground">No executives added yet.</p>
+          <p className="text-xs text-muted-foreground py-4 text-center">No executives added yet.</p>
         )}
         {executives.map((ex) => (
           <div
             key={ex.id}
-            className="flex flex-col gap-2 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-2 rounded-xl border border-border/40 bg-card p-3 sm:flex-row sm:items-center sm:justify-between shadow-2xs hover:bg-muted/20 transition-all"
           >
             <div className="min-w-0">
-              <p className="font-semibold text-sm">{ex.name}</p>
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="font-semibold text-sm text-foreground">{ex.name}</p>
+              <p className="truncate text-xs text-muted-foreground mt-0.5">
                 {ex.email || "—"} · {ex.phone || "—"}
               </p>
             </div>
@@ -797,7 +812,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
               <Button
                 size="sm"
                 variant="ghost"
-                className="size-8 p-0"
+                className="apple-button size-8.5 rounded-lg p-0 text-muted-foreground hover:text-foreground"
                 onClick={() => openEdit(ex)}
                 title="Edit member"
               >
@@ -806,7 +821,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
               <Button
                 size="sm"
                 variant="ghost"
-                className="size-8 p-0 text-destructive hover:text-destructive"
+                className="apple-button size-8.5 rounded-lg p-0 text-destructive hover:text-destructive"
                 onClick={() => setDeleteId(ex.id)}
                 title="Remove member"
               >
@@ -815,7 +830,7 @@ function TeamManager({ clientId }: { clientId: string | null }) {
             </div>
           </div>
         ))}
-      </CardContent>
+      </div>
 
       {/* Add dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
@@ -959,6 +974,6 @@ function TeamManager({ clientId }: { clientId: string | null }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </div>
   );
 }

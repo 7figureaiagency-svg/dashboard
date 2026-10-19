@@ -450,39 +450,33 @@ export function InventoryTab({
   return (
     <div className="space-y-4">
       {/* Sub-tab segment toggle */}
-      <div className="flex items-center justify-between border-b pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between border-b border-border/40 pb-3">
+        <div className="flex items-center rounded-xl border border-border/30 bg-muted/60 p-1 shadow-2xs backdrop-blur-xs">
           <button
             type="button"
             onClick={() => setActiveTab("inventory")}
-            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`apple-button flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
               activeTab === "inventory"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Building2 className="size-4" />
+            <Building2 className="size-3.5" />
             <span>Live Inventory ({properties.length})</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("submissions")}
-            className={`relative flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`apple-button relative flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
               activeTab === "submissions"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <User className="size-4" />
+            <User className="size-3.5" />
             <span>Owner Submissions ({submissions.length})</span>
             {pendingSubmissionsCount > 0 && (
-              <span
-                className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
-                  activeTab === "submissions"
-                    ? "bg-amber-400 text-slate-950 font-bold"
-                    : "bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold"
-                }`}
-              >
+              <span className="inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
                 {pendingSubmissionsCount} new
               </span>
             )}
@@ -494,71 +488,83 @@ export function InventoryTab({
         <OwnerSubmissionsView clientId={clientId} />
       ) : (
         <>
-          {/* ── Top Portfolio Overview Strip ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="rounded-lg border bg-card p-3 shadow-2xs">
-              <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                <Building2 className="size-3.5 text-primary" />
-                <span>Total Inventory</span>
-              </p>
-              <div className="mt-1 flex items-baseline gap-1.5">
-                <span className="text-xl font-bold tracking-tight text-foreground">{portfolioStats.totalCount}</span>
-                <span className="text-[11px] text-muted-foreground">units</span>
+          {/* ── Top Portfolio Overview Strip (Apple Complication Widgets) ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-2xl border border-border/50 bg-card p-4.5 shadow-xs transition-all hover:bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="size-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Building2 className="size-4" />
+                </div>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                {formatMoney(portfolioStats.totalSaleValue)} total value
+              <p className="mt-3 text-2xl font-bold tracking-tight text-foreground tabular-nums">
+                {portfolioStats.totalCount} <span className="text-xs font-normal text-muted-foreground">units</span>
               </p>
+              <div className="mt-1">
+                <span className="text-xs font-semibold text-foreground">Total Inventory</span>
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate tabular-nums">
+                  {formatMoney(portfolioStats.totalSaleValue)} total value
+                </p>
+              </div>
             </div>
 
-            <div className="rounded-lg border bg-card p-3 shadow-2xs">
-              <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                <span className="inline-block size-2 rounded-full bg-emerald-500" />
-                <span>For Sale</span>
-              </p>
-              <div className="mt-1 flex items-baseline gap-1.5">
-                <span className="text-xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">{portfolioStats.saleCount}</span>
-                <span className="text-[11px] text-muted-foreground">properties</span>
+            <div className="rounded-2xl border border-border/50 bg-card p-4.5 shadow-xs transition-all hover:bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="size-9 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <span className="inline-block size-2.5 rounded-full bg-emerald-500" />
+                </div>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Ready for booking</p>
+              <p className="mt-3 text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400 tabular-nums">
+                {portfolioStats.saleCount} <span className="text-xs font-normal text-muted-foreground">units</span>
+              </p>
+              <div className="mt-1">
+                <span className="text-xs font-semibold text-foreground">For Sale</span>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Ready for booking</p>
+              </div>
             </div>
 
-            <div className="rounded-lg border bg-card p-3 shadow-2xs">
-              <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                <span className="inline-block size-2 rounded-full bg-sky-500" />
-                <span>For Rent</span>
-              </p>
-              <div className="mt-1 flex items-baseline gap-1.5">
-                <span className="text-xl font-bold tracking-tight text-sky-600 dark:text-sky-400">{portfolioStats.rentCount}</span>
-                <span className="text-[11px] text-muted-foreground">units</span>
+            <div className="rounded-2xl border border-border/50 bg-card p-4.5 shadow-xs transition-all hover:bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="size-9 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                  <span className="inline-block size-2.5 rounded-full bg-sky-500" />
+                </div>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Rental yield</p>
+              <p className="mt-3 text-2xl font-bold tracking-tight text-sky-600 dark:text-sky-400 tabular-nums">
+                {portfolioStats.rentCount} <span className="text-xs font-normal text-muted-foreground">units</span>
+              </p>
+              <div className="mt-1">
+                <span className="text-xs font-semibold text-foreground">For Rent</span>
+                <p className="text-[11px] text-muted-foreground mt-0.5">High rental yield</p>
+              </div>
             </div>
 
-            <div className="rounded-lg border bg-card p-3 shadow-2xs bg-amber-500/5 border-amber-500/20">
-              <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                <Flame className="size-3.5 fill-amber-500 text-amber-500" />
-                <span>Hot Buyer Demand</span>
-              </p>
-              <div className="mt-1 flex items-baseline gap-1.5">
-                <span className="text-xl font-bold tracking-tight text-amber-700 dark:text-amber-300">{portfolioStats.highDemandCount}</span>
-                <span className="text-[11px] text-muted-foreground">units</span>
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4.5 shadow-xs transition-all hover:bg-amber-500/10">
+              <div className="flex items-center justify-between">
+                <div className="size-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Flame className="size-4 fill-amber-500 text-amber-500" />
+                </div>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">Active buyers in CRM</p>
+              <p className="mt-3 text-2xl font-bold tracking-tight text-amber-700 dark:text-amber-300 tabular-nums">
+                {portfolioStats.highDemandCount} <span className="text-xs font-normal text-muted-foreground">units</span>
+              </p>
+              <div className="mt-1">
+                <span className="text-xs font-semibold text-foreground">Hot Buyer Demand</span>
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">Active CRM buyers ready</p>
+              </div>
             </div>
           </div>
 
-          {/* ── Filter & Search Toolbar ── */}
-          <div className="space-y-2.5 rounded-lg border bg-card/60 p-3 shadow-2xs">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          {/* ── Filter & Search Toolbar (Apple HIG Grouped Panel) ── */}
+          <div className="space-y-3 rounded-2xl border border-border/50 bg-card p-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
               {/* Search Input */}
               <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
                 <Input
                   type="text"
                   placeholder="Search by project name, locality, landmarks, ID..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 pr-8 h-9 text-xs bg-background"
+                  className="pl-9 pr-8 h-9 text-xs rounded-xl bg-muted/40 border-border/40 focus:bg-background transition-colors"
                 />
                 {search && (
                   <button
@@ -573,15 +579,15 @@ export function InventoryTab({
 
               <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                 {/* Deal Type Switcher */}
-                <div className="flex rounded-md border bg-muted/40 p-0.5 text-xs shrink-0">
+                <div className="flex items-center rounded-xl border border-border/30 bg-muted/60 p-1 text-xs shrink-0">
                   {(["ALL", "SALE", "RENT"] as const).map((t) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setDealTypeFilter(t)}
-                      className={`px-2.5 py-1 rounded font-medium transition-colors ${
+                      className={`apple-button px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                         dealTypeFilter === t
-                          ? "bg-background text-foreground shadow-2xs"
+                          ? "bg-card text-foreground shadow-xs"
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
@@ -593,7 +599,7 @@ export function InventoryTab({
                 {/* Sort Select */}
                 <div className="w-[180px] shrink-0">
                   <Select value={sortBy} onValueChange={(v) => setSortBy(v as never)}>
-                    <SelectTrigger className="h-9 text-xs bg-background">
+                    <SelectTrigger className="h-9 text-xs rounded-xl border-border/40 bg-muted/40 hover:bg-muted/60">
                       <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
                     <SelectContent>
@@ -607,11 +613,11 @@ export function InventoryTab({
                 </div>
 
                 {/* View Mode Toggle */}
-                <div className="flex rounded-lg border bg-background p-1 shrink-0">
+                <div className="flex items-center rounded-xl border border-border/30 bg-muted/60 p-1 shrink-0">
                   <button
                     onClick={() => setView("grid")}
-                    className={`rounded-md p-1.5 transition-colors ${
-                      view === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    className={`apple-button rounded-lg p-1.5 transition-all ${
+                      view === "grid" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
                     }`}
                     title="Grid view"
                   >
@@ -619,8 +625,8 @@ export function InventoryTab({
                   </button>
                   <button
                     onClick={() => setView("list")}
-                    className={`rounded-md p-1.5 transition-colors ${
-                      view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                    className={`apple-button rounded-lg p-1.5 transition-all ${
+                      view === "list" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
                     }`}
                     title="List view"
                   >
@@ -631,7 +637,7 @@ export function InventoryTab({
                 {/* Add Property Button */}
                 <Button
                   size="sm"
-                  className="h-9 text-xs gap-1.5 shadow-2xs shrink-0"
+                  className="apple-button h-9 rounded-xl px-3.5 text-xs font-semibold gap-1.5 shadow-2xs shrink-0"
                   onClick={() => {
                     setIsNew(true);
                     setEditing({ ...EMPTY });
@@ -741,9 +747,9 @@ export function InventoryTab({
                 const matchingBuyers = matchingBuyersMap.get(p.property_id) ?? [];
 
                 return (
-                  <Card
+                  <div
                     key={p.property_id}
-                    className="overflow-hidden flex flex-col justify-between hover:border-primary/40 transition-colors shadow-2xs"
+                    className="rounded-2xl border border-border/50 bg-card overflow-hidden flex flex-col justify-between hover:border-primary/40 transition-all shadow-xs"
                   >
                     <div>
                       <div className="relative">
@@ -751,80 +757,80 @@ export function InventoryTab({
                           <img
                             src={p.image_urls[0]}
                             alt={p.project_name}
-                            className="h-40 w-full object-cover"
+                            className="h-44 w-full object-cover"
                           />
                         ) : (
-                          <div className="flex h-40 w-full items-center justify-center bg-muted text-muted-foreground">
+                          <div className="flex h-44 w-full items-center justify-center bg-muted/60 text-muted-foreground">
                             <ImageOff className="size-6" />
                           </div>
                         )}
-                        <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
+                        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm ${
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-xs ${
                               isRent ? "bg-sky-600 text-white" : "bg-emerald-600 text-white"
                             }`}
                           >
                             {isRent ? "FOR RENT" : "FOR SALE"}
                           </span>
                           {p.stock_type === "PREMIUM" && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 shadow-sm">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow-xs">
                               PREMIUM
                             </span>
                           )}
                         </div>
                         {ratePerSqft && (
-                          <span className="absolute top-2 right-2 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-white border border-white/20 shadow-sm">
+                          <span className="absolute top-2.5 right-2.5 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-black/75 backdrop-blur-xs text-white border border-white/20 shadow-xs">
                             {ratePerSqft}
                           </span>
                         )}
                       </div>
 
-                      <CardHeader className="pb-2">
-                        <CardTitle className="flex items-start justify-between gap-2 text-base">
-                          <span className="truncate">{p.project_name}</span>
-                          <ToneBadge
-                            tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
-                            label={p.status ?? "—"}
-                          />
-                        </CardTitle>
-                        <p className="text-xs text-muted-foreground">
-                          {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"} · {p.location}
-                          {p.city ? `, ${p.city}` : ""}
-                        </p>
-                        {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
-                          <p className="line-clamp-1 text-xs text-muted-foreground">
-                            📍 {p.landmarks.join(", ")}
+                      <div className="p-4 space-y-3">
+                        <div className="space-y-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="font-bold text-base text-foreground tracking-tight truncate">{p.project_name}</h4>
+                            <ToneBadge
+                              tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
+                              label={p.status ?? "—"}
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"} · {p.location}
+                            {p.city ? `, ${p.city}` : ""}
                           </p>
-                        )}
-                      </CardHeader>
+                          {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
+                            <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                              📍 {p.landmarks.join(", ")}
+                            </p>
+                          )}
+                        </div>
 
-                      <CardContent className="space-y-3 text-sm">
-                        <div className="flex items-baseline justify-between">
+                        <div className="flex items-baseline justify-between pt-1 border-t border-border/40">
                           <div className="flex items-baseline gap-1.5 flex-wrap">
-                            <span className="text-xl font-bold tracking-tight text-foreground">
+                            <span className="text-xl font-bold tracking-tight text-foreground tabular-nums">
                               {formatMoney(p.price, { isRent })}
                             </span>
                             {ratePerSqft && (
-                              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium tabular-nums">
                                 ({ratePerSqft})
                               </span>
                             )}
                           </div>
-                          <span className="text-xs text-muted-foreground font-medium">
+                          <span className="text-xs text-muted-foreground font-medium tabular-nums">
                             {p.area_sqft ?? p.carpet_area_sqft ?? "—"} sq.ft
                           </span>
                         </div>
 
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[11px] text-muted-foreground">
                           Stock: {p.stock_type} · {p.possession_status || "Possession N/A"}
                         </p>
 
-                        <div className="rounded-lg bg-muted/50 p-2 text-xs flex items-center justify-between">
+                        <div className="rounded-xl bg-muted/40 p-2.5 text-xs flex items-center justify-between border border-border/40">
                           <div>
-                            <p className="font-medium text-foreground">{p.assigned_executive_name || "Unassigned"}</p>
-                            <p className="text-muted-foreground text-[11px]">{p.assigned_executive_phone || "No phone"}</p>
+                            <p className="font-semibold text-foreground">{p.assigned_executive_name || "Unassigned"}</p>
+                            <p className="text-muted-foreground text-[11px] tabular-nums">{p.assigned_executive_phone || "No phone"}</p>
                           </div>
-                          <span className="text-[10px] font-mono text-muted-foreground px-1.5 py-0.5 rounded bg-background border">
+                          <span className="text-[10px] font-mono text-muted-foreground px-1.5 py-0.5 rounded-md bg-card border border-border/40">
                             {p.property_id}
                           </span>
                         </div>
@@ -834,7 +840,7 @@ export function InventoryTab({
                           <Button
                             type="button"
                             size="sm"
-                            className="w-full justify-between bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-medium h-8 text-xs shadow-2xs"
+                            className="apple-button w-full justify-between bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-medium h-8.5 rounded-xl text-xs shadow-2xs"
                             onClick={() =>
                               setMatchingDialogProperty({ property: p, buyers: matchingBuyers })
                             }
@@ -850,193 +856,197 @@ export function InventoryTab({
                             No matching buyers in CRM yet
                           </p>
                         )}
-                      </CardContent>
+                      </div>
                     </div>
 
-                    <div className="p-6 pt-0">
-                      <div className="flex flex-wrap gap-2 pt-2 border-t">
+                    <div className="p-4 pt-0">
+                      <div className="flex flex-wrap gap-2 pt-2.5 border-t border-border/40">
                         {p.brochure_url && (
-                          <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                          <Button asChild size="sm" variant="outline" className="apple-button h-8 rounded-lg text-xs shadow-2xs">
                             <a href={p.brochure_url} target="_blank" rel="noreferrer">
                               <FileText className="size-3.5 mr-1" /> Brochure
                             </a>
                           </Button>
                         )}
                         {p.map_url && (
-                          <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                          <Button asChild size="sm" variant="outline" className="apple-button h-8 rounded-lg text-xs shadow-2xs">
                             <a href={p.map_url} target="_blank" rel="noreferrer">
                               <MapPin className="size-3.5 mr-1" /> Map
                             </a>
                           </Button>
                         )}
-                        <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={() => openEdit(p)}>
+                        <Button size="sm" variant="secondary" className="apple-button h-8 rounded-lg text-xs shadow-2xs" onClick={() => openEdit(p)}>
                           <Pencil className="size-3.5 mr-1" /> Edit
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                          className="apple-button h-8 rounded-lg text-xs text-destructive hover:bg-destructive/10"
                           onClick={() => setDeleteId(p.property_id)}
                         >
                           <Trash2 className="size-3.5" />
                         </Button>
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 );
               })}
             </div>
           )}
 
-          {/* ── List view ── */}
+          {/* ── List view (Apple Inset-Grouped Table) ── */}
           {view === "list" && (
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Property</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Rate/Sq.ft</TableHead>
-                    <TableHead>Area</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Executive</TableHead>
-                    <TableHead>Matching Demand</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredProperties.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
-                        No properties match your filter.
-                      </TableCell>
+            <div className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-xs">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
+                      <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Property</TableHead>
+                      <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Category</TableHead>
+                      <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Location</TableHead>
+                      <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Price</TableHead>
+                      <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Rate/Sq.ft</TableHead>
+                      <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Area</TableHead>
+                      <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Status</TableHead>
+                      <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Executive</TableHead>
+                      <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Matching Demand</TableHead>
+                      <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3 text-right">Actions</TableHead>
                     </TableRow>
-                  )}
-                  {filteredProperties.map((p) => {
-                    const isRent =
-                      (p.listing_type || "").toUpperCase() === "RENT" ||
-                      (p.listing_type || "").toUpperCase() === "LEASE" ||
-                      (p.transaction_type || "").toUpperCase().includes("RENT");
-                    const ratePerSqft = formatRatePerSqft(p.price, p.area_sqft || p.carpet_area_sqft);
-                    const matchingBuyers = matchingBuyersMap.get(p.property_id) || [];
-
-                    return (
-                      <TableRow key={p.property_id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {p.image_urls && p.image_urls.length > 0 ? (
-                              <img
-                                src={p.image_urls[0]}
-                                alt={p.project_name}
-                                className="size-10 rounded-md object-cover"
-                              />
-                            ) : (
-                              <div className="flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                                <ImageOff className="size-4" />
-                              </div>
-                            )}
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <p className="font-medium leading-tight">{p.project_name}</p>
-                                <span
-                                  className={`text-[9px] font-bold px-1 rounded ${
-                                    isRent ? "bg-sky-500/15 text-sky-700 dark:text-sky-300" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                                  }`}
-                                >
-                                  {isRent ? "RENT" : "SALE"}
-                                </span>
-                              </div>
-                              <p className="text-xs text-muted-foreground">{p.property_id}</p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm">
-                          {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <div>
-                            {p.location}
-                            {p.city ? `, ${p.city}` : ""}
-                          </div>
-                          {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
-                            <div className="line-clamp-1 text-xs text-muted-foreground">
-                              📍 {p.landmarks.slice(0, 2).join(", ")}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap font-semibold">
-                          {formatMoney(p.price, { isRent })}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap font-mono text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                          {ratePerSqft || "—"}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                          {p.area_sqft ?? p.carpet_area_sqft ?? "—"} sq.ft
-                        </TableCell>
-                        <TableCell>
-                          <ToneBadge
-                            tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
-                            label={p.status ?? "—"}
-                          />
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {p.assigned_executive_name || (
-                            <span className="text-muted-foreground">Unassigned</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {matchingBuyers.length > 0 ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2.5 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-medium text-xs gap-1.5 shadow-2xs"
-                              onClick={() =>
-                                setMatchingDialogProperty({ property: p, buyers: matchingBuyers })
-                              }
-                              title={`View ${matchingBuyers.length} matching buyer leads`}
-                            >
-                              <Flame className="size-3 fill-emerald-600 text-emerald-600 dark:fill-emerald-400 dark:text-emerald-400" />
-                              <span><b>{matchingBuyers.length}</b> {matchingBuyers.length === 1 ? "Buyer" : "Buyers"}</span>
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic">None yet</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            {p.brochure_url && (
-                              <Button asChild size="sm" variant="outline">
-                                <a href={p.brochure_url} target="_blank" rel="noreferrer">
-                                  <FileText className="size-3.5" />
-                                </a>
-                              </Button>
-                            )}
-                            {p.map_url && (
-                              <Button asChild size="sm" variant="outline">
-                                <a href={p.map_url} target="_blank" rel="noreferrer">
-                                  <MapPin className="size-3.5" />
-                                </a>
-                              </Button>
-                            )}
-                            <Button size="sm" variant="secondary" onClick={() => openEdit(p)}>
-                              <Pencil className="size-3.5" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => setDeleteId(p.property_id)}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredProperties.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={10} className="py-12 text-center text-muted-foreground text-xs">
+                          No properties match your filter.
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                    )}
+                    {filteredProperties.map((p) => {
+                      const isRent =
+                        (p.listing_type || "").toUpperCase() === "RENT" ||
+                        (p.listing_type || "").toUpperCase() === "LEASE" ||
+                        (p.transaction_type || "").toUpperCase().includes("RENT");
+                      const ratePerSqft = formatRatePerSqft(p.price, p.area_sqft || p.carpet_area_sqft);
+                      const matchingBuyers = matchingBuyersMap.get(p.property_id) || [];
+
+                      return (
+                        <TableRow key={p.property_id} className="border-b border-border/30 hover:bg-muted/35 transition-colors">
+                          <TableCell className="py-3.5">
+                            <div className="flex items-center gap-2.5">
+                              {p.image_urls && p.image_urls.length > 0 ? (
+                                <img
+                                  src={p.image_urls[0]}
+                                  alt={p.project_name}
+                                  className="size-10 rounded-xl object-cover shadow-2xs"
+                                />
+                              ) : (
+                                <div className="flex size-10 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground">
+                                  <ImageOff className="size-4" />
+                                </div>
+                              )}
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="font-semibold text-foreground text-sm leading-tight">{p.project_name}</p>
+                                  <span
+                                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                      isRent ? "bg-sky-500/15 text-sky-700 dark:text-sky-300" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                    }`}
+                                  >
+                                    {isRent ? "RENT" : "SALE"}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground font-mono mt-0.5">{p.property_id}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground py-3.5">
+                            {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"}
+                          </TableCell>
+                          <TableCell className="text-xs py-3.5">
+                            <div className="font-medium text-foreground">
+                              {p.location}
+                              {p.city ? `, ${p.city}` : ""}
+                            </div>
+                            {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
+                              <div className="line-clamp-1 text-[11px] text-muted-foreground mt-0.5">
+                                📍 {p.landmarks.slice(0, 2).join(", ")}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap font-bold text-foreground text-sm tabular-nums py-3.5">
+                            {formatMoney(p.price, { isRent })}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap font-mono text-xs text-emerald-600 dark:text-emerald-400 font-medium tabular-nums py-3.5">
+                            {ratePerSqft || "—"}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground tabular-nums py-3.5">
+                            {p.area_sqft ?? p.carpet_area_sqft ?? "—"} sq.ft
+                          </TableCell>
+                          <TableCell className="py-3.5">
+                            <ToneBadge
+                              tone={statusTone[p.status ?? "AVAILABLE"] ?? "gray"}
+                              label={p.status ?? "—"}
+                            />
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground py-3.5">
+                            {p.assigned_executive_name || (
+                              <span className="italic">Unassigned</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-3.5">
+                            {matchingBuyers.length > 0 ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="apple-button h-7 px-2.5 rounded-lg border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-medium text-xs gap-1.5 shadow-2xs tabular-nums"
+                                onClick={() =>
+                                  setMatchingDialogProperty({ property: p, buyers: matchingBuyers })
+                                }
+                                title={`View ${matchingBuyers.length} matching buyer leads`}
+                              >
+                                <Flame className="size-3 fill-emerald-600 text-emerald-600 dark:fill-emerald-400 dark:text-emerald-400" />
+                                <span><b>{matchingBuyers.length}</b> {matchingBuyers.length === 1 ? "Buyer" : "Buyers"}</span>
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">None yet</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right py-3.5">
+                            <div className="flex justify-end gap-1.5">
+                              {p.brochure_url && (
+                                <Button asChild size="sm" variant="outline" className="apple-button size-8 p-0 rounded-lg shadow-2xs">
+                                  <a href={p.brochure_url} target="_blank" rel="noreferrer" title="Brochure">
+                                    <FileText className="size-3.5" />
+                                  </a>
+                                </Button>
+                              )}
+                              {p.map_url && (
+                                <Button asChild size="sm" variant="outline" className="apple-button size-8 p-0 rounded-lg shadow-2xs">
+                                  <a href={p.map_url} target="_blank" rel="noreferrer" title="Map">
+                                    <MapPin className="size-3.5" />
+                                  </a>
+                                </Button>
+                              )}
+                              <Button size="sm" variant="secondary" className="apple-button size-8 p-0 rounded-lg shadow-2xs" onClick={() => openEdit(p)} title="Edit property">
+                                <Pencil className="size-3.5" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="apple-button size-8 p-0 rounded-lg text-destructive hover:bg-destructive/10"
+                                onClick={() => setDeleteId(p.property_id)}
+                                title="Delete property"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </>

@@ -13,7 +13,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -131,31 +130,37 @@ export function IntegrationsTab({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl">
       <WhatsAppConnectCard clientId={clientId} client={client} />
 
-      <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+      <div className="rounded-2xl border border-border/50 bg-card shadow-xs overflow-hidden">
+        <div className="p-5 pb-4 border-b border-border/30 bg-muted/15 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div className="flex-1">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Globe2 className="size-4" /> Portal lead webhooks
-            </CardTitle>
-            <CardDescription>
+            <h3 className="flex items-center gap-2 text-base font-bold tracking-tight text-foreground">
+              <div className="size-8 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                <Globe2 className="size-4" />
+              </div>
+              <span>Portal Lead Webhooks</span>
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-2xl leading-relaxed">
               Add the webhook URL for every portal you list on — 99acres, Housing.com, MagicBricks,
-              OLX or anything else. Each one routes straight into your automation and lands as a new
-              lead here. You can add as many as you need.
-            </CardDescription>
-          </div>
-          <Button onClick={openAdd} className="w-full sm:w-auto">
-            <Plus /> Add webhook
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-          {!isLoading && integrations.filter((i) => i.provider !== "meta").length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No portal webhooks added yet. Click "Add webhook" to add your first one.
+              OLX or custom channels. Each lead routes straight into your automated lead engine
+              with zero manual entry.
             </p>
+          </div>
+          <Button onClick={openAdd} className="apple-button h-9 rounded-xl px-3.5 text-xs font-semibold gap-1.5 shadow-2xs w-full sm:w-auto">
+            <Plus className="size-3.5" /> <span>Add webhook</span>
+          </Button>
+        </div>
+        <div className="p-5 space-y-3">
+          {isLoading && <p className="text-sm text-muted-foreground">Loading webhooks…</p>}
+          {!isLoading && integrations.filter((i) => i.provider !== "meta").length === 0 && (
+            <div className="rounded-xl border border-dashed p-8 text-center bg-card/40 space-y-2">
+              <p className="text-sm font-semibold text-foreground">No portal webhooks configured yet</p>
+              <p className="text-xs text-muted-foreground">
+                Click "Add webhook" above to generate a webhook endpoint for 99acres, MagicBricks, or Housing.com.
+              </p>
+            </div>
           )}
           {integrations
             .filter((i) => i.provider !== "meta")
@@ -168,8 +173,8 @@ export function IntegrationsTab({
                 onDelete={() => setDeleteId(row.id)}
               />
             ))}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -215,20 +220,22 @@ export function IntegrationsTab({
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>Webhook URL</Label>
+              <Label className="text-xs font-semibold text-foreground">Webhook URL</Label>
               <div className="flex gap-2">
                 <Input
                   value={draft.webhookUrl}
                   placeholder="https://…/webhook/portal/…"
                   onChange={(e) => setDraft((p) => ({ ...p, webhookUrl: e.target.value }))}
+                  className="rounded-xl border-border/40 bg-muted/30 focus:bg-background text-xs h-9"
                 />
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
+                  className="apple-button size-9 rounded-xl border-border/40 shrink-0"
                   onClick={() => {
                     navigator.clipboard?.writeText(draft.webhookUrl);
-                    toast.success("Copied");
+                    toast.success("Copied webhook URL");
                   }}
                 >
                   <Copy className="size-4" />
@@ -236,27 +243,29 @@ export function IntegrationsTab({
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>API key (if the portal gives you one)</Label>
+              <Label className="text-xs font-semibold text-foreground">API key (if portal provides one)</Label>
               <Input
                 value={draft.apiKey}
                 onChange={(e) => setDraft((p) => ({ ...p, apiKey: e.target.value }))}
+                className="rounded-xl border-border/40 bg-muted/30 focus:bg-background text-xs h-9"
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Forwarding email (optional)</Label>
+              <Label className="text-xs font-semibold text-foreground">Forwarding email (optional)</Label>
               <Input
                 type="email"
                 value={draft.forwardingEmail}
                 placeholder="leads@yourcompany.com"
                 onChange={(e) => setDraft((p) => ({ ...p, forwardingEmail: e.target.value }))}
+                className="rounded-xl border-border/40 bg-muted/30 focus:bg-background text-xs h-9"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" className="apple-button rounded-xl min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={submit} disabled={add.isPending || update.isPending}>
+            <Button className="apple-button rounded-xl min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold shadow-2xs" onClick={submit} disabled={add.isPending || update.isPending}>
               {editing ? "Save changes" : "Add webhook"}
             </Button>
           </DialogFooter>
@@ -264,22 +273,23 @@ export function IntegrationsTab({
       </Dialog>
 
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-2xl border-border/50 shadow-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove this webhook?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Leads from this source will stop arriving until you add it back.
+            <AlertDialogTitle className="text-base font-bold tracking-tight">Remove this webhook?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed text-muted-foreground">
+              Leads from this source will stop arriving until you add it back. Existing leads in your CRM will remain safe.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="apple-button rounded-xl min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold">Cancel</AlertDialogCancel>
             <AlertDialogAction
+              className="apple-button rounded-xl min-h-[44px] sm:min-h-0 sm:h-9 text-xs font-semibold bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-2xs"
               onClick={() => {
                 if (deleteId) del.mutate(deleteId);
                 setDeleteId(null);
               }}
             >
-              Remove
+              Remove Webhook
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -301,27 +311,29 @@ function IntegrationRow({
 }) {
   const meta = INTEGRATION_PROVIDERS.find((p) => p.key === row.provider);
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-2xl border border-border/50 bg-card p-4 sm:flex-row sm:items-center sm:justify-between hover:border-primary/40 transition-all shadow-2xs">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-medium">{row.label || meta?.label || row.provider}</p>
+          <p className="font-bold text-sm text-foreground">{row.label || meta?.label || row.provider}</p>
           <ToneBadge
             tone={row.is_enabled ? "green" : "gray"}
             label={row.is_enabled ? "Active" : "Paused"}
           />
         </div>
-        <p className="mt-0.5 break-all text-xs text-muted-foreground">
-          {row.webhook_url || "No URL set"}
-        </p>
+        <div className="mt-1.5">
+          <span className="break-all text-xs text-muted-foreground font-mono bg-muted/40 rounded-lg px-2.5 py-1 border border-border/30 inline-block">
+            {row.webhook_url || "No URL set"}
+          </span>
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/30">
         <Switch checked={row.is_enabled} onCheckedChange={onToggle} aria-label="Toggle webhook" />
-        <Button size="sm" variant="secondary" onClick={onEdit}>
-          <Pencil className="size-3.5" />
+        <Button size="sm" variant="secondary" className="apple-button min-h-[44px] sm:min-h-0 sm:h-8 rounded-lg text-xs font-semibold px-3" onClick={onEdit}>
+          <Pencil className="size-3.5 mr-1" />
           <span>Edit</span>
         </Button>
-        <Button size="sm" variant="destructive" onClick={onDelete}>
-          <Trash2 className="size-3.5" />
+        <Button size="sm" variant="destructive" className="apple-button min-h-[44px] sm:min-h-0 sm:h-8 rounded-lg text-xs font-semibold px-3 shadow-2xs" onClick={onDelete}>
+          <Trash2 className="size-3.5 mr-1" />
           <span>Remove</span>
         </Button>
       </div>

@@ -20,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PropertyStateBadge, StatusBadge } from "@/components/crm/badges";
 import {
   SALE_BUDGET_TIERS,
@@ -283,118 +282,126 @@ export function BudgetTab({
 
   return (
     <div className="space-y-6">
-      {/* 1. Top Executive Pipeline KPI Strip */}
+      {/* 1. Top Executive Pipeline KPI Strip (Apple Complication Widgets) */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border bg-card p-4 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="rounded-2xl border border-border/50 bg-card p-4.5 shadow-xs transition-all hover:bg-muted/30">
+          <div className="flex items-center justify-between">
+            <div className="size-10 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <Wallet className="size-5" />
+            </div>
+          </div>
+          <p className="mt-3.5 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">
+            {formatMoney(metrics.totalBuyVal)}
+          </p>
+          <div className="mt-1">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               Buyer Demand Pipeline
             </span>
-            <div className="text-2xl font-bold tracking-tight text-foreground">
-              {formatMoney(metrics.totalBuyVal)}
-            </div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Users className="size-3 text-indigo-500" />
+            <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1 tabular-nums">
+              <Users className="size-3 text-blue-500" />
               <span>{metrics.buyCount} active purchasing leads</span>
             </p>
           </div>
-          <div className="rounded-xl p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
-            <Wallet className="size-6" />
-          </div>
         </div>
 
-        <div className="rounded-xl border bg-card p-4 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="rounded-2xl border border-border/50 bg-card p-4.5 shadow-xs transition-all hover:bg-muted/30">
+          <div className="flex items-center justify-between">
+            <div className="size-10 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+              <TrendingUp className="size-5" />
+            </div>
+          </div>
+          <p className="mt-3.5 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">
+            {formatMoney(metrics.totalRentVal, { isRent: true })}
+          </p>
+          <div className="mt-1">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               Rental Demand (Run-Rate)
             </span>
-            <div className="text-2xl font-bold tracking-tight text-foreground">
-              {formatMoney(metrics.totalRentVal, { isRent: true })}
-            </div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <KeyRound className="size-3 text-emerald-500" />
+            <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1 tabular-nums">
+              <KeyRound className="size-3 text-sky-500" />
               <span>{metrics.rentCount} active tenant leads</span>
             </p>
           </div>
-          <div className="rounded-xl p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-            <TrendingUp className="size-6" />
-          </div>
         </div>
 
-        <div className="rounded-xl border bg-card p-4 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="rounded-2xl border border-border/50 bg-card p-4.5 shadow-xs transition-all hover:bg-muted/30">
+          <div className="flex items-center justify-between">
+            <div className="size-10 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+              <Building2 className="size-5" />
+            </div>
+          </div>
+          <p className="mt-3.5 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">
+            {formatMoney(metrics.avgBuyTicket)}
+          </p>
+          <div className="mt-1">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               Avg. Buyer Ticket Size
             </span>
-            <div className="text-2xl font-bold tracking-tight text-foreground">
-              {formatMoney(metrics.avgBuyTicket)}
-            </div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Home className="size-3 text-blue-500" />
+            <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+              <Home className="size-3 text-indigo-500" />
               <span>Core buying sweet-spot</span>
             </p>
           </div>
-          <div className="rounded-xl p-3 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
-            <Building2 className="size-6" />
-          </div>
         </div>
 
-        <div className="rounded-xl border bg-card p-4 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4.5 shadow-xs transition-all hover:bg-amber-500/10">
+          <div className="flex items-center justify-between">
+            <div className="size-10 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Flame className="size-5 fill-amber-500 text-amber-500" />
+            </div>
+          </div>
+          <p className="mt-3.5 text-2xl sm:text-3xl font-bold tracking-tight text-amber-700 dark:text-amber-300 tabular-nums">
+            {formatMoney(metrics.highIntentVal)}
+          </p>
+          <div className="mt-1">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               High-Intent Pipeline
             </span>
-            <div className="text-2xl font-bold tracking-tight text-foreground">
-              {formatMoney(metrics.highIntentVal)}
-            </div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1 tabular-nums">
               <Flame className="size-3 text-amber-500 fill-amber-500" />
               <span>{metrics.highIntentCount} visits booked / selected</span>
             </p>
           </div>
-          <div className="rounded-xl p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
-            <Flame className="size-6" />
-          </div>
         </div>
       </div>
 
-      {/* 2. Controls & Filter Strip */}
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm">
+      {/* 2. Controls & Filter Strip (Apple HIG Toolbar) */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-border/50 bg-card p-4 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Deal Type Switcher */}
-          <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-lg overflow-x-auto w-full sm:w-auto shrink-0">
+          {/* Deal Type Switcher (macOS Segmented Control) */}
+          <div className="flex items-center rounded-xl border border-border/30 bg-muted/60 p-1 shadow-2xs backdrop-blur-xs overflow-x-auto w-full sm:w-auto shrink-0">
             <button
               type="button"
               onClick={() => setDealFilter("ALL")}
-              className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+              className={`apple-button shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 dealFilter === "ALL"
-                  ? "bg-card text-foreground shadow-2xs"
+                  ? "bg-card text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              All ({leads.length})
+              All (<span className="tabular-nums">{leads.length}</span>)
             </button>
             <button
               type="button"
               onClick={() => setDealFilter("BUY")}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+              className={`apple-button shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 dealFilter === "BUY"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-card text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Buy / Sale ({metrics.buyCount})
+              Buy / Sale (<span className="tabular-nums">{metrics.buyCount}</span>)
             </button>
             <button
               type="button"
               onClick={() => setDealFilter("RENT")}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+              className={`apple-button shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 dealFilter === "RENT"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-card text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Rent / Lease ({metrics.rentCount})
+              Rent / Lease (<span className="tabular-nums">{metrics.rentCount}</span>)
             </button>
           </div>
 
@@ -405,24 +412,24 @@ export function BudgetTab({
               placeholder="Search lead, location, requirement..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-9 text-xs"
+              className="pl-9 h-9 text-xs rounded-xl bg-muted/40 border-border/40 focus:bg-background transition-colors"
             />
           </div>
         </div>
 
         {/* Micro-market / Hot Localities Pills */}
         {topLocalities.length > 0 && (
-          <div className="flex items-center gap-2 pt-2 border-t text-xs overflow-x-auto">
-            <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">
+          <div className="flex items-center gap-1.5 pt-2 border-t border-border/30 text-xs overflow-x-auto touch-scroll pb-0.5">
+            <span className="text-[11px] text-muted-foreground font-medium shrink-0 flex items-center gap-1 mr-1">
               <MapPin className="size-3 text-primary" /> Hot Localities:
             </span>
             <button
               type="button"
               onClick={() => setSelectedLocality(null)}
-              className={`px-2.5 py-1 rounded-full text-xs transition shrink-0 ${
+              className={`apple-button px-2.5 py-1 rounded-full text-xs font-semibold transition-all shrink-0 ${
                 selectedLocality === null
-                  ? "bg-primary text-primary-foreground font-semibold"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  ? "bg-primary text-primary-foreground shadow-2xs"
+                  : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               All Areas
@@ -432,14 +439,14 @@ export function BudgetTab({
                 key={loc}
                 type="button"
                 onClick={() => setSelectedLocality(selectedLocality === loc ? null : loc)}
-                className={`px-2.5 py-1 rounded-full text-xs transition shrink-0 flex items-center gap-1.5 ${
+                className={`apple-button px-2.5 py-1 rounded-full text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
                   selectedLocality === loc
-                    ? "bg-primary text-primary-foreground font-semibold"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    ? "bg-primary text-primary-foreground shadow-2xs"
+                    : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 <span>{loc}</span>
-                <span className="opacity-75 font-mono text-[11px]">({data.count})</span>
+                <span className="opacity-75 font-mono text-[11px] tabular-nums">({data.count})</span>
               </button>
             ))}
           </div>
@@ -451,29 +458,32 @@ export function BudgetTab({
         {tiersData.map((tier) => {
           const OppIcon = tier.opportunity.icon;
           return (
-            <Card key={tier.key} className="flex flex-col justify-between border-2 border-muted/80 hover:border-primary/30 transition shadow-sm">
-              <CardHeader className="pb-3 border-b bg-muted/20">
+            <div
+              key={tier.key}
+              className="rounded-2xl border border-border/50 bg-card shadow-xs flex flex-col justify-between overflow-hidden hover:border-primary/40 transition-all"
+            >
+              <div className="p-4 pb-3 border-b border-border/30 bg-muted/20">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <CardTitle className="text-base font-semibold">{tier.label}</CardTitle>
-                    <p className="text-xs font-medium text-muted-foreground">{tier.hint}</p>
+                    <h4 className="text-sm font-bold tracking-tight text-foreground">{tier.label}</h4>
+                    <p className="text-xs font-medium text-muted-foreground mt-0.5">{tier.hint}</p>
                   </div>
                   <span className="crm-badge" data-tone={tier.tone}>
-                    {tier.leads.length} Leads
+                    <span className="tabular-nums font-bold">{tier.leads.length}</span> Leads
                   </span>
                 </div>
 
                 {/* Supply vs Demand Comparison Bar */}
-                <div className="mt-3 space-y-1.5 pt-2 border-t border-dashed">
+                <div className="mt-3 space-y-1.5 pt-2 border-t border-border/30 border-dashed">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Buyer Demand:</span>
-                    <span className="font-semibold text-foreground">
+                    <span className="font-semibold text-foreground tabular-nums">
                       {formatMoney(tier.demandValue, { isRent: tier.isRentMode })}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Inventory Available:</span>
-                    <span className="font-semibold text-foreground">
+                    <span className="font-semibold text-foreground tabular-nums">
                       {tier.matchingInventory.length} unit{tier.matchingInventory.length === 1 ? "" : "s"}
                       {tier.supplyValue > 0 && ` (${formatMoney(tier.supplyValue, { isRent: tier.isRentMode })})`}
                     </span>
@@ -481,13 +491,13 @@ export function BudgetTab({
 
                   {/* Opportunity Signal Badge */}
                   <div
-                    className={`mt-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+                    className={`mt-2 flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold ${
                       tier.opportunity.tone === "yellow"
-                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"
+                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25"
                         : tier.opportunity.tone === "green"
-                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25"
                         : tier.opportunity.tone === "blue"
-                        ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
+                        ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/25"
                         : "bg-muted text-muted-foreground"
                     }`}
                     title={tier.opportunity.hint}
@@ -496,9 +506,9 @@ export function BudgetTab({
                     <span className="truncate">{tier.opportunity.label}</span>
                   </div>
                 </div>
-              </CardHeader>
+              </div>
 
-              <CardContent className="p-3 space-y-2.5 flex-1 max-h-[500px] overflow-y-auto">
+              <div className="p-3 space-y-2 flex-1 max-h-[500px] overflow-y-auto touch-scroll">
                 {tier.leads.length === 0 ? (
                   <div className="py-8 text-center text-xs text-muted-foreground">
                     No active leads in this budget bracket.
@@ -508,25 +518,29 @@ export function BudgetTab({
                     <LeadMiniCard key={lead.lead_id} lead={lead} isRent={tier.isRentMode} />
                   ))
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           );
         })}
       </div>
 
       {/* 4. Live Inventory Traction & Demand Matrix */}
-      <Card>
-        <CardHeader className="pb-3 border-b bg-muted/10">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Building2 className="size-4 text-primary" /> Property Demand & Site Visit Traction
-            </CardTitle>
-            <span className="text-xs text-muted-foreground">
-              Showing active inventory and buyer interest
-            </span>
+      <div className="rounded-2xl border border-border/50 bg-card shadow-xs overflow-hidden">
+        <div className="p-4 pb-3 border-b border-border/30 bg-muted/15 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Building2 className="size-4" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold tracking-tight text-foreground">Property Demand & Site Visit Traction</h4>
+              <p className="text-xs text-muted-foreground">Showing active inventory and qualified buyer interest</p>
+            </div>
           </div>
-        </CardHeader>
-        <CardContent className="p-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <span className="text-xs text-muted-foreground font-mono tabular-nums">
+            {propertyTraction.length} active projects
+          </span>
+        </div>
+        <div className="p-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {propertyTraction.length === 0 && (
             <p className="text-sm text-muted-foreground col-span-full py-6 text-center">
               No inventory or lead-selected properties available yet.
@@ -538,7 +552,7 @@ export function BudgetTab({
             const isRental = (inv?.listing_type || "").toUpperCase() === "RENT";
 
             return (
-              <div key={item.name} className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
+              <div key={item.name} className="rounded-xl border border-border/40 bg-card p-3.5 shadow-2xs space-y-2.5 hover:border-primary/40 transition-all">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-semibold text-foreground text-sm leading-tight">{item.name}</p>
@@ -551,11 +565,11 @@ export function BudgetTab({
                   </div>
                   {inv?.price && (
                     <div className="text-right shrink-0">
-                      <div className="font-bold text-sm text-foreground">
+                      <div className="font-bold text-sm text-foreground tabular-nums">
                         {formatMoney(inv.price, { isRent: isRental })}
                       </div>
                       {rateFormatted && (
-                        <div className="text-[11px] text-muted-foreground font-mono">
+                        <div className="text-[11px] text-muted-foreground font-mono tabular-nums">
                           {rateFormatted}
                         </div>
                       )}
@@ -563,18 +577,18 @@ export function BudgetTab({
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 pt-1 border-t">
+                <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-border/30">
                   <span className="crm-badge" data-tone="indigo">
-                    <Users className="size-3" /> {item.leads.length} Interested Lead{item.leads.length === 1 ? "" : "s"}
+                    <Users className="size-3" /> <span className="tabular-nums font-semibold">{item.leads.length}</span> Interested Lead{item.leads.length === 1 ? "" : "s"}
                   </span>
                   <span className="crm-badge" data-tone="green">
-                    <CheckCircle2 className="size-3" /> {item.visits} Site Visit{item.visits === 1 ? "" : "s"}
+                    <CheckCircle2 className="size-3" /> <span className="tabular-nums font-semibold">{item.visits}</span> Site Visit{item.visits === 1 ? "" : "s"}
                   </span>
                 </div>
 
                 {item.leads.length > 0 && (
-                  <div className="pt-2 border-t text-xs space-y-1.5">
-                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  <div className="pt-2 border-t border-border/30 text-xs space-y-1.5">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                       Recent Interested Leads:
                     </span>
                     <ul className="space-y-1">
@@ -583,7 +597,7 @@ export function BudgetTab({
                           <span className="font-medium text-foreground truncate max-w-[140px]">
                             {l.name || "Unnamed Lead"}
                           </span>
-                          <span className="font-mono text-[11px]">
+                          <span className="font-mono text-[11px] tabular-nums">
                             {formatMoney(l.budget, { isRent: getLeadDealType(l) === "RENT" })}
                           </span>
                         </li>
@@ -594,8 +608,8 @@ export function BudgetTab({
               </div>
             );
           })}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
@@ -605,12 +619,12 @@ function LeadMiniCard({ lead, isRent }: { lead: Lead; isRent?: boolean }) {
   const isLeadRent = isRent || getLeadDealType(lead) === "RENT";
 
   return (
-    <div className="rounded-xl border bg-card p-3 shadow-sm hover:border-primary/40 transition">
+    <div className="rounded-xl border border-border/50 bg-card p-3 shadow-2xs hover:border-primary/40 transition-all">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-semibold text-foreground text-sm truncate">{lead.name || "Unnamed Lead"}</p>
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-            <span className="font-bold text-foreground">
+            <span className="font-bold text-foreground tabular-nums">
               {formatMoney(lead.budget, { isRent: isLeadRent })}
             </span>
             <span>·</span>
@@ -618,8 +632,8 @@ function LeadMiniCard({ lead, isRent }: { lead: Lead; isRent?: boolean }) {
           </div>
         </div>
 
-        {/* Strict Call-Only CTA policy (tel:) */}
-        <Button asChild size="sm" variant="outline" className="h-7 px-2.5 text-xs shrink-0" disabled={!lead.phone}>
+        {/* Strict Call-Only CTA policy (tel:) with 44pt touch target on mobile */}
+        <Button asChild size="sm" variant="outline" className="apple-button min-h-[44px] sm:min-h-0 sm:h-7 px-3 text-xs font-semibold rounded-lg shadow-2xs shrink-0" disabled={!lead.phone}>
           <a href={`tel:${lead.phone ?? ""}`}>
             <Phone className="size-3.5 mr-1" /> Call
           </a>
@@ -638,12 +652,15 @@ function LeadMiniCard({ lead, isRent }: { lead: Lead; isRent?: boolean }) {
 
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" size="sm" className="mt-1 h-6 px-1 text-xs text-muted-foreground hover:text-foreground">
-            <ChevronDown className={`size-3.5 mr-1 transition-transform ${open ? "rotate-180" : ""}`} />
-            {open ? "Hide Details" : "Lead Insights"}
-          </Button>
+          <button
+            type="button"
+            className="apple-button mt-1.5 flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground py-1"
+          >
+            <ChevronDown className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+            <span>{open ? "Hide Details" : "Lead Insights"}</span>
+          </button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2 text-xs text-muted-foreground leading-relaxed border-t mt-2">
+        <CollapsibleContent className="pt-2 text-xs text-muted-foreground leading-relaxed border-t border-border/30 mt-2">
           {buildLeadSummary(lead)}
         </CollapsibleContent>
       </Collapsible>
