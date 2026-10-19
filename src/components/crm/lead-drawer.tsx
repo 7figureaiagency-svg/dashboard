@@ -262,45 +262,22 @@ export function LeadDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-        <SheetHeader>
-          <SheetTitle className="text-xl">{lead.name || "Unnamed lead"}</SheetTitle>
-          <SheetDescription>
-            {lead.phone || "No phone"} · Created {formatDate(lead.created_at)}
-          </SheetDescription>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <StatusBadge value={lead.status} />
-            <PropertyStateBadge value={lead.property_state} />
-          </div>
+      <SheetContent className="flex flex-col h-full w-full p-0 sm:max-w-xl overflow-hidden">
+        {/* ── 📱 iOS Sheet Grabber ── */}
+        <div className="w-9 h-1 rounded-full bg-muted-foreground/30 mx-auto mt-2.5 mb-1 sm:hidden shrink-0" />
 
-          {/* ── Direct Contact CTAs ── */}
-          <div className="flex flex-wrap items-center gap-2 pt-2">
-            {lead.phone ? (
-              <>
-                <Button asChild size="sm" variant="default" className="h-8 gap-1.5 font-medium shadow-xs">
-                  <a href={`tel:${lead.phone}`}>
-                    <Phone className="size-3.5" /> Call ({lead.phone})
-                  </a>
-                </Button>
-                <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 font-medium border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10">
-                  <a
-                    href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <MessageSquare className="size-3.5" /> WhatsApp
-                  </a>
-                </Button>
-              </>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-xs text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2.5 py-1 rounded-md border border-sky-200 dark:border-sky-800 font-mono">
-                Telegram ID: {lead.lead_id}
-              </span>
-            )}
-          </div>
-        </SheetHeader>
-
-        <div className="space-y-6 px-4 pb-10">
+        {/* ── Scrollable Inspector Content ── */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+          <SheetHeader className="text-left space-y-1.5">
+            <SheetTitle className="text-xl font-bold tracking-tight text-foreground">{lead.name || "Unnamed lead"}</SheetTitle>
+            <SheetDescription className="text-xs text-muted-foreground">
+              {lead.phone || "No phone"} · Created {formatDate(lead.created_at)}
+            </SheetDescription>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <StatusBadge value={lead.status} />
+              <PropertyStateBadge value={lead.property_state} />
+            </div>
+          </SheetHeader>
           {closed && (
             <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
               {dealWon
@@ -375,25 +352,25 @@ export function LeadDrawer({
                 <p className="py-6 text-center text-xs text-muted-foreground">No chat messages recorded yet.</p>
               )}
               {!eventsLoading && chatMessages.length > 0 && (
-                <div className="space-y-3 rounded-xl border bg-muted/30 p-3 max-h-[360px] overflow-y-auto">
+                <div className="space-y-3 rounded-2xl border border-border/40 bg-muted/20 p-3.5 max-h-[380px] overflow-y-auto">
                   {chatMessages.map((msg, i) => (
                     <div
                       key={i}
                       className={`flex flex-col ${msg.sender === "user" ? "items-start" : "items-end"}`}
                     >
-                      <span className="text-[10px] text-muted-foreground mb-0.5 px-1 font-medium">
+                      <span className="text-[10px] text-muted-foreground mb-1 px-1 font-medium">
                         {msg.sender === "user" ? (lead.name || lead.first_name || "Client") : "🤖 Nextgen AI Bot"}
                       </span>
                       <div
-                        className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
+                        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-2xs ${
                           msg.sender === "user"
-                            ? "bg-card border text-card-foreground rounded-tl-xs shadow-2xs"
-                            : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-950 dark:text-emerald-200 rounded-tr-xs shadow-2xs"
+                            ? "bg-muted/80 text-foreground border border-border/40 rounded-bl-xs"
+                            : "bg-primary/10 text-primary border border-primary/20 rounded-br-xs"
                         }`}
                       >
                         <div className="whitespace-pre-wrap break-words">{msg.text}</div>
                       </div>
-                      <span className="text-[9px] text-muted-foreground mt-0.5 px-1">
+                      <span className="text-[9px] text-muted-foreground/75 mt-1 px-1 font-mono tabular-nums">
                         {formatDate(msg.time)}
                       </span>
                     </div>
@@ -836,6 +813,42 @@ export function LeadDrawer({
               </Button>
             )}
           </div>
+        </div>
+
+        {/* ── 📱 Persistent Sticky Frosted Action Bar (iOS Ergonomics) ── */}
+        <div className="sticky bottom-0 z-20 apple-glass border-t border-border/40 p-3 sm:px-5 flex items-center gap-2.5 shrink-0">
+          {lead.phone ? (
+            <>
+              <Button
+                asChild
+                size="sm"
+                variant="default"
+                className="apple-button flex-1 h-11 min-h-[44px] gap-2 rounded-xl text-xs font-semibold shadow-xs"
+              >
+                <a href={`tel:${lead.phone}`}>
+                  <Phone className="size-4" /> Call Client
+                </a>
+              </Button>
+              <Button
+                asChild
+                size="sm"
+                variant="outline"
+                className="apple-button flex-1 h-11 min-h-[44px] gap-2 rounded-xl text-xs font-semibold border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-xs"
+              >
+                <a
+                  href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <MessageSquare className="size-4" /> WhatsApp
+                </a>
+              </Button>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center py-2 text-xs text-muted-foreground font-mono">
+              Telegram ID: {lead.lead_id} (Direct calling unavailable)
+            </div>
+          )}
         </div>
 
         <AlertDialog open={dropOpen} onOpenChange={setDropOpen}>
