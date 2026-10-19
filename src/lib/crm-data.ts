@@ -377,13 +377,14 @@ export function useApprovePropertySubmission() {
 
       const resolvedClientId = submission.client_id || clientId || "8699dca1-2b97-4367-85b8-8a0db2fd51f5";
 
-      // 3. Insert into inventory (note: bhk_num lives inside attributes jsonb, not as a top-level column)
+      // 3. Insert into inventory (both bhk_num column and inside attributes jsonb)
       const { error: insertError } = await supabase.from("inventory").insert({
         property_id: propertyId,
         client_id: resolvedClientId,
         project_name: submission.project_name || submission.society_name || "Direct Owner Property",
         property_category: propertyCategory,
         configuration: submission.configuration || "2BHK",
+        bhk_num,
         location: submission.location || "Vadodara",
         city: "Vadodara",
         price,

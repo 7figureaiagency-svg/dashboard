@@ -2241,6 +2241,7 @@ function PropertyForm({
 
     const attributes: Record<string, unknown> = {
       ...commercialSpecs,
+      ...(bhk_num !== null ? { bhk_num } : {}),
       ...(current.floor_number ? { floor_number: toNumber(current.floor_number) } : {}),
       ...(current.total_floors ? { total_floors: toNumber(current.total_floors) } : {}),
       ...(current.bathrooms ? { bathrooms: toNumber(current.bathrooms) } : {}),
