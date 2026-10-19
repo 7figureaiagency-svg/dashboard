@@ -118,10 +118,10 @@ export function buildExecStats(
       }
 
       const visitsDone = mine.filter((l) => isVisitDoneStatus(l.status)).length;
-      const visitsBooked = mine.filter((l) => isVisitBookedStatus(l.status)).length;
+      const visitsBooked = mine.filter((l) => isVisitBookedStatus(l.status) || l.site_visit_booked).length;
       const visitShowupRate =
         visitsBooked > 0
-          ? Math.round((visitsDone / visitsBooked) * 100)
+          ? Math.min(100, Math.round((visitsDone / visitsBooked) * 100))
           : visitsDone > 0
           ? 100
           : 0;
@@ -248,7 +248,7 @@ export function buildTeamSummary(leads: Lead[], period: Period): TeamSummary {
       totalPipelineValue += price;
     }
 
-    if (isVisitBookedStatus(l.status)) totalVisitsBooked += 1;
+    if (isVisitBookedStatus(l.status) || l.site_visit_booked) totalVisitsBooked += 1;
     if (isVisitDoneStatus(l.status)) totalVisitsDone += 1;
 
     const m = responseMinutes(l);
@@ -270,7 +270,7 @@ export function buildTeamSummary(leads: Lead[], period: Period): TeamSummary {
 
   const teamShowupRate =
     totalVisitsBooked > 0
-      ? Math.round((totalVisitsDone / totalVisitsBooked) * 100)
+      ? Math.min(100, Math.round((totalVisitsDone / totalVisitsBooked) * 100))
       : totalVisitsDone > 0
       ? 100
       : 0;
