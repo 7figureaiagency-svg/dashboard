@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nextgn Realtors - Luxury Brokerage CRM &amp; Lead Management</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS with Forms and Container Queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration strictly mapped to design tokens -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "tertiary-fixed-dim": "#4edea3",
+            "inverse-on-surface": "#eaf1ff",
+            "secondary-fixed": "#ffdcc3",
+            "outline-variant": "#c6c6cd",
+            "tertiary": "#000000",
+            "primary-fixed": "#dae2fd",
+            "surface-container-highest": "#d3e4fe",
+            "secondary-fixed-dim": "#ffb77d",
+            "on-secondary-fixed": "#2f1500",
+            "on-tertiary-fixed": "#002113",
+            "secondary": "#904d00",
+            "surface-dim": "#cbdbf5",
+            "surface-tint": "#565e74",
+            "error-container": "#ffdad6",
+            "surface-container-lowest": "#ffffff",
+            "on-error": "#ffffff",
+            "on-primary-fixed-variant": "#3f465c",
+            "on-primary": "#ffffff",
+            "on-background": "#0b1c30",
+            "surface-container": "#e5eeff",
+            "on-tertiary-fixed-variant": "#005236",
+            "surface": "#f8f9ff",
+            "on-tertiary-container": "#009668",
+            "surface-variant": "#d3e4fe",
+            "inverse-surface": "#213145",
+            "primary-fixed-dim": "#bec6e0",
+            "tertiary-fixed": "#6ffbbe",
+            "outline": "#76777d",
+            "on-primary-fixed": "#131b2e",
+            "primary": "#000000",
+            "on-surface": "#0b1c30",
+            "on-primary-container": "#7c839b",
+            "surface-bright": "#f8f9ff",
+            "surface-container-high": "#dce9ff",
+            "tertiary-container": "#002113",
+            "on-error-container": "#93000a",
+            "on-secondary": "#ffffff",
+            "error": "#ba1a1a",
+            "on-secondary-container": "#663500",
+            "primary-container": "#131b2e",
+            "on-secondary-fixed-variant": "#6e3900",
+            "surface-container-low": "#eff4ff",
+            "on-surface-variant": "#45464d",
+            "inverse-primary": "#bec6e0",
+            "secondary-container": "#fe932c",
+            "on-tertiary": "#ffffff",
+            "background": "#f8f9ff"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-2xl": "2.5rem",
+            "margin": "1rem",
+            "gutter": "1rem",
+            "space-md": "0.75rem",
+            "space-xl": "1.75rem",
+            "space-lg": "1.25rem",
+            "space-sm": "0.5rem",
+            "gutter-desktop": "1.25rem",
+            "space-xs": "0.25rem",
+            "margin-tablet": "1.5rem",
+            "margin-desktop": "2rem"
+          },
+          "fontFamily": {
+            "data-tabular": ["Inter"],
+            "headline-xl": ["Plus Jakarta Sans"],
+            "headline-sm": ["Plus Jakarta Sans"],
+            "headline-xl-mobile": ["Plus Jakarta Sans"],
+            "label-md": ["Inter"],
+            "data-metric": ["Plus Jakarta Sans"],
+            "headline-md": ["Plus Jakarta Sans"],
+            "headline-lg": ["Plus Jakarta Sans"],
+            "body-md": ["Inter"],
+            "body-sm": ["Inter"],
+            "body-lg": ["Inter"],
+            "label-sm": ["Inter"]
+          },
+          "fontSize": {
+            "data-tabular": ["13px", { "lineHeight": "18px", "fontWeight": "500" }],
+            "headline-xl": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.025em", "fontWeight": "700" }],
+            "headline-sm": ["16px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "headline-xl-mobile": ["26px", { "lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+            "data-metric": ["28px", { "lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "body-lg": ["15px", { "lineHeight": "24px", "fontWeight": "400" }],
+            "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.03em", "fontWeight": "600" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    /* Tabular lining figures for financial clarity */
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+    /* Subtle custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #c6c6cd;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased min-h-screen flex selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- ========================================================================= -->
+<!-- SHARED COMPONENT 1: SideNavBar (Rail expandable docked left)               -->
+<!-- ========================================================================= -->
+<aside class="fixed top-0 left-0 bottom-0 z-40 w-68 flex flex-col justify-between p-4 bg-surface-container-lowest border-r border-outline-variant select-none">
+<div class="flex flex-col gap-6">
+<!-- Monogram & Brand Header -->
+<div class="flex items-center gap-3 px-2 pt-1 pb-2">
+<div class="w-10 h-10 rounded-lg bg-primary-container text-on-primary flex items-center justify-center font-headline-sm text-headline-sm font-bold shadow-sm ring-1 ring-white/10">
+          NR
+        </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="text-headline-sm font-headline-sm font-bold text-on-surface tracking-tight">Nextgn Realtors</span>
+</div>
+<span class="text-label-md font-label-md text-on-surface-variant">Luxury Brokerage CRM</span>
+</div>
+</div>
+<!-- Quick Action: Add Lead -->
+<button class="w-full h-9 flex items-center justify-center gap-2 rounded-lg bg-primary text-on-primary text-label-md font-label-md font-semibold hover:bg-primary-container transition-colors duration-150 active:scale-[0.99] shadow-sm">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>Add Lead</span>
+</button>
+<!-- Navigation Links (Active item: 'Pipeline' matches current view) -->
+<nav class="flex flex-col gap-1">
+<!-- Pipeline (ACTIVE) -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-container text-on-surface font-semibold text-label-md font-label-md transition-colors duration-150" href="#pipeline">
+<span class="material-symbols-outlined text-[20px] text-primary" style="font-variation-settings: 'FILL' 1;">space_dashboard</span>
+<span>Pipeline</span>
+</a>
+<!-- Leads -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-normal text-label-md font-label-md transition-colors duration-150" href="#leads">
+<span class="material-symbols-outlined text-[20px]">group</span>
+<span>Leads</span>
+<span class="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant tabular-nums">59</span>
+</a>
+<!-- Site Visits -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-normal text-label-md font-label-md transition-colors duration-150" href="#site-visits">
+<span class="material-symbols-outlined text-[20px]">calendar_month</span>
+<span>Site Visits</span>
+<span class="ml-auto w-2 h-2 rounded-full bg-secondary-container"></span>
+</a>
+<!-- Properties -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-normal text-label-md font-label-md transition-colors duration-150" href="#properties">
+<span class="material-symbols-outlined text-[20px]">domain</span>
+<span>Properties</span>
+</a>
+<!-- Analytics -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-normal text-label-md font-label-md transition-colors duration-150" href="#analytics">
+<span class="material-symbols-outlined text-[20px]">monitoring</span>
+<span>Analytics</span>
+</a>
+<!-- Deals -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-normal text-label-md font-label-md transition-colors duration-150" href="#deals">
+<span class="material-symbols-outlined text-[20px]">handshake</span>
+<span>Deals</span>
+</a>
+</nav>
+</div>
+<!-- Footer Controls & Workspace Live Status -->
+<div class="flex flex-col gap-4 border-t border-outline-variant pt-4">
+<!-- Live Sync Feed Indicator -->
+<div class="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant/60">
+<div class="flex items-center gap-2">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-on-tertiary-container opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-on-tertiary-container"></span>
+</span>
+<span class="text-label-sm font-label-sm font-medium text-on-surface-variant">Live Feed Active</span>
+</div>
+<span class="text-label-sm font-label-sm text-on-surface-variant/80 tabular-nums">1.2ms</span>
+</div>
+<!-- Settings & Support Links -->
+<div class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-normal text-label-md font-label-md transition-colors duration-150" href="#settings">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-normal text-label-md font-label-md transition-colors duration-150" href="#support">
+<span class="material-symbols-outlined text-[20px]">help</span>
+<span>Support</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- ========================================================================= -->
+<!-- MAIN CONTENT CANVAS WRAPPER (Left offset by SideNav 280px / 17.5rem)     -->
+<!-- ========================================================================= -->
+<div class="flex-1 ml-[17rem] flex flex-col min-h-screen">
+<!-- ======================================================================= -->
+<!-- SHARED COMPONENT 2: TopNavBar                                           -->
+<!-- ======================================================================= -->
+<header class="sticky top-0 z-30 flex items-center justify-between w-full h-14 px-6 bg-surface-container-lowest border-b border-outline-variant select-none shadow-[0_1px_2px_0_rgba(15,23,42,0.04)]">
+<!-- Left side: Live sync pill & search -->
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+<span class="text-headline-md font-headline-md font-bold text-on-surface tracking-tight hidden lg:inline">Nextgn Realtors</span>
+<span class="text-outline hidden lg:inline">/</span>
+<div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container-low border border-outline-variant/60">
+<span class="w-1.5 h-1.5 rounded-full bg-on-tertiary-container"></span>
+<span class="text-label-sm font-label-sm text-on-surface-variant tabular-nums">Live Sync (12s ago)</span>
+</div>
+</div>
+<!-- Global Search Field -->
+<div class="relative w-64 md:w-80">
+<span class="material-symbols-outlined absolute left-2.5 top-2 text-on-surface-variant text-[18px]">search</span>
+<input class="w-full h-8 pl-8 pr-14 text-body-sm font-body-sm bg-surface-container-low border border-outline-variant rounded-md text-on-surface placeholder:text-on-surface-variant/60 focus:bg-surface-container-lowest focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="Search leads, units, or phone..." type="text"/>
+<kbd class="absolute right-2 top-1.5 px-1.5 py-0.5 rounded bg-surface-container-lowest border border-outline-variant text-[10px] font-label-sm text-on-surface-variant">⌘K</kbd>
+</div>
+</div>
+<!-- Center: Date Segment Filter Pills -->
+<div class="flex items-center bg-surface-container-low p-0.5 rounded-lg border border-outline-variant/70">
+<button class="px-3 py-1 rounded-md bg-surface-container-lowest text-on-surface font-semibold text-label-md font-label-md shadow-sm transition-all">
+          Today
+        </button>
+<button class="px-3 py-1 rounded-md text-on-surface-variant hover:text-on-surface font-normal text-label-md font-label-md transition-all">
+          Tomorrow
+        </button>
+<button class="px-3 py-1 rounded-md text-on-surface-variant hover:text-on-surface font-normal text-label-md font-label-md transition-all">
+          All Time
+        </button>
+</div>
+<!-- Right side actions: Tools, Alerts & Executive Profile -->
+<div class="flex items-center gap-3">
+<!-- Live Sync action button -->
+<button class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-label-md font-label-md font-medium text-on-surface-variant border border-outline-variant rounded-md bg-surface-container-lowest hover:bg-surface-container-low hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[16px]">sync</span>
+<span>Live Sync</span>
+</button>
+<!-- Notification bell with dot -->
+<button class="relative p-1.5 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-secondary"></span>
+</button>
+<button class="p-1.5 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[20px]">tune</span>
+</button>
+<div class="h-4 w-px bg-outline-variant"></div>
+<!-- Executive Broker Profile -->
+<div class="flex items-center gap-2 pl-1 cursor-pointer">
+<div class="w-8 h-8 rounded-full bg-primary-container text-inverse-primary flex items-center justify-center font-headline-sm text-[12px] font-bold border border-outline-variant">
+            VR
+          </div>
+<div class="hidden xl:flex flex-col text-left leading-tight">
+<span class="text-label-md font-label-md font-semibold text-on-surface">Vikramaditya Roy</span>
+<span class="text-[11px] font-label-sm text-on-surface-variant">Senior VP Sales</span>
+</div>
+</div>
+</div>
+</header>
+<!-- ======================================================================= -->
+<!-- DASHBOARD WORKSPACE CANVAS                                              -->
+<!-- ======================================================================= -->
+<main class="p-6 flex flex-col gap-6 max-w-[1600px] w-full mx-auto">
+<!-- Page Title & Operational Context -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+<div>
+<div class="flex items-center gap-2 text-label-md font-label-md text-on-surface-variant mb-1">
+<span>Portfolio</span>
+<span class="text-outline">/</span>
+<span>Ultra Luxury Mumbai &amp; NCR</span>
+<span class="text-outline">/</span>
+<span class="text-on-surface font-medium">Q3 High Velocity Deals</span>
+</div>
+<h1 class="text-headline-lg font-headline-lg font-bold text-on-surface tracking-tight">Executive Lead Pipeline</h1>
+</div>
+<!-- Quick Toolbar Action Cluster -->
+<div class="flex items-center gap-2.5">
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface-container-lowest border border-outline-variant text-on-surface text-label-md font-label-md font-medium hover:bg-surface-container-low shadow-[0_1px_2px_0_rgba(15,23,42,0.04)] transition-all">
+<span class="material-symbols-outlined text-[16px]">file_download</span>
+<span>Export CSV</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface-container-lowest border border-outline-variant text-on-surface text-label-md font-label-md font-medium hover:bg-surface-container-low shadow-[0_1px_2px_0_rgba(15,23,42,0.04)] transition-all">
+<span class="material-symbols-outlined text-[16px]">view_column</span>
+<span>Customize Columns</span>
+</button>
+<button class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-primary text-on-primary text-label-md font-label-md font-semibold hover:bg-primary-container shadow-sm transition-all active:scale-[0.99]">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>Add Lead</span>
+</button>
+</div>
+</div>
+<!-- ===================================================================== -->
+<!-- SECTION 3: TRIAGE METRIC STRIP (4 Linear-grade elevated KPI cards)   -->
+<!-- ===================================================================== -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+<!-- KPI Card 1: Visits Today -->
+<div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/80 shadow-[0_1px_2px_0_rgba(15,23,42,0.04)] hover:border-outline transition-all duration-200">
+<div class="flex items-center justify-between text-on-surface-variant mb-2">
+<span class="text-label-md font-label-md font-medium">Visits Today</span>
+<div class="w-7 h-7 rounded-lg bg-surface-container-low flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined text-[16px]">calendar_month</span>
+</div>
+</div>
+<div class="flex items-baseline gap-2 mb-1.5">
+<span class="text-data-metric font-data-metric text-on-surface tabular-nums">12</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm font-semibold px-2 py-0.5 rounded-full bg-surface-container text-on-tertiary-container border border-tertiary-fixed-dim/40">
+<span class="material-symbols-outlined text-[12px]">trending_up</span>
+              +3 vs yesterday
+            </span>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant">8 Confirmed • 4 In Transit</p>
+</div>
+<!-- KPI Card 2: Action Needed -->
+<div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/80 shadow-[0_1px_2px_0_rgba(15,23,42,0.04)] hover:border-outline transition-all duration-200">
+<div class="flex items-center justify-between text-on-surface-variant mb-2">
+<span class="text-label-md font-label-md font-medium">Action Needed</span>
+<div class="w-7 h-7 rounded-lg bg-secondary-fixed/40 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[16px]">warning</span>
+</div>
+</div>
+<div class="flex items-baseline gap-2 mb-1.5">
+<span class="text-data-metric font-data-metric text-on-surface tabular-nums">4</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm font-semibold px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant border border-secondary-fixed-dim">
+              Urgent SLA &lt; 15m
+            </span>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant">Missed Follow-ups &amp; Escalations</p>
+</div>
+<!-- KPI Card 3: Qualified Leads -->
+<div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/80 shadow-[0_1px_2px_0_rgba(15,23,42,0.04)] hover:border-outline transition-all duration-200">
+<div class="flex items-center justify-between text-on-surface-variant mb-2">
+<span class="text-label-md font-label-md font-medium">Qualified Leads</span>
+<div class="w-7 h-7 rounded-lg bg-surface-container-low flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined text-[16px]">verified</span>
+</div>
+</div>
+<div class="flex items-baseline gap-2 mb-1.5">
+<span class="text-data-metric font-data-metric text-on-surface tabular-nums">28</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm font-semibold px-2 py-0.5 rounded-full bg-surface-container-low text-on-surface-variant border border-outline-variant">
+              +18% this week
+            </span>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant">Ready for Site Demo</p>
+</div>
+<!-- KPI Card 4: In Qualifying -->
+<div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/80 shadow-[0_1px_2px_0_rgba(15,23,42,0.04)] hover:border-outline transition-all duration-200">
+<div class="flex items-center justify-between text-on-surface-variant mb-2">
+<span class="text-label-md font-label-md font-medium">In Qualifying</span>
+<div class="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[16px]">auto_awesome</span>
+</div>
+</div>
+<div class="flex items-baseline gap-2 mb-1.5">
+<span class="text-data-metric font-data-metric text-on-surface tabular-nums">15</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-label-sm font-semibold px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant border border-surface-variant">
+              Avg resp 42s
+            </span>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant">AI Sales Bot Nurturing</p>
+</div>
+</div>
+<!-- ===================================================================== -->
+<!-- SECTION 4: MAIN DATA TABLE & FILTER TOOLBAR                            -->
+<!-- ===================================================================== -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant/80 shadow-[0_1px_3px_0_rgba(15,23,42,0.04)] overflow-hidden flex flex-col">
+<!-- Filter Tabs Strip -->
+<div class="flex items-center justify-between px-4 pt-3 border-b border-outline-variant bg-surface-container-lowest overflow-x-auto">
+<div class="flex items-center gap-6">
+<button class="pb-2.5 text-label-md font-label-md font-semibold text-on-surface border-b-2 border-primary flex items-center gap-1.5">
+<span>All Leads</span>
+<span class="px-1.5 py-0.2 rounded-full bg-surface-container text-on-surface text-[11px] tabular-nums">59</span>
+</button>
+<button class="pb-2.5 text-label-md font-label-md font-medium text-on-surface-variant hover:text-on-surface border-b-2 border-transparent transition-colors flex items-center gap-1.5">
+<span>Hot Prospects</span>
+<span class="px-1.5 py-0.2 rounded-full bg-secondary-fixed/50 text-secondary text-[11px] tabular-nums">14</span>
+</button>
+<button class="pb-2.5 text-label-md font-label-md font-medium text-on-surface-variant hover:text-on-surface border-b-2 border-transparent transition-colors flex items-center gap-1.5">
+<span>Site Visit Scheduled</span>
+<span class="px-1.5 py-0.2 rounded-full bg-surface-container text-on-tertiary-container text-[11px] tabular-nums">12</span>
+</button>
+<button class="pb-2.5 text-label-md font-label-md font-medium text-on-surface-variant hover:text-on-surface border-b-2 border-transparent transition-colors flex items-center gap-1.5">
+<span>Follow-up Due</span>
+<span class="px-1.5 py-0.2 rounded-full bg-surface-container-low text-on-surface-variant text-[11px] tabular-nums">8</span>
+</button>
+<button class="pb-2.5 text-label-md font-label-md font-medium text-on-surface-variant hover:text-on-surface border-b-2 border-transparent transition-colors flex items-center gap-1.5">
+<span>Closed / Won</span>
+<span class="px-1.5 py-0.2 rounded-full bg-surface-container-low text-on-surface-variant text-[11px] tabular-nums">25</span>
+</button>
+</div>
+<div class="pb-2 hidden sm:flex items-center gap-2">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Last updated: Just now</span>
+</div>
+</div>
+<!-- Fast Filter Controls Bar -->
+<div class="p-3 bg-surface-container-lowest border-b border-outline-variant/60 flex flex-wrap items-center justify-between gap-3">
+<div class="flex flex-wrap items-center gap-2.5 flex-1">
+<!-- Quick search input inside table -->
+<div class="relative w-72">
+<span class="material-symbols-outlined absolute left-2.5 top-2 text-on-surface-variant text-[17px]">search</span>
+<input class="w-full h-8 pl-8 pr-3 text-body-sm font-body-sm bg-surface-container-low border border-outline-variant rounded-md text-on-surface placeholder:text-on-surface-variant/70 focus:bg-surface-container-lowest focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="Search by lead name, phone, or unit ID..." type="text"/>
+</div>
+<!-- Property Filter Select -->
+<div class="relative">
+<select class="h-8 pl-2.5 pr-8 text-label-md font-label-md bg-surface-container-lowest border border-outline-variant rounded-md text-on-surface hover:bg-surface-container-low cursor-pointer appearance-none outline-none focus:border-primary">
+<option>All Properties: The Grandview, Oberoi, Godrej...</option>
+<option>The Grandview Residences (Worli)</option>
+<option>Oberoi Sky City (Borivali)</option>
+<option>Godrej Horizon (Wadala)</option>
+<option>Lodha Altamount (South Mumbai)</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-2 text-[16px] text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+<!-- Executive Filter Select -->
+<div class="relative">
+<select class="h-8 pl-2.5 pr-8 text-label-md font-label-md bg-surface-container-lowest border border-outline-variant rounded-md text-on-surface hover:bg-surface-container-low cursor-pointer appearance-none outline-none focus:border-primary">
+<option>All Agents</option>
+<option>Sameer Joshi</option>
+<option>Tanvi Shah</option>
+<option>Arjun Verma</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-2 text-[16px] text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+<!-- Budget Filter Button / Chip -->
+<button class="h-8 px-2.5 flex items-center gap-1.5 text-label-md font-label-md bg-surface-container-lowest border border-outline-variant rounded-md text-on-surface hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">currency_rupee</span>
+<span>Budget: ₹2.00 Cr - ₹8.00 Cr</span>
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">close</span>
+</button>
+</div>
+<!-- Fast Sort Dropdown -->
+<div class="flex items-center gap-2">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Sort:</span>
+<div class="relative">
+<select class="h-8 pl-2 pr-7 text-label-md font-label-md bg-surface-container-low border border-outline-variant rounded-md text-on-surface cursor-pointer appearance-none outline-none">
+<option>Priority (Highest first)</option>
+<option>Budget (High to Low)</option>
+<option>Recent Activity</option>
+</select>
+<span class="material-symbols-outlined absolute right-1.5 top-2 text-[16px] text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+</div>
+</div>
+<!-- =================================================================== -->
+<!-- THE RICH TABLE                                                      -->
+<!-- =================================================================== -->
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant text-[11px] font-label-sm uppercase tracking-wider text-on-surface-variant">
+<th class="w-10 px-4 py-2.5">
+<input class="w-3.5 h-3.5 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer" type="checkbox"/>
+</th>
+<th class="px-3 py-2.5 font-semibold">Customer Name</th>
+<th class="px-3 py-2.5 font-semibold">Assigned Executive</th>
+<th class="px-3 py-2.5 font-semibold">Phone</th>
+<th class="px-3 py-2.5 font-semibold">Status</th>
+<th class="px-3 py-2.5 font-semibold">AI Bot Status</th>
+<th class="px-3 py-2.5 font-semibold">Selected Property</th>
+<th class="px-3 py-2.5 font-semibold">Budget</th>
+<th class="px-4 py-2.5 font-semibold text-right">Quick Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/60 text-body-sm font-body-sm">
+<!-- ROW 1: Hot Lead (Aarav Singhania) -->
+<tr class="hover:bg-surface-container-low/70 transition-colors group">
+<td class="px-4 py-3">
+<input class="w-3.5 h-3.5 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer" type="checkbox"/>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-container" title="Hot Priority"></span>
+<div class="flex flex-col">
+<span class="font-semibold text-on-surface group-hover:text-primary">Aarav Singhania</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant tabular-nums">14m ago • Web Portal</span>
+</div>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center text-[10px] font-bold">
+                      SJ
+                    </div>
+<span class="text-on-surface font-medium">Sameer Joshi</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-1.5 text-on-surface-variant tabular-nums font-data-tabular">
+<span>+91 98201 44821</span>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity hover:text-on-surface" title="Copy Number">
+<span class="material-symbols-outlined text-[14px]">content_copy</span>
+</button>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-fixed text-on-secondary-fixed-variant border border-secondary-fixed-dim">
+<span class="material-symbols-outlined text-[13px] text-secondary">local_fire_department</span>
+                    Hot Lead
+                  </span>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-on-tertiary-container opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-on-tertiary-container"></span>
+</span>
+<span class="text-label-sm font-label-sm text-on-surface font-medium">Active Nurture</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex flex-col">
+<span class="font-medium text-on-surface">The Grandview Residences</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">4BHK Penthouse • Tower A</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="font-data-tabular text-data-tabular text-on-surface font-semibold tabular-nums">₹4.85 Cr</span>
+</td>
+<td class="px-4 py-3 text-right">
+<div class="flex items-center justify-end gap-1.5">
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[13px]">call</span>
+<span>Call</span>
+</button>
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded bg-surface-container text-on-tertiary-container border border-tertiary-fixed-dim/50 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[13px]">chat</span>
+<span>WhatsApp</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low">
+<span class="material-symbols-outlined text-[16px]">more_vert</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- ROW 2: Site Visit Booked (Dr. Meera Nambiar) -->
+<tr class="hover:bg-surface-container-low/70 transition-colors group">
+<td class="px-4 py-3">
+<input class="w-3.5 h-3.5 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer" type="checkbox"/>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-on-tertiary-container" title="Confirmed Booking"></span>
+<div class="flex flex-col">
+<span class="font-semibold text-on-surface group-hover:text-primary">Dr. Meera Nambiar</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant tabular-nums">42m ago • Referral</span>
+</div>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center text-[10px] font-bold">
+                      TS
+                    </div>
+<span class="text-on-surface font-medium">Tanvi Shah</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-1.5 text-on-surface-variant tabular-nums font-data-tabular">
+<span>+91 99304 88120</span>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity hover:text-on-surface" title="Copy Number">
+<span class="material-symbols-outlined text-[14px]">content_copy</span>
+</button>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-label-sm bg-surface-container text-on-tertiary-container border border-tertiary-fixed-dim/60">
+<span class="material-symbols-outlined text-[13px]">event_available</span>
+                    Site Visit Booked
+                  </span>
+</td>
+<td class="px-3 py-3">
+<span class="text-label-sm font-label-sm text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded">
+                    Handed Over
+                  </span>
+</td>
+<td class="px-3 py-3">
+<div class="flex flex-col">
+<span class="font-medium text-on-surface">Oberoi Sky City</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">3BHK Duplex • Unit 1802</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="font-data-tabular text-data-tabular text-on-surface font-semibold tabular-nums">₹3.40 Cr</span>
+</td>
+<td class="px-4 py-3 text-right">
+<div class="flex items-center justify-end gap-1.5">
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[13px]">call</span>
+<span>Call</span>
+</button>
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded bg-surface-container text-on-tertiary-container border border-tertiary-fixed-dim/50 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[13px]">chat</span>
+<span>WhatsApp</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low">
+<span class="material-symbols-outlined text-[16px]">more_vert</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- ROW 3: Token Received (Rohan & Priya Kapoor) -->
+<tr class="hover:bg-surface-container-low/70 transition-colors group">
+<td class="px-4 py-3">
+<input class="w-3.5 h-3.5 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer" type="checkbox"/>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-on-tertiary-container" title="Deal Closing"></span>
+<div class="flex flex-col">
+<span class="font-semibold text-on-surface group-hover:text-primary">Rohan &amp; Priya Kapoor</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant tabular-nums">1h 10m ago • Direct Walk-in</span>
+</div>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center text-[10px] font-bold">
+                      AV
+                    </div>
+<span class="text-on-surface font-medium">Arjun Verma</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-1.5 text-on-surface-variant tabular-nums font-data-tabular">
+<span>+91 97690 12554</span>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity hover:text-on-surface" title="Copy Number">
+<span class="material-symbols-outlined text-[14px]">content_copy</span>
+</button>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-label-sm bg-surface-container text-on-tertiary-container border border-tertiary-fixed-dim/60">
+<span class="material-symbols-outlined text-[13px]">payments</span>
+                    Token Received
+                  </span>
+</td>
+<td class="px-3 py-3">
+<span class="text-label-sm font-label-sm text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded">
+                    Paused
+                  </span>
+</td>
+<td class="px-3 py-3">
+<div class="flex flex-col">
+<span class="font-medium text-on-surface">Lodha Altamount</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">5BHK Tower • Sky Villa 32</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="font-data-tabular text-data-tabular text-on-surface font-semibold tabular-nums">₹6.20 Cr</span>
+</td>
+<td class="px-4 py-3 text-right">
+<div class="flex items-center justify-end gap-1.5">
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[13px]">call</span>
+<span>Call</span>
+</button>
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded bg-surface-container text-on-tertiary-container border border-tertiary-fixed-dim/50 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[13px]">chat</span>
+<span>WhatsApp</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low">
+<span class="material-symbols-outlined text-[16px]">more_vert</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- ROW 4: Callback Scheduled (Vikram Malhotra) -->
+<tr class="hover:bg-surface-container-low/70 transition-colors group">
+<td class="px-4 py-3">
+<input class="w-3.5 h-3.5 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer" type="checkbox"/>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-outline" title="Scheduled Callback"></span>
+<div class="flex flex-col">
+<span class="font-semibold text-on-surface group-hover:text-primary">Vikram Malhotra</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant tabular-nums">2h 15m ago • LinkedIn Ads</span>
+</div>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center text-[10px] font-bold">
+                      SJ
+                    </div>
+<span class="text-on-surface font-medium">Sameer Joshi</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-1.5 text-on-surface-variant tabular-nums font-data-tabular">
+<span>+91 98112 77401</span>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity hover:text-on-surface" title="Copy Number">
+<span class="material-symbols-outlined text-[14px]">content_copy</span>
+</button>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-label-sm bg-surface-container-high text-on-surface border border-outline-variant">
+<span class="material-symbols-outlined text-[13px]">schedule</span>
+                    Callback Scheduled
+                  </span>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<span class="relative flex h-2 w-2">
+<span class="relative inline-flex rounded-full h-2 w-2 bg-on-tertiary-container"></span>
+</span>
+<span class="text-label-sm font-label-sm text-on-surface font-medium">Active Nurture</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex flex-col">
+<span class="font-medium text-on-surface">Godrej Horizon</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">Luxury Sea-facing • 3BHK</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="font-data-tabular text-data-tabular text-on-surface font-semibold tabular-nums">₹2.40 Cr</span>
+</td>
+<td class="px-4 py-3 text-right">
+<div class="flex items-center justify-end gap-1.5">
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[13px]">call</span>
+<span>Call</span>
+</button>
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded bg-surface-container text-on-tertiary-container border border-tertiary-fixed-dim/50 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[13px]">chat</span>
+<span>WhatsApp</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low">
+<span class="material-symbols-outlined text-[16px]">more_vert</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- ROW 5: Follow-up Due (Ananya Deshmukh) -->
+<tr class="hover:bg-surface-container-low/70 transition-colors group">
+<td class="px-4 py-3">
+<input class="w-3.5 h-3.5 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer" type="checkbox"/>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary" title="SLA Breach Risk"></span>
+<div class="flex flex-col">
+<span class="font-semibold text-on-surface group-hover:text-primary">Ananya Deshmukh</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant tabular-nums">3h 40m ago • WhatsApp Bot</span>
+</div>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center text-[10px] font-bold">
+                      TS
+                    </div>
+<span class="text-on-surface font-medium">Tanvi Shah</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-1.5 text-on-surface-variant tabular-nums font-data-tabular">
+<span>+91 99200 33418</span>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity hover:text-on-surface" title="Copy Number">
+<span class="material-symbols-outlined text-[14px]">content_copy</span>
+</button>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-fixed/50 text-secondary border border-secondary-fixed">
+<span class="material-symbols-outlined text-[13px]">alarm</span>
+                    Follow-up Due
+                  </span>
+</td>
+<td class="px-3 py-3">
+<span class="text-label-sm font-label-sm text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded">
+                    Handed Over
+                  </span>
+</td>
+<td class="px-3 py-3">
+<div class="flex flex-col">
+<span class="font-medium text-on-surface">The Grandview Residences</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">3BHK Grand View • Unit 1204</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="font-data-tabular text-data-tabular text-on-surface font-semibold tabular-nums">₹3.10 Cr</span>
+</td>
+<td class="px-4 py-3 text-right">
+<div class="flex items-center justify-end gap-1.5">
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[13px]">call</span>
+<span>Call</span>
+</button>
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded bg-surface-container text-on-tertiary-container border border-tertiary-fixed-dim/50 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[13px]">chat</span>
+<span>WhatsApp</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low">
+<span class="material-symbols-outlined text-[16px]">more_vert</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- ROW 6: Hot Lead (Kabir Sen) -->
+<tr class="hover:bg-surface-container-low/70 transition-colors group">
+<td class="px-4 py-3">
+<input class="w-3.5 h-3.5 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer" type="checkbox"/>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-container" title="Hot Priority"></span>
+<div class="flex flex-col">
+<span class="font-semibold text-on-surface group-hover:text-primary">Kabir Sen</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant tabular-nums">4h 05m ago • Instagram Ads</span>
+</div>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center text-[10px] font-bold">
+                      AV
+                    </div>
+<span class="text-on-surface font-medium">Arjun Verma</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-1.5 text-on-surface-variant tabular-nums font-data-tabular">
+<span>+91 98450 67329</span>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity hover:text-on-surface" title="Copy Number">
+<span class="material-symbols-outlined text-[14px]">content_copy</span>
+</button>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-label-sm bg-secondary-fixed text-on-secondary-fixed-variant border border-secondary-fixed-dim">
+<span class="material-symbols-outlined text-[13px] text-secondary">local_fire_department</span>
+                    Hot Lead
+                  </span>
+</td>
+<td class="px-3 py-3">
+<div class="flex items-center gap-2">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-on-tertiary-container opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-on-tertiary-container"></span>
+</span>
+<span class="text-label-sm font-label-sm text-on-surface font-medium">Active Nurture</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<div class="flex flex-col">
+<span class="font-medium text-on-surface">Godrej Horizon</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">2BHK High Floor • Tower B</span>
+</div>
+</td>
+<td class="px-3 py-3">
+<span class="font-data-tabular text-data-tabular text-on-surface font-semibold tabular-nums">₹1.85 Cr</span>
+</td>
+<td class="px-4 py-3 text-right">
+<div class="flex items-center justify-end gap-1.5">
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[13px]">call</span>
+<span>Call</span>
+</button>
+<button class="h-7 px-2 flex items-center gap-1 text-[11px] font-label-sm font-medium rounded bg-surface-container text-on-tertiary-container border border-tertiary-fixed-dim/50 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[13px]">chat</span>
+<span>WhatsApp</span>
+</button>
+<button class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low">
+<span class="material-symbols-outlined text-[16px]">more_vert</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- =================================================================== -->
+<!-- SECTION 5: TABLE FOOTER & PAGINATION CONTROLS                       -->
+<!-- =================================================================== -->
+<div class="px-4 py-3 bg-surface-container-lowest border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-3 text-label-md font-label-md">
+<!-- Lead Counter & Page Size -->
+<div class="flex items-center gap-4 text-on-surface-variant">
+<span class="tabular-nums">Showing <strong class="text-on-surface font-semibold">1–8</strong> of <strong class="text-on-surface font-semibold">59</strong> leads</span>
+<div class="flex items-center gap-1.5">
+<span>Rows per page:</span>
+<select class="h-7 pl-2 pr-6 text-label-sm font-label-sm bg-surface-container-low border border-outline-variant rounded text-on-surface outline-none cursor-pointer">
+<option>10</option>
+<option>25</option>
+<option>50</option>
+</select>
+</div>
+</div>
+<!-- Pagination Pill Group -->
+<div class="flex items-center gap-1">
+<button class="h-7 px-2.5 rounded border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low disabled:opacity-40 transition-colors flex items-center gap-1" disabled="">
+<span class="material-symbols-outlined text-[14px]">chevron_left</span>
+<span>Previous</span>
+</button>
+<button class="h-7 w-7 rounded bg-primary text-on-primary font-semibold flex items-center justify-center text-label-sm">
+              1
+            </button>
+<button class="h-7 w-7 rounded border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low flex items-center justify-center text-label-sm">
+              2
+            </button>
+<button class="h-7 w-7 rounded border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low flex items-center justify-center text-label-sm">
+              3
+            </button>
+<span class="px-1 text-outline">...</span>
+<button class="h-7 w-7 rounded border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low flex items-center justify-center text-label-sm">
+              6
+            </button>
+<button class="h-7 px-2.5 rounded border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-1">
+<span>Next</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Quick Operational Intelligence Card: Real Estate Market Velocity -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-1">
+<div class="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[20px]">speed</span>
+</div>
+<div>
+<div class="text-label-md font-label-md text-on-surface-variant">Average Time to Site Visit</div>
+<div class="text-headline-sm font-headline-sm font-bold text-on-surface tabular-nums">3.4 Days</div>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-secondary-fixed/50 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[20px]">bolt</span>
+</div>
+<div>
+<div class="text-label-md font-label-md text-on-surface-variant">High-Intent Deal Conversion</div>
+<div class="text-headline-sm font-headline-sm font-bold text-on-surface tabular-nums">41.8%</div>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-on-tertiary-container">
+<span class="material-symbols-outlined text-[20px]">security</span>
+</div>
+<div>
+<div class="text-label-md font-label-md text-on-surface-variant">Escrow Verification Status</div>
+<div class="text-headline-sm font-headline-sm font-bold text-on-surface">100% Compliant</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Micro-interaction JavaScript -->
+<script>
+    // Copy number notification micro-interaction
+    document.querySelectorAll('button[title="Copy Number"]').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const icon = this.querySelector('.material-symbols-outlined');
+        const originalIcon = icon.innerText;
+        icon.innerText = 'check';
+        setTimeout(() => {
+          icon.innerText = originalIcon;
+        }, 1200);
+      });
+    });
+  </script>
+</body></html>
