@@ -686,6 +686,105 @@ function parseBudgetFromText(text: string): number {
   return 0;
 }
 
+interface ParsedArea {
+  carpet_sqft: number | null;
+  super_built_up_sqft: number | null;
+  plot_area_sqft: number | null;
+}
+
+function parseAreaFromText(text: string): ParsedArea {
+  const normalized = normalizeIndicDigits(text || "");
+  const clean = normalized.replace(/,/g, "");
+  const lower = clean.toLowerCase().trim();
+
+  let carpet: number | null = null;
+  let superBuilt: number | null = null;
+  let plot: number | null = null;
+
+  // 1. Explicit matches for carpet area (e.g., "carpet 900", "900 carpet", "carpet area 900 sqft")
+  const carpetMatch1 = lower.match(/(?:carpet|carpat|karpet|carpet\s*area)\s*[:=-]?\s*(\d{2,6})/i);
+  const carpetMatch2 = lower.match(/(\d{2,6})\s*(?:sq\.?\s*ft|sqft|feet|square\s*feet|foot)?\s*(?:carpet|carpat|karpet)/i);
+  if (carpetMatch1) carpet = parseInt(carpetMatch1[1], 10);
+  else if (carpetMatch2) carpet = parseInt(carpetMatch2[1], 10);
+
+  // 2. Explicit matches for built-up / super built-up area (e.g., "built up 1250", "1250 built up", "super built 1500", "construction 1250", "sba 1250")
+  const builtMatch1 = lower.match(/(?:built[\s-]*up|buildup|super[\s-]*built|super[\s-]*built[\s-]*up|sba|construction|bua)\s*(?:area)?\s*[:=-]?\s*(\d{2,6})/i);
+  const builtMatch2 = lower.match(/(\d{2,6})\s*(?:sq\.?\s*ft|sqft|feet|square\s*feet|foot)?\s*(?:built[\s-]*up|buildup|super[\s-]*built|super[\s-]*built[\s-]*up|sba|construction|bua)/i);
+  if (builtMatch1) superBuilt = parseInt(builtMatch1[1], 10);
+  else if (builtMatch2) superBuilt = parseInt(builtMatch2[1], 10);
+
+  // 3. Explicit matches for plot / land area (e.g., "plot 1500", "plot area 1200", "zameen 2000", "plot size 1500")
+  const plotMatch1 = lower.match(/(?:plot|land|zameen|jamin)\s*(?:area|size)?\s*[:=-]?\s*(\d{2,6})/i);
+  const plotMatch2 = lower.match(/(\d{2,6})\s*(?:sq\.?\s*ft|sqft|feet|square\s*feet|foot|var|gaj|vigha)?\s*(?:plot|land|zameen|jamin)/i);
+  if (plotMatch1) plot = parseInt(plotMatch1[1], 10);
+  else if (plotMatch2) plot = parseInt(plotMatch2[1], 10);
+
+  // 4. Matches with sqft units without keyword (e.g., "1250 sqft", "1250 sq.ft", "900 feet", "1250 square feet")
+  if (!carpet && !superBuilt && !plot) {
+    const unitMatch = lower.match(/(\d{2,6})\s*(?:sq\.?\s*ft|sqft|feet|square\s*feet|foot|sq\s*mtr|sqm)\b/i);
+    if (unitMatch) {
+      const val = parseInt(unitMatch[1], 10);
+      if (val >= 50 && val <= 50000) {
+        if (lower.includes("built") || lower.includes("super") || lower.includes("construction")) {
+          superBuilt = val;
+        } else if (lower.includes("plot") || lower.includes("land") || lower.includes("zameen")) {
+          plot = val;
+        } else {
+          carpet = val;
+        }
+      }
+    }
+  }
+
+  // 5. Bare number fallback when user is simply answering the area question (e.g., "900", "1250", "around 1200")
+  if (!carpet && !superBuilt && !plot) {
+    const bareMatch = lower.match(/^(?:around|approx|lagbhag|andaje|karib|size|area)?\s*(\d{2,5})\s*(?:sqft|sq\.?\s*ft|feet)?$/i);
+    if (bareMatch) {
+      const val = parseInt(bareMatch[1], 10);
+      if (val >= 50 && val <= 50000) {
+        if (lower.includes("built") || lower.includes("super")) {
+          superBuilt = val;
+        } else if (lower.includes("plot") || lower.includes("land")) {
+          plot = val;
+        } else {
+          carpet = val;
+        }
+      }
+    }
+  }
+
+  return { carpet_sqft: carpet, super_built_up_sqft: superBuilt, plot_area_sqft: plot };
+}
+
+function formatSocietyAndLocationLabel(society?: string | null, location?: string | null, city?: string | null): string {
+  const soc = (society || "").trim();
+  const loc = (location || "").trim();
+
+  if (!soc && !loc) return city || "Prime Area";
+  if (!soc) return loc;
+  if (!loc) return soc;
+
+  const socParts = soc.split(/,\s*/).map(p => p.trim()).filter(Boolean);
+  const locParts = loc.split(/,\s*/).map(p => p.trim()).filter(Boolean);
+  const allParts = [...socParts, ...locParts];
+
+  const deduped: string[] = [];
+  for (const part of allParts) {
+    const pClean = part.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!pClean) continue;
+    const isDup = deduped.some(d => {
+      const dClean = d.toLowerCase().replace(/[^a-z0-9]/g, "");
+      return dClean.includes(pClean) || pClean.includes(dClean) ||
+        (dClean.length > 5 && pClean.length > 5 && (dClean.slice(0, 5) === pClean.slice(0, 5) || dClean.slice(-7) === pClean.slice(-7)));
+    });
+    if (!isDup) {
+      deduped.push(part);
+    }
+  }
+
+  return deduped.join(", ") || soc;
+}
+
 function parsePropertyTypeFromText(text: string): string {
   const normalized = normalizeIndicDigits(text || "");
   const lower = normalized.toLowerCase();
@@ -1147,10 +1246,11 @@ async function classifyLeadIntentWithGemini(
   const fullPrompt = `${INTENT_CLASSIFICATION_SYSTEM_PROMPT}\n\n${userContent}`;
 
   const candidates = [
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cleanKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${cleanKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${cleanKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${cleanKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${cleanKey}`,
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${cleanKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${cleanKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:generateContent?key=${cleanKey}`,
   ];
 
   const candidateErrors: string[] = [];
@@ -1204,6 +1304,8 @@ async function classifyLeadIntentWithGroq(
   const userContent = buildLeadContextForClassifier(lead, messageText);
 
   const models = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
     "qwen/qwen3.8-27b",
@@ -1444,9 +1546,25 @@ async function classifyLeadIntent(
     }
   }
 
-  const isOwnerMsg = fallbackIntent === "OWNER_LISTING" || lead?.lead_type === "PROVIDER";
+  const isInOwnerIntake = [
+    "OWNER_CONFIG_PENDING",
+    "OWNER_SOCIETY_PENDING",
+    "OWNER_LOCATION_PENDING",
+    "OWNER_AREA_PENDING",
+    "OWNER_PRICE_PENDING",
+    "OWNER_POSSESSION_PENDING",
+    "OWNER_FURNISHING_PENDING",
+    "OWNER_PHONE_PENDING",
+  ].includes(lead?.state);
+
+  if (isInOwnerIntake && fallbackIntent === "UNKNOWN") {
+    fallbackIntent = "OWNER_LISTING";
+  }
+
+  const isOwnerMsg = fallbackIntent === "OWNER_LISTING" || lead?.lead_type === "PROVIDER" || isInOwnerIntake;
   const userRole: "OWNER" | "SEEKER" | "UNKNOWN" = isOwnerMsg ? "OWNER" : (fallbackIntent === "GREETING" || fallbackIntent === "OPT_OUT" ? "UNKNOWN" : "SEEKER");
   const parsedPrice = parseBudgetFromText(messageText);
+  const parsedArea = parseAreaFromText(messageText);
   const isFlexLoc = /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|kahi\s*pan|koi\s*pan|gamete|any\s*location|any\s*area|anywhere|all\s*over|no\s*preference|flexible|kuch\s*bhi|koi\s*fix\s*nathi|koi\s*fix\s*nahi|chalegi|chalega|chalse)\b/i.test(lower);
 
   return {
@@ -1458,6 +1576,9 @@ async function classifyLeadIntent(
     location: isFlexLoc ? "FLEXIBLE" : null,
     is_flexible_location: isFlexLoc,
     price_or_budget: parsedPrice > 0 ? parsedPrice : null,
+    carpet_sqft: parsedArea.carpet_sqft,
+    super_built_up_sqft: parsedArea.super_built_up_sqft,
+    plot_area_sqft: parsedArea.plot_area_sqft,
     provider_used: "DETERMINISTIC_FALLBACK",
     latency_ms: Date.now() - start,
   };
@@ -2447,38 +2568,44 @@ async function handleOwnerFlow({
     }
 
     // E. Areas (Carpet, Super Built-up, Plot Area):
-    if (aiAnalysis.carpet_sqft) {
-      draft.carpet_area_sqft = aiAnalysis.carpet_sqft;
+    const areaFallback = parseAreaFromText(messageText);
+    const carpetVal = aiAnalysis.carpet_sqft || areaFallback.carpet_sqft;
+    const superBuiltVal = aiAnalysis.super_built_up_sqft || areaFallback.super_built_up_sqft;
+    const plotVal = aiAnalysis.plot_area_sqft || areaFallback.plot_area_sqft;
+
+    if (carpetVal) {
+      draft.carpet_area_sqft = carpetVal;
     }
-    if (aiAnalysis.super_built_up_sqft) {
-      draft.super_built_up_sqft = aiAnalysis.super_built_up_sqft;
-      draft.attributes.built_up_area = aiAnalysis.super_built_up_sqft;
+    if (superBuiltVal) {
+      draft.super_built_up_sqft = superBuiltVal;
+      draft.attributes.built_up_area = superBuiltVal;
     }
-    if (aiAnalysis.plot_area_sqft) {
-      draft.plot_area_sqft = aiAnalysis.plot_area_sqft;
-      draft.attributes.plot_area = aiAnalysis.plot_area_sqft;
+    if (plotVal) {
+      draft.plot_area_sqft = plotVal;
+      draft.attributes.plot_area = plotVal;
       if (!draft.carpet_area_sqft) {
-        draft.carpet_area_sqft = aiAnalysis.plot_area_sqft;
+        draft.carpet_area_sqft = plotVal;
       }
     }
 
     // F. Expected Price / Demand / Monthly Rent:
     const isAnsweringPhone = lead.state === "OWNER_PHONE_PENDING" || !!aiAnalysis.contact_phone;
-    if (aiAnalysis.price_or_budget && !isAnsweringPhone) {
+    const resolvedPrice = aiAnalysis.price_or_budget || (!isAnsweringPhone ? parseBudgetFromText(messageText) : null);
+    if (resolvedPrice && !isAnsweringPhone) {
       const isRentTx = draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT";
       const hasValidPrice = (!isRentTx && (draft.expected_price || 0) >= 100000) || (isRentTx && (draft.expected_rent || 0) >= 3000);
       if (!hasValidPrice || lead.state === "OWNER_PRICE_PENDING") {
         if (isRentTx) {
           // Sanity check: In Indian real estate, residential rent rarely exceeds ₹15 Lakhs/month.
           // Amounts >= ₹15 Lakhs without explicit /month are selling prices or demands.
-          if (aiAnalysis.price_or_budget < 1500000) {
-            draft.expected_rent = aiAnalysis.price_or_budget;
+          if (resolvedPrice < 1500000) {
+            draft.expected_rent = resolvedPrice;
           } else {
-            draft.expected_price = aiAnalysis.price_or_budget;
+            draft.expected_price = resolvedPrice;
             draft.transaction_type = "SELL";
           }
         } else {
-          draft.expected_price = aiAnalysis.price_or_budget;
+          draft.expected_price = resolvedPrice;
         }
       }
     }
@@ -2617,7 +2744,42 @@ async function handleOwnerFlow({
 
   // Step 4: Carpet Area / Plot Area / Built-up Area
   if (!draft.carpet_area_sqft && !draft.super_built_up_sqft && !draft.plot_area_sqft) {
-    const locLabel = `${draft.society_name || ""}, ${draft.location || ""}`.replace(/^,\s*|,\s*$/g, "").trim() || (city || "Prime Area");
+    if (lead.state === "OWNER_AREA_PENDING") {
+      const parsed = parseAreaFromText(messageText);
+      if (parsed.carpet_sqft || parsed.super_built_up_sqft || parsed.plot_area_sqft) {
+        if (parsed.carpet_sqft) draft.carpet_area_sqft = parsed.carpet_sqft;
+        if (parsed.super_built_up_sqft) {
+          draft.super_built_up_sqft = parsed.super_built_up_sqft;
+          draft.attributes.built_up_area = parsed.super_built_up_sqft;
+        }
+        if (parsed.plot_area_sqft) {
+          draft.plot_area_sqft = parsed.plot_area_sqft;
+          draft.attributes.plot_area = parsed.plot_area_sqft;
+          if (!draft.carpet_area_sqft) draft.carpet_area_sqft = parsed.plot_area_sqft;
+        }
+      } else {
+        const rawNum = messageText.match(/\b(\d{2,5})\b/);
+        if (rawNum) {
+          const val = parseInt(rawNum[1], 10);
+          if (val >= 50 && val <= 50000) {
+            if (lower.includes("built") || lower.includes("super")) {
+              draft.super_built_up_sqft = val;
+              draft.attributes.built_up_area = val;
+            } else if (lower.includes("plot") || lower.includes("land") || lower.includes("zameen")) {
+              draft.plot_area_sqft = val;
+              draft.attributes.plot_area = val;
+            } else {
+              draft.carpet_area_sqft = val;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // If STILL missing after direct extraction check, prompt the question:
+  if (!draft.carpet_area_sqft && !draft.super_built_up_sqft && !draft.plot_area_sqft) {
+    const locLabel = formatSocietyAndLocationLabel(draft.society_name, draft.location, city);
     const replyText =
       lang === "GUJLISH"
         ? `Noted <b>${locLabel}</b>. 👍\n\n👉 <b>Property no approximate Carpet ya Built-up Area ketlo sq.ft chhe?</b> 📐`
@@ -2636,6 +2798,34 @@ async function handleOwnerFlow({
 
   // Step 5: Expected Price / Demand / Monthly Rent
   const isRent = draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT";
+  if ((isRent && (!draft.expected_rent || draft.expected_rent < 3000)) || (!isRent && (!draft.expected_price || draft.expected_price < 100000))) {
+    if (lead.state === "OWNER_PRICE_PENDING") {
+      const directPrice = parseBudgetFromText(messageText);
+      if (directPrice > 0) {
+        if (isRent) {
+          if (directPrice < 1500000) draft.expected_rent = directPrice;
+          else {
+            draft.expected_price = directPrice;
+            draft.transaction_type = "SELL";
+          }
+        } else {
+          draft.expected_price = directPrice;
+        }
+      } else {
+        const numMatch = lower.match(/^(\d+(?:\.\d+)?)\s*$/);
+        if (numMatch) {
+          const val = parseFloat(numMatch[1]);
+          if (val >= 0.25 && val <= 50) {
+            draft.expected_price = Math.round(val * 10000000);
+          } else if (val > 50 && val <= 500) {
+            draft.expected_price = Math.round(val * 100000);
+          }
+        }
+      }
+    }
+  }
+
+  // If STILL missing after direct extraction check, prompt the question:
   if ((isRent && (!draft.expected_rent || draft.expected_rent < 3000)) || (!isRent && (!draft.expected_price || draft.expected_price < 100000))) {
     const areaDesc = draft.super_built_up_sqft
       ? `${draft.super_built_up_sqft} sq.ft Built-up`
@@ -2887,7 +3077,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v53-single-detail-cascade-currency-fix",
+        version: "v54-owner-area-loop-fix",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
