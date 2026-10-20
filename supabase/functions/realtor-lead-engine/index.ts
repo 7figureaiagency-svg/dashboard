@@ -55,9 +55,11 @@ function formatForWhatsApp(text: string): string {
 
 function formatPriceShort(priceNum: number): string {
   if (priceNum >= 10000000) {
-    return `₹${(priceNum / 10000000).toFixed(2)} Cr`;
+    const cr = (priceNum / 10000000).toFixed(2).replace(/\.00$/, "").replace(/(\.[1-9])0$/, "$1");
+    return `₹${cr} Cr`;
   } else if (priceNum >= 100000) {
-    return `₹${(priceNum / 100000).toFixed(0)} Lakhs`;
+    const l = (priceNum / 100000).toFixed(2).replace(/\.00$/, "").replace(/(\.[1-9])0$/, "$1");
+    return `₹${l} Lakhs`;
   } else if (priceNum > 0) {
     return `₹${priceNum.toLocaleString("en-IN")}`;
   }
@@ -1617,13 +1619,7 @@ function formatN8nPropertyCard(p: any, index: number, isBestDeal: boolean = fals
   const isRental = p.listing_type === "RENT" || p.listing_type === "LEASE" || (priceNum > 0 && priceNum <= 200000);
   const formattedPrice = isRental
     ? `₹${priceNum.toLocaleString("en-IN")}/month`
-    : priceNum >= 10000000
-    ? `₹${(priceNum / 10000000).toFixed(2)} Cr`
-    : priceNum >= 100000
-    ? `₹${(priceNum / 100000).toFixed(0)} Lakhs`
-    : priceNum > 0
-    ? `₹${priceNum.toLocaleString("en-IN")}`
-    : "N/A";
+    : formatPriceShort(priceNum);
 
   const isCommercial =
     cat.toUpperCase() === "COMMERCIAL" ||
@@ -2891,7 +2887,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v52-zero-regex-ai-engine",
+        version: "v53-single-detail-cascade-currency-fix",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -3796,7 +3792,8 @@ Deno.serve(async (req: Request) => {
           searchedProp = prop;
         }
 
-        const knownFacts = [lead.property_type, lead.location, lead.budget ? `₹${Number(lead.budget) / 100000}L` : null].filter(Boolean).join(" in ");
+        const budgetFormatted = lead.budget ? formatPriceShort(Number(lead.budget)) : null;
+        const knownFacts = [lead.property_type, lead.location, budgetFormatted].filter(Boolean).join(" in ");
 
         if (searchedProp && !lower.includes("start") && !lower.includes("fresh") && !lower.includes("naya")) {
           const leadName = senderName ? `${senderName} ji` : "Friend";
@@ -3935,10 +3932,10 @@ Deno.serve(async (req: Request) => {
         const leadName = senderName || "Friend";
         replyText =
           lang === "GUJLISH"
-            ? `Namaste <b>${leadName}</b>! 🏡 Tame ${resolvedCity ? `${resolvedCity} ma ` : ""}property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe? Ane kai type ni property joiye chhe (e.g. <b>2BHK/3BHK Flat, Villa, ya Commercial Office</b>)?`
+            ? `Zaroor <b>${leadName}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
             : lang === "ENGLISH"
-            ? `Great <b>${leadName}</b>! 🏡 Are you looking to <b>Buy</b> or <b>Rent</b> a property${resolvedCity ? ` in ${resolvedCity}` : ""}? And what type of property are you interested in (e.g. <b>2BHK/3BHK Flat, Villa, or Commercial Office</b>)?`
-            : `Zaroor <b>${leadName}</b>! 🏡 Aap ${resolvedCity ? `${resolvedCity} me ` : ""}property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye? Aur kis type ki property dekh rahe hain (e.g. <b>2BHK/3BHK Flat, Villa, ya Commercial Office</b>)?`;
+            ? `Certainly <b>${leadName}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
+            : `Zaroor <b>${leadName}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
       }
     }
 
@@ -3980,8 +3977,12 @@ Deno.serve(async (req: Request) => {
         let newReq = parseRequirementFromText(messageText);
 
         // UNCONDITIONALLY WIPE ALL STALE CRITERIA FROM PREVIOUS PROPERTIES:
+        const isFreshSelection = !newPropType && !newBudget && !newLocation;
+        const targetState = isFreshSelection ? "ROLE_SELECTION_PENDING" : "QUALIFYING";
+
         const leadUpdates: any = {
-          state: "QUALIFYING",
+          state: targetState,
+          lead_type: isFreshSelection ? null : lead.lead_type,
           property_type: newPropType || null,
           budget: newBudget || null,
           location: newLocation || null,
@@ -3998,25 +3999,26 @@ Deno.serve(async (req: Request) => {
         };
 
         await supabase.from("leads").update(leadUpdates).eq("id", lead.id);
-        nextState = "QUALIFYING";
+        nextState = targetState;
 
         const leadName = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : (lang === "GUJLISH" ? "Mitra" : "ji");
 
         if (newPropType || newBudget || newLocation) {
-          const acknowledged = [newPropType, newLocation, newBudget ? `₹${newBudget}` : null].filter(Boolean).join(", ");
+          const acknowledged = [newPropType, newLocation, newBudget ? formatPriceShort(newBudget) : null].filter(Boolean).join(", ");
           replyText =
             lang === "GUJLISH"
-              ? `Noted <b>${leadName}</b>! 👍 Ame tamari navi requirement note kari lidhi chhe: <b>${acknowledged}</b>. Kripya janavjo, tamne kaya nava area, budget ke timeline ma properties joiye chhe?`
+              ? `Noted <b>${leadName}</b>! 👍 Ame tamari navi requirement note kari lidhi chhe: <b>${acknowledged}</b>. Kripya janavjo, tamne kaya nava area ma properties joiye chhe? 📍`
               : lang === "ENGLISH"
-              ? `Noted <b>${senderName || "Friend"}</b>! 👍 We have updated your preference to <b>${acknowledged}</b>. Please share any other specific details about your new budget, location or timeline.`
-              : `Noted <b>${leadName}</b>! 👍 Humne aapki nayi requirement note kar li hai: <b>${acknowledged}</b>. Kripya apne naye location, budget ya timeline ki details batayein.`;
+              ? `Noted <b>${senderName || "Friend"}</b>! 👍 We have updated your preference to <b>${acknowledged}</b>. Which specific area or locality would you prefer? 📍`
+              : `Noted <b>${leadName}</b>! 👍 Humne aapki nayi requirement note kar li hai: <b>${acknowledged}</b>. Kripya apna preferred location ya area batayein. 📍`;
         } else {
+          // Requirement 2: Ask dual-role fork so user can clarify if they want to BUY/RENT (1) or SELL/LIST (2)
           replyText =
             lang === "GUJLISH"
-              ? `Ji bilkul <b>${leadName}</b>! Tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial</b>? 🏡`
+              ? `Ji bilkul <b>${leadName}</b>! ${agencyName} ma aapnu swagat chhe. 🏢✨\n\nTame ${agencyName} sathe shu karva mango chho?\n\n1️⃣ <b>Property Leni chhe</b> (Kharidva / Rent par joiye chhe) 🏡\n2️⃣ <b>Property Deni chhe</b> (Vechva / Rent par aapvi chhe) 🔑\n\n<i>(Tame 1 ke 2 lakhi ne reply kari shako chho)</i>`
               : lang === "ENGLISH"
-              ? `Certainly <b>${senderName || "Friend"}</b>! What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial</b>? 🏡`
-              : `Ji bilkul <b>${leadName}</b>! Aap kis type ki property dekhna chahte hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial</b>? 🏡`;
+              ? `Certainly <b>${senderName || "Friend"}</b>! Welcome to ${agencyName}. 🏢✨\n\nHow would you like to proceed?\n\n1️⃣ <b>Looking for a Property</b> (Buy / Rent) 🏡\n2️⃣ <b>List / Offer a Property</b> (Sell / Rent Out) 🔑\n\n<i>(You can reply with 1 or 2)</i>`
+              : `Ji bilkul <b>${leadName}</b>! ${agencyName} me aapka swagat hai. 🏢✨\n\nAap ${agencyName} ke sath kya karna chahenge?\n\n1️⃣ <b>Property leni hai</b> (Kharidna / Rent pe lena) 🏡\n2️⃣ <b>Apni property deni hai</b> (Bechna / Rent out karna) 🔑\n\n<i>(Aap 1 ya 2 likh kar bata sakte hain)</i>`;
         }
       } else if (isConfirmSame) {
         // If lead already had a specific selected property anchored (from greeting re-engagement):
@@ -4866,20 +4868,21 @@ Deno.serve(async (req: Request) => {
                   ? `What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? 🏡`
                   : `Aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial Shop/Office</b>? 🏡`;
             } else if (missingField === "REQUIREMENT") {
+              const typeLabel = currentLead.property_type || "Property";
               if (isComm) {
                 replyText =
                   lang === "GUJLISH"
-                    ? `Commercial space <b>Buy</b> 💼 karvo chhe ke <b>Rent / Lease</b> 🔑 par joiye chhe?`
+                    ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Commercial space <b>Buy</b> 💼 karvo chhe ke <b>Rent / Lease</b> 🔑 par joiye chhe?`
                     : lang === "ENGLISH"
-                    ? `Are you looking to <b>Buy</b> 💼 or <b>Rent/Lease</b> 🔑 commercial space?`
-                    : `Commercial space <b>Buy</b> 💼 karna chahte hain ya <b>Rent / Lease</b> 🔑 par chahiye?`;
+                    ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> 💼 or <b>Rent/Lease</b> 🔑 commercial space?`
+                    : `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Commercial space <b>Buy</b> 💼 karna chahte hain ya <b>Rent / Lease</b> 🔑 par chahiye?`;
               } else {
                 replyText =
                   lang === "GUJLISH"
-                    ? `Tame property <b>Buy (Kharidva)</b> 🏠 mango chho ke <b>Rent</b> 🔑 par joiye chhe?`
+                    ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva)</b> 🏠 mango chho ke <b>Rent</b> 🔑 par joiye chhe?`
                     : lang === "ENGLISH"
-                    ? `Are you looking to <b>Buy</b> 🏠 or <b>Rent</b> 🔑 a property?`
-                    : `Aap property <b>Buy (Kharidna)</b> 🏠 chahte hain ya <b>Rent</b> 🔑 par chahiye?`;
+                    ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> 🏠 or <b>Rent</b> 🔑 this property?`
+                    : `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> 🏠 chahte hain ya <b>Rent</b> 🔑 par chahiye?`;
               }
             } else if (missingField === "LOCATION") {
               // Dynamic location suggestions from tenant's active inventory (City-Agnostic!)
@@ -4893,37 +4896,40 @@ Deno.serve(async (req: Request) => {
               const uniqueLocs = Array.from(new Set((invLocs || []).map((i) => i.location).filter(Boolean))).slice(0, 3);
               const targetCity = invLocs?.[0]?.city || resolvedCity;
               const availStr = uniqueLocs.length > 0 ? ` (e.g. <b>${uniqueLocs.join(", ")}</b>)` : "";
+              const reqLabel = currentLead.requirement ? (currentLead.requirement === "BUY" ? "Kharidva" : "Rent") : "";
+              const prefPrefix = currentLead.property_type ? `${currentLead.property_type}${reqLabel ? ` (${reqLabel})` : ""}` : "Property";
 
               if (targetCity) {
                 replyText =
                   lang === "GUJLISH"
-                    ? `${targetCity} ma tamari preferred <b>location</b> kayi chhe 📍${availStr}?`
+                    ? `Bahuj saras! <b>${prefPrefix}</b> note kari lidhu chhe. 👍\n\n👉 ${targetCity} ma tamari preferred <b>location</b> kayi chhe 📍${availStr}?`
                     : lang === "ENGLISH"
-                    ? `Which preferred <b>location</b> in ${targetCity} are you looking for 📍${availStr}?`
-                    : `${targetCity} me aapki preferred <b>location</b> konsi hai 📍${availStr}?`;
+                    ? `Great! Noted <b>${prefPrefix}</b>. 👍\n\n👉 Which preferred <b>location</b> in ${targetCity} are you looking for 📍${availStr}?`
+                    : `Bahut badhiya! <b>${prefPrefix}</b> note kar liya hai. 👍\n\n👉 ${targetCity} me aapki preferred <b>location</b> konsi hai 📍${availStr}?`;
               } else {
                 replyText =
                   lang === "GUJLISH"
-                    ? `Tamari preferred <b>location</b> kayi chhe 📍${availStr}?`
+                    ? `Bahuj saras! <b>${prefPrefix}</b> note kari lidhu chhe. 👍\n\n👉 Tamari preferred <b>location</b> kayi chhe 📍${availStr}?`
                     : lang === "ENGLISH"
-                    ? `Which preferred <b>location</b> are you looking for 📍${availStr}?`
-                    : `Aapki preferred <b>location</b> konsi hai 📍${availStr}?`;
+                    ? `Great! Noted <b>${prefPrefix}</b>. 👍\n\n👉 Which preferred <b>location</b> are you looking for 📍${availStr}?`
+                    : `Bahut badhiya! <b>${prefPrefix}</b> note kar liya hai. 👍\n\n👉 Aapki preferred <b>location</b> konsi hai 📍${availStr}?`;
               }
             } else if (missingField === "BUDGET") {
+              const locLabel = currentLead.location ? `<b>${currentLead.location}</b>` : "Location";
               if (isRentOrLease) {
                 replyText =
                   lang === "GUJLISH"
-                    ? `Tamari monthly rent budget range ketli raheshe 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
+                    ? `Noted ${locLabel}! 📍\n\n👉 Tamari monthly rent budget range ketli raheshe 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
                     : lang === "ENGLISH"
-                    ? `What is your monthly rent budget range 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
-                    : `Monthly rent budget range kya rahegi 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`;
+                    ? `Noted ${locLabel}! 📍\n\n👉 What is your monthly rent budget range 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
+                    : `Noted ${locLabel}! 📍\n\n👉 Monthly rent budget range kya rahegi 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`;
               } else {
                 replyText =
                   lang === "GUJLISH"
-                    ? `Best options filter karva mate tamaro budget ketlo raheshe 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
+                    ? `Noted ${locLabel}! 📍\n\n👉 Best options filter karva mate tamaro budget ketlo raheshe 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
                     : lang === "ENGLISH"
-                    ? `To filter the best options, what is your comfortable budget range 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
-                    : `Best options filter karne ke liye aapka comfortable budget range kya rahega 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`;
+                    ? `Noted ${locLabel}! 📍\n\n👉 To filter the best options, what is your comfortable budget range 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
+                    : `Noted ${locLabel}! 📍\n\n👉 Best options filter karne ke liye aapka comfortable budget range kya rahega 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`;
               }
             }
           } else {
