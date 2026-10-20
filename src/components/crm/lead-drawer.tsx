@@ -6,6 +6,7 @@ import {
   CalendarX,
   CheckCircle2,
   History,
+  MessageCircle,
   MessageSquare,
   MessageSquareText,
   Phone,
@@ -51,6 +52,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
+import { WhatsAppChatView } from "@/components/crm/whatsapp-chat-view";
+import { WorkflowTimeline } from "@/components/crm/workflow-timeline";
+import { HistoryTimeline } from "@/components/crm/history-timeline";
 import { useInventory, useLeadEvents, useUpdateLead } from "@/lib/crm-data";
 import {
   LEAD_STATUSES,
@@ -262,7 +266,7 @@ export function LeadDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex flex-col h-full w-full p-0 sm:max-w-xl overflow-hidden">
+      <SheetContent className="flex flex-col h-full w-full p-0 sm:max-w-2xl lg:max-w-3xl overflow-hidden">
         {/* ── 📱 iOS Sheet Grabber ── */}
         <div className="w-9 h-1 rounded-full bg-muted-foreground/30 mx-auto mt-2.5 mb-1 sm:hidden shrink-0" />
 
@@ -297,127 +301,51 @@ export function LeadDrawer({
 
           <Separator />
 
-          <Tabs defaultValue="ai">
-            <TabsList className="w-full">
-              <TabsTrigger value="ai" className="flex flex-1 items-center gap-1.5 text-xs">
-                <Bot className="size-3.5" /> Workflow
+          <Tabs defaultValue="chat" className="w-full">
+            <TabsList className="w-full grid grid-cols-3 h-10 p-1 bg-muted/60 rounded-xl">
+              <TabsTrigger
+                value="chat"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-[#008069] data-[state=active]:text-white transition-all rounded-lg"
+              >
+                <MessageCircle className="size-3.5" /> WhatsApp ({chatMessages.length})
               </TabsTrigger>
-              <TabsTrigger value="chat" className="flex flex-1 items-center gap-1.5 text-xs">
-                <MessageSquare className="size-3.5" /> Chat Messages ({chatMessages.length})
+              <TabsTrigger
+                value="ai"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all rounded-lg"
+              >
+                <Sparkles className="size-3.5" /> Workflow
               </TabsTrigger>
-              <TabsTrigger value="exec" className="flex flex-1 items-center gap-1.5 text-xs">
-                <History className="size-3.5" /> History
+              <TabsTrigger
+                value="exec"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all rounded-lg"
+              >
+                <History className="size-3.5" /> History ({activity.length})
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="ai" className="mt-3 space-y-2">
-              <p className="text-xs text-muted-foreground">
-                What the automated workflow has done on this lead so far — reflects current state,
-                not a message-by-message log.
-              </p>
-              <ul className="space-y-2">
-                {buildAiActivity(lead).map((event) => (
-                  <li
-                    key={event.key}
-                    className="flex flex-wrap items-start justify-between gap-2 rounded-lg border bg-card p-2.5"
-                  >
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-medium">{event.label}</p>
-                      {event.detail && (
-                        <p className="text-xs text-muted-foreground">{event.detail}</p>
-                      )}
-                      {event.timestamp && (
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(event.timestamp)}
-                        </p>
-                      )}
-                    </div>
-                    <ToneBadge
-                      label={event.done ? "Done" : "Pending"}
-                      tone={event.done ? event.tone : "gray"}
-                    />
-                  </li>
-                ))}
-              </ul>
+            <TabsContent value="chat" className="mt-3 space-y-2">
+              <WhatsAppChatView
+                lead={lead}
+                messages={chatMessages}
+                loading={eventsLoading}
+                onSendNote={(note) => {
+                  run({ executive_notes: note }, "Logged WhatsApp note", "NOTE");
+                }}
+              />
             </TabsContent>
 
-            <TabsContent value="chat" className="mt-3 space-y-3">
-              <p className="text-xs text-muted-foreground">
-                Actual conversation messages exchanged between the client and Nextgen AI Bot.
-              </p>
-              {eventsLoading && (
-                <p className="py-6 text-center text-xs text-muted-foreground">Loading chat history…</p>
-              )}
-              {!eventsLoading && chatMessages.length === 0 && (
-                <p className="py-6 text-center text-xs text-muted-foreground">No chat messages recorded yet.</p>
-              )}
-              {!eventsLoading && chatMessages.length > 0 && (
-                <div className="space-y-3 rounded-2xl border border-border/40 bg-muted/20 p-3.5 max-h-[380px] overflow-y-auto">
-                  {chatMessages.map((msg, i) => (
-                    <div
-                      key={i}
-                      className={`flex flex-col ${msg.sender === "user" ? "items-start" : "items-end"}`}
-                    >
-                      <span className="text-[10px] text-muted-foreground mb-1 px-1 font-medium">
-                        {msg.sender === "user" ? (lead.name || lead.first_name || "Client") : "🤖 Nextgen AI Bot"}
-                      </span>
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-2xs ${
-                          msg.sender === "user"
-                            ? "bg-muted/80 text-foreground border border-border/40 rounded-bl-xs"
-                            : "bg-primary/10 text-primary border border-primary/20 rounded-br-xs"
-                        }`}
-                      >
-                        <div className="whitespace-pre-wrap break-words">{msg.text}</div>
-                      </div>
-                      <span className="text-[9px] text-muted-foreground/75 mt-1 px-1 font-mono tabular-nums">
-                        {formatDate(msg.time)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <TabsContent value="ai" className="mt-3 space-y-2">
+              <WorkflowTimeline
+                lead={lead}
+                matchingProperties={matchingProperties}
+                onSelectProperty={(propName) =>
+                  setProfile((p) => ({ ...p, selected_property_name: propName }))
+                }
+              />
             </TabsContent>
 
             <TabsContent value="exec" className="mt-3 space-y-2">
-              {activity.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No executive actions yet.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {activity
-                    .slice()
-                    .sort(
-                      (a, b) =>
-                        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-                    )
-                    .map((a) => (
-                      <li
-                        key={a.id}
-                        className="flex items-start gap-2 rounded-md border bg-card px-3 py-2"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                            <span className="text-sm font-medium">{actionLabel(a.action)}</span>
-                            <span className="text-xs text-muted-foreground">
-                              · {a.executive_name || "Unassigned"}
-                            </span>
-                          </div>
-                          {a.field && (
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {a.field}: {a.old_value ?? "—"} → {a.new_value ?? "—"}
-                            </p>
-                          )}
-                          {a.note && (
-                            <p className="mt-0.5 text-xs italic text-muted-foreground">{a.note}</p>
-                          )}
-                        </div>
-                        <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                          {formatDate(a.created_at)}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-              )}
+              <HistoryTimeline activity={activity} />
             </TabsContent>
           </Tabs>
 
