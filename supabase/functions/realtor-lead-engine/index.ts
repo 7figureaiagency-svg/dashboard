@@ -3325,14 +3325,27 @@ async function handleOwnerFlow({
         .maybeSingle();
 
       const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || "Vadodara"}` : "Aapki property";
-      const statusLabel = sub?.status === "PENDING_VERIFICATION" ? "Physical Verification & Quality Inspection" : (sub?.status || "Under Review");
+      const isSubApprovedA =
+        sub?.status === "CONVERTED_TO_INVENTORY" ||
+        sub?.status === "APPROVED" ||
+        sub?.status === "LISTED";
+      const statusLabel = isSubApprovedA
+        ? "Approved & Listed in Inventory 🏡✨"
+        : sub?.status === "PENDING_VERIFICATION"
+        ? "Physical Verification & Quality Inspection"
+        : (sub?.status || "Under Review");
 
-      const replyText =
-        lang === "GUJLISH"
+      const replyText = isSubApprovedA
+        ? (lang === "GUJLISH"
+          ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari listed property (<b>${propLabel}</b>) approve thai ne successfully list thai chuki chhe! 🏡✨\n\nAmari sales team verified buyers ane tenants sathe aane actively match kari rahi chhe. Koi pan suitable inquiry aave etle ame tarat j tamaro sampark karshe! 🙏`
+          : lang === "ENGLISH"
+          ? `Hello <b>${senderName || "Friend"}</b>! Your listed property (<b>${propLabel}</b>) has been approved and successfully listed in our inventory! 🏡✨\n\nOur sales team is actively matching it with verified buyers and tenants. We will connect with you as soon as a suitable offer arrives! 🙏`
+          : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) approve hoke successfully list ho chuki hai! 🏡✨\n\nHamari sales team verified buyers & tenants ke saath ise actively match kar rahi hai. Koi bhi suitable inquiry aane par hum turant aapse connect karenge! 🙏`)
+        : (lang === "GUJLISH"
           ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari listed property (<b>${propLabel}</b>) hal ma <b>${statusLabel}</b> stage par chhe. 📋 Amari inspection team verification mate jald aapse call par connect karshe! 🙏`
           : lang === "ENGLISH"
           ? `Hello <b>${senderName || "Friend"}</b>! Your listed property (<b>${propLabel}</b>) is currently in the <b>${statusLabel}</b> stage. 📋 Our acquisition team will connect with you shortly for on-site inspection! 🙏`
-          : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋 Hamari inspection team verification ke liye jald aapse call par connect karegi! 🙏`;
+          : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋 Hamari inspection team verification ke liye jald aapse call par connect karegi! 🙏`);
 
       return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
     }
@@ -3963,7 +3976,15 @@ export async function dispatchStateAction(
 
       const listingSocietyName = latestSub?.project_name || latestSub?.society_name || lead.metadata?.owner_draft?.project_name || lead.metadata?.owner_draft?.society_name || "Listed Property";
       const listingStatusRaw = latestSub?.status || "PENDING_VERIFICATION";
-      const listingStatus = listingStatusRaw === "PENDING_VERIFICATION" ? "Pending Verification / Under Review" : listingStatusRaw;
+      const isSubApproved =
+        latestSub?.status === "CONVERTED_TO_INVENTORY" ||
+        latestSub?.status === "APPROVED" ||
+        latestSub?.status === "LISTED";
+      const listingStatus = isSubApproved
+        ? "Approved & Listed in Inventory 🏡✨"
+        : listingStatusRaw === "PENDING_VERIFICATION"
+        ? "Pending Verification / Under Review"
+        : listingStatusRaw;
 
       const replyText =
         lang === "GUJLISH"
@@ -4105,14 +4126,28 @@ export async function dispatchStateAction(
         .maybeSingle();
 
       const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || "Vadodara"}` : "Aapki property";
-      const statusLabel = sub?.status === "PENDING_VERIFICATION" ? "Physical Verification & Quality Inspection" : (sub?.status || "Under Review");
+      const isSubApprovedC =
+        sub?.status === "CONVERTED_TO_INVENTORY" ||
+        sub?.status === "APPROVED" ||
+        sub?.status === "LISTED";
+      const statusLabel = isSubApprovedC
+        ? "Approved & Listed in Inventory 🏡✨"
+        : sub?.status === "PENDING_VERIFICATION"
+        ? "Physical Verification & Quality Inspection"
+        : (sub?.status || "Under Review");
 
-      const replyText =
-        lang === "GUJLISH"
+      const replyText = isSubApprovedC
+        ? (lang === "GUJLISH"
+          ? `Ji <b>${nameStr}</b>! Tamari listed property (<b>${propLabel}</b>) approve thai ne successfully list thai chuki chhe! 🏡✨\n\nAmari sales team verified buyers ane tenants sathe aane actively match kari rahi chhe. Koi pan suitable inquiry aave etle ame tarat j tamaro sampark karshe! 🙏`
+          : lang === "ENGLISH"
+          ? `Hello <b>${nameStr}</b>! Your listed property (<b>${propLabel}</b>) has been approved and successfully listed in our inventory! 🏡✨\n\nOur sales team is actively matching it with verified buyers and tenants. We will connect with you as soon as a suitable offer arrives! 🙏`
+          : `Ji <b>${nameStr}</b>! Aapki listed property (<b>${propLabel}</b>) approve hoke successfully list ho chuki hai! 🏡✨\n\nHamari sales team verified buyers & tenants ke saath ise actively match kar rahi hai. Koi bhi suitable inquiry aane par hum turant aapse connect karenge! 🙏`)
+        : (lang === "GUJLISH"
           ? `Ji <b>${nameStr}</b>! Tamari listed property (<b>${propLabel}</b>) hal ma <b>${statusLabel}</b> stage par chhe. 📋 Amari inspection team verification mate jald aapse call par connect karshe! 🙏`
           : lang === "ENGLISH"
           ? `Hello <b>${nameStr}</b>! Your listed property (<b>${propLabel}</b>) is currently in the <b>${statusLabel}</b> stage. 📋 Our acquisition team will connect with you shortly for on-site inspection! 🙏`
-          : `Ji <b>${nameStr}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋 Hamari inspection team verification ke liye jald aapse call par connect karegi! 🙏`;
+          : `Ji <b>${nameStr}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋 Hamari inspection team verification ke liye jald aapse call par connect karegi! 🙏`);
+
 
       return {
         replyText,
@@ -4262,17 +4297,29 @@ export async function dispatchStateAction(
       const propLabel = sub
         ? `${sub.configuration || sub.property_type || "Property"} at ${sub.society_name || sub.project_name || sub.location || "Vadodara"}`
         : "Aapki listed property";
+      const isSubApprovedB =
+        sub?.status === "CONVERTED_TO_INVENTORY" ||
+        sub?.status === "APPROVED" ||
+        sub?.status === "LISTED";
       const statusLabel =
-        sub?.status === "PENDING_VERIFICATION"
+        isSubApprovedB
+          ? "Approved & Listed in Inventory 🏡✨"
+          : sub?.status === "PENDING_VERIFICATION"
           ? "Physical Verification & Quality Inspection"
           : (sub?.status || "Under Review");
 
-      const replyText =
-        lang === "GUJLISH"
+      const replyText = isSubApprovedB
+        ? (lang === "GUJLISH"
+          ? `Ji <b>${nameStr}</b>! Tamari listed property (<b>${propLabel}</b>) approve thai ne successfully list thai chuki chhe! 🏡✨\n\nAmari sales team verified buyers ane tenants sathe aane actively match kari rahi chhe. Koi pan direct inquiry aave etle ame tarat j tamaro sampark karshe! 🙏\n\n👉 <i>Shu tamne koi biji property pan list karvi chhe? (Tame 'Ha' ke 'List another' lakhi shako chho)</i>`
+          : lang === "ENGLISH"
+          ? `Hello <b>${nameStr}</b>! Your listed property (<b>${propLabel}</b>) has been approved and successfully listed in our inventory! 🏡✨\n\nOur sales team is actively matching it with verified buyers and tenants. We will connect with you as soon as a suitable offer arrives! 🙏\n\n👉 <i>Would you like to list another property for sale or rent? (You can reply 'Yes' or 'List another')</i>`
+          : `Ji <b>${nameStr}</b>! Aapki listed property (<b>${propLabel}</b>) approve hoke successfully list ho chuki hai! 🏡✨\n\nHamari sales team verified buyers & tenants ke saath ise actively match kar rahi hai. Koi bhi suitable inquiry aane par hum turant aapse connect karenge! 🙏\n\n👉 <i>Kya aapko koi dusri property bhi list karni hai? (Aap 'Haan' ya 'List another' likh sakte hain)</i>`)
+        : (lang === "GUJLISH"
           ? `Ji <b>${nameStr}</b>! Tamari listed property (<b>${propLabel}</b>) hal ma <b>${statusLabel}</b> stage par chhe. 📋\n\nAmari inspection team verification mate jald aapse call par connect karshe! 🙏\n\n👉 <i>Shu tamne koi biji property pan list karvi chhe? (Tame 'Ha' ke 'List another' lakhi shako chho)</i>`
           : lang === "ENGLISH"
           ? `Hello <b>${nameStr}</b>! Your listed property (<b>${propLabel}</b>) is currently in the <b>${statusLabel}</b> stage. 📋\n\nOur acquisition team will connect with you shortly for verification and on-site inspection! 🙏\n\n👉 <i>Would you like to list another property for sale or rent? (You can reply 'Yes' or 'List another')</i>`
-          : `Ji <b>${nameStr}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋\n\nHamari inspection team verification ke liye jald aapse call par connect karegi! 🙏\n\n👉 <i>Kya aapko koi dusri property bhi list karni hai? (Aap 'Haan' ya 'List another' likh sakte hain)</i>`;
+          : `Ji <b>${nameStr}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋\n\nHamari inspection team verification ke liye jald aapse call par connect karegi! 🙏\n\n👉 <i>Kya aapko koi dusri property bhi list karni hai? (Aap 'Haan' ya 'List another' likh sakte hain)</i>`);
+
 
       return {
         replyText,
@@ -5964,7 +6011,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v63-telegram-qa-hotfix",
+        version: "v64-approved-listing-template",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -6080,7 +6127,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v63 Ready (Anti-OFF_TOPIC Guard, Owner Multi-Listing & Dual Search Path)", { status: 200 });
+    return new Response("Realtor Lead Engine v64 Ready (Approved Listing Templates, Anti-OFF_TOPIC Guard, Owner Multi-Listing & Dual Search Path)", { status: 200 });
   }
 
   try {
