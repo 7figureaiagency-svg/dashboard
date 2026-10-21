@@ -1630,6 +1630,19 @@ interface IntentResult {
 19. "kem cho" / "hello" / "namaste" ->
 {"action": {"intent": "GREETING"}, "language": "GUJLISH", "user_role": "UNKNOWN"}
 
+20. "Office" / "Commercial Office" ->
+{"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "Commercial Office"}, "language": "ENGLISH", "user_role": "SEEKER"}
+
+21. "Residential" / "Residential flat" ->
+{"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "Residential"}, "language": "ENGLISH", "user_role": "SEEKER"}
+
+22. "Commercial" / "Commercial shop" ->
+{"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "Commercial"}, "language": "ENGLISH", "user_role": "SEEKER"}
+
+### REAL ESTATE PROPERTY TERMS RULE:
+- Property types and categories (e.g. "Office", "Commercial", "Residential", "Flat", "Villa", "Shop", "Plot", "BHK") are NEVER "OFF_TOPIC".
+- In role selection or qualification, mentioning any property type is strictly CHANGE_REQUIREMENT (or SUBMIT_LISTING if user is listing).
+
 ### OWNER INTAKE EXTRACTION RULES:
 - If In-Progress Owner Intake is YES (state is OWNER_*_PENDING):
   user_role MUST BE "OWNER" and intent MUST BE "SUBMIT_LISTING".
@@ -1667,7 +1680,7 @@ function buildLeadContextForClassifier(lead: any, messageText: string): string {
 
   let currentPendingQuestion = "NONE";
   if (lead?.state === "ROLE_SELECTION_PENDING") {
-    currentPendingQuestion = "ROLE_SELECTION (Bot asked user: 1 or 'Leni hai' to Buy/Rent properties, 2 or 'Deni hai' to Sell/Rent Out their property)";
+    currentPendingQuestion = "ROLE_SELECTION (Bot asked user: 1 or 'Leni hai' to Buy/Rent properties, 2 or 'Deni hai' to Sell/Rent Out their property. Replies indicating property types like 'Office', 'Residential', 'Commercial', 'Shop', 'Flat' are SEEKER requests, NEVER OFF_TOPIC!)";
   } else if (lead?.state === "OWNER_CONFIG_PENDING") {
     currentPendingQuestion = "PROPERTY_CONFIG (Bot asked for property type / configuration: Flat, Villa, Commercial Office, Shop, Plot)";
   } else if (lead?.state === "OWNER_SOCIETY_PENDING") {
@@ -1685,7 +1698,7 @@ function buildLeadContextForClassifier(lead: any, messageText: string): string {
   } else if (lead?.state === "OWNER_PHONE_PENDING") {
     currentPendingQuestion = "CONTACT_PHONE (Bot asked for direct calling/WhatsApp number. Extract 10-digit number into contact_phone)";
   } else if (lead?.state === "QUALIFYING") {
-    if (!lead?.property_type) currentPendingQuestion = "SEEKER_PROPERTY_TYPE";
+    if (!lead?.property_type) currentPendingQuestion = "SEEKER_PROPERTY_TYPE (Bot asked what type of property: Residential, Commercial, Flat, Office, Villa, Shop. Replies with property types are strictly CHANGE_REQUIREMENT, NEVER OFF_TOPIC!)";
     else if (!lead?.requirement) currentPendingQuestion = "SEEKER_REQUIREMENT (Buy or Rent)";
     else if (!lead?.location) currentPendingQuestion = "SEEKER_LOCATION";
     else if (!lead?.budget) currentPendingQuestion = "SEEKER_BUDGET (A numeric reply is price_or_budget)";
@@ -3214,10 +3227,13 @@ async function handleOwnerFlow({
   // If already gathered, check if user is listing a SECOND property, inquiring status, or asking for buyer options
   if (lead.state === "OWNER_DETAILS_GATHERED") {
     const isSecondListing =
+      /^(?:haan|ha|ji\s*haan|yes|yep|sure|list\s*another|karni\s*hai|aur\s*bhi|ek\s*aur|bilkul)\b/i.test(lower.trim()) ||
       /(?:dusri|biji|ek\s*aur|nayi|navi|another|second|2nd)\s*(?:property|flat|house|ghar|makan|villa|office|shop|plot)\b/i.test(lower) ||
       /(?:dusri\s*property\s*sell|nayi\s*property\s*list|office\s*bhade|shop\s*rent|flat\s*bechna|ghar\s*bechna|biji\s*vechvi)/i.test(lower) ||
       ((/(?:bechna|bechni|vechvu|vechva|sell|list|bhade|bhaade|kiraya|kiraye|rent\s*par\s*den|chadani)/i.test(lower)) &&
-       (/\b(flat|house|ghar|makan|villa|office|shop|plot|godown|showroom|commercial)\b/i.test(lower)));
+       (/\b(flat|house|ghar|makan|villa|office|shop|plot|godown|showroom|commercial)\b/i.test(lower))) ||
+      aiAnalysis?.action?.intent === "SUBMIT_LISTING" ||
+      (aiAnalysis?.action?.intent === "CONFIRM_CRITERIA" && (aiAnalysis?.action as any)?.confirm);
 
     const isStatusInquiry = /(?:status|update|kya\s*hua|ketle\s*pahonchyu|check\s*status|listing\s*status|verification|approved)/i.test(lower);
 
@@ -3798,8 +3814,8 @@ export async function dispatchStateAction(
   actionResult: ClassifiedActionResult,
   context: DialogContext
 ): Promise<DialogTransitionResult> {
-  const action = actionResult.action;
-  const intent = action.intent;
+  let action = actionResult.action;
+  let intent = action.intent;
   const currentState: DialogState = (lead?.state as DialogState) || "FRESH";
   const lang = context.lang || "HINGLISH";
   const senderName = context.senderName || "Friend";
@@ -3826,6 +3842,24 @@ export async function dispatchStateAction(
       nextState: "DROPPED",
       leadUpdates: { state: "DROPPED", bot_active: false, drip_stage: "CANCELLED" },
     };
+  }
+
+  // Anti-OFF_TOPIC Property Keyword Immunity Guard:
+  // If user mentioned real estate terms, NEVER reject as OFF_TOPIC!
+  const isRealEstateTerm =
+    parsePropertyTypeFromText(context.messageText) !== null ||
+    /\b(office|shop|dukaan|dukan|showroom|flat|apartment|villa|bungalow|plot|land|commercial|residential|residence|bhk|buy|rent|sell|bechna|vechvu|kharidna|kharidvu)\b/i.test(context.messageText);
+
+  if (intent === "OFF_TOPIC" && isRealEstateTerm) {
+    console.log(`[dispatchStateAction] Overriding OFF_TOPIC false positive for message: "${context.messageText}"`);
+    const propType = parsePropertyTypeFromText(context.messageText) || (/\b(office|shop|dukaan|dukan|showroom|commercial)\b/i.test(context.messageText) ? "Commercial Office" : "Residential");
+    intent = "CHANGE_REQUIREMENT";
+    action = {
+      intent: "CHANGE_REQUIREMENT",
+      property_type: propType,
+    } as any;
+    actionResult.property_type = propType;
+    (actionResult as any).action = action;
   }
 
   if (intent === "OFF_TOPIC") {
@@ -3985,7 +4019,16 @@ export async function dispatchStateAction(
   // 2. OWNER IN-PROGRESS STATES -> DIRECT TO handleOwnerFlow
   // ---------------------------------------------------------------------------
 
-  if (isInOwnerIntake || (currentState === "OWNER_DETAILS_GATHERED" && intent === "SUBMIT_LISTING")) {
+  if (isInOwnerIntake || currentState === "OWNER_DETAILS_GATHERED") {
+    // If owner explicitly asks for buyer property search, route to qualification cascade
+    const isExplicitBuyerSearch =
+      (intent === "CHANGE_REQUIREMENT" || intent === "SEEKER_QUALIFICATION") &&
+      /(?:chahiye|joiye|buy|kharid|purchase|options|dekhna)/i.test(lower);
+
+    if (currentState === "OWNER_DETAILS_GATHERED" && isExplicitBuyerSearch) {
+      return handleQualificationCascade(lead, actionResult, context);
+    }
+
     const ownerRes = await handleOwnerFlow({
       lead,
       messageText: context.messageText,
@@ -4165,10 +4208,10 @@ export async function dispatchStateAction(
 
         const replyText =
           lang === "GUJLISH"
-            ? `Ji bilkul <b>${nameStr}</b>! Tamari VIP Site Visit <b>${propName}</b> mate <b>${visitTime}</b> par confirmed chhe. 🚗${mapLink}\n\nAmara senior property advisor time par direct site location par tamne malshe. Shu tamne visit reschedule karvi chhe ke koi query chhe?`
+            ? `Ji bilkul <b>${nameStr}</b>! Tamari VIP Site Visit <b>${propName}</b> mate <b>${visitTime}</b> par confirmed chhe. 🚗${mapLink}\n\nAape shu karvu chhe?\n1️⃣ <b>Visit Details & Location Map 📍</b>\n2️⃣ <b>Reschedule / Cancel Visit ⏰</b>\n3️⃣ <b>Nayi Property Search karvi chhe 🏡</b>\n\n<i>(Tame 1, 2 ke 3 reply kari shako chho)</i>`
             : lang === "ENGLISH"
-            ? `Certainly <b>${nameStr}</b>! Your VIP Site Visit for <b>${propName}</b> is confirmed for <b>${visitTime}</b>. 🚗${mapLink}\n\nOur senior property advisor will meet you directly at the location. Would you like to reschedule or do you have any questions?`
-            : `Ji bilkul <b>${nameStr}</b>! Aapki VIP Site Visit <b>${propName}</b> ke liye <b>${visitTime}</b> par confirmed hai. 🚗${mapLink}\n\nHamare senior property advisor time par direct site location par aapse milenge. Kya aapko visit reschedule karni hai ya koi query hai?`;
+            ? `Certainly <b>${nameStr}</b>! Your VIP Site Visit for <b>${propName}</b> is confirmed for <b>${visitTime}</b>. 🚗${mapLink}\n\nWhat would you like to do?\n1️⃣ <b>Visit Details & Location Map 📍</b>\n2️⃣ <b>Reschedule / Cancel Visit ⏰</b>\n3️⃣ <b>Search for New Properties 🏡</b>\n\n<i>(You can reply with 1, 2, or 3)</i>`
+            : `Ji bilkul <b>${nameStr}</b>! Aapki VIP Site Visit <b>${propName}</b> ke liye <b>${visitTime}</b> par confirmed hai. 🚗${mapLink}\n\nAap kya karna chahte hain?\n1️⃣ <b>Visit Details & Location Map 📍</b>\n2️⃣ <b>Reschedule / Cancel Visit ⏰</b>\n3️⃣ <b>Nayi Property Search karni hai 🏡</b>\n\n<i>(Aap 1, 2 ya 3 reply kar sakte hain)</i>`;
 
         return {
           replyText,
@@ -4650,11 +4693,107 @@ export async function dispatchStateAction(
           ? `Welcome back <b>${nameStr}</b>! 🙏\n\nTamari VIP Site Visit already booked chhe:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu tamne timing reschedule karvo chhe ke koi biji query chhe?`
           : lang === "ENGLISH"
           ? `Welcome back <b>${nameStr}</b>! 🙏\n\nYou already have a VIP Site Visit booked:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time. Would you like to reschedule the time or do you have any questions?`
-          : `Welcome back <b>${nameStr}</b>! 🙏\n\nAapki VIP Site Visit already booked hai:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge. Kya aapko timing reschedule karna hai ya koi aur query hai?`;
-
       return {
         replyText,
         nextState: currentState,
+      };
+    }
+
+    // A2. SUB-CHOICES FROM DUAL-ROLE SITE VISIT CONFIRMATION (1, 2, or 3)
+    const isSearchNewChoice =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
+      /^(?:3|3️⃣|third|3rd|option\s*3|search|nayi|naya|new\s*property|property\s*search)\b/i.test(lower);
+
+    if (isSearchNewChoice) {
+      const pType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+      const replyText =
+        lang === "GUJLISH"
+          ? `Bahuj saras <b>${nameStr}</b>! 🏡 Chalo navi property search shuru kariye.\n\n👉 <b>Tame kaya type ni property shodhva mango chho — Residential (Flat / Villa) ke Commercial (Shop / Office / Plot)?</b>`
+          : lang === "ENGLISH"
+          ? `Wonderful <b>${nameStr}</b>! 🏡 Let's start a fresh property search.\n\n👉 <b>What type of property are you looking for — Residential (Flat / Villa) or Commercial (Shop / Office / Plot)?</b>`
+          : `Bahut badhiya <b>${nameStr}</b>! 🏡 Chaliye nayi property search shuru karte hain.\n\n👉 <b>Aap kis type ki property search kar rahe hain — Residential (Flat / Villa) ya Commercial (Shop / Office / Plot)?</b>`;
+
+      return {
+        replyText,
+        nextState: "QUALIFYING",
+        leadUpdates: {
+          state: "QUALIFYING",
+          lead_type: "DUAL_ROLE",
+          property_type: pType || null,
+          requirement: null,
+          purpose: null,
+          location: null,
+          budget: null,
+          timeline: null,
+          selected_property_id: null,
+          last_option_ids: null,
+          metadata: {
+            ...(lead.metadata || {}),
+            active_persona: "BUYER",
+          },
+        },
+      };
+    }
+
+    const isVisitDetailsChoice =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+      /^(?:1|1️⃣|first|1st|option\s*1|details|map|location)\b/i.test(lower);
+
+    if (isVisitDetailsChoice) {
+      let propDetails: any = null;
+      let scheduledTime = lead.site_visit_at || lead.site_visit_datetime;
+      const { data: latestVisit } = await supabase
+        .from("site_visits")
+        .select("*, inventory(*)")
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestVisit) {
+        scheduledTime = latestVisit.scheduled_at || scheduledTime;
+        propDetails = latestVisit.inventory;
+      }
+      if (!propDetails && lead.selected_property_id) {
+        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.selected_property_id).maybeSingle();
+        propDetails = p;
+      }
+
+      const visitTime = scheduledTime
+        ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
+        : "Scheduled Time";
+      const propInfo = propDetails ? `\n🏢 <b>Property:</b> ${propDetails.project_name} (${propDetails.location})` : "";
+      const mapInfo = propDetails?.map_url ? `\n📍 <b>Google Map Location:</b> ${propDetails.map_url}` : "";
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Tamari VIP Site Visit Details: 🚗${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Jo timing reschedule karvo hoy to batavjo!`
+          : lang === "ENGLISH"
+          ? `Your VIP Site Visit Details: 🚗${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the location. Let us know if you need to reschedule!`
+          : `Aapki VIP Site Visit Details: 🚗${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par milenge. Agar timing reschedule karni ho to batayein!`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_BOOKED",
+      };
+    }
+
+    const isReschedulePromptChoice =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
+      /^(?:2|2️⃣|second|2nd|option\s*2)\b/i.test(lower);
+
+    if (isReschedulePromptChoice) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul <b>${nameStr}</b>! Tame kaya divase ane timing par visit reschedule karva mango chho? (e.g. <b>Kaale sanje 5 vage</b> ke <b>Sunday subah 11 baje</b>). Jo cancel karvi hoy to 'Cancel' lakhi shako chho. 🙏`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! Which day and time would you like to reschedule your visit to? (e.g. <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>). If you wish to cancel, you can reply 'Cancel'. 🙏`
+          : `Ji bilkul <b>${nameStr}</b>! Aap kis din aur timing par visit reschedule karna chahte hain? (e.g. <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>). Agar cancel karni ho to 'Cancel' likh sakte hain. 🙏`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_BOOKED",
       };
     }
 
@@ -5823,7 +5962,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v62-slot-booking-engine",
+        version: "v63-telegram-qa-hotfix",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -5939,7 +6078,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v62 Ready (Robust Natural Slot Booking & FSM Anti-Reset Safeguard)", { status: 200 });
+    return new Response("Realtor Lead Engine v63 Ready (Anti-OFF_TOPIC Guard, Owner Multi-Listing & Dual Search Path)", { status: 200 });
   }
 
   try {
