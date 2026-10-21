@@ -3262,7 +3262,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v56-fresh-requalification-and-visit-conflict-resolution",
+        version: "v57-site-visit-slot-clarification-and-false-alert-fix",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -3373,7 +3373,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v56 Ready (Fresh Requalification & Visit Conflict Resolution)", { status: 200 });
+    return new Response("Realtor Lead Engine v57 Ready (Site Visit Slot Clarification & False Alert Fix)", { status: 200 });
   }
 
   try {
@@ -4839,11 +4839,14 @@ Deno.serve(async (req: Request) => {
     else if (
       (lead.state === "OPTIONS_SENT" || lead.state === "VISIT_REQUESTED") &&
       !aiAnalysis.reschedule_slot &&
-      !aiAnalysis.property_type &&
+      !parsePropertyTypeFromText(messageText) &&
       (aiAnalysis.selected_option_index !== null && aiAnalysis.selected_option_index !== undefined ||
        /(?:^|\b)(?:1|1️⃣|first|1st|option\s*1|2|2️⃣|second|2nd|option\s*2|3|3️⃣|third|3rd|option\s*3)\b/i.test(lower))
     ) {
       let index = aiAnalysis.selected_option_index ?? (/(?:2|2️⃣|second|dusra)/i.test(lower) ? 1 : /(?:3|3️⃣|third|teesra)/i.test(lower) ? 2 : 0);
+
+      // Check if lead already has an anchored / single property for which visit slot was already proposed
+      const hasAnchoredProp = Boolean(lead.selected_property_id || (Array.isArray(lead.last_option_ids) && lead.last_option_ids.length === 1));
 
       // Fetch matching options from last options
       let selected: any = null;
@@ -4854,18 +4857,40 @@ Deno.serve(async (req: Request) => {
           .eq("property_id", lead.last_option_ids[index])
           .maybeSingle();
         selected = prop;
+      } else if (lead.selected_property_id) {
+        const { data: prop } = await supabase
+          .from("inventory")
+          .select("*")
+          .eq("property_id", lead.selected_property_id)
+          .maybeSingle();
+        selected = prop;
       }
 
-      if (!selected) {
+      // If a single property was already offered or user already anchored this property,
+      // and user replied with "1", "option 1" etc. without providing a date/time:
+      // Clarify that the agent asked for the site visit time slot!
+      const isAlreadyAnchored = hasAnchoredProp && selected && (lead.selected_property_id === selected.property_id || (Array.isArray(lead.last_option_ids) && lead.last_option_ids.length === 1));
+
+      if (isAlreadyAnchored) {
+        nextState = "OPTIONS_SENT";
+        const propName = selected.project_name || "property";
+        const leadName = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+
+        replyText =
+          lang === "GUJLISH"
+            ? `Ji ${leadName}! Ame <b>${propName}</b> ni VIP Site Visit mate time puchhyo chhe 🚗.\n\n👉 <b>Kripya tamaro anukool time janavjo — jem ke Kaale sanje 5 vage ke Sunday savare 11 vage?</b>`
+            : lang === "ENGLISH"
+            ? `Hello <b>${senderName || "Friend"}</b>! I asked for your preferred timing for the VIP Site Visit to <b>${propName}</b> 🚗.\n\n👉 <b>Please let me know your preferred slot — such as Tomorrow 5 PM or Sunday 11 AM?</b>`
+            : `Ji ${leadName}! Maine <b>${propName}</b> ki VIP Site Visit ke liye time pucha hai 🚗.\n\n👉 <b>Kripya apna preferred time batayein — jaise ki Kal shaam 5 baje ya Sunday subah 11 baje?</b>`;
+      } else if (!selected) {
         replyText =
           lang === "GUJLISH"
             ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>, tamara exact criteria (<b>${lead.property_type || "Property"}</b> in <b>${lead.location || resolvedCity || "tamara shehar"}</b>) mate aa amaru best verified option hatu. Amara senior sales executive tamara mate exclusive <b>off-market options</b> arrange kari rahya chhe ane direct <b>call par connect karshe</b>. 📞\n\nAgar tame location ke budget badalva mango chho, to kripya janavjo!`
             : lang === "ENGLISH"
             ? `Sure <b>${senderName}</b>, this was our top verified option for your criteria (<b>${lead.property_type || "Property"}</b> in <b>${lead.location || resolvedCity || "your city"}</b>). Our senior sales executives are arranging exclusive <b>off-market options</b> and will <b>connect with you directly over a call</b>. 📞\n\nIf you would like to explore nearby areas or adjust your budget, please let me know!`
             : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>, aapke exact criteria (<b>${lead.property_type || "Property"}</b> in <b>${lead.location || resolvedCity || "aapke shehar"}</b>) ke liye ye hamara top verified option tha. Hamare senior sales executive aapke liye exclusive <b>off-market & alternate options</b> arrange kar rahe hain aur aapse direct <b>call par connect karenge</b>. 📞\n\nAgar aap location ya budget relax karna chahein, to kripya batayein!`;
-      }
-
-      if (selected) {
+      } else {
+        // Normal property selection when user is picking from multiple options (Option 1, 2, or 3)
         // Check if lead already has an active booked visit for a different property
         const { data: activeVisits } = await supabase
           .from("site_visits")
@@ -4882,9 +4907,10 @@ Deno.serve(async (req: Request) => {
           const oldPropName = currentActiveVisit.inventory?.project_name || "Project";
           const oldLoc = currentActiveVisit.inventory?.location ? ` (${currentActiveVisit.inventory.location})` : "";
           const scheduledTime = currentActiveVisit.scheduled_at || lead.site_visit_at || lead.site_visit_datetime;
-          const visitTime = scheduledTime
-            ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
-            : "Scheduled Time";
+          const d = scheduledTime ? new Date(scheduledTime) : null;
+          const visitTime = d && !isNaN(d.getTime())
+            ? d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
+            : (scheduledTime || "Scheduled Time");
 
           nextState = "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING";
           await supabase.from("leads").update({
@@ -5427,18 +5453,22 @@ Deno.serve(async (req: Request) => {
       }
 
       // Detect if user has changed their core property search criteria (new property type, new location, or new budget)
+      const hasExplicitNewPropType = Boolean(parsePropertyTypeFromText(messageText));
+      const hasExplicitNewBudget = Boolean(parseBudgetFromText(messageText));
+      const hasExplicitNewLoc = Boolean(extractLocationFromText(messageText, allTenantInventory || []).length > 0);
+      const hasExplicitChangePhrase = /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|nayi\s*chahiye|navi\s*joiye)/i.test(lower);
+
       const oldCat = getPropertyCategoryGroup(lead?.property_type);
       const newCat = getPropertyCategoryGroup(propType);
-      const isCategoryChanged = Boolean(propType && oldCat !== "UNKNOWN" && newCat !== "UNKNOWN" && oldCat !== newCat);
-      const isNewPropTypeGiven = Boolean(propType && propType !== lead?.property_type);
-      const isNewLocationGiven = Boolean(location && location !== lead?.location);
+      const isCategoryChanged = Boolean(hasExplicitNewPropType && propType && oldCat !== "UNKNOWN" && newCat !== "UNKNOWN" && oldCat !== newCat);
+      const isNewPropTypeGiven = Boolean(hasExplicitNewPropType && propType && propType !== lead?.property_type);
+      const isNewLocationGiven = Boolean(hasExplicitNewLoc && location && location !== lead?.location);
 
       const hasNewSearchIntent = isNewPropTypeGiven ||
                                  isNewLocationGiven ||
-                                 Boolean(budget && Math.abs(budget - Number(lead?.budget || 0)) > 1000) ||
+                                 Boolean(hasExplicitNewBudget && budget && Math.abs(budget - Number(lead?.budget || 0)) > 1000) ||
                                  isCategoryChanged ||
-                                 aiAnalysis.intent === "CHANGE_CRITERIA" ||
-                                 /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|nayi\s*chahiye|navi\s*joiye)/i.test(lower);
+                                 (hasExplicitChangePhrase && aiAnalysis.intent === "CHANGE_CRITERIA");
 
       // Active Booked Visit Safeguard Circuit Breaker:
       // If the lead already has an active booked site visit and did not explicitly initiate a new property search,
@@ -5467,6 +5497,22 @@ Deno.serve(async (req: Request) => {
             : `Aapki VIP Site Visit already booked hai <b>${senderName ? `${senderName} ji` : "ji"}</b>! 🚗\n🏢 <b>Project:</b> ${bookedPropName}${bookedLocation}\n⏰ <b>Time:</b> ${formattedTime}\n\n🤝 <b>Milte hain site par!</b> Kya aapko timing reschedule karna hai ya koi aur property dekhna chahte hain?`;
 
         nextState = lead.state;
+      } else if (lead.state === "OPTIONS_SENT" && !hasNewSearchIntent) {
+        // Options Sent Safeguard: User is in OPTIONS_SENT and sent a generic response without new criteria
+        const targetPropId = lead.selected_property_id || (Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0 ? lead.last_option_ids[0] : null);
+        let propName = "property";
+        if (targetPropId) {
+          const { data: p } = await supabase.from("inventory").select("project_name").eq("property_id", targetPropId).maybeSingle();
+          if (p?.project_name) propName = p.project_name;
+        }
+        nextState = "OPTIONS_SENT";
+        const leadName = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+        replyText =
+          lang === "GUJLISH"
+            ? `Ji ${leadName}! Ame <b>${propName}</b> ni VIP Site Visit mate time puchhyo chhe 🚗.\n\n👉 <b>Kripya tamaro anukool time janavjo — jem ke Kaale sanje 5 vage ke Sunday savare 11 vage?</b>`
+            : lang === "ENGLISH"
+            ? `Hello <b>${senderName || "Friend"}</b>! I asked for your preferred timing for the VIP Site Visit to <b>${propName}</b> 🚗.\n\n👉 <b>Please let me know your preferred slot — such as Tomorrow 5 PM or Sunday 11 AM?</b>`
+            : `Ji ${leadName}! Maine <b>${propName}</b> ki VIP Site Visit ke liye time pucha hai 🚗.\n\n👉 <b>Kripya apna preferred time batayein — jaise ki Kal shaam 5 baje ya Sunday subah 11 baje?</b>`;
       } else {
         // 2. Persist newly extracted fields into leads table
         const leadUpdates: any = { state: "QUALIFYING" };
