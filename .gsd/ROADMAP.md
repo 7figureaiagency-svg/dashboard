@@ -40,9 +40,21 @@ updated: 2026-10-19T18:50:30+05:30
 
 ---
 
+### Phase 3: Schema-Guided Zero-Regex Conversational Intent Engine (TypeChat Architecture)
+**Status:** ⏳ Planned  
+**Objective:** Replace fragile regex cascades and section-hijacking with TypeChat-style Discriminated Union Schemas and deterministic state machine transitions for 100% accurate intent classification and site visit booking.  
+**Depends on:** Phase 2  
+**Plans:**
+- [ ] Plan 3.1: Discriminated Union Schema & LLM Zero-Regex Prompt Engineering
+- [ ] Plan 3.2: Deterministic State Transition Routing & Elimination of Fragile Regex Cascades
+
+---
+
 ## Progress Summary
 
 | Phase | Status | Plans | Complete |
 | :--- | :---: | :---: | :---: |
 | 1: Core Dashboard & Leads CRM | ✅ Complete | 1/1 | 100% |
 | 2: Secondary Tabs & Workflows | ✅ Complete | 3/3 | 100% |
+| 3: Schema-Guided Intent Engine | ⏳ Planned | 0/2 | 0% |
+
