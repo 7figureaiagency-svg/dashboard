@@ -533,6 +533,27 @@ export function isValidUrl(value: string): boolean {
   }
 }
 
+/**
+ * Normalizes phone numbers for WhatsApp (`wa.me`) links.
+ * Automatically prepends India (+91) country code for 10-digit mobile numbers
+ * to prevent WhatsApp from misidentifying them as Iran (+98) or other foreign dial codes.
+ */
+export function toWhatsAppUrl(phone?: string | null, text?: string): string | null {
+  if (!phone) return null;
+  let digits = phone.replace(/[^0-9]/g, "");
+  if (!digits) return null;
+
+  // If standard 10-digit Indian phone (e.g. 9820144821), prepend 91
+  if (digits.length === 10) {
+    digits = `91${digits}`;
+  } else if (digits.length === 11 && digits.startsWith("0")) {
+    digits = `91${digits.slice(1)}`;
+  }
+
+  const query = text ? `?text=${encodeURIComponent(text)}` : "";
+  return `https://wa.me/${digits}${query}`;
+}
+
 export type DatePreset = "today" | "tomorrow" | "all";
 
 export function inDatePreset(iso: string | null, preset: DatePreset): boolean {

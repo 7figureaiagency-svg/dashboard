@@ -82,7 +82,7 @@ function TermsPage() {
 
             <Section title="7. Service Availability">
               We aim to maintain high availability but do not guarantee uninterrupted access. We
-              are not liable for downtime caused by third-party services (Meta, Supabase, n8n).
+              are not liable for downtime caused by third-party services (Meta, Supabase, Vercel).
             </Section>
 
             <Section title="8. Termination">

@@ -48,6 +48,7 @@ import {
   isVisitBookedStatus,
   isVisitDoneStatus,
   STATUS_MAP,
+  toWhatsAppUrl,
   type Lead,
   type Period,
 } from "@/lib/crm";
@@ -799,7 +800,7 @@ export function LeadsTab({
                           className="apple-button min-h-[44px] h-11 flex-1 gap-2 text-xs font-semibold rounded-xl border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-2xs"
                         >
                           <a
-                            href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`}
+                            href={toWhatsAppUrl(lead.phone) || "#"}
                             target="_blank"
                             rel="noreferrer"
                           >
@@ -963,6 +964,23 @@ export function LeadsTab({
                             <a href={`tel:${lead.phone ?? ""}`}>
                               <Phone className="size-3.5 text-primary" />
                               <span>Call</span>
+                            </a>
+                          </Button>
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="apple-button h-8 rounded-lg gap-1.5 border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-2xs font-medium"
+                            disabled={!lead.phone}
+                          >
+                            <a
+                              href={toWhatsAppUrl(lead.phone) || "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={`Chat with ${lead.name || "client"} on WhatsApp`}
+                            >
+                              <Send className="size-3 text-emerald-600 dark:text-emerald-400" />
+                              <span className="hidden xl:inline">WhatsApp</span>
                             </a>
                           </Button>
                           <Button

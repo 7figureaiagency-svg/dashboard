@@ -69,7 +69,8 @@ function PrivacyPolicyPage() {
                   <strong>Supabase</strong> — our database and authentication provider.
                 </li>
                 <li>
-                  <strong>n8n</strong> — our workflow automation provider for WhatsApp follow-ups.
+                  <strong>Supabase Edge Functions</strong> — our serverless computing engine for
+                  automated lead qualification and WhatsApp follow-ups.
                 </li>
               </ul>
             </Section>

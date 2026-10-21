@@ -8,10 +8,12 @@ updated: 2026-10-21T16:15:00+05:30
 
 **Milestone:** Apple HIG Modernization & Conversational Architecture  
 **Phase:** 4 - Bi-Directional Dual-Persona Lifecycle Architecture (Buyer ↔ Seller Multi-Role Engine)  
-**Status:** Complete (Wave 1 & Wave 2 Complete)  
+**Status:** In Progress (Wave 3 Gap Closure Plan 4.3 Ready)  
 **Plans:**
 - `.gsd/phases/4/4.1-PLAN.md` (Dual-Persona Data Model, FSM Transitions, and Dual-Reminder Disambiguation Menu) — ✅ Complete
 - `.gsd/phases/4/4.2-PLAN.md` (CRM Dashboard Dual-Role Badges, Drawer Sub-Tabs & High-Value Sales Alerts) — ✅ Complete
+- `.gsd/phases/4/4.3-PLAN.md` (Natural Slot Booking & Anti-Reset Safeguard in OPTIONS_SENT) — ⏳ Ready
+- `.gsd/phases/4/4.4-PLAN.md` (QA Audit Bugfixes: Onboarding Webhook, Indian Phone Normalizer, Desktop CTA & Legal Copy) — ✅ Complete
 
 ## Last Action
 

@@ -71,6 +71,7 @@ import {
   formatMoney,
   isDualRoleLead,
   toNumber,
+  toWhatsAppUrl,
   type Activity,
   type Lead,
 } from "@/lib/crm";
@@ -519,7 +520,7 @@ export function LeadDrawer({
                                 className="apple-button min-h-[44px] h-11 flex-1 gap-2 text-xs font-semibold rounded-xl border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-2xs"
                               >
                                 <a
-                                  href={`https://wa.me/${ownerPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hello, Nextgen Realtors inspection team contacting you regarding your property listing at ${title}.`)}`}
+                                  href={toWhatsAppUrl(ownerPhone, `Hello, Nextgen Realtors inspection team contacting you regarding your property listing at ${title}.`) || "#"}
                                   target="_blank"
                                   rel="noreferrer"
                                 >
@@ -958,7 +959,7 @@ export function LeadDrawer({
                 className="apple-button flex-1 h-11 min-h-[44px] gap-2 rounded-xl text-xs font-semibold border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-xs"
               >
                 <a
-                  href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`}
+                  href={toWhatsAppUrl(lead.phone) || "#"}
                   target="_blank"
                   rel="noreferrer"
                 >

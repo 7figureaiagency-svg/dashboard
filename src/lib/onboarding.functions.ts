@@ -12,7 +12,10 @@ const META_APP_ID = process.env["META_APP_ID"];
 const META_APP_SECRET = process.env["META_APP_SECRET"];
 const META_GRAPH_VERSION = process.env["META_GRAPH_VERSION"] || "v21.0";
 const META_WEBHOOK_URL =
-  process.env["META_WEBHOOK_URL"] || "https://n8n.yourdomain.com/webhook/meta-whatsapp";
+  process.env["META_WEBHOOK_URL"] ||
+  (process.env["SUPABASE_URL"]
+    ? `${process.env["SUPABASE_URL"]}/functions/v1/realtor-lead-engine/webhook`
+    : "https://yeiygfysijptjdepctnx.supabase.co/functions/v1/realtor-lead-engine/webhook");
 
 type OnboardingInput = { companyName?: string; phone?: string };
 
