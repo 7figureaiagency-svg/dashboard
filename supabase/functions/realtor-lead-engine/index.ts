@@ -312,6 +312,10 @@ function getIstTime() {
 function isWithinWorkingHours(startHour = 10, endHour = 19): boolean {
   const ist = getIstTime();
   const hour = ist.getUTCHours();
+  const minute = ist.getUTCMinutes();
+  if (endHour === 19) {
+    return (hour >= startHour && hour < 18) || (hour === 18 && minute <= 30);
+  }
   return hour >= startHour && hour < endHour;
 }
 
@@ -3262,7 +3266,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v57-site-visit-slot-clarification-and-false-alert-fix",
+        version: "v58-seamless-visit-booking-and-criteria-persistence-fix",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -3373,7 +3377,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v57 Ready (Site Visit Slot Clarification & False Alert Fix)", { status: 200 });
+    return new Response("Realtor Lead Engine v58 Ready (Seamless Visit Booking & Criteria Persistence Fix)", { status: 200 });
   }
 
   try {
@@ -3891,6 +3895,7 @@ Deno.serve(async (req: Request) => {
           userText: messageText,
         });
 
+        const isNegotiation = /(discount|negotiat|bhav\s*ochho|rate\s*kam|price|offer|token|sitting|baithak)/i.test(lower);
         const isLoan = /(loan|bank|emi|interest|finance)/i.test(lower);
         const isSimpleAttendanceOnly =
           /(?:^|\b)(?:1|1️⃣|one|option\s*1)\b/i.test(lower) ||
@@ -4183,7 +4188,11 @@ Deno.serve(async (req: Request) => {
           nextState = "CRITERIA_CONFIRMATION_PENDING";
           await supabase
             .from("leads")
-            .update({ state: "CRITERIA_CONFIRMATION_PENDING" })
+            .update({
+              state: "CRITERIA_CONFIRMATION_PENDING",
+              selected_property_id: searchedProp.property_id,
+              last_option_ids: [searchedProp.property_id]
+            })
             .eq("id", lead.id);
 
           replyText =
@@ -4602,6 +4611,12 @@ Deno.serve(async (req: Request) => {
       !isInProgressOwnerIntake &&
       lead.lead_type !== "PROVIDER" &&
       lead.state !== "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING" &&
+      !(
+        (aiAnalysis.intent === "BOOK_VISIT" ||
+         (/\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj)\b/i.test(lower) &&
+          /\b\d{1,2}(?::\d{2})?\s*(am|pm|baje|vage)?\b/i.test(lower))) &&
+        !/(nayi|navi|change|badalna|naya|option\s*2)/i.test(lower)
+      ) &&
       (
         lead.state === "CRITERIA_CONFIRMATION_PENDING" ||
         aiAnalysis.intent === "CHANGE_CRITERIA" ||
@@ -4688,6 +4703,15 @@ Deno.serve(async (req: Request) => {
         // If user wants to schedule site visit for this anchored property:
         if (targetProp && (lower.includes("visit") || lower.includes("site") || lower === "1" || lower === "1️⃣" || lower === "ha" || lower === "yes")) {
           nextState = "OPTIONS_SENT";
+          await supabase
+            .from("leads")
+            .update({
+              state: "OPTIONS_SENT",
+              selected_property_id: targetProp.property_id,
+              last_option_ids: [targetProp.property_id],
+            })
+            .eq("id", lead.id);
+
           replyText =
             lang === "GUJLISH"
               ? `Khub saras pasand <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! <b>${targetProp.project_name}</b> (${targetProp.configuration}, ${targetProp.location}) ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
@@ -4777,6 +4801,15 @@ Deno.serve(async (req: Request) => {
                 : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>, <b>${critSummary}</b> ke criteria me hamare paas yehi top verified inventory available thi. Hamare senior sales executive aapke liye exclusive <b>off-market options</b> arrange kar rahe hain aur aapse direct <b>call par connect karenge</b>. 📞\n\nAgar aap aas-paas ke areas ya budget me thoda change karna chahein to batayein!`;
           }
         }
+      } else {
+        // Fallback for any unrecognized message in CRITERIA_CONFIRMATION_PENDING (never drop silently!)
+        const leadName = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+        replyText =
+          lang === "GUJLISH"
+            ? `Kripya 1 ke 2 lakhi ne janavjo ${leadName}:\n\n1️⃣ <b>Site Visit plan karvi chhe</b> 🚗\n2️⃣ <b>Navi requirement search karvi chhe</b> 🔍`
+            : lang === "ENGLISH"
+            ? `Please reply with 1 or 2, <b>${senderName || "Friend"}</b>:\n\n1️⃣ <b>Schedule a VIP Site Visit</b> 🚗\n2️⃣ <b>Search for a new requirement</b> 🔍`
+            : `Kripya 1 ya 2 likh kar batayein ${leadName}:\n\n1️⃣ <b>Site Visit plan karni hai</b> 🚗\n2️⃣ <b>Nayi requirement search karni hai</b> 🔍`;
       }
     }
 
@@ -4839,6 +4872,9 @@ Deno.serve(async (req: Request) => {
     else if (
       (lead.state === "OPTIONS_SENT" || lead.state === "VISIT_REQUESTED") &&
       !aiAnalysis.reschedule_slot &&
+      !(aiAnalysis.intent === "BOOK_VISIT" ||
+        (/\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj)\b/i.test(lower) && /\b\d{1,2}(?::\d{2})?\s*(am|pm|baje|vage)?\b/i.test(lower)) ||
+        /\b(baje|vage|am|pm|\d{1,2}:\d{2})\b/i.test(lower)) &&
       !parsePropertyTypeFromText(messageText) &&
       (aiAnalysis.selected_option_index !== null && aiAnalysis.selected_option_index !== undefined ||
        /(?:^|\b)(?:1|1️⃣|first|1st|option\s*1|2|2️⃣|second|2nd|option\s*2|3|3️⃣|third|3rd|option\s*3)\b/i.test(lower))
@@ -4948,8 +4984,9 @@ Deno.serve(async (req: Request) => {
     // 8. SITE VISIT BOOKING WITH 10 AM - 6 PM IST VALIDATION
     // =========================================================================
     else if (
-      !/(commercial|office|shop|flat|bhk|villa|budget|lakh|crore|hazar|rent|buy|chahiye|sodhu|dekhna)/i.test(lower) &&
-      (/(site visit|visit book|book visit|visit schedule|meeting schedule|visit karvi|visit aavvu|visit karni)/i.test(lower) ||
+      !(Boolean(parseBudgetFromText(messageText)) || /(chahiye|sodhu|naya\s*search|nayi\s*search|nava\s*search)/i.test(lower)) &&
+      (aiAnalysis.intent === "BOOK_VISIT" ||
+       /(site visit|visit book|book visit|visit schedule|meeting schedule|visit karvi|visit aavvu|visit karni)/i.test(lower) ||
        (/\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj)\b/i.test(lower) && /\b\d{1,2}(?::\d{2})?\s*(am|pm|baje|vage)?\b/i.test(lower)) ||
        (/\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i.test(lower)) ||
        (lead.state === "OPTIONS_SENT" && /\b(ha|haan|yes|yep|sure|chalo|done)\b/i.test(lower)))
@@ -5870,7 +5907,8 @@ Deno.serve(async (req: Request) => {
 
             let adjacentLoc: string | null = null;
             if (distinctAvailableLocs.length > 0) {
-              adjacentLoc = await findAdjacentLocalityWithAI(currentLead.location, resolvedCity, distinctAvailableLocs);
+              const aiAdj = await findAdjacentLocalityWithAI(currentLead.location, resolvedCity, distinctAvailableLocs);
+              adjacentLoc = aiAdj?.adjacent_location || null;
             }
 
             if (adjacentLoc) {
@@ -5951,7 +5989,7 @@ Deno.serve(async (req: Request) => {
             .from("leads")
             .update({
               last_option_ids: optionIds,
-              selected_property_id: properties[0].property_id,
+              selected_property_id: properties.length === 1 ? properties[0].property_id : null,
             })
             .eq("id", lead.id);
 
@@ -5989,6 +6027,16 @@ Deno.serve(async (req: Request) => {
     // =========================================================================
     // 11. OUTBOUND DISPATCH (Only if not silent!)
     // =========================================================================
+    if (!isSilent && (!replyText || !replyText.trim())) {
+      const leadName = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+      replyText =
+        lang === "GUJLISH"
+          ? `Ji ${leadName}! Kripya janavjo tamne kaya type ni property ma interest chhe — Flat, Villa, ke Commercial Office/Shop? 🏡`
+          : lang === "ENGLISH"
+          ? `Hello <b>${senderName || "Friend"}</b>! How may we assist you with your property search — are you looking for a Flat, Villa, or Commercial space? 🏡`
+          : `Ji ${leadName}! Kripya batayein aap kis type ki property search kar rahe hain — Flat, Villa, ya Commercial Office/Shop? 🏡`;
+    }
+
     if (!isSilent && replyText) {
       if (platform === "TELEGRAM") {
         await sendTelegramMessage(botToken, senderId, replyText);
