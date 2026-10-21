@@ -5794,7 +5794,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v60-typechat-fsm-engine",
+        version: "v61-dual-role-engine",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -5808,6 +5808,9 @@ Deno.serve(async (req: Request) => {
           groq_len: (Deno.env.get("GROQ_API_KEY") || "").length,
         },
         features: [
+          "dual-role-lifecycle-engine",
+          "scenario-3-disambiguation-menu",
+          "high-value-dual-role-sales-alert",
           "city-agnostic-multi-tenant-architecture",
           "ai-locality-proximity-finder",
           "data-driven-price-reality-floor",
@@ -5907,7 +5910,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v60 Ready (Schema-Guided Zero-Regex Engine & Deterministic FSM Router)", { status: 200 });
+    return new Response("Realtor Lead Engine v61 Ready (Dual-Role Lifecycle Engine & Scenario 3 Disambiguation Menu)", { status: 200 });
   }
 
   try {
