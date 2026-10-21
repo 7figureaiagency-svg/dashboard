@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-21T14:35:30+05:30
+updated: 2026-10-21T15:03:00+05:30
 ---
 
 # Project State
@@ -12,16 +12,17 @@ updated: 2026-10-21T14:35:30+05:30
 **Plans:**
 - `.gsd/phases/3/3.1-PLAN.md` (Discriminated Union Schema & TypeChat Prompt Engineering) — ✅ Complete
 - `.gsd/phases/3/3.2-PLAN.md` (Deterministic FSM Router & Regex Elimination) — ✅ Complete
+- `.gsd/phases/3/3.3-PLAN.md` (Gap Closure: VISIT_CANCELLED Loop, Dual-Role Transition, and Catch-All Routing) — ✅ Complete
 
 ## Last Action
 
-Executed Phase 3 Plan 3.2:
-- Replaced fragile cascading regular expressions in `handleIncomingMessage` with deterministic FSM router `dispatchStateAction()`.
-- Net eliminated ~2,626 lines of legacy regex cascades.
-- Implemented and verified all 6 critical state transition invariants (zero option hijacking, zero criteria wipes, zero silent drops, missed visit empathy, role selection).
-- Bumped version to `v60-typechat-fsm-engine` and registered features in `/health`.
-- Deployed Edge Function to Supabase Edge Serverless runtime and confirmed live status `ONLINE`.
-- Committed `9109ac9`: `feat(phase-3): implement deterministic FSM router, eliminate regex cascades, and deploy v60`.
+Executed Phase 3 Plan 3.3 (Gap Closure):
+- Added dedicated state machine handlers for `VISIT_CANCELLED` and `DROPPED` in `dispatchStateAction`.
+- Added dual-role seller intake support (`SUBMIT_LISTING`) from `SITE_VISIT_BOOKED`.
+- Upgraded the final catch-all fallback to smart-forward messages with detected property attributes into `handleQualificationCascade` instead of repeating generic questions.
+- Fixed `nameStr` definitions to eliminate nested `<b><b>...</b></b>` tags.
+- Deployed Edge Function `v60-typechat-fsm-engine` (version 90) to Supabase Edge Serverless.
+- Live test on Telegram by user `5117510624` verified: `"Hi"` -> greeted; `"Office"` -> absorbed `"Commercial Office"`, searched inventory, and transitioned to `OPTIONS_SENT`. Loop is completely resolved.
 
 ## Active Decisions
 
@@ -40,4 +41,4 @@ None.
 
 ## Concerns
 
-None. Edge Function `v60-typechat-fsm-engine` is live on Supabase Edge Serverless with zero regex cascading conflicts and full empirical test coverage.
+None. Edge Function `v60-typechat-fsm-engine` is live, all edge-state transitions verified, and live user test confirmed clean progression.

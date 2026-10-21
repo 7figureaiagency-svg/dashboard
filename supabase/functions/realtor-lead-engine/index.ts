@@ -3713,7 +3713,7 @@ export async function dispatchStateAction(
   const displayCity = context.displayCity || resolvedCity || "aapke shehar";
   const activeTenantId = context.tenantId || defaultTenantId;
   const lower = context.lower || context.messageText.toLowerCase().trim();
-  const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+  const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : (lang === "GUJLISH" ? "Mitra" : "ji");
 
   // ---------------------------------------------------------------------------
   // 1. GLOBAL CRITICAL INTERCEPTORS
@@ -4359,6 +4359,39 @@ export async function dispatchStateAction(
     if (intent === "BROCHURE_REQUEST" || intent === "MAP_REQUEST") {
       return handleBrochureOrMapResponse(lead, intent, context, true);
     }
+
+    // G. DUAL-ROLE: OWNER LISTING INTAKE FROM BOOKED VISIT
+    if (
+      intent === "SUBMIT_LISTING" ||
+      actionResult.user_role === "OWNER" ||
+      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower)
+    ) {
+      const ownerRes = await handleOwnerFlow({
+        lead,
+        messageText: context.messageText,
+        lower,
+        lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+        senderName,
+        senderId: context.senderId,
+        platform: context.platform,
+        tenantId: activeTenantId,
+        supabase,
+        aiAnalysis: actionResult,
+        city: resolvedCity,
+        agencyName,
+      });
+      return {
+        replyText: ownerRes.replyText,
+        nextState: ownerRes.nextState as DialogState,
+        leadUpdates: { lead_type: "PROVIDER", state: ownerRes.nextState },
+      };
+    }
+
+    // H. NEW PROPERTY INQUIRY FROM BOOKED VISIT
+    const parsedTypeInBooked = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+    if (intent === "CHANGE_REQUIREMENT" || parsedTypeInBooked) {
+      return handleQualificationCascade(lead, actionResult, context);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -4441,6 +4474,115 @@ export async function dispatchStateAction(
         salesAlert: { type: "FEEDBACK_RECEIVED", payload: { userText: context.messageText } },
       };
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 9b. VISIT CANCELLED (State: VISIT_CANCELLED)
+  // ---------------------------------------------------------------------------
+  if (currentState === "VISIT_CANCELLED") {
+    // 1. Owner Listing Intent (e.g. "Muje meri property sell krni he")
+    if (
+      intent === "SUBMIT_LISTING" ||
+      actionResult.user_role === "OWNER" ||
+      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower)
+    ) {
+      const ownerRes = await handleOwnerFlow({
+        lead,
+        messageText: context.messageText,
+        lower,
+        lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+        senderName,
+        senderId: context.senderId,
+        platform: context.platform,
+        tenantId: activeTenantId,
+        supabase,
+        aiAnalysis: actionResult,
+        city: resolvedCity,
+        agencyName,
+      });
+      return {
+        replyText: ownerRes.replyText,
+        nextState: ownerRes.nextState as DialogState,
+        leadUpdates: { lead_type: "PROVIDER", state: ownerRes.nextState },
+      };
+    }
+
+    // 2. Re-booking or rescheduling request
+    if (intent === "BOOK_VISIT" || intent === "RESCHEDULE_VISIT") {
+      const slotRaw = (action as RescheduleVisitAction).new_slot_raw || (action as BookVisitAction).preferred_date_raw || context.messageText;
+      const slotResult = parseVisitSlot(slotRaw);
+      if (slotResult.isValidTime && !slotResult.isPast) {
+        const newSlot = slotResult.isoUtc;
+        await supabase
+          .from("site_visits")
+          .update({ scheduled_at: newSlot, status: "RESCHEDULED" })
+          .eq("lead_id", lead.id)
+          .in("status", ["CANCELLED", "MISSED", "SCHEDULED"]);
+
+        const formatted = new Date(newSlot).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji bilkul <b>${nameStr}</b>! Tamari VIP site visit <b>${formatted}</b> mate fari thi schedule kari didhi chhe. (Site par maliye chiye)! 🤝📍`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! Your VIP site visit has been rescheduled to <b>${formatted}</b>. See you at the site! 🤝📍`
+            : `Ji bilkul <b>${nameStr}</b>! Aapki VIP site visit <b>${formatted}</b> ke liye dobara schedule kar di gayi hai (Milte hain site par)! 🤝📍`;
+
+        return {
+          replyText,
+          nextState: "SITE_VISIT_BOOKED",
+          leadUpdates: {
+            site_visit_at: newSlot,
+            site_visit_datetime: newSlot,
+            site_visit_booked: true,
+            state: "SITE_VISIT_BOOKED",
+          },
+          salesAlert: { type: "SITE_VISIT_BOOKED", payload: { scheduledAt: newSlot, userText: context.messageText } },
+        };
+      }
+    }
+
+    // 3. Property search inquiry or property type provided (e.g. "Office", "Flat", "Commercial")
+    const parsedTypeInCancelled = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+    if (intent === "CHANGE_REQUIREMENT" || intent === "SEEKER_QUALIFICATION" || parsedTypeInCancelled || actionResult.location || actionResult.price_or_budget) {
+      return handleQualificationCascade(lead, actionResult, context);
+    }
+
+    // 4. Greeting ("Hi", "Hello", etc.)
+    if (intent === "GREETING") {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Welcome back <b>${nameStr}</b>! ${agencyName} desk par tamaru swagat chhe. 🏢✨\n\nTame ${agencyName} sathe shu karva mango chho?\n\n1️⃣ <b>Nayi Property Shodhvi chhe</b> (Buy / Rent) 🏡\n2️⃣ <b>Property List Karvi chhe</b> (Sell / Rent Out) 📋\n\n<i>(Tame 1 ke 2 lakhi ne reply kari shako chho)</i>`
+          : lang === "ENGLISH"
+          ? `Welcome back <b>${nameStr}</b>! Welcome back to ${agencyName}. 🏢✨\n\nHow can we assist you today?\n\n1️⃣ <b>Search for a Property</b> (Buy / Rent) 🏡\n2️⃣ <b>List / Offer a Property</b> (Sell / Rent Out) 📋\n\n<i>(You can reply with 1 or 2)</i>`
+          : `Welcome back <b>${nameStr}</b>! ${agencyName} desk par aapka swagat hai. 🏢✨\n\nAap ${agencyName} ke sath kya karna chahte hain?\n\n1️⃣ <b>Nayi Property Dekhni hai</b> (Buy / Rent) 🏡\n2️⃣ <b>Property List Karni hai</b> (Bechni / Rent Out) 📋\n\n<i>(Aap 1 ya 2 likh kar reply kar sakte hain)</i>`;
+
+      return {
+        replyText,
+        nextState: "ROLE_SELECTION_PENDING",
+        leadUpdates: {
+          state: "ROLE_SELECTION_PENDING",
+          site_visit_booked: false,
+        },
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 9c. DROPPED STATE RE-ENGAGEMENT (State: DROPPED)
+  // ---------------------------------------------------------------------------
+  if (currentState === "DROPPED") {
+    const replyText =
+      lang === "GUJLISH"
+        ? `Welcome back <b>${nameStr}</b>! Tamara mate automated alerts fari activate kari didha chhe. Tame property Buy/Rent karva mango chho ke List karva mango chho? 🏢`
+        : lang === "ENGLISH"
+        ? `Welcome back <b>${nameStr}</b>! Automated notifications have been reactivated for you. Are you looking to Buy/Rent or List a property? 🏢`
+        : `Welcome back <b>${nameStr}</b>! Aapke liye automated alerts dobara activate kar diye gaye hain. Aap property Buy/Rent karna chahte hain ya List karna chahte hain? 🏢`;
+
+    return {
+      replyText,
+      nextState: "ROLE_SELECTION_PENDING",
+      leadUpdates: { state: "ROLE_SELECTION_PENDING", bot_active: true },
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -4697,6 +4839,40 @@ export async function dispatchStateAction(
   // ---------------------------------------------------------------------------
   // ZERO SILENT DROPS INVARIANT (Final Catch-All)
   // ---------------------------------------------------------------------------
+  // SMART ROUTING: If user provided a property type, location, or budget, NEVER repeat the generic question!
+  // Instead, forward directly to handleQualificationCascade() so it absorbs the input and asks for the next missing field!
+  const detectedTypeInCatchAll = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+  if (detectedTypeInCatchAll || actionResult.location || actionResult.price_or_budget || actionResult.transaction_type) {
+    return handleQualificationCascade(lead, actionResult, context);
+  }
+
+  // If user expressed owner/seller intent:
+  if (
+    actionResult.user_role === "OWNER" ||
+    intent === "SUBMIT_LISTING" ||
+    /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower)
+  ) {
+    const ownerRes = await handleOwnerFlow({
+      lead,
+      messageText: context.messageText,
+      lower,
+      lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+      senderName,
+      senderId: context.senderId,
+      platform: context.platform,
+      tenantId: activeTenantId,
+      supabase,
+      aiAnalysis: actionResult,
+      city: resolvedCity,
+      agencyName,
+    });
+    return {
+      replyText: ownerRes.replyText,
+      nextState: ownerRes.nextState as DialogState,
+      leadUpdates: { lead_type: "PROVIDER", state: ownerRes.nextState },
+    };
+  }
+
   const defaultReply =
     lang === "GUJLISH"
       ? `Ji <b>${nameStr}</b>! Kripya janavjo tamne kaya type ni property ma interest chhe — Flat, Villa, ke Commercial Office/Shop? 🏡`
@@ -4706,7 +4882,7 @@ export async function dispatchStateAction(
 
   return {
     replyText: defaultReply,
-    nextState: currentState,
+    nextState: "ROLE_SELECTION_PENDING",
   };
 }
 
@@ -4888,7 +5064,7 @@ async function handleQualificationCascade(
 ): Promise<DialogTransitionResult> {
   const lang = context.lang || "HINGLISH";
   const senderName = context.senderName || "Friend";
-  const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+  const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : (lang === "GUJLISH" ? "Mitra" : "ji");
   const activeTenantId = context.tenantId || defaultTenantId;
   const resolvedCity = context.resolvedCity;
 
