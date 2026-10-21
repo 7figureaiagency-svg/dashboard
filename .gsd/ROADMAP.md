@@ -51,6 +51,16 @@ updated: 2026-10-19T18:50:30+05:30
 
 ---
 
+### Phase 4: Bi-Directional Dual-Persona Lifecycle Architecture (Buyer ↔ Seller Multi-Role Engine)
+**Status:** ⏳ Planned  
+**Objective:** Support a seamless bi-directional customer lifecycle where a single lead can concurrently qualify as a Property Seeker (Buyer/Tenant) and a Property Provider (Seller/Landlord). Ensure zero criteria wipes, contextual Dual-Reminder disambiguation menus on return greetings, parallel persistence across `leads` and `property_submissions`, and full visual clarity in the React CRM Dashboard.  
+**Depends on:** Phase 3  
+**Plans:**
+- [ ] Plan 4.1: Dual-Persona Data Model, FSM Transitions, and Dual-Reminder Disambiguation Menu ([`4.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.1-PLAN.md))
+- [ ] Plan 4.2: CRM Dashboard Dual-Role Badges, Drawer Sub-Tabs & High-Value Sales Alerts ([`4.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.2-PLAN.md))
+
+---
+
 ## Progress Summary
 
 | Phase | Status | Plans | Complete |
@@ -58,6 +68,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 1: Core Dashboard & Leads CRM | ✅ Complete | 1/1 | 100% |
 | 2: Secondary Tabs & Workflows | ✅ Complete | 3/3 | 100% |
 | 3: Schema-Guided Intent Engine | ✅ Complete | 3/3 | 100% |
+| 4: Bi-Directional Dual-Persona Lifecycle | ⏳ Planned | 0/2 | 0% |
 
 
 

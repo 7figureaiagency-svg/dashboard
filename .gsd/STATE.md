@@ -1,28 +1,25 @@
 ---
-updated: 2026-10-21T15:03:00+05:30
+updated: 2026-10-21T15:25:00+05:30
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone:** Apple HIG Modernization & Conversational Architecture
-**Phase:** 3 - Schema-Guided Zero-Regex Conversational Intent Engine (TypeChat Architecture)
-**Status:** Completed
+**Milestone:** Apple HIG Modernization & Conversational Architecture  
+**Phase:** 4 - Bi-Directional Dual-Persona Lifecycle Architecture (Buyer ↔ Seller Multi-Role Engine)  
+**Status:** Planned & Ready for Execution  
 **Plans:**
-- `.gsd/phases/3/3.1-PLAN.md` (Discriminated Union Schema & TypeChat Prompt Engineering) — ✅ Complete
-- `.gsd/phases/3/3.2-PLAN.md` (Deterministic FSM Router & Regex Elimination) — ✅ Complete
-- `.gsd/phases/3/3.3-PLAN.md` (Gap Closure: VISIT_CANCELLED Loop, Dual-Role Transition, and Catch-All Routing) — ✅ Complete
+- `.gsd/phases/4/4.1-PLAN.md` (Dual-Persona Data Model, FSM Transitions, and Dual-Reminder Disambiguation Menu) — ⏳ Ready
+- `.gsd/phases/4/4.2-PLAN.md` (CRM Dashboard Dual-Role Badges, Drawer Sub-Tabs & High-Value Sales Alerts) — ⏳ Ready
 
 ## Last Action
 
-Executed Phase 3 Plan 3.3 (Gap Closure):
-- Added dedicated state machine handlers for `VISIT_CANCELLED` and `DROPPED` in `dispatchStateAction`.
-- Added dual-role seller intake support (`SUBMIT_LISTING`) from `SITE_VISIT_BOOKED`.
-- Upgraded the final catch-all fallback to smart-forward messages with detected property attributes into `handleQualificationCascade` instead of repeating generic questions.
-- Fixed `nameStr` definitions to eliminate nested `<b><b>...</b></b>` tags.
-- Deployed Edge Function `v60-typechat-fsm-engine` (version 90) to Supabase Edge Serverless.
-- Live test on Telegram by user `5117510624` verified: `"Hi"` -> greeted; `"Office"` -> absorbed `"Commercial Office"`, searched inventory, and transitioned to `OPTIONS_SENT`. Loop is completely resolved.
+Authored Phase 4 execution plans based on user selection of Option A (Multi-Persona Lead Model) and Scenario 3 (Dual-Reminder Disambiguation Menu):
+- Status: **COMPLETE** (2 plans across 2 waves)
+- Plan 4.1: Wave 1 (`supabase/functions/realtor-lead-engine/index.ts`, `scratch/test_dual_role_lifecycle.cjs`)
+- Plan 4.2: Wave 2 (`src/lib/crm.ts`, `src/components/crm/badges.tsx`, `leads-tab.tsx`, `lead-drawer.tsx`, `whatsapp-chat-view.tsx`)
+- Validated with GSD plan-checker: all requirements covered, zero cyclic dependencies, atomic 2-3 task decomposition.
 
 ## Active Decisions
 
