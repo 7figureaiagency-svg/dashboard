@@ -188,12 +188,32 @@ async function dispatchSalesAlert(
         badge = "🏡 NEW OWNER PROPERTY LISTING";
         pitchHint = extra.hint || "Call owner within 15 mins: verify ownership paperwork, confirm asking price flexibility, and schedule on-site inspection & photography.";
         break;
+      case "HIGH_VALUE_DUAL_ROLE":
+        badge = "💎 HIGH-VALUE DUAL-ROLE CLIENT (BUYER + SELLER)";
+        pitchHint = extra.hint || "High-value dual-intent client: Connect within 5 minutes. Prepare both listed property valuation/progress and exclusive high-ticket buyer inventory. Ideal for reinvestment / 1031 upgrade pitch.";
+        break;
     }
 
     // 3. Compose rich HTML alert for Sales / Acquisition Team
     const isOwnerAlert = alertType === "NEW_OWNER_LISTING";
+    const isDualAlert = alertType === "HIGH_VALUE_DUAL_ROLE";
     const sub = extra.submission || {};
-    const alertHtml = isOwnerAlert
+    const alertHtml = isDualAlert
+      ? `
+<b>${badge}</b>
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>Dual Client:</b> ${lead?.first_name || "Valued Client"}
+📱 <b>Phone / ID:</b> <code>${lead?.phone || lead?.lead_id}</code>
+🏡 <b>Buyer Preference:</b> ${lead?.property_type || "—"} | ${lead?.location || "Any Area"} | ₹${lead?.budget ? Number(lead.budget).toLocaleString("en-IN") : "—"}
+${extra.scheduledAt ? `⏰ <b>Site Visit:</b> ${new Date(extra.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}\n` : ""}📋 <b>Seller Listing:</b> ${sub.configuration || ""} ${sub.property_type || "Property"} at ${sub.society_name || sub.project_name || "Society"} (Status: ${sub.status || "Under Review"})
+💬 <b>User Request:</b> <i>"${extra.userText || "Requested Senior Advisor Call"}"</i>
+━━━━━━━━━━━━━━━━━━━━
+💡 <b>Executive Pitching Strategy:</b>
+<i>${pitchHint}</i>
+━━━━━━━━━━━━━━━━━━━━
+👉 <i>Assigned to: ${targetExecutive?.name || "Senior Partner Desk"}</i>
+`.trim()
+      : isOwnerAlert
       ? `
 <b>${badge}</b>
 ━━━━━━━━━━━━━━━━━━━━
@@ -3054,6 +3074,9 @@ async function handleOwnerFlow({
   let draft = existingMeta.owner_draft || {};
   if (!draft.attributes) draft.attributes = {};
 
+  const isDualLead = lead.lead_type === "DUAL_ROLE" || Boolean(existingMeta.has_buyer_profile || lead.budget || lead.property_type || lead.site_visit_at || lead.site_visit_booked);
+  const effectiveOwnerLeadType = isDualLead ? "DUAL_ROLE" : "PROVIDER";
+
   // 1b. Direct accumulative AI entities merge (100% Zero-Regex Architecture):
   if (aiAnalysis) {
     // A. Transaction Type Immutability:
@@ -3218,10 +3241,12 @@ async function handleOwnerFlow({
 
       const nextStateTarget = draft.property_type ? "OWNER_SOCIETY_PENDING" : "OWNER_CONFIG_PENDING";
       await supabase.from("leads").update({
-        lead_type: "PROVIDER",
+        lead_type: effectiveOwnerLeadType,
         state: nextStateTarget,
         metadata: {
           ...existingMeta,
+          has_seller_profile: true,
+          ...(isDualLead ? { has_buyer_profile: true } : {}),
           owner_draft: draft,
           archived_submissions: archived,
           submission_id: null,
@@ -3229,7 +3254,7 @@ async function handleOwnerFlow({
       }).eq("id", lead.id);
 
       lead.state = nextStateTarget;
-      lead.lead_type = "PROVIDER";
+      lead.lead_type = effectiveOwnerLeadType;
 
       if (draft.property_type) {
         const isComm = draft.property_category === "COMMERCIAL";
@@ -3283,11 +3308,17 @@ async function handleOwnerFlow({
 
     if (isSeekerInquiry) {
       await supabase.from("leads").update({
-        lead_type: "SEEKER",
+        lead_type: "DUAL_ROLE",
         state: "QUALIFYING",
         last_active_at: new Date().toISOString(),
+        metadata: {
+          ...existingMeta,
+          has_seller_profile: true,
+          has_buyer_profile: true,
+          active_persona: "BUYER",
+        },
       }).eq("id", lead.id);
-      lead.lead_type = "SEEKER";
+      lead.lead_type = "DUAL_ROLE";
       lead.state = "QUALIFYING";
 
       const replyText =
@@ -3330,9 +3361,14 @@ async function handleOwnerFlow({
         : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! ${agency} par hum verified buyers aur tenants ke sath deal karte hain. 🏡✨\n\n👉 <b>Aapki property kis type ki hai — 2BHK / 3BHK Flat, Villa, ya Commercial Shop/Office?</b> 🏢`;
 
     await supabase.from("leads").update({
-      lead_type: "PROVIDER",
+      lead_type: effectiveOwnerLeadType,
       state: "OWNER_CONFIG_PENDING",
-      metadata: { ...existingMeta, owner_draft: draft },
+      metadata: {
+        ...existingMeta,
+        has_seller_profile: true,
+        ...(isDualLead ? { has_buyer_profile: true } : {}),
+        owner_draft: draft,
+      },
     }).eq("id", lead.id);
 
     return { replyText, nextState: "OWNER_CONFIG_PENDING" };
@@ -3360,9 +3396,14 @@ async function handleOwnerFlow({
           : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n\n👉 <b>Ye property kis Project ya Society me sthit hai? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`);
 
       await supabase.from("leads").update({
-        lead_type: "PROVIDER",
+        lead_type: effectiveOwnerLeadType,
         state: "OWNER_SOCIETY_PENDING",
-        metadata: { ...existingMeta, owner_draft: draft },
+        metadata: {
+          ...existingMeta,
+          has_seller_profile: true,
+          ...(isDualLead ? { has_buyer_profile: true } : {}),
+          owner_draft: draft,
+        },
       }).eq("id", lead.id);
 
       return { replyText, nextState: "OWNER_SOCIETY_PENDING" };
@@ -3383,9 +3424,14 @@ async function handleOwnerFlow({
           : `Noted <b>${socLabel}</b>! 🏢\n\n👉 <b>Ye property ${city ? `${city} ke ` : ""}kaunse exact Area ya Landmark ke paas sthit hai?</b> 📍`;
 
       await supabase.from("leads").update({
-        lead_type: "PROVIDER",
+        lead_type: effectiveOwnerLeadType,
         state: "OWNER_LOCATION_PENDING",
-        metadata: { ...existingMeta, owner_draft: draft },
+        metadata: {
+          ...existingMeta,
+          has_seller_profile: true,
+          ...(isDualLead ? { has_buyer_profile: true } : {}),
+          owner_draft: draft,
+        },
       }).eq("id", lead.id);
 
       return { replyText, nextState: "OWNER_LOCATION_PENDING" };
@@ -3438,9 +3484,14 @@ async function handleOwnerFlow({
         : `Noted <b>${locLabel}</b>. 👍\n\n👉 <b>Property ka approximate Carpet ya Built-up Area kitna sq.ft hai?</b> 📐`;
 
     await supabase.from("leads").update({
-      lead_type: "PROVIDER",
+      lead_type: effectiveOwnerLeadType,
       state: "OWNER_AREA_PENDING",
-      metadata: { ...existingMeta, owner_draft: draft },
+      metadata: {
+        ...existingMeta,
+        has_seller_profile: true,
+        ...(isDualLead ? { has_buyer_profile: true } : {}),
+        owner_draft: draft,
+      },
     }).eq("id", lead.id);
 
     return { replyText, nextState: "OWNER_AREA_PENDING" };
@@ -3491,9 +3542,14 @@ async function handleOwnerFlow({
         : `Noted — <b>${targetProp}</b>! 📐\n\n👉 <b>Is property ke liye aapka expected ${isRent ? "Monthly Rent 💰 (e.g. ₹25,000/month)" : "Selling Price / Demand 💰 (e.g. 75 Lakhs, 1.25 Cr)"} kitna rahega?</b>`;
 
     await supabase.from("leads").update({
-      lead_type: "PROVIDER",
+      lead_type: effectiveOwnerLeadType,
       state: "OWNER_PRICE_PENDING",
-      metadata: { ...existingMeta, owner_draft: draft },
+      metadata: {
+        ...existingMeta,
+        has_seller_profile: true,
+        ...(isDualLead ? { has_buyer_profile: true } : {}),
+        owner_draft: draft,
+      },
     }).eq("id", lead.id);
 
     return { replyText, nextState: "OWNER_PRICE_PENDING" };
@@ -3512,9 +3568,14 @@ async function handleOwnerFlow({
         : `Noted — <b>${priceStr} Demand</b>. 💰\n\n👉 <b>Property ka Possession status kya hai — Ready to Move hai ya Under Construction? (Aap 1 ya 2 likh sakte hain)</b> 🔑\n\n1️⃣ <b>Ready to Move</b>\n2️⃣ <b>Under Construction</b>`;
 
     await supabase.from("leads").update({
-      lead_type: "PROVIDER",
+      lead_type: effectiveOwnerLeadType,
       state: "OWNER_POSSESSION_PENDING",
-      metadata: { ...existingMeta, owner_draft: draft },
+      metadata: {
+        ...existingMeta,
+        has_seller_profile: true,
+        ...(isDualLead ? { has_buyer_profile: true } : {}),
+        owner_draft: draft,
+      },
     }).eq("id", lead.id);
 
     return { replyText, nextState: "OWNER_POSSESSION_PENDING" };
@@ -3531,9 +3592,14 @@ async function handleOwnerFlow({
         : `Noted — <b>${possLabel}</b>! 🔑\n\n👉 <b>Property ka Furnishing status kya hai — Unfurnished, Semi-Furnished ya Fully Furnished? (Aap 1, 2 ya 3 likh sakte hain)</b> 🛋️\n\n1️⃣ <b>Unfurnished</b>\n2️⃣ <b>Semi-Furnished</b>\n3️⃣ <b>Fully Furnished</b>`;
 
     await supabase.from("leads").update({
-      lead_type: "PROVIDER",
+      lead_type: effectiveOwnerLeadType,
       state: "OWNER_FURNISHING_PENDING",
-      metadata: { ...existingMeta, owner_draft: draft },
+      metadata: {
+        ...existingMeta,
+        has_seller_profile: true,
+        ...(isDualLead ? { has_buyer_profile: true } : {}),
+        owner_draft: draft,
+      },
     }).eq("id", lead.id);
 
     return { replyText, nextState: "OWNER_FURNISHING_PENDING" };
@@ -3558,9 +3624,14 @@ async function handleOwnerFlow({
         : `Bahut badhiya! Document verification aur physical inspection schedule karne ke liye kripya aapka **direct calling ya WhatsApp number** share kar dijiye 📞`;
 
     await supabase.from("leads").update({
-      lead_type: "PROVIDER",
+      lead_type: effectiveOwnerLeadType,
       state: "OWNER_PHONE_PENDING",
-      metadata: { ...existingMeta, owner_draft: draft },
+      metadata: {
+        ...existingMeta,
+        has_seller_profile: true,
+        ...(isDualLead ? { has_buyer_profile: true } : {}),
+        owner_draft: draft,
+      },
     }).eq("id", lead.id);
 
     return { replyText, nextState: "OWNER_PHONE_PENDING" };
@@ -3612,11 +3683,19 @@ async function handleOwnerFlow({
   }
 
   await supabase.from("leads").update({
-    lead_type: "PROVIDER",
+    lead_type: effectiveOwnerLeadType,
     state: "OWNER_DETAILS_GATHERED",
     phone: effectivePhone || lead.phone,
-    metadata: { ...existingMeta, owner_draft: draft, submission_id: sub?.id }
+    metadata: {
+      ...existingMeta,
+      owner_draft: draft,
+      submission_id: sub?.id,
+      has_seller_profile: true,
+      ...(isDualLead ? { has_buyer_profile: true } : {}),
+    }
   }).eq("id", lead.id);
+  lead.lead_type = effectiveOwnerLeadType;
+  lead.state = "OWNER_DETAILS_GATHERED";
 
   // Dispatch High-Priority Alert to Acquisition / Listing Desk
   await dispatchSalesAlert(tenantId, "NEW_OWNER_LISTING", lead, {
@@ -3652,6 +3731,7 @@ async function handleOwnerFlow({
 export type DialogState =
   | "FRESH"
   | "ROLE_SELECTION_PENDING"
+  | "DUAL_ROLE_MENU_PENDING"
   | "QUALIFYING"
   | "OPTIONS_SENT"
   | "CRITERIA_CONFIRMATION_PENDING"
@@ -3783,7 +3863,7 @@ export async function dispatchStateAction(
   }
 
   // ---------------------------------------------------------------------------
-  // 2. OWNER IN-PROGRESS STATES -> DIRECT TO handleOwnerFlow
+  // 1b. SCENARIO 3 DUAL-REMINDER DISAMBIGUATION GREETING
   // ---------------------------------------------------------------------------
   const isInOwnerIntake = [
     "OWNER_CONFIG_PENDING",
@@ -3795,6 +3875,100 @@ export async function dispatchStateAction(
     "OWNER_FURNISHING_PENDING",
     "OWNER_PHONE_PENDING",
   ].includes(currentState);
+
+  if (!isInOwnerIntake && (intent === "GREETING" || /^(hi|hello|hey|namaste|kem cho|good morning|pranam)\b/i.test(lower))) {
+    // 1. Query submitted property
+    const { data: subs } = await supabase
+      .from("property_submissions")
+      .select("*")
+      .or(`lead_id.eq.${lead.lead_id},lead_id.eq.${lead.id}`)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const latestSub = subs && subs.length > 0 ? subs[0] : null;
+
+    // 2. Query active booked visit or buyer criteria
+    let activeVisit: any = null;
+    const { data: visits } = await supabase
+      .from("site_visits")
+      .select("*, inventory(*)")
+      .eq("lead_id", lead.id)
+      .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (visits && visits.length > 0) {
+      activeVisit = visits[0];
+    }
+
+    const hasActiveVisit = Boolean(activeVisit || lead.site_visit_at || lead.site_visit_datetime || lead.site_visit_booked);
+    const hasBuyerCriteria = Boolean(lead.budget || lead.property_type || lead.location || lead.metadata?.has_buyer_profile || hasActiveVisit);
+    const hasSellerListing = Boolean(latestSub || lead.metadata?.submission_id || lead.metadata?.has_seller_profile);
+
+    if (hasSellerListing && (hasActiveVisit || hasBuyerCriteria)) {
+      const scheduledTime = activeVisit?.scheduled_at || lead.site_visit_at || lead.site_visit_datetime;
+      const formattedVisitTime = scheduledTime
+        ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
+        : "Scheduled Time";
+      const visitProjectName = activeVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? `${lead.property_type} (${lead.location || "Vadodara"})` : "VIP Property");
+
+      const listingSocietyName = latestSub?.project_name || latestSub?.society_name || lead.metadata?.owner_draft?.project_name || lead.metadata?.owner_draft?.society_name || "Listed Property";
+      const listingStatusRaw = latestSub?.status || "PENDING_VERIFICATION";
+      const listingStatus = listingStatusRaw === "PENDING_VERIFICATION" ? "Pending Verification / Under Review" : listingStatusRaw;
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Welcome back <b>${nameStr}</b>! ${agencyName} desk par tamaru swagat chhe. 🙏✨\n\n` +
+            (hasActiveVisit
+              ? `🚗 <b>Upcoming Site Visit:</b> <b>${visitProjectName}</b> scheduled chhe at <b>${formattedVisitTime}</b>.\n`
+              : `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`) +
+            `📋 <b>Listed Property:</b> <b>${listingSocietyName}</b> (Status: <b>${listingStatus}</b>).\n\n` +
+            `Aaje tame kaya vishay ma aagal vadharva mango chho?\n\n` +
+            `1️⃣ <b>Site Visit / Property Search 🏡</b>\n` +
+            `2️⃣ <b>Meri Listed Property Status 📋</b>\n` +
+            `3️⃣ <b>Senior Advisor se call chahiye 📞</b>\n\n` +
+            `<i>(Tame 1, 2 ke 3 reply kari shako chho)</i>`
+          : lang === "ENGLISH"
+          ? `Welcome back <b>${nameStr}</b>! Welcome to ${agencyName}. 🙏✨\n\n` +
+            (hasActiveVisit
+              ? `🚗 <b>Upcoming Site Visit:</b> Scheduled for <b>${visitProjectName}</b> on <b>${formattedVisitTime}</b>.\n`
+              : `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`) +
+            `📋 <b>Listed Property:</b> <b>${listingSocietyName}</b> (Status: <b>${listingStatus}</b>).\n\n` +
+            `How would you like to proceed today?\n\n` +
+            `1️⃣ <b>Site Visit / Property Search 🏡</b>\n` +
+            `2️⃣ <b>Meri Listed Property Status 📋</b>\n` +
+            `3️⃣ <b>Senior Advisor se call chahiye 📞</b>\n\n` +
+            `<i>(You can reply with 1, 2, or 3)</i>`
+          : `Welcome back <b>${nameStr}</b>! ${agencyName} desk par aapka swagat hai. 🙏✨\n\n` +
+            (hasActiveVisit
+              ? `🚗 <b>Upcoming Site Visit:</b> <b>${visitProjectName}</b> ke liye scheduled hai at <b>${formattedVisitTime}</b>.\n`
+              : `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`) +
+            `📋 <b>Listed Property:</b> <b>${listingSocietyName}</b> (Status: <b>${listingStatus}</b>).\n\n` +
+            `Aaj aap kis bare me aage badhna chahte hain?\n\n` +
+            `1️⃣ <b>Site Visit / Property Search 🏡</b>\n` +
+            `2️⃣ <b>Meri Listed Property Status 📋</b>\n` +
+            `3️⃣ <b>Senior Advisor se call chahiye 📞</b>\n\n` +
+            `<i>(Aap 1, 2 ya 3 likh kar reply kar sakte hain)</i>`;
+
+      return {
+        replyText,
+        nextState: "DUAL_ROLE_MENU_PENDING",
+        leadUpdates: {
+          state: "DUAL_ROLE_MENU_PENDING",
+          lead_type: "DUAL_ROLE",
+          metadata: {
+            ...(lead.metadata || {}),
+            has_buyer_profile: true,
+            has_seller_profile: true,
+          },
+        },
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. OWNER IN-PROGRESS STATES -> DIRECT TO handleOwnerFlow
+  // ---------------------------------------------------------------------------
 
   if (isInOwnerIntake || (currentState === "OWNER_DETAILS_GATHERED" && intent === "SUBMIT_LISTING")) {
     const ownerRes = await handleOwnerFlow({
@@ -3908,7 +4082,7 @@ export async function dispatchStateAction(
         replyText,
         nextState: "QUALIFYING",
         leadUpdates: {
-          lead_type: "SEEKER",
+          lead_type: "DUAL_ROLE",
           state: "QUALIFYING",
           property_type: givenPropType || null,
           requirement: null,
@@ -3918,9 +4092,194 @@ export async function dispatchStateAction(
           timeline: null,
           selected_property_id: null,
           last_option_ids: null,
+          metadata: {
+            ...(lead.metadata || {}),
+            has_seller_profile: true,
+            has_buyer_profile: true,
+            active_persona: "BUYER",
+          },
         },
       };
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3b. DUAL-ROLE MENU PENDING (State: DUAL_ROLE_MENU_PENDING)
+  // ---------------------------------------------------------------------------
+  if (currentState === "DUAL_ROLE_MENU_PENDING") {
+    const isOpt1 =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+      /^(1|1️⃣|first|1st|option\s*1|site\s*visit|visit|search|buy|property\s*search)\b/i.test(lower);
+
+    const isOpt2 =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
+      /^(2|2️⃣|second|2nd|option\s*2|meri\s*listed|listed|listing|status|property\s*status|update)\b/i.test(lower);
+
+    const isOpt3 =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
+      intent === "REQUEST_HUMAN_CALL" ||
+      /^(3|3️⃣|third|3rd|option\s*3|call|advisor|senior|senior\s*advisor|talk|phone|human)\b/i.test(lower);
+
+    // If explicit property search or criteria change was typed (e.g. "3BHK flat dikhao"):
+    const detectedTypeInMenu = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+    if (
+      !isOpt1 && !isOpt2 && !isOpt3 &&
+      (detectedTypeInMenu || actionResult.location || actionResult.price_or_budget || intent === "CHANGE_REQUIREMENT" || intent === "SEEKER_QUALIFICATION")
+    ) {
+      return handleQualificationCascade(lead, actionResult, context);
+    }
+
+    // Option 1: Route to Buyer context / anchor site visit
+    if (isOpt1) {
+      let activeVisit: any = null;
+      const { data: visits } = await supabase
+        .from("site_visits")
+        .select("*, inventory(*)")
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (visits && visits.length > 0) activeVisit = visits[0];
+      const scheduledTime = activeVisit?.scheduled_at || lead.site_visit_at || lead.site_visit_datetime;
+
+      if (scheduledTime) {
+        const visitTime = new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+        const propName = activeVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? `${lead.property_type} (${lead.location || "Vadodara"})` : "VIP Property");
+        const mapLink = activeVisit?.inventory?.map_url ? `\n📍 <b>Map Location:</b> ${activeVisit.inventory.map_url}` : "";
+
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji bilkul <b>${nameStr}</b>! Tamari VIP Site Visit <b>${propName}</b> mate <b>${visitTime}</b> par confirmed chhe. 🚗${mapLink}\n\nAmara senior property advisor time par direct site location par tamne malshe. Shu tamne visit reschedule karvi chhe ke koi query chhe?`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! Your VIP Site Visit for <b>${propName}</b> is confirmed for <b>${visitTime}</b>. 🚗${mapLink}\n\nOur senior property advisor will meet you directly at the location. Would you like to reschedule or do you have any questions?`
+            : `Ji bilkul <b>${nameStr}</b>! Aapki VIP Site Visit <b>${propName}</b> ke liye <b>${visitTime}</b> par confirmed hai. 🚗${mapLink}\n\nHamare senior property advisor time par direct site location par aapse milenge. Kya aapko visit reschedule karni hai ya koi query hai?`;
+
+        return {
+          replyText,
+          nextState: "SITE_VISIT_BOOKED",
+          leadUpdates: {
+            state: "SITE_VISIT_BOOKED",
+            lead_type: "DUAL_ROLE",
+            metadata: {
+              ...(lead.metadata || {}),
+              active_persona: "BUYER",
+            },
+          },
+        };
+      } else {
+        const targetState: DialogState = (lead.property_type && lead.budget) ? "OPTIONS_SENT" : "QUALIFYING";
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji <b>${nameStr}</b>! Chalo tamara buyer property search par aagal vadhiye. Tame kaya type ni property shodhva mango chho? 🏡`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! Let's continue with your property search. What type of property are you looking for? 🏡`
+            : `Ji <b>${nameStr}</b>! Chaliye aapke property search par aage badhte hain. Aap kis type ki property search karna chahte hain? 🏡`;
+
+        return {
+          replyText,
+          nextState: targetState,
+          leadUpdates: {
+            state: targetState,
+            lead_type: "DUAL_ROLE",
+            metadata: {
+              ...(lead.metadata || {}),
+              active_persona: "BUYER",
+            },
+          },
+        };
+      }
+    }
+
+    // Option 2: Check Seller listing status
+    if (isOpt2) {
+      const { data: sub } = await supabase
+        .from("property_submissions")
+        .select("*")
+        .or(`lead_id.eq.${lead.lead_id},lead_id.eq.${lead.id}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const propLabel = sub
+        ? `${sub.configuration || sub.property_type || "Property"} at ${sub.society_name || sub.project_name || sub.location || "Vadodara"}`
+        : "Aapki listed property";
+      const statusLabel =
+        sub?.status === "PENDING_VERIFICATION"
+          ? "Physical Verification & Quality Inspection"
+          : (sub?.status || "Under Review");
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Ji <b>${nameStr}</b>! Tamari listed property (<b>${propLabel}</b>) hal ma <b>${statusLabel}</b> stage par chhe. 📋\n\nAmari inspection team verification mate jald aapse call par connect karshe! 🙏\n\n👉 <i>Shu tamne koi biji property pan list karvi chhe? (Tame 'Ha' ke 'List another' lakhi shako chho)</i>`
+          : lang === "ENGLISH"
+          ? `Hello <b>${nameStr}</b>! Your listed property (<b>${propLabel}</b>) is currently in the <b>${statusLabel}</b> stage. 📋\n\nOur acquisition team will connect with you shortly for verification and on-site inspection! 🙏\n\n👉 <i>Would you like to list another property for sale or rent? (You can reply 'Yes' or 'List another')</i>`
+          : `Ji <b>${nameStr}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋\n\nHamari inspection team verification ke liye jald aapse call par connect karegi! 🙏\n\n👉 <i>Kya aapko koi dusri property bhi list karni hai? (Aap 'Haan' ya 'List another' likh sakte hain)</i>`;
+
+      return {
+        replyText,
+        nextState: "OWNER_DETAILS_GATHERED",
+        leadUpdates: {
+          state: "OWNER_DETAILS_GATHERED",
+          lead_type: "DUAL_ROLE",
+          metadata: {
+            ...(lead.metadata || {}),
+            active_persona: "SELLER",
+          },
+        },
+      };
+    }
+
+    // Option 3: Senior Advisor call & HIGH_VALUE_DUAL_ROLE alert
+    if (isOpt3) {
+      const { data: sub } = await supabase
+        .from("property_submissions")
+        .select("*")
+        .or(`lead_id.eq.${lead.lead_id},lead_id.eq.${lead.id}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul <b>${nameStr}</b>! Amara senior property partner ne high-priority VIP alert mokli didhu chhe. 📞🤝\n\nTeo tamari buying requirement ane listed property banne nu portfolio samji ne agami <b>5-10 minute ma direct tamari sathe call par connect karshe</b>.`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! A high-priority VIP alert has been dispatched to our senior property partner. 📞🤝\n\nThey will <b>call you directly within 5-10 minutes</b> to discuss both your buyer requirements and listed property portfolio.`
+          : `Ji bilkul <b>${nameStr}</b>! Hamare senior property partner ko high-priority VIP alert bhej diya gaya hai. 📞🤝\n\nWo aapki buying requirement aur listed property dono ka portfolio lekar agle <b>5-10 minutes me direct call par connect karenge</b>.`;
+
+      return {
+        replyText,
+        nextState: "DUAL_ROLE_MENU_PENDING",
+        leadUpdates: {
+          lead_type: "DUAL_ROLE",
+          metadata: {
+            ...(lead.metadata || {}),
+            last_advisor_call_requested_at: new Date().toISOString(),
+          },
+        },
+        salesAlert: {
+          type: "HIGH_VALUE_DUAL_ROLE",
+          payload: {
+            userText: context.messageText,
+            submission: sub || lead.metadata?.owner_draft,
+            scheduledAt: lead.site_visit_at || lead.site_visit_datetime,
+            hint: "High-value dual-intent client: Client requested Senior Partner consultation for combined Buyer & Seller portfolio. Prepare 1031 tax exchange / reinvestment upgrade pitch.",
+          },
+        },
+      };
+    }
+
+    const defaultReply =
+      lang === "GUJLISH"
+        ? `Kripya 1, 2 athva 3 mathi option pasand karjo <b>${nameStr}</b>:\n1️⃣ Site Visit / Property Search 🏡\n2️⃣ Meri Listed Property Status 📋\n3️⃣ Senior Advisor Call 📞`
+        : lang === "ENGLISH"
+        ? `Please choose option 1, 2, or 3 <b>${nameStr}</b>:\n1️⃣ Site Visit / Property Search 🏡\n2️⃣ My Listed Property Status 📋\n3️⃣ Senior Advisor Call 📞`
+        : `Kripya 1, 2 ya 3 me se option select karein <b>${nameStr}</b>:\n1️⃣ Site Visit / Property Search 🏡\n2️⃣ Meri Listed Property Status 📋\n3️⃣ Senior Advisor Call 📞`;
+
+    return {
+      replyText: defaultReply,
+      nextState: "DUAL_ROLE_MENU_PENDING",
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -3980,12 +4339,21 @@ export async function dispatchStateAction(
           ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
           : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`);
 
+      const isDualFromRoleSelection = lead?.lead_type === "PROVIDER" || lead?.lead_type === "DUAL_ROLE" || Boolean(lead?.metadata?.has_seller_profile);
       return {
         replyText,
         nextState: "QUALIFYING",
         leadUpdates: {
-          lead_type: "SEEKER",
+          lead_type: isDualFromRoleSelection ? "DUAL_ROLE" : "SEEKER",
           state: "QUALIFYING",
+          ...(isDualFromRoleSelection ? {
+            metadata: {
+              ...(lead.metadata || {}),
+              has_seller_profile: true,
+              has_buyer_profile: true,
+              active_persona: "BUYER",
+            }
+          } : {}),
           ...(pType ? { property_type: pType } : {}),
           ...(bVal ? { budget: bVal } : {}),
           ...(locVal ? { location: locVal } : {}),
@@ -4383,7 +4751,16 @@ export async function dispatchStateAction(
       return {
         replyText: ownerRes.replyText,
         nextState: ownerRes.nextState as DialogState,
-        leadUpdates: { lead_type: "PROVIDER", state: ownerRes.nextState },
+        leadUpdates: {
+          lead_type: "DUAL_ROLE",
+          state: ownerRes.nextState as DialogState,
+          metadata: {
+            ...(lead.metadata || {}),
+            has_buyer_profile: true,
+            has_seller_profile: true,
+            active_persona: "SELLER",
+          },
+        },
       };
     }
 
@@ -4500,10 +4877,19 @@ export async function dispatchStateAction(
         city: resolvedCity,
         agencyName,
       });
+      const isDual = lead.lead_type === "DUAL_ROLE" || Boolean(lead.metadata?.has_buyer_profile || lead.property_type || lead.budget || lead.site_visit_at);
       return {
         replyText: ownerRes.replyText,
         nextState: ownerRes.nextState as DialogState,
-        leadUpdates: { lead_type: "PROVIDER", state: ownerRes.nextState },
+        leadUpdates: {
+          lead_type: isDual ? "DUAL_ROLE" : "PROVIDER",
+          state: ownerRes.nextState as DialogState,
+          metadata: {
+            ...(lead.metadata || {}),
+            has_seller_profile: true,
+            ...(isDual ? { has_buyer_profile: true, active_persona: "SELLER" } : {}),
+          },
+        },
       };
     }
 
@@ -4646,6 +5032,42 @@ export async function dispatchStateAction(
         leadUpdates: {
           selected_property_id: selectedPropId,
           state: "OPTIONS_SENT",
+        },
+      };
+    }
+
+    // DUAL-ROLE: OWNER LISTING INTAKE FROM OPTIONS_SENT
+    if (
+      intent === "SUBMIT_LISTING" ||
+      actionResult.user_role === "OWNER" ||
+      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower)
+    ) {
+      const ownerRes = await handleOwnerFlow({
+        lead,
+        messageText: context.messageText,
+        lower,
+        lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+        senderName,
+        senderId: context.senderId,
+        platform: context.platform,
+        tenantId: activeTenantId,
+        supabase,
+        aiAnalysis: actionResult,
+        city: resolvedCity,
+        agencyName,
+      });
+      return {
+        replyText: ownerRes.replyText,
+        nextState: ownerRes.nextState as DialogState,
+        leadUpdates: {
+          lead_type: "DUAL_ROLE",
+          state: ownerRes.nextState as DialogState,
+          metadata: {
+            ...(lead.metadata || {}),
+            has_buyer_profile: true,
+            has_seller_profile: true,
+            active_persona: "SELLER",
+          },
         },
       };
     }
@@ -4866,10 +5288,19 @@ export async function dispatchStateAction(
       city: resolvedCity,
       agencyName,
     });
+    const isDual = lead.lead_type === "SEEKER" || lead.lead_type === "DUAL_ROLE" || Boolean(lead.metadata?.has_buyer_profile || lead.property_type || lead.budget || lead.site_visit_at || lead.site_visit_booked);
     return {
       replyText: ownerRes.replyText,
       nextState: ownerRes.nextState as DialogState,
-      leadUpdates: { lead_type: "PROVIDER", state: ownerRes.nextState },
+      leadUpdates: {
+        lead_type: isDual ? "DUAL_ROLE" : "PROVIDER",
+        state: ownerRes.nextState as DialogState,
+        metadata: {
+          ...(lead.metadata || {}),
+          has_seller_profile: true,
+          ...(isDual ? { has_buyer_profile: true, active_persona: "SELLER" } : {}),
+        },
+      },
     };
   }
 
@@ -5111,15 +5542,24 @@ async function handleQualificationCascade(
     missingField = "BUDGET";
   }
 
+  const isDual = lead?.lead_type === "DUAL_ROLE" || Boolean(lead?.metadata?.has_seller_profile) || lead?.lead_type === "PROVIDER";
   const leadUpdates: Record<string, any> = {
     state: missingField ? "QUALIFYING" : "OPTIONS_SENT",
-    lead_type: "SEEKER",
+    lead_type: isDual ? "DUAL_ROLE" : "SEEKER",
     property_type: propType || null,
     requirement: requirement || null,
     purpose: purpose || null,
     location: location || null,
     budget: budget || null,
     timeline: timeline || null,
+    ...(isDual ? {
+      metadata: {
+        ...(lead.metadata || {}),
+        has_seller_profile: true,
+        has_buyer_profile: true,
+        active_persona: "BUYER",
+      }
+    } : {}),
   };
 
   if (missingField !== null) {
