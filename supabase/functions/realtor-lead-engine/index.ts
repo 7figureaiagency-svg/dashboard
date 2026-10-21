@@ -1567,7 +1567,13 @@ interface IntentResult {
 - "UNKNOWN": Greetings, off-topic, or queries without role context.
 
 ### MULTILINGUAL FEW-SHOT EXEMPLARS:
-1. "kal shaam 5 baje chalega" ->
+1. "aaj 6 baje" ->
+{"action": {"intent": "BOOK_VISIT", "preferred_date_raw": "aaj", "preferred_time_raw": "6 baje"}, "language": "HINGLISH", "user_role": "SEEKER"}
+
+2. "Sunday 11 AM" ->
+{"action": {"intent": "BOOK_VISIT", "preferred_date_raw": "Sunday", "preferred_time_raw": "11 AM"}, "language": "ENGLISH", "user_role": "SEEKER"}
+
+3. "kal shaam 5 baje chalega" ->
 {"action": {"intent": "BOOK_VISIT", "preferred_date_raw": "kal", "preferred_time_raw": "shaam 5 baje"}, "language": "HINGLISH", "user_role": "SEEKER"}
 
 2. "kale sanje 5 vage" ->
@@ -1684,6 +1690,8 @@ function buildLeadContextForClassifier(lead: any, messageText: string): string {
     else if (!lead?.location) currentPendingQuestion = "SEEKER_LOCATION";
     else if (!lead?.budget) currentPendingQuestion = "SEEKER_BUDGET (A numeric reply is price_or_budget)";
     else if (!lead?.timeline) currentPendingQuestion = "SEEKER_TIMELINE";
+  } else if (lead?.state === "OPTIONS_SENT" || lead?.state === "VISIT_REQUESTED") {
+    currentPendingQuestion = "VISIT_SLOT_OR_OPTION_SELECTION (Bot sent property cards. Any date, time, day, or 'Option N' is strictly BOOK_VISIT or SELECT_OPTION!)";
   }
 
   return `LEAD STATUS:
@@ -2029,6 +2037,12 @@ async function classifyLeadIntent(
     fallbackIntent = "GREETING";
   }
 
+  // Robust Slot Detection for OPTIONS_SENT or VISIT_REQUESTED in deterministic fallback
+  const slotRegex = /\b(aaj|kal|kale|kaale|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i;
+  if ((lead?.state === "OPTIONS_SENT" || lead?.state === "VISIT_REQUESTED") && slotRegex.test(lower)) {
+    fallbackIntent = "BOOK_VISIT";
+  }
+
   // Handle explicit 1 vs 2 in ROLE_SELECTION_PENDING
   if (lead?.state === "ROLE_SELECTION_PENDING") {
     if (/^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim())) {
@@ -2116,6 +2130,7 @@ async function classifyLeadIntent(
     carpet_sqft: parsedArea.carpet_sqft,
     super_built_up_sqft: parsedArea.super_built_up_sqft,
     plot_area_sqft: parsedArea.plot_area_sqft,
+    preferred_date_raw: fallbackIntent === "BOOK_VISIT" ? messageText : null,
   };
 
   const action = validateUserAction(fallbackPayload, lead?.state);
@@ -4326,18 +4341,44 @@ export async function dispatchStateAction(
       const pType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
       const bVal = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
       const locVal = actionResult.location || extractLocationFromText(context.messageText);
+      const parsedReq = parseRequirementFromText(context.messageText);
+      const reqVal: string | null =
+        actionResult.transaction_type === "RENT" ? "RENT"
+        : (actionResult.transaction_type === "BUY" || parsedReq === "BUY" || /(?:buy|kharid|purchase|leni)/i.test(lower)) ? "BUY"
+        : (parsedReq || (actionResult.action as any)?.requirement || null);
 
-      const replyText = pType
-        ? (lang === "GUJLISH"
-          ? `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> note kari lidhu chhe. Kripya janavjo, aa property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe?`
-          : lang === "ENGLISH"
-          ? `Certainly <b>${nameStr}</b>! 🏡 Noted <b>${pType}</b>. Are you looking to <b>Buy</b> or <b>Rent</b> this property?`
-          : `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> note kar liya hai. Kripya batayein, aap ye property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye?`)
-        : (lang === "GUJLISH"
-          ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
-          : lang === "ENGLISH"
-          ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
-          : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`);
+      let replyText = "";
+      if (pType && reqVal) {
+        if (!locVal) {
+          replyText =
+            lang === "GUJLISH"
+              ? `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType} (${reqVal === "BUY" ? "Kharidva" : "Rent"})</b> note kari lidhu chhe. Kripya janavjo, tame kaya specific area/locality ma property shodhva mango chho? 📍`
+              : lang === "ENGLISH"
+              ? `Certainly <b>${nameStr}</b>! 🏡 Noted <b>${pType} (${reqVal === "BUY" ? "Buy" : "Rent"})</b>. Which specific locality or area are you looking in? 📍`
+              : `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType} (${reqVal === "BUY" ? "Kharidne ke liye" : "Rent par"})</b> note kar liya hai. Kripya batayein, aap kis area ya locality me property dekh rahe hain? 📍`;
+        } else if (!bVal) {
+          replyText =
+            lang === "GUJLISH"
+              ? `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> at <b>${locVal}</b> note kari lidhu chhe. Tamaro approximate budget ketlo chhe? 💰`
+              : lang === "ENGLISH"
+              ? `Certainly <b>${nameStr}</b>! 🏡 Noted <b>${pType}</b> at <b>${locVal}</b>. What is your approximate budget? 💰`
+              : `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> in <b>${locVal}</b> note kar liya hai. Aapka approximate budget kitna hai? 💰`;
+        }
+      } else if (pType) {
+        replyText =
+          lang === "GUJLISH"
+            ? `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> note kari lidhu chhe. Kripya janavjo, aa property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe?`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! 🏡 Noted <b>${pType}</b>. Are you looking to <b>Buy</b> or <b>Rent</b> this property?`
+            : `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> note kar liya hai. Kripya batayein, aap ye property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye?`;
+      } else {
+        replyText =
+          lang === "GUJLISH"
+            ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
+            : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
+      }
 
       const isDualFromRoleSelection = lead?.lead_type === "PROVIDER" || lead?.lead_type === "DUAL_ROLE" || Boolean(lead?.metadata?.has_seller_profile);
       return {
@@ -4355,6 +4396,7 @@ export async function dispatchStateAction(
             }
           } : {}),
           ...(pType ? { property_type: pType } : {}),
+          ...(reqVal ? { requirement: reqVal } : {}),
           ...(bVal ? { budget: bVal } : {}),
           ...(locVal ? { location: locVal } : {}),
         },
@@ -4751,16 +4793,6 @@ export async function dispatchStateAction(
       return {
         replyText: ownerRes.replyText,
         nextState: ownerRes.nextState as DialogState,
-        leadUpdates: {
-          lead_type: "DUAL_ROLE",
-          state: ownerRes.nextState as DialogState,
-          metadata: {
-            ...(lead.metadata || {}),
-            has_buyer_profile: true,
-            has_seller_profile: true,
-            active_persona: "SELLER",
-          },
-        },
       };
     }
 
@@ -5059,30 +5091,21 @@ export async function dispatchStateAction(
       return {
         replyText: ownerRes.replyText,
         nextState: ownerRes.nextState as DialogState,
-        leadUpdates: {
-          lead_type: "DUAL_ROLE",
-          state: ownerRes.nextState as DialogState,
-          metadata: {
-            ...(lead.metadata || {}),
-            has_buyer_profile: true,
-            has_seller_profile: true,
-            active_persona: "SELLER",
-          },
-        },
       };
     }
 
-    // BOOK_VISIT
-    if (intent === "BOOK_VISIT") {
-      const bookAct = action as BookVisitAction;
+    // BOOK_VISIT (Explicit action or natural slot detected)
+    const hasSlotKeywords = /\b(aaj|kal|kale|kaale|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i.test(lower);
+    if (intent === "BOOK_VISIT" || hasSlotKeywords) {
+      const bookAct = (intent === "BOOK_VISIT" ? action : { intent: "BOOK_VISIT" }) as BookVisitAction;
       let targetPropId = lead.selected_property_id;
       if (bookAct.target_property_index !== undefined && bookAct.target_property_index !== null && lead.last_option_ids?.[bookAct.target_property_index]) {
         targetPropId = lead.last_option_ids[bookAct.target_property_index];
-      } else if (!targetPropId && lead.last_option_ids?.length === 1) {
+      } else if (!targetPropId && Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0) {
         targetPropId = lead.last_option_ids[0];
       }
 
-      if (!targetPropId && Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 1) {
+      if (!targetPropId) {
         const replyText =
           lang === "GUJLISH"
             ? `Site visit plan karva mate, pehla kripya batavo tame <b>Option 1, 2 ke 3</b> mathi kayo project pehla jova mango chho? 🚗`
@@ -5215,6 +5238,21 @@ export async function dispatchStateAction(
     if (intent === "BROCHURE_REQUEST" || intent === "MAP_REQUEST") {
       return handleBrochureOrMapResponse(lead, intent, context, false);
     }
+
+    // ANTI-RESET SAFEGUARD FOR OPTIONS_SENT / VISIT_REQUESTED:
+    // If the message is not an explicit change of criteria or other recognized intent,
+    // NEVER fall through to FRESH/ROLE_SELECTION_PENDING. Retain currentState and guide the user!
+    const reminderReply =
+      lang === "GUJLISH"
+        ? `Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho, ane kayo time anukool raheshe (jem ke <b>'Kaale sanje 5 vage'</b>)?`
+        : lang === "ENGLISH"
+        ? `Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for, and what time works best for you (e.g. <b>'Tomorrow 5 PM'</b>)?`
+        : `Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge, aur kaunsa time aapke liye best rahega (jaise <b>'Kal shaam 5 baje'</b>)?`;
+
+    return {
+      replyText: reminderReply,
+      nextState: currentState,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -5292,15 +5330,6 @@ export async function dispatchStateAction(
     return {
       replyText: ownerRes.replyText,
       nextState: ownerRes.nextState as DialogState,
-      leadUpdates: {
-        lead_type: isDual ? "DUAL_ROLE" : "PROVIDER",
-        state: ownerRes.nextState as DialogState,
-        metadata: {
-          ...(lead.metadata || {}),
-          has_seller_profile: true,
-          ...(isDual ? { has_buyer_profile: true, active_persona: "SELLER" } : {}),
-        },
-      },
     };
   }
 
@@ -5794,7 +5823,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v61-dual-role-engine",
+        version: "v62-slot-booking-engine",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -5910,7 +5939,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v61 Ready (Dual-Role Lifecycle Engine & Scenario 3 Disambiguation Menu)", { status: 200 });
+    return new Response("Realtor Lead Engine v62 Ready (Robust Natural Slot Booking & FSM Anti-Reset Safeguard)", { status: 200 });
   }
 
   try {
