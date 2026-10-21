@@ -3646,6 +3646,1457 @@ async function handleOwnerFlow({
   return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
 }
 
+// =========================================================================
+// 9c. DETERMINISTIC FINITE STATE MACHINE (FSM) ROUTER
+// =========================================================================
+export type DialogState =
+  | "FRESH"
+  | "ROLE_SELECTION_PENDING"
+  | "QUALIFYING"
+  | "OPTIONS_SENT"
+  | "CRITERIA_CONFIRMATION_PENDING"
+  | "VISIT_REQUESTED"
+  | "SITE_VISIT_BOOKED"
+  | "VISIT_RESCHEDULED"
+  | "VISIT_MISSED"
+  | "SITE_VISIT_DONE"
+  | "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING"
+  | "RETURNING_OWNER_MENU_PENDING"
+  | "OWNER_CONFIG_PENDING"
+  | "OWNER_SOCIETY_PENDING"
+  | "OWNER_LOCATION_PENDING"
+  | "OWNER_AREA_PENDING"
+  | "OWNER_PRICE_PENDING"
+  | "OWNER_POSSESSION_PENDING"
+  | "OWNER_FURNISHING_PENDING"
+  | "OWNER_PHONE_PENDING"
+  | "OWNER_DETAILS_GATHERED"
+  | "DROPPED"
+  | "VISIT_CANCELLED"
+  | "RESCHEDULE_REQUESTED";
+
+export interface DialogContext {
+  messageText: string;
+  normalizedMessage: string;
+  lower: string;
+  senderName: string;
+  senderId: string;
+  platform: "TELEGRAM" | "WHATSAPP" | "DIRECT";
+  tenantId: string;
+  agencyName: string;
+  resolvedCity: string | null;
+  displayCity: string;
+  lang: "HINGLISH" | "GUJLISH" | "ENGLISH" | "GUJARATI_SCRIPT";
+  availableInventory?: any[];
+}
+
+export interface DialogTransitionResult {
+  replyText: string;
+  nextState: DialogState;
+  leadUpdates?: Record<string, any>;
+  salesAlert?: { type: string; payload?: Record<string, any> };
+  isSilent?: boolean;
+}
+
+export async function dispatchStateAction(
+  lead: any,
+  actionResult: ClassifiedActionResult,
+  context: DialogContext
+): Promise<DialogTransitionResult> {
+  const action = actionResult.action;
+  const intent = action.intent;
+  const currentState: DialogState = (lead?.state as DialogState) || "FRESH";
+  const lang = context.lang || "HINGLISH";
+  const senderName = context.senderName || "Friend";
+  const agencyName = context.agencyName || "Nextgen Realty";
+  const resolvedCity = context.resolvedCity;
+  const displayCity = context.displayCity || resolvedCity || "aapke shehar";
+  const activeTenantId = context.tenantId || defaultTenantId;
+  const lower = context.lower || context.messageText.toLowerCase().trim();
+  const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+
+  // ---------------------------------------------------------------------------
+  // 1. GLOBAL CRITICAL INTERCEPTORS
+  // ---------------------------------------------------------------------------
+  if (intent === "OPT_OUT") {
+    const replyText =
+      lang === "GUJLISH"
+        ? `Aabhar <b>${senderName} bhai</b>. Have tamne koi automated messages nahi aave. Bhawishyaman koi jarur hoy to tame amaro sampark kari shako chho. Tamaro divas shubh rahe! 🙏`
+        : lang === "ENGLISH"
+        ? `Thank you <b>${senderName}</b>. You have been opted out from automated messages. Feel free to contact us anytime if you need property assistance! 🙏`
+        : `Dhanyawad <b>${senderName} ji</b>. Aapka number opt-out kar diya gaya hai. Aage se koi automated message nahi aayega. Have a great day! 🙏`;
+
+    return {
+      replyText,
+      nextState: "DROPPED",
+      leadUpdates: { state: "DROPPED", bot_active: false, drip_stage: "CANCELLED" },
+    };
+  }
+
+  if (intent === "OFF_TOPIC") {
+    const replyText =
+      lang === "GUJLISH"
+        ? `Hu Nextgen Realty no AI property assistant chhu ane hu fakt property search, site visits ane real estate sambhandhit details ma j tamne help kari shaku chhu. 😊🏢\n\nKripya janavjo, tame kaya type ni property shodhva mango chho - Residential ke Commercial?`
+        : lang === "ENGLISH"
+        ? `I am Nextgen Realty's AI property assistant, and I can only assist you with property search, site visits, and real estate details. 😊🏢\n\nPlease let me know what kind of residential or commercial property you are looking for!`
+        : `Main Nextgen Realty ka AI property assistant hu aur main sirf property search, site visits aur real estate queries me hi aapki help kar sakta hu. 😊🏢\n\nKripya batayein, aap kis type ki property search kar rahe hain - Residential ya Commercial?`;
+
+    return {
+      replyText,
+      nextState: currentState,
+    };
+  }
+
+  if (intent === "REQUEST_HUMAN_CALL") {
+    const replyText =
+      lang === "GUJLISH"
+        ? `Ji bilkul ${nameStr}! Amara senior property advisor agami <b>5-10 minute ma direct tamne call karshe</b>. 📞\n\nCall pehla kripya janavjo — tamaro preferred area ke budget ketlo chhe jethi teo best options ready rakhi shake?`
+        : lang === "ENGLISH"
+        ? `Certainly ${nameStr}! Our senior property advisor will <b>call you directly within 5-10 minutes</b>. 📞\n\nBefore they connect, could you share your preferred location or budget range so they have tailored options ready?`
+        : `Ji bilkul ${nameStr}! Hamare senior property advisor aapko agle <b>5-10 minutes me direct call par connect kar rahe hain</b>. 📞\n\nCall se pehle bas bata dijiye — aapka preferred area ya budget kya hai taaki wo ready options open rakhein?`;
+
+    return {
+      replyText,
+      nextState: currentState,
+      salesAlert: {
+        type: "CALL_REQUEST",
+        payload: {
+          userText: context.messageText,
+          reason: (action as HumanCallAction).reason || "Lead requested immediate phone call with executive.",
+        },
+      },
+    };
+  }
+
+  if (intent === "MARKET_ADVISORY") {
+    const replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}! Hal ma 2 & 3 BHK premium apartments ane gated villas ma sabse high demand chhe, jya pricing <b>₹45 Lakhs thi shuru</b> thay chhe. 🏡\n\nTame property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe?`
+        : lang === "ENGLISH"
+        ? `Hello ${nameStr}! Currently, 2 & 3 BHK premium apartments and villas are in highest demand, with verified options starting from <b>₹45 Lakhs</b>. 🏡\n\nAre you looking to <b>Buy</b> or <b>Rent</b>?`
+        : `Ji ${nameStr}! Abhi market me 2 & 3 BHK premium apartments aur villas ki sabse high demand hai, jinki pricing <b>₹45 Lakhs se shuru</b> hoti hai. 🏡\n\nAap property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye?`;
+
+    return {
+      replyText,
+      nextState: currentState,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. OWNER IN-PROGRESS STATES -> DIRECT TO handleOwnerFlow
+  // ---------------------------------------------------------------------------
+  const isInOwnerIntake = [
+    "OWNER_CONFIG_PENDING",
+    "OWNER_SOCIETY_PENDING",
+    "OWNER_LOCATION_PENDING",
+    "OWNER_AREA_PENDING",
+    "OWNER_PRICE_PENDING",
+    "OWNER_POSSESSION_PENDING",
+    "OWNER_FURNISHING_PENDING",
+    "OWNER_PHONE_PENDING",
+  ].includes(currentState);
+
+  if (isInOwnerIntake || (currentState === "OWNER_DETAILS_GATHERED" && intent === "SUBMIT_LISTING")) {
+    const ownerRes = await handleOwnerFlow({
+      lead,
+      messageText: context.messageText,
+      lower,
+      lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+      senderName,
+      senderId: context.senderId,
+      platform: context.platform,
+      tenantId: activeTenantId,
+      supabase,
+      aiAnalysis: actionResult,
+      city: resolvedCity,
+      agencyName,
+    });
+    return {
+      replyText: ownerRes.replyText,
+      nextState: ownerRes.nextState as DialogState,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3. RETURNING OWNER MENU (State: RETURNING_OWNER_MENU_PENDING)
+  // ---------------------------------------------------------------------------
+  if (currentState === "RETURNING_OWNER_MENU_PENDING") {
+    if ((intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) || intent === "SUBMIT_LISTING") {
+      // Option 2: List another property
+      const archived = Array.isArray(lead.metadata?.archived_submissions) ? [...lead.metadata.archived_submissions] : [];
+      if (lead.metadata?.owner_draft && Object.keys(lead.metadata.owner_draft).length > 0) {
+        archived.push({
+          ...lead.metadata.owner_draft,
+          submission_id: lead.metadata.submission_id || null,
+          archived_at: new Date().toISOString(),
+        });
+      }
+      const newDraft: any = { started_at: new Date().toISOString(), attributes: {} };
+      const parsedType = parsePropertyTypeFromText(context.messageText);
+      const isRent = /(?:rent|bhade|bhadu|kiraya|kiraye|chadani|lease)/i.test(lower);
+      newDraft.transaction_type = isRent ? "RENT_OUT" : "SELL";
+      if (parsedType) {
+        newDraft.property_type = parsedType;
+        newDraft.configuration = parsedType;
+        newDraft.property_category = /(office|shop|showroom|commercial)/i.test(parsedType) ? "COMMERCIAL" : /(plot|land)/i.test(parsedType) ? "PLOT" : "RESIDENTIAL";
+      }
+      const targetState: DialogState = newDraft.property_type ? "OWNER_SOCIETY_PENDING" : "OWNER_CONFIG_PENDING";
+      const replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul <b>${nameStr}</b>! Nayi property listing desk par swagat chhe. 🏡✨\n\n👉 <b>Tamari nayi property kaya type ni chhe — 2BHK / 3BHK Flat, Villa, ke Commercial Shop/Office?</b> 🏢`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! Let's get your next property listed. 🏡✨\n\n👉 <b>What type of property is this — 2BHK / 3BHK Flat, Villa, or Commercial Shop/Office?</b> 🏢`
+          : `Ji bilkul <b>${nameStr}</b>! Nayi property listing desk par swagat hai. 🏡✨\n\n👉 <b>Aapki nayi property kis type ki hai — 2BHK / 3BHK Flat, Villa, ya Commercial Shop/Office?</b> 🏢`;
+
+      return {
+        replyText,
+        nextState: targetState,
+        leadUpdates: {
+          lead_type: "PROVIDER",
+          state: targetState,
+          metadata: {
+            ...(lead.metadata || {}),
+            owner_draft: newDraft,
+            archived_submissions: archived,
+            submission_id: null,
+          },
+        },
+      };
+    } else if (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) {
+      // Option 3: Check status
+      const { data: sub } = await supabase
+        .from("property_submissions")
+        .select("*")
+        .eq("lead_id", lead.lead_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || "Vadodara"}` : "Aapki property";
+      const statusLabel = sub?.status === "PENDING_VERIFICATION" ? "Physical Verification & Quality Inspection" : (sub?.status || "Under Review");
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Ji <b>${nameStr}</b>! Tamari listed property (<b>${propLabel}</b>) hal ma <b>${statusLabel}</b> stage par chhe. 📋 Amari inspection team verification mate jald aapse call par connect karshe! 🙏`
+          : lang === "ENGLISH"
+          ? `Hello <b>${nameStr}</b>! Your listed property (<b>${propLabel}</b>) is currently in the <b>${statusLabel}</b> stage. 📋 Our acquisition team will connect with you shortly for on-site inspection! 🙏`
+          : `Ji <b>${nameStr}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋 Hamari inspection team verification ke liye jald aapse call par connect karegi! 🙏`;
+
+      return {
+        replyText,
+        nextState: "OWNER_DETAILS_GATHERED",
+      };
+    } else {
+      // Option 1 (or default): Switch to SEEKER and start fresh search
+      const givenPropType = parsePropertyTypeFromText(context.messageText);
+      const givenBudget = parseBudgetFromText(context.messageText);
+      const givenLocation = extractLocationFromText(context.messageText);
+
+      const replyText = givenPropType
+        ? (lang === "GUJLISH"
+          ? `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva)</b> mango chho ke <b>Rent / Lease</b> par joiye chhe? 🔑`
+          : lang === "ENGLISH"
+          ? `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> or <b>Rent/Lease</b> this property? 🔑`
+          : `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent / Lease</b> par chahiye? 🔑`)
+        : (lang === "GUJLISH"
+          ? `Bahuj saras <b>${nameStr}</b>! 🏡 Chalo navi property search shuru kariye.\n\n👉 <b>Tame kaya type ni property shodhva mango chho — Residential (Flat / Villa) ke Commercial (Shop / Office / Plot)?</b>`
+          : lang === "ENGLISH"
+          ? `Wonderful <b>${nameStr}</b>! 🏡 Let's start a fresh property search.\n\n👉 <b>What type of property are you looking for — Residential (Flat / Villa) or Commercial (Shop / Office / Plot)?</b>`
+          : `Bahut badhiya <b>${nameStr}</b>! 🏡 Chaliye nayi property search shuru karte hain.\n\n👉 <b>Aap kis type ki property search kar rahe hain — Residential (Flat / Villa) ya Commercial (Shop / Office / Plot)?</b>`);
+
+      return {
+        replyText,
+        nextState: "QUALIFYING",
+        leadUpdates: {
+          lead_type: "SEEKER",
+          state: "QUALIFYING",
+          property_type: givenPropType || null,
+          requirement: null,
+          purpose: null,
+          location: givenLocation || null,
+          budget: givenBudget || null,
+          timeline: null,
+          selected_property_id: null,
+          last_option_ids: null,
+        },
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4. ROLE SELECTION PENDING (State: ROLE_SELECTION_PENDING)
+  // ---------------------------------------------------------------------------
+  if (currentState === "ROLE_SELECTION_PENDING") {
+    const isOwnerChoice =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
+      intent === "SUBMIT_LISTING" ||
+      actionResult.user_role === "OWNER" ||
+      /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower);
+
+    if (isOwnerChoice) {
+      // Transition to OWNER_CONFIG_PENDING
+      const initialDraft: any = {
+        started_at: new Date().toISOString(),
+        ...(actionResult.transaction_type ? { transaction_type: (actionResult.transaction_type === "RENT" || actionResult.transaction_type === "LEASE") ? "RENT_OUT" : "SELL" } : {}),
+        ...(actionResult.property_type ? { property_type: actionResult.property_type, configuration: actionResult.property_type } : {}),
+        ...(actionResult.property_category ? { property_category: actionResult.property_category } : {}),
+        ...(actionResult.location ? { location: actionResult.location } : {}),
+      };
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Namaste <b>${nameStr}</b>! 🙏 NextGen Realty par tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
+          : lang === "ENGLISH"
+          ? `Thank you <b>${nameStr}</b>! 🙏 We would be delighted to assist you in listing your property with NextGen Realty.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
+          : `Namaste <b>${nameStr}</b>! 🙏 NextGen Realty par apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
+
+      return {
+        replyText,
+        nextState: "OWNER_CONFIG_PENDING",
+        leadUpdates: {
+          lead_type: "PROVIDER",
+          state: "OWNER_CONFIG_PENDING",
+          metadata: {
+            ...(lead.metadata || {}),
+            owner_draft: initialDraft,
+          },
+        },
+      };
+    } else {
+      // Transition to QUALIFYING as SEEKER (Option 1 or change requirement)
+      const pType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+      const bVal = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
+      const locVal = actionResult.location || extractLocationFromText(context.messageText);
+
+      const replyText = pType
+        ? (lang === "GUJLISH"
+          ? `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> note kari lidhu chhe. Kripya janavjo, aa property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe?`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! 🏡 Noted <b>${pType}</b>. Are you looking to <b>Buy</b> or <b>Rent</b> this property?`
+          : `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> note kar liya hai. Kripya batayein, aap ye property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye?`)
+        : (lang === "GUJLISH"
+          ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
+          : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`);
+
+      return {
+        replyText,
+        nextState: "QUALIFYING",
+        leadUpdates: {
+          lead_type: "SEEKER",
+          state: "QUALIFYING",
+          ...(pType ? { property_type: pType } : {}),
+          ...(bVal ? { budget: bVal } : {}),
+          ...(locVal ? { location: locVal } : {}),
+        },
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5. CANCEL PREVIOUS VISIT CONFIRMATION (State: CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING)
+  // ---------------------------------------------------------------------------
+  if (currentState === "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING") {
+    const isCancelYes =
+      (intent === "CONFIRM_CRITERIA" && (action as ConfirmCriteriaAction).confirm) ||
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+      /^(1|1️⃣|first|1st|option\s*1|ha|haan|yes|yep|sure|cancel|karo|nayi\s*book|ha\s*cancel)/i.test(lower);
+
+    if (isCancelYes) {
+      // Cancel previous visit in DB
+      await supabase
+        .from("site_visits")
+        .update({
+          status: "CANCELLED",
+          notes: "Cancelled by seeker to schedule visit for new property",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
+
+      const pendingPropId = lead.metadata?.pending_new_visit_property_id;
+      let newProp: any = null;
+      if (pendingPropId) {
+        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", pendingPropId).maybeSingle();
+        newProp = p;
+      }
+      const updatedMeta = { ...(lead.metadata || {}) };
+      delete updatedMeta.pending_new_visit_property_id;
+      delete updatedMeta.pending_new_visit_property_name;
+
+      const newPropName = newProp?.project_name || "Project";
+      const newPropConfig = newProp?.configuration ? `${newProp.configuration}, ` : "";
+      const newPropLoc = newProp?.location || "prime location";
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Pichli visit cancel kari didhi chhe! 🚗 <b>${newPropName}</b> (${newPropConfig}${newPropLoc}) ni navi <b>VIP Site Visit</b> mate tamne kayo time anukool ganasho - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
+          : lang === "ENGLISH"
+          ? `Previous visit cancelled! 🚗 When would you like to schedule your new <b>VIP Site Visit</b> for <b>${newPropName}</b> (${newPropConfig}${newPropLoc}) - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
+          : `Pichli visit cancel kar di gayi hai! 🚗 <b>${newPropName}</b> (${newPropConfig}${newPropLoc}) ki nayi <b>VIP Site Visit</b> ke liye aap kaunsa time prefer karenge - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`;
+
+      return {
+        replyText,
+        nextState: "OPTIONS_SENT",
+        leadUpdates: {
+          state: "OPTIONS_SENT",
+          selected_property_id: pendingPropId || lead.selected_property_id,
+          site_visit_booked: false,
+          site_visit_at: null,
+          site_visit_datetime: null,
+          metadata: updatedMeta,
+        },
+      };
+    } else {
+      // Keep old visit
+      const updatedMeta = { ...(lead.metadata || {}) };
+      delete updatedMeta.pending_new_visit_property_id;
+      delete updatedMeta.pending_new_visit_property_name;
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Samajh gaya <b>${nameStr}</b>! Aapki purani visit j confirm chhe. <b>Milte hain site par!</b> 🤝📍\n\nAmara senior sales executive samay par direct site location par tamari raah joshe. Koi pan query hoy to zaroor janavjo!`
+          : lang === "ENGLISH"
+          ? `Understood <b>${nameStr}</b>! Your existing VIP Site Visit remains confirmed. <b>Looking forward to seeing you there!</b> 🤝📍\n\nOur senior sales executive will meet you at the site location as scheduled.`
+          : `Samajh gaya <b>${nameStr}</b>! Aapki purani visit hi confirm rakhi gayi hai. <b>Milte hain site par!</b> 🤝📍\n\nHamare senior sales executive time par direct site location par aapka intezar karenge. Koi badlav ya query ho to zaroor batayein!`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_BOOKED",
+        leadUpdates: {
+          state: "SITE_VISIT_BOOKED",
+          site_visit_booked: true,
+          metadata: updatedMeta,
+        },
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 6. CRITERIA CONFIRMATION (State: CRITERIA_CONFIRMATION_PENDING)
+  // ---------------------------------------------------------------------------
+  if (currentState === "CRITERIA_CONFIRMATION_PENDING") {
+    const isChange =
+      (intent === "CONFIRM_CRITERIA" && !(action as ConfirmCriteriaAction).confirm) ||
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
+      intent === "CHANGE_REQUIREMENT" ||
+      /^(2|2️⃣|second|2nd|option\s*2|nahi|no|change|badalna|naya|nayi|navi)\b/i.test(lower);
+
+    if (isChange) {
+      // Cleanly wipe prior criteria
+      const newPropType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+      const newBudget = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
+      const newLocation = actionResult.location || extractLocationFromText(context.messageText);
+      const isFresh = !newPropType && !newBudget && !newLocation;
+      const targetState: DialogState = isFresh ? "ROLE_SELECTION_PENDING" : "QUALIFYING";
+
+      const replyText = isFresh
+        ? (lang === "GUJLISH"
+          ? `Ji bilkul <b>${nameStr}</b>! ${agencyName} ma aapnu swagat chhe. 🏢✨\n\nTame ${agencyName} sathe shu karva mango chho?\n\n1️⃣ <b>Property Leni chhe</b> (Kharidva / Rent par joiye chhe) 🏡\n2️⃣ <b>Property Deni chhe</b> (Vechva / Rent par aapvi chhe) 📋`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! Welcome to ${agencyName}. 🏢✨\n\nHow would you like to proceed?\n\n1️⃣ <b>Looking for a Property</b> (Buy / Rent) 🏡\n2️⃣ <b>List / Offer a Property</b> (Sell / Rent Out) 📋`
+          : `Ji bilkul <b>${nameStr}</b>! ${agencyName} me aapka swagat hai. 🏢✨\n\nAap ${agencyName} ke sath kya karna chahenge?\n\n1️⃣ <b>Property leni hai</b> (Kharidna / Rent pe lena) 🏡\n2️⃣ <b>Apni property deni hai</b> (Bechna / Rent out karna) 🔑`)
+        : (lang === "GUJLISH"
+          ? `Noted <b>${nameStr}</b>! 👍 Ame tamara nava criteria note kari lidha chhe. Kripya janavjo, tamne kaya nava area ma properties joiye chhe? 📍`
+          : lang === "ENGLISH"
+          ? `Noted <b>${nameStr}</b>! 👍 Updated your preferences. Which specific area or locality would you prefer? 📍`
+          : `Noted <b>${nameStr}</b>! 👍 Humne aapki nayi requirement note kar li hai. Kripya apna preferred location ya area batayein. 📍`);
+
+      return {
+        replyText,
+        nextState: targetState,
+        leadUpdates: {
+          state: targetState,
+          property_type: newPropType || null,
+          budget: newBudget || null,
+          location: newLocation || null,
+          requirement: null,
+          purpose: null,
+          selected_property_id: null,
+          last_option_ids: null,
+          site_visit_booked: false,
+          site_visit_at: null,
+          site_visit_datetime: null,
+        },
+      };
+    } else {
+      // Retain criteria: query unseen inventory
+      const { data: allProps } = await supabase
+        .from("inventory")
+        .select("*")
+        .eq("client_id", activeTenantId)
+        .eq("status", "AVAILABLE");
+
+      const available = allProps || [];
+      const excludedIds = new Set<string>([
+        ...(Array.isArray(lead.last_option_ids) ? lead.last_option_ids : []),
+        lead.selected_property_id,
+      ].filter(Boolean));
+
+      const leadBudget = Number(lead.budget || 0);
+      const maxBudget = leadBudget > 0 ? leadBudget * 1.15 : Infinity;
+
+      const strictMatches = available.filter((p: any) => {
+        if (excludedIds.has(p.property_id)) return false;
+        const price = Number(p.price || 0);
+        if (leadBudget > 0 && price > maxBudget) return false;
+        if (!matchesListingType(lead.requirement, p.listing_type, price)) return false;
+        if (!matchesPropertyType(lead.property_type, p.property_category, p.configuration, p.project_name)) return false;
+        if (!matchesLocation(lead.location, p.location, p.landmarks)) return false;
+        return true;
+      });
+
+      const freshProperties = strictMatches.slice(0, 3);
+      if (freshProperties.length > 0) {
+        const newIds = freshProperties.map((p) => p.property_id);
+        const combinedIds = Array.from(new Set([...(lead.last_option_ids || []), ...newIds]));
+        const optionsCards = freshProperties.map((p, idx) => formatN8nPropertyCard(p, idx, false)).join("\n\n---\n\n");
+        const critSummary = formatLeadCriteriaSummary(lead, lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH", resolvedCity);
+
+        const heading =
+          lang === "GUJLISH"
+            ? `🌟 <b>${critSummary} Mujab Nava Verified Options</b>\n\n${nameStr}, tamara criteria mujab aa fresh matching properties chhe:`
+            : lang === "ENGLISH"
+            ? `🌟 <b>Fresh Options Matching ${critSummary}</b>\n\n${nameStr}, here are more verified properties matching your criteria:`
+            : `🌟 <b>${critSummary} Ke Mutabiq Naye Verified Options</b>\n\n${nameStr}, aapke criteria ke hisab se ye fresh options hain:`;
+
+        const trailer =
+          freshProperties.length === 1
+            ? (lang === "GUJLISH"
+              ? `👉 <i>Tame <b>${freshProperties[0].project_name}</b> ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho — <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?</i>`
+              : lang === "ENGLISH"
+              ? `👉 <i>When would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>${freshProperties[0].project_name}</b> — <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?</i>`
+              : `👉 <i>Aap <b>${freshProperties[0].project_name}</b> ki <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge — <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?</i>`)
+            : (lang === "GUJLISH"
+              ? `👉 <i>Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho — <b>Option 1</b>, <b>Option 2</b> ke <b>Option 3</b>?</i>`
+              : lang === "ENGLISH"
+              ? `👉 <i>Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for — <b>Option 1</b>, <b>Option 2</b>, or <b>Option 3</b>?</i>`
+              : `👉 <i>Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge — <b>Option 1</b>, <b>Option 2</b> ya <b>Option 3</b>?</i>`);
+
+        return {
+          replyText: `${heading}\n\n${optionsCards}\n\n${trailer}`,
+          nextState: "OPTIONS_SENT",
+          leadUpdates: {
+            state: "OPTIONS_SENT",
+            last_option_ids: combinedIds,
+            selected_property_id: freshProperties[0].property_id,
+          },
+        };
+      } else {
+        const critSummary = formatLeadCriteriaSummary(lead, lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH", resolvedCity);
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji ${nameStr}, <b>${critSummary}</b> na criteria ma amari paas aa best verified inventory available hati. Amara senior sales manager tamara mate exclusive <b>off-market options</b> arrange kari rahya chhe ane direct <b>call par connect karshe</b>. 📞`
+            : lang === "ENGLISH"
+            ? `Sure ${nameStr}, these were our top verified options matching <b>${critSummary}</b>. Our senior sales executives are sourcing exclusive <b>off-market inventory</b> and will <b>connect with you directly over a call</b>. 📞`
+            : `Ji ${nameStr}, <b>${critSummary}</b> ke criteria me hamare paas yehi top verified inventory available thi. Hamare senior sales executive aapke liye exclusive <b>off-market options</b> arrange kar rahe hain aur aapse direct <b>call par connect karenge</b>. 📞`;
+
+        return {
+          replyText,
+          nextState: "OPTIONS_SENT",
+          leadUpdates: { state: "OPTIONS_SENT" },
+          salesAlert: { type: "NO_PROPERTY_MATCH", payload: { userText: context.messageText } },
+        };
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 7. SITE VISIT BOOKED & RESCHEDULED (State: SITE_VISIT_BOOKED / VISIT_RESCHEDULED)
+  // ---------------------------------------------------------------------------
+  if (currentState === "SITE_VISIT_BOOKED" || currentState === "VISIT_RESCHEDULED") {
+    // A. GREETING -> Never wipe criteria! Welcome back & anchor booked visit
+    if (intent === "GREETING") {
+      let propDetails: any = null;
+      let scheduledTime = lead.site_visit_at || lead.site_visit_datetime;
+
+      const { data: latestVisit } = await supabase
+        .from("site_visits")
+        .select("*, inventory(*)")
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestVisit) {
+        scheduledTime = latestVisit.scheduled_at || scheduledTime;
+        propDetails = latestVisit.inventory;
+      }
+      if (!propDetails && lead.selected_property_id) {
+        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.selected_property_id).maybeSingle();
+        propDetails = p;
+      }
+
+      const visitTime = scheduledTime
+        ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
+        : "Scheduled Time";
+      const propInfo = propDetails ? `\n🏢 <b>Property:</b> ${propDetails.project_name} (${propDetails.location})` : "";
+      const mapInfo = propDetails?.map_url ? `\n📍 <b>Google Map Location:</b> ${propDetails.map_url}` : "";
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Welcome back <b>${nameStr}</b>! 🙏\n\nTamari VIP Site Visit already booked chhe:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu tamne timing reschedule karvo chhe ke koi biji query chhe?`
+          : lang === "ENGLISH"
+          ? `Welcome back <b>${nameStr}</b>! 🙏\n\nYou already have a VIP Site Visit booked:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time. Would you like to reschedule the time or do you have any questions?`
+          : `Welcome back <b>${nameStr}</b>! 🙏\n\nAapki VIP Site Visit already booked hai:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge. Kya aapko timing reschedule karna hai ya koi aur query hai?`;
+
+      return {
+        replyText,
+        nextState: currentState,
+      };
+    }
+
+    // B. RESCHEDULE_VISIT
+    if (intent === "RESCHEDULE_VISIT" || (intent === "BOOK_VISIT" && (action as BookVisitAction).preferred_date_raw)) {
+      const slotRaw = (action as RescheduleVisitAction).new_slot_raw || (action as BookVisitAction).preferred_date_raw || context.messageText;
+      const slotResult = parseVisitSlot(slotRaw);
+
+      if (!slotResult.isValidTime) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Amara site visit timings saware <b>10:00 AM thi sanje 6:00 PM</b> sudhi na hoy chhe. Kripya aa samay vachhe no slot janavjo. 🙏`
+            : lang === "ENGLISH"
+            ? `Our property site visits are scheduled between <b>10:00 AM and 6:00 PM IST</b>. Kindly suggest a convenient slot within this window. 🙏`
+            : `Hamare site visit timings subah <b>10:00 AM se shaam 6:00 PM</b> ke beech hote hain. Kripya is time window me apna convenient slot batayein. 🙏`;
+        return { replyText, nextState: currentState };
+      }
+
+      if (slotResult.isPast) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Aa time viti gayo chhe. Kripya aavnar divas athva timing janavjo. 🙏`
+            : lang === "ENGLISH"
+            ? `This time slot has already passed. Please suggest an upcoming date and time. 🙏`
+            : `Ye time slot nikal chuka hai. Kripya aane wala day ya timing batayein. 🙏`;
+        return { replyText, nextState: currentState };
+      }
+
+      const newSlot = slotResult.isoUtc;
+      await supabase
+        .from("site_visits")
+        .update({ scheduled_at: newSlot, status: "RESCHEDULED" })
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED", "MISSED"]);
+
+      const formatted = new Date(newSlot).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+      const replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul <b>${nameStr}</b>! Tamari site visit <b>${formatted}</b> mate reschedule thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chiye)! 🤝📍`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! Your site visit has been rescheduled to <b>${formatted}</b>. Our senior sales executive will meet you directly at the site location on time! 🤝📍`
+          : `Ji bilkul <b>${nameStr}</b>! Aapki site visit <b>${formatted}</b> ke liye reschedule kar di gayi hai. Hamare senior sales executive time par aapse direct site location par milenge (Milte hain site par)! 🤝📍`;
+
+      return {
+        replyText,
+        nextState: "VISIT_RESCHEDULED",
+        leadUpdates: {
+          site_visit_at: newSlot,
+          site_visit_datetime: newSlot,
+          state: "VISIT_RESCHEDULED",
+        },
+        salesAlert: { type: "RESCHEDULE_VISIT", payload: { scheduledAt: newSlot, userText: context.messageText } },
+      };
+    }
+
+    // C. CANNOT_ATTEND_VISIT
+    if (intent === "CANNOT_ATTEND_VISIT") {
+      await supabase
+        .from("site_visits")
+        .update({ status: "MISSED", feedback_notes: `Missed visit: ${context.messageText}` })
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Arey koi vandho nahi <b>${nameStr}</b>! 🙏 Pehla thi janavva mate aabhar. Ame samji shakiye chhiye ke urgent kaam ya emergency lidhe tame aaje nathi aavi shakya. Chalo tame bija divase anukool hoy tyare reschedule kari daiye. Shu ame <b>kaale sanje 4:00 vage</b> ke <b>5:30 vage</b> navi VIP site visit plan kariye? 🚗📍`
+          : lang === "ENGLISH"
+          ? `No problem at all <b>${nameStr}</b>! 🙏 Thank you for letting us know in advance. We completely understand that an urgent commitment prevented you from making it today. Let's reschedule your visit for a convenient time. Would <b>tomorrow at 4:00 PM or 5:30 PM</b> work for you? 🚗📍`
+          : `Koi baat nahi <b>${nameStr}</b>! 🙏 Batane ke liye shukriya. Hum samajh sakte hain ki achanak kisi zaroori kaam ya emergency ki wajah se aap visit par nahi aa pa rahe hain. Chaliye aapke liye dusri convenient timing par reschedule kar dete hain. Kya hum <b>kal shaam 4:00 baje ya 5:30 baje</b> aapki nayi VIP site visit plan karein? 🚗📍`;
+
+      return {
+        replyText,
+        nextState: "VISIT_MISSED",
+        leadUpdates: {
+          state: "VISIT_MISSED",
+          site_visit_booked: false,
+          drip_stage: "MISSED_RESCHEDULE_PROMPTED",
+        },
+        salesAlert: { type: "VISIT_MISSED", payload: { userText: context.messageText, reason: (action as CannotAttendVisitAction).reason || context.messageText } },
+      };
+    }
+
+    // D. CANCEL_VISIT
+    if (intent === "CANCEL_VISIT") {
+      await supabase
+        .from("site_visits")
+        .update({ status: "CANCELLED" })
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Samji gayo <b>${nameStr}</b>. Tamari site visit cancel kari didhi chhe. Jyare tame anukool hovo tyare navi visit book kari shako chho. 🙏`
+          : lang === "ENGLISH"
+          ? `Understood <b>${nameStr}</b>. Your scheduled site visit has been cancelled. Whenever you are ready, you can book a new slot anytime. 🙏`
+          : `Samajh gaya <b>${nameStr}</b>. Aapki scheduled site visit cancel kar di gayi hai. Jab bhi aap comfortable hon, naya slot schedule kar sakte hain. 🙏`;
+
+      return {
+        replyText,
+        nextState: "VISIT_CANCELLED",
+        leadUpdates: { state: "VISIT_CANCELLED", site_visit_booked: false },
+        salesAlert: { type: "CANCEL_VISIT", payload: { userText: context.messageText } },
+      };
+    }
+
+    // E. ASK_FAQ while visit booked
+    if (intent === "ASK_FAQ") {
+      return handleFaqResponse(lead, action as AskFaqAction, context, true);
+    }
+
+    // F. BROCHURE / MAP REQUEST while visit booked
+    if (intent === "BROCHURE_REQUEST" || intent === "MAP_REQUEST") {
+      return handleBrochureOrMapResponse(lead, intent, context, true);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 8. VISIT MISSED (State: VISIT_MISSED)
+  // ---------------------------------------------------------------------------
+  if (currentState === "VISIT_MISSED") {
+    if (intent === "RESCHEDULE_VISIT" || intent === "BOOK_VISIT") {
+      const slotRaw = (action as RescheduleVisitAction).new_slot_raw || (action as BookVisitAction).preferred_date_raw || context.messageText;
+      const slotResult = parseVisitSlot(slotRaw);
+
+      if (slotResult.isValidTime && !slotResult.isPast) {
+        const newSlot = slotResult.isoUtc;
+        await supabase
+          .from("site_visits")
+          .update({ scheduled_at: newSlot, status: "RESCHEDULED" })
+          .eq("lead_id", lead.id)
+          .in("status", ["MISSED", "SCHEDULED", "CONFIRMED"]);
+
+        const formatted = new Date(newSlot).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji bilkul <b>${nameStr}</b>! Tamari VIP site visit <b>${formatted}</b> mate reschedule thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chiye)! 🤝📍`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! Your VIP site visit has been rescheduled to <b>${formatted}</b>. Our senior sales executive will meet you directly at the site location on time! 🤝📍`
+            : `Ji bilkul <b>${nameStr}</b>! Aapki VIP site visit <b>${formatted}</b> ke liye reschedule kar di gayi hai. Hamare senior sales executive time par aapse direct site location par milenge (Milte hain site par)! 🤝📍`;
+
+        return {
+          replyText,
+          nextState: "SITE_VISIT_BOOKED",
+          leadUpdates: {
+            site_visit_at: newSlot,
+            site_visit_datetime: newSlot,
+            site_visit_booked: true,
+            state: "SITE_VISIT_BOOKED",
+          },
+          salesAlert: { type: "SITE_VISIT_BOOKED", payload: { scheduledAt: newSlot, userText: context.messageText } },
+        };
+      }
+    }
+
+    const replyText =
+      lang === "GUJLISH"
+        ? `Shu ame <b>kaale sanje 4:00 vage</b> ke <b>5:30 vage</b> navi VIP site visit plan kariye? 🚗📍`
+        : lang === "ENGLISH"
+        ? `Would <b>tomorrow at 4:00 PM or 5:30 PM</b> work for you to reschedule your visit? 🚗📍`
+        : `Kya hum <b>kal shaam 4:00 baje ya 5:30 baje</b> aapki nayi VIP site visit plan karein? 🚗📍`;
+
+    return { replyText, nextState: "VISIT_MISSED" };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 9. SITE VISIT DONE (State: SITE_VISIT_DONE)
+  // ---------------------------------------------------------------------------
+  if (currentState === "SITE_VISIT_DONE") {
+    if (intent === "CONFIRM_VISIT_ATTENDANCE") {
+      const isNeg = /(discount|negotiat|bhav\s*ochho|rate\s*kam|price|offer|token)/i.test(lower);
+      const isLoan = /(loan|bank|emi|interest|finance)/i.test(lower);
+
+      const replyText = isNeg
+        ? (lang === "GUJLISH"
+          ? `Tamara feedback mate aabhar <b>${nameStr}</b>! 🙏 Developer sathe special pricing ane exclusive payment plan finalize karva mate amara senior sales director direct tamaro sampark karshe.`
+          : lang === "ENGLISH"
+          ? `Thank you for your feedback <b>${nameStr}</b>! 🙏 Our senior property director will personally connect with you to arrange an exclusive developer sitting and discuss the best negotiated price.`
+          : `Aapke feedback ke liye dhanyawad <b>${nameStr}</b>! 🙏 Developer ke sath special pricing aur best payment scheme finalize karne ke liye hamare senior sales director direct aapse call par connect karenge.`)
+        : isLoan
+        ? (lang === "GUJLISH"
+          ? `Tamara feedback mate aabhar <b>${nameStr}</b>! 🏦 Amari banking & loan expert team lowest interest rate ane easy EMI guidance mate tamne turant call karshe.`
+          : lang === "ENGLISH"
+          ? `Thank you for your feedback <b>${nameStr}</b>! 🏦 Our preferred banking partners will reach out shortly to guide you with the lowest home loan interest rates and flexible EMI structures.`
+          : `Aapke feedback ke liye dhanyawad <b>${nameStr}</b>! 🏦 Hamari home loan & banking team lowest interest rate aur easy EMI structure guide karne ke liye aapse turant connect karegi.`)
+        : (lang === "GUJLISH"
+          ? `Khub saras <b>${nameStr}</b>! 🌟 Tamne property ane layout kevo lagyo? Jo project pasand aavyo hoy to shu ame developer sathe <b>special token pricing baithak</b> plan kariye?`
+          : lang === "ENGLISH"
+          ? `Wonderful <b>${nameStr}</b>! 🌟 How did you like the property and floor layout? If you liked it, shall we arrange a <b>developer sitting for exclusive negotiated pricing</b>?`
+          : `Bohot badiya <b>${nameStr}</b>! 🌟 Aapko property aur layout kaisa laga? Agar pasand aaya ho to kya hum developer ke sath <b>best token pricing sitting</b> arrange karein?`);
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_DONE",
+        salesAlert: { type: "FEEDBACK_RECEIVED", payload: { userText: context.messageText } },
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 10. OPTIONS SENT or VISIT REQUESTED (State: OPTIONS_SENT / VISIT_REQUESTED)
+  // ---------------------------------------------------------------------------
+  if (currentState === "OPTIONS_SENT" || currentState === "VISIT_REQUESTED") {
+    // ZERO OPTION HIJACKING: Option selection picks property and asks slot!
+    if (intent === "SELECT_OPTION") {
+      const idx = (action as SelectOptionAction).option_index;
+      let selectedPropId = lead.last_option_ids?.[idx] || lead.selected_property_id;
+      let selectedProp: any = null;
+
+      if (selectedPropId) {
+        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", selectedPropId).maybeSingle();
+        selectedProp = p;
+      }
+
+      // Check if lead already has active visit for a different property
+      const { data: activeVisits } = await supabase
+        .from("site_visits")
+        .select("*, inventory(*)")
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (activeVisits && activeVisits.length > 0 && selectedProp && activeVisits[0].property_id !== selectedProp.property_id) {
+        const oldName = activeVisits[0].inventory?.project_name || "Project";
+        const replyText =
+          lang === "GUJLISH"
+            ? `Aapki already ek VIP Site Visit booked hai 🚗:\n🏢 <b>Property:</b> ${oldName}\n\n👉 <b>Shu tame aa pichli visit cancel kari ne ${selectedProp.project_name} mate navi VIP Site Visit book karva mango chho?</b>\n\n1️⃣ <b>Haan, pichli visit cancel kari ne navi book karo</b> 🚗\n2️⃣ <b>Nahi, purani visit j continue rakho</b> 🤝`
+            : lang === "ENGLISH"
+            ? `You already have a VIP Site Visit booked for <b>${oldName}</b> 🚗.\n\n👉 <b>Would you like to cancel this previous visit and schedule a new VIP Site Visit for ${selectedProp.project_name}?</b>\n\n1️⃣ <b>Yes, cancel previous visit & schedule new</b> 🚗\n2️⃣ <b>No, keep previous visit active</b> 🤝`
+            : `Aapki already ek VIP Site Visit booked hai <b>${oldName}</b> ke liye 🚗.\n\n👉 <b>Kya aap is pichli visit ko cancel karke ${selectedProp.project_name} ke liye nayi VIP Site Visit book karna chahte hain?</b>\n\n1️⃣ <b>Haan, pichli visit cancel karke nayi book karein</b> 🚗\n2️⃣ <b>Nahi, purani visit hi continue rakhein</b> 🤝`;
+
+        return {
+          replyText,
+          nextState: "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING",
+          leadUpdates: {
+            state: "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING",
+            metadata: {
+              ...(lead.metadata || {}),
+              pending_new_visit_property_id: selectedProp.property_id,
+              pending_new_visit_property_name: selectedProp.project_name,
+            },
+          },
+        };
+      }
+
+      const propName = selectedProp?.project_name || "property";
+      const replyText =
+        lang === "GUJLISH"
+          ? `Khub saras pasand <b>${nameStr}</b>! <b>${propName}</b> ekdam prime project chhe.\n\nTame aa project ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
+          : lang === "ENGLISH"
+          ? `Excellent choice <b>${nameStr}</b>! <b>${propName}</b> is a premium project.\n\nWhen would you like to schedule a <b>VIP Site Visit 🚗</b> - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
+          : `Bahut badhiya choice <b>${nameStr}</b>! <b>${propName}</b> kaafi premium project hai.\n\nAap iski <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`;
+
+      return {
+        replyText,
+        nextState: "OPTIONS_SENT",
+        leadUpdates: {
+          selected_property_id: selectedPropId,
+          state: "OPTIONS_SENT",
+        },
+      };
+    }
+
+    // BOOK_VISIT
+    if (intent === "BOOK_VISIT") {
+      const bookAct = action as BookVisitAction;
+      let targetPropId = lead.selected_property_id;
+      if (bookAct.target_property_index !== undefined && bookAct.target_property_index !== null && lead.last_option_ids?.[bookAct.target_property_index]) {
+        targetPropId = lead.last_option_ids[bookAct.target_property_index];
+      } else if (!targetPropId && lead.last_option_ids?.length === 1) {
+        targetPropId = lead.last_option_ids[0];
+      }
+
+      if (!targetPropId && Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 1) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Site visit plan karva mate, pehla kripya batavo tame <b>Option 1, 2 ke 3</b> mathi kayo project pehla jova mango chho? 🚗`
+            : lang === "ENGLISH"
+            ? `To schedule your site visit, please select which property you want to visit first - <b>Option 1, 2, or 3</b>? 🚗`
+            : `Site visit schedule karne ke liye, kripya pehle batayein aap <b>Option 1, 2 ya 3</b> me se kis project ko pehle dekhna chahenge? 🚗`;
+
+        return { replyText, nextState: "OPTIONS_SENT" };
+      }
+
+      const slotRaw = bookAct.preferred_date_raw || bookAct.slot_iso || context.messageText;
+      const hasSlot = Boolean(bookAct.preferred_date_raw || bookAct.slot_iso) || /\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i.test(lower);
+
+      if (!hasSlot) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Bahuj saras <b>${nameStr}</b>! 👍 Site visit 🚗 mate tamne kayo time anukool raheshe - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
+            : lang === "ENGLISH"
+            ? `Great <b>${nameStr}</b>! 👍 Which slot suits you best for the site visit 🚗 - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
+            : `Bahut badhiya <b>${nameStr}</b>! 👍 Site visit 🚗 confirm karne ke liye aapko kaunsa slot suit karega - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`;
+
+        return {
+          replyText,
+          nextState: "VISIT_REQUESTED",
+          leadUpdates: { state: "VISIT_REQUESTED", selected_property_id: targetPropId },
+        };
+      }
+
+      const slotResult = parseVisitSlot(slotRaw);
+      if (!slotResult.isValidTime) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Amara site visit timings saware <b>10:00 AM thi sanje 6:00 PM</b> sudhi na hoy chhe. Kripya aa samay vachhe no slot janavjo. 🙏`
+            : lang === "ENGLISH"
+            ? `Our property site visits are scheduled between <b>10:00 AM and 6:00 PM IST</b>. Kindly suggest a convenient slot within this window. 🙏`
+            : `Hamare site visit timings subah <b>10:00 AM se shaam 6:00 PM</b> ke beech hote hain. Kripya is time window me apna convenient slot batayein. 🙏`;
+        return { replyText, nextState: "OPTIONS_SENT" };
+      }
+
+      if (slotResult.isPast) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Aa time viti gayo chhe. Kripya aavnar divas athva timing janavjo. 🙏`
+            : lang === "ENGLISH"
+            ? `This time slot has already passed. Please suggest an upcoming date and time. 🙏`
+            : `Ye time slot nikal chuka hai. Kripya aane wala day ya timing batayein. 🙏`;
+        return { replyText, nextState: "OPTIONS_SENT" };
+      }
+
+      const scheduledAt = slotResult.isoUtc;
+      const finalPropId = targetPropId || "PROP-NXG-001";
+      let propDetails: any = null;
+      if (finalPropId) {
+        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", finalPropId).maybeSingle();
+        propDetails = p;
+      }
+
+      await supabase.from("site_visits").insert({
+        lead_id: lead.id,
+        client_id: activeTenantId,
+        property_id: finalPropId,
+        scheduled_at: scheduledAt,
+        status: "SCHEDULED",
+      });
+
+      const formatted = new Date(scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+      const mapLink = propDetails?.map_url ? `\n📍 <b>Google Map Location:</b> ${propDetails.map_url}` : "";
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Mubarak <b>${nameStr}</b>! 🎉\n\nTamari VIP Site Visit <b>${formatted}</b> par confirm thai gai chhe! 🚗${propDetails ? `\n🏢 <b>Project:</b> ${propDetails.project_name} (${propDetails.location})` : ""}${mapLink}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior property advisor time par direct site location par tamne malshe.`
+          : lang === "ENGLISH"
+          ? `Congratulations <b>${nameStr}</b>! 🎉\n\nYour VIP Site Visit is confirmed for <b>${formatted}</b>! 🚗${propDetails ? `\n🏢 <b>Project:</b> ${propDetails.project_name} (${propDetails.location})` : ""}${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time.`
+          : `Badhai ho <b>${nameStr}</b>! 🎉\n\nAapki VIP Site Visit <b>${formatted}</b> ke liye confirm ho gayi hai! 🚗${propDetails ? `\n🏢 <b>Project:</b> ${propDetails.project_name} (${propDetails.location})` : ""}${mapLink}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge.`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_BOOKED",
+        leadUpdates: {
+          site_visit_booked: true,
+          site_visit_at: scheduledAt,
+          site_visit_datetime: scheduledAt,
+          selected_property_id: finalPropId,
+          metadata: {
+            ...(lead.metadata || {}),
+            selected_property_name: propDetails?.project_name || "the property",
+          },
+          state: "SITE_VISIT_BOOKED",
+          pre_visit_reminder_sent: false,
+          post_visit_feedback_sent: false,
+        },
+        salesAlert: {
+          type: "SITE_VISIT_BOOKED",
+          payload: { scheduledAt, property: propDetails, userText: context.messageText },
+        },
+      };
+    }
+
+    // CHANGE_REQUIREMENT
+    if (intent === "CHANGE_REQUIREMENT") {
+      const crAct = action as ChangeRequirementAction;
+      const replyText =
+        lang === "GUJLISH"
+          ? `Noted <b>${nameStr}</b>! 👍 Ame tamara criteria update kari didha chhe. Kripya janavjo, tamne kaya nava area ma properties joiye chhe? 📍`
+          : lang === "ENGLISH"
+          ? `Noted <b>${nameStr}</b>! 👍 Updated your preferences. Which specific area or locality would you prefer? 📍`
+          : `Noted <b>${nameStr}</b>! 👍 Humne aapki requirement note kar li hai. Kripya apna preferred location ya area batayein. 📍`;
+
+      return {
+        replyText,
+        nextState: "QUALIFYING",
+        leadUpdates: {
+          state: "QUALIFYING",
+          property_type: crAct.property_type || null,
+          budget: crAct.budget || null,
+          location: crAct.location || null,
+          requirement: crAct.requirement || null,
+          selected_property_id: null,
+          last_option_ids: null,
+        },
+      };
+    }
+
+    // ASK_FAQ
+    if (intent === "ASK_FAQ") {
+      return handleFaqResponse(lead, action as AskFaqAction, context, false);
+    }
+
+    // BROCHURE / MAP REQUEST
+    if (intent === "BROCHURE_REQUEST" || intent === "MAP_REQUEST") {
+      return handleBrochureOrMapResponse(lead, intent, context, false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 11. QUALIFYING (State: QUALIFYING)
+  // ---------------------------------------------------------------------------
+  if (currentState === "QUALIFYING") {
+    return handleQualificationCascade(lead, actionResult, context);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 12. FRESH STATE (State: FRESH)
+  // ---------------------------------------------------------------------------
+  if (currentState === "FRESH") {
+    // If user provided requirement right away:
+    if (intent === "CHANGE_REQUIREMENT") {
+      return handleQualificationCascade(lead, actionResult, context);
+    }
+
+    // Otherwise show dual-role greeting:
+    const replyText =
+      lang === "GUJLISH"
+        ? `Namaste <b>${nameStr}</b>! ${agencyName} ma aapnu swagat chhe. 🏢✨\n\nTame ${agencyName} sathe shu karva mango chho?\n\n1️⃣ <b>Property Leni chhe</b> (Kharidva / Rent par joiye chhe) 🏡\n2️⃣ <b>Property Deni chhe</b> (Vechva / Rent par aapvi chhe) 📋\n\n<i>(Tame 1 ke 2 lakhi ne reply kari shako chho)</i>`
+        : lang === "ENGLISH"
+        ? `Hello <b>${nameStr}</b>! Welcome to ${agencyName}. 🏢✨\n\nHow can we assist you today?\n\n1️⃣ <b>Looking for a Property</b> (Buy / Rent) 🏡\n2️⃣ <b>List / Offer a Property</b> (Sell / Rent Out) 📋\n\n<i>(You can reply with 1 or 2)</i>`
+        : `Namaste <b>${nameStr}</b>! ${agencyName} me aapka swagat hai. 🏢✨\n\nAap ${agencyName} ke sath kya karna chahte hain?\n\n1️⃣ <b>Property Leni hai</b> (Buy / Rent par chahiye) 🏡\n2️⃣ <b>Property Deni hai</b> (Bechni / Rent par deni hai) 📋\n\n<i>(Aap 1 ya 2 likh kar reply kar sakte hain)</i>`;
+
+    return {
+      replyText,
+      nextState: "ROLE_SELECTION_PENDING",
+      leadUpdates: {
+        state: "ROLE_SELECTION_PENDING",
+        property_type: null,
+        requirement: null,
+        purpose: null,
+        location: null,
+        budget: null,
+        timeline: null,
+        selected_property_id: null,
+        site_visit_booked: false,
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // ZERO SILENT DROPS INVARIANT (Final Catch-All)
+  // ---------------------------------------------------------------------------
+  const defaultReply =
+    lang === "GUJLISH"
+      ? `Ji <b>${nameStr}</b>! Kripya janavjo tamne kaya type ni property ma interest chhe — Flat, Villa, ke Commercial Office/Shop? 🏡`
+      : lang === "ENGLISH"
+      ? `Hello <b>${nameStr}</b>! How may we assist you with your property search — are you looking for a Flat, Villa, or Commercial space? 🏡`
+      : `Ji <b>${nameStr}</b>! Kripya batayein aap kis type ki property search kar rahe hain — Flat, Villa, ya Commercial Office/Shop? 🏡`;
+
+  return {
+    replyText: defaultReply,
+    nextState: currentState,
+  };
+}
+
+async function handleFaqResponse(
+  lead: any,
+  faqAct: AskFaqAction,
+  context: DialogContext,
+  hasBookedVisit: boolean
+): Promise<DialogTransitionResult> {
+  const lang = context.lang || "HINGLISH";
+  const senderName = context.senderName || "Friend";
+  const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+  const agencyName = context.agencyName || "Nextgen Realty";
+  const resolvedCity = context.resolvedCity;
+  const activeTenantId = context.tenantId || defaultTenantId;
+
+  const { data: allProps } = await supabase
+    .from("inventory")
+    .select("*")
+    .eq("client_id", activeTenantId)
+    .eq("status", "AVAILABLE");
+  const availableProps = allProps || [];
+
+  let prop: any = null;
+  if (lead?.selected_property_id) {
+    prop = availableProps.find((p: any) => p.property_id === lead.selected_property_id);
+  }
+  if (!prop && Array.isArray(lead?.last_option_ids) && lead.last_option_ids.length > 0) {
+    prop = availableProps.find((p: any) => p.property_id === lead.last_option_ids[0]);
+  }
+  if (!prop && availableProps.length > 0) {
+    prop = availableProps[0];
+  }
+
+  const projName = prop?.project_name || "Project";
+  const projLoc = prop?.location || resolvedCity || "Prime Location";
+
+  let bridgeCta = "";
+  if (hasBookedVisit) {
+    bridgeCta =
+      lang === "GUJLISH"
+        ? `\n\n🤝 <b>Tamari VIP Site Visit already booked chhe!</b> Amara senior sales executive direct site location par tamne malshe ane aa badhi details personally samjavshe.`
+        : lang === "ENGLISH"
+        ? `\n\n🤝 <b>Your VIP Site Visit is already confirmed!</b> Our senior sales advisor will meet you directly at the site location to verify all details in person.`
+        : `\n\n🤝 <b>Aapki VIP Site Visit already confirm hai!</b> Hamare senior sales executive direct site location par aapse milenge aur saari details personally physically verify karwayenge.`;
+  } else {
+    bridgeCta =
+      lang === "GUJLISH"
+        ? `\n\n👉 <b>Actual space, layout ane quality live jova mate</b>, shu ame <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b> tamari <b>VIP Site Visit 🚗</b> schedule karie?`
+        : lang === "ENGLISH"
+        ? `\n\n👉 <b>To experience the actual space, layout, and finish in person</b>, would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
+        : `\n\n👉 <b>Actual space, layout aur quality physically dekhne ke liye</b>, kya hum <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b> aapki <b>VIP Site Visit 🚗</b> schedule karein?`;
+  }
+
+  const topic = faqAct.topic;
+  let replyText = "";
+
+  if (topic === "PRICING_DISCOUNT") {
+    replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}! <b>${projName}</b> nu pricing direct developer approved pricing chhe. Serious buyers mate developer taraf thi <b>exclusive token booking discount ane flexible payment plan</b> direct face-to-face site meeting ma finalize thai shake chhe. 💰${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `Hello ${nameStr}! The pricing for <b>${projName}</b> reflects direct builder rates. For serious buyers, exclusive <b>token spot discounts and customized payment schedules</b> are finalized face-to-face directly with the developer during the site visit. 💰${bridgeCta}`
+        : `Ji ${nameStr}! <b>${projName}</b> ki pricing direct developer approved base rate hai. Serious buyers ke liye developer side se <b>exclusive spot token discount aur flexible payment slabs</b> direct face-to-face site visit par finalize ho sakte hain. 💰${bridgeCta}`;
+  } else if (topic === "BROKERAGE") {
+    replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}! ${agencyName} par <b>0% Brokerage (Zero Commission)</b> chhe! 🎉\nTame direct builder pricing ane 100% transparent paperwork access karo chho. Tamara thi koi pan extra brokerage charge levama aavshe nahi.${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `Hello ${nameStr}! ${agencyName} offers <b>0% Brokerage (Zero Commission)</b> on all direct builder bookings! 🎉\nYou get direct developer pricing and verified paperwork with absolutely zero advisory charges.${bridgeCta}`
+        : `Ji ${nameStr}! ${agencyName} par <b>0% Brokerage (Zero Commission)</b> hai! 🎉\nAapko direct builder pricing aur 100% verified transparent paperwork milta hai bina kisi hidden ya extra brokerage charges ke.${bridgeCta}`;
+  } else if (topic === "LOAN") {
+    replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}! <b>${projName}</b> 100% approved project chhe ane <b>SBI, HDFC, ICICI, Bank of Baroda</b> jevi top nationalized ane private banks thi pre-approved chhe! 🏦\n\n• 💰 <b>Starting Rate:</b> 8.4% p.a.\n• 📑 <b>Eligibility:</b> Up to 80%-90% funding support\n• 🤝 <b>Doorstep Assistance:</b> Amari in-house banking team tamara mate loan documentation manage karshe.${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `Hello ${nameStr}! <b>${projName}</b> is pre-approved by all leading banks including <b>SBI, HDFC, ICICI, and Bank of Baroda</b>! 🏦\n\n• 💰 <b>Starting Interest Rate:</b> 8.4% p.a.\n• 📑 <b>Loan Quantum:</b> Up to 80%-90% funding assistance\n• 🤝 <b>Doorstep Documentation:</b> Our dedicated banking associates coordinate paperwork end-to-end.${bridgeCta}`
+        : `Ji ${nameStr}! <b>${projName}</b> sabhi leading banks (jaise <b>SBI, HDFC, ICICI, Bank of Baroda</b>) se pre-approved project hai! 🏦\n\n• 💰 <b>Starting Interest Rate:</b> 8.4% p.a.\n• 📑 <b>Funding:</b> 80% se 90% tak loan approval assistance\n• 🤝 <b>Doorstep Support:</b> Hamari banking team aapke liye loan process aur documentation coordinate karegi.${bridgeCta}`;
+  } else if (topic === "RERA") {
+    const reraNo = prop?.rera_number || "Verified RERA Registered Project";
+    replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}! <b>${projName}</b> 100% RERA Registered ane Clear Title project chhe! 📜✅\n\n• 🏛️ <b>RERA Registration:</b> <code>${reraNo}</code>\n• ⚖️ <b>Clear Title:</b> All legal approvals, NA permissions ane sanctioned plans complete chhe.${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `Hello ${nameStr}! <b>${projName}</b> is a 100% RERA-registered and clear title property! 📜✅\n\n• 🏛️ <b>RERA Registration:</b> <code>${reraNo}</code>\n• ⚖️ <b>Clear Title:</b> Fully sanctioned layout, NA permissions, and verified legal clearances.${bridgeCta}`
+        : `Ji ${nameStr}! <b>${projName}</b> 100% RERA Registered aur Clear Title project hai! 📜✅\n\n• 🏛️ <b>RERA Registration:</b> <code>${reraNo}</code>\n• ⚖️ <b>Clear Title:</b> Sabhi legal approvals, NA permissions aur sanctioned plans verified hain.${bridgeCta}`;
+  } else if (topic === "POSSESSION") {
+    const possStatus = prop?.possession_status === "READY_TO_MOVE" ? "Ready to Move (Immediate Handover)" : (prop?.possession_status || "Ready to Move");
+    replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}! <b>${projName}</b> (${projLoc}) ni current status <b>${possStatus}</b> chhe. 🔑\nTame token booking ane registration pachhi direct possession lai shako chho.${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `Hello ${nameStr}! <b>${projName}</b> in ${projLoc} is currently <b>${possStatus}</b>. 🔑\nYou can take immediate possession upon registration and token allotment.${bridgeCta}`
+        : `Ji ${nameStr}! <b>${projName}</b> (${projLoc}) ka current status <b>${possStatus}</b> hai. 🔑\nAap token booking aur registration formalities ke baad direct possession le sakte hain.${bridgeCta}`;
+  } else if (topic === "LANDMARKS") {
+    const landmarksStr = Array.isArray(prop?.landmarks) && prop.landmarks.length > 0 ? prop.landmarks.join(", ") : "Prime connectivity hub";
+    const mapUrl = prop?.map_url || "https://maps.google.com";
+    replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}! <b>${projName}</b> ${projLoc} na ekdam prime location par sthit chhe! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• 🗺️ <b>Location Map:</b> <a href="${mapUrl}">Google Maps Link</a>${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `Hello ${nameStr}! <b>${projName}</b> is situated at a prime location in ${projLoc}! 📍\n\n• 🚗 <b>Nearby Landmarks:</b> ${landmarksStr}\n• 🗺️ <b>Location Map:</b> <a href="${mapUrl}">Google Maps Link</a>${bridgeCta}`
+        : `Ji ${nameStr}! <b>${projName}</b> ${projLoc} ki ekdam prime location par sthit hai! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• 🗺️ <b>Location Map:</b> <a href="${mapUrl}">Google Maps Link</a>${bridgeCta}`;
+  } else {
+    // AMENITIES
+    const hasLift = Array.isArray(prop?.amenities) ? prop.amenities.some((a: string) => /lift/i.test(a)) : true;
+    const hasParking = Array.isArray(prop?.amenities) ? prop.amenities.some((a: string) => /parking/i.test(a)) : true;
+    const carpet = prop?.carpet_area_sqft ? `${prop.carpet_area_sqft} sq.ft` : "Spacious carpet layout";
+    const furn = prop?.furnished_status || "Premium specifications";
+    const liftText = hasLift ? "High-Speed Elevators / Lifts available 🛗" : "Elevator facility in tower";
+    const parkText = hasParking ? "Reserved Car & Two-Wheeler Parking 🚗" : "Dedicated parking space";
+
+    replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}! <b>${projName}</b> (${projLoc}) ni key specifications aa mujab chhe:\n\n• 🛗 <b>Lift:</b> ${liftText}\n• 🚗 <b>Parking:</b> ${parkText}\n• 📏 <b>Carpet Area:</b> ${carpet}\n• 🛋️ <b>Furnishing:</b> ${furn}${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `Hello ${nameStr}! Here are the verified specifications for <b>${projName}</b> (${projLoc}):\n\n• 🛗 <b>Lift:</b> ${liftText}\n• 🚗 <b>Parking:</b> ${parkText}\n• 📏 <b>Carpet Area:</b> ${carpet}\n• 🛋️ <b>Furnishing:</b> ${furn}${bridgeCta}`
+        : `Ji ${nameStr}! <b>${projName}</b> (${projLoc}) ki verified specifications ye hain:\n\n• 🛗 <b>Lift:</b> ${liftText}\n• 🚗 <b>Parking:</b> ${parkText}\n• 📏 <b>Carpet Area:</b> ${carpet}\n• 🛋️ <b>Furnishing:</b> ${furn}${bridgeCta}`;
+  }
+
+  return {
+    replyText,
+    nextState: lead?.state || "OPTIONS_SENT",
+  };
+}
+
+async function handleBrochureOrMapResponse(
+  lead: any,
+  intent: "BROCHURE_REQUEST" | "MAP_REQUEST",
+  context: DialogContext,
+  hasBookedVisit: boolean
+): Promise<DialogTransitionResult> {
+  const lang = context.lang || "HINGLISH";
+  const senderName = context.senderName || "Friend";
+  const activeTenantId = context.tenantId || defaultTenantId;
+  const isMapReq = intent === "MAP_REQUEST";
+
+  let prop: any = null;
+  if (lead?.selected_property_id) {
+    const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.selected_property_id).maybeSingle();
+    prop = p;
+  }
+  if (!prop && Array.isArray(lead?.last_option_ids) && lead.last_option_ids.length > 0) {
+    const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.last_option_ids[0]).maybeSingle();
+    prop = p;
+  }
+  if (!prop) {
+    const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("status", "AVAILABLE").limit(1).maybeSingle();
+    prop = p;
+  }
+
+  const link = isMapReq
+    ? (prop?.map_url || "https://maps.google.com")
+    : (prop?.brochure_url || prop?.map_url || "https://maps.google.com");
+
+  const replyText = hasBookedVisit
+    ? (lang === "GUJLISH"
+      ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nTamari VIP Site Visit 🚗 already confirm chhe. 🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe.`
+      : lang === "ENGLISH"
+      ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "the project"}</b>, <b>${senderName}</b>:\n${link}\n\nYour VIP Site Visit 🚗 is already confirmed. 🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time.`
+      : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nAapki VIP Site Visit 🚗 already confirm hai. 🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge.`)
+    : (lang === "GUJLISH"
+      ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nAa check kari ne janavjo, VIP Site Visit 🚗 mate kayo time anukool raheshe - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
+      : lang === "ENGLISH"
+      ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "the project"}</b>, <b>${senderName}</b>:\n${link}\n\nWhen would you like to schedule a VIP Site Visit 🚗 once you review this - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
+      : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nIse dekh kar bataiye, VIP Site Visit 🚗 ke liye kaunsa slot prefer karenge - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`);
+
+  return {
+    replyText,
+    nextState: lead?.state || "OPTIONS_SENT",
+    salesAlert: { type: isMapReq ? "MAP_REQUEST" : "BROCHURE_REQUEST", payload: { property: prop, userText: context.messageText } },
+  };
+}
+
+async function handleQualificationCascade(
+  lead: any,
+  actionResult: ClassifiedActionResult,
+  context: DialogContext
+): Promise<DialogTransitionResult> {
+  const lang = context.lang || "HINGLISH";
+  const senderName = context.senderName || "Friend";
+  const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+  const activeTenantId = context.tenantId || defaultTenantId;
+  const resolvedCity = context.resolvedCity;
+
+  let propType = actionResult.property_type || parsePropertyTypeFromText(context.messageText) || lead?.property_type;
+  let requirement = actionResult.transaction_type || parseRequirementFromText(context.messageText) || lead?.requirement;
+  let purpose = parsePurposeFromText(context.messageText) || lead?.purpose;
+  let budget = actionResult.price_or_budget || parseBudgetFromText(context.messageText) || (lead?.budget ? Number(lead.budget) : 0);
+  let timeline = actionResult.timeline || parseTimelineFromText(context.messageText) || lead?.timeline;
+
+  const { data: allTenantInventory } = await supabase
+    .from("inventory")
+    .select("location, landmarks, project_name")
+    .eq("client_id", activeTenantId)
+    .eq("status", "AVAILABLE");
+
+  const matchedLocs = extractLocationsFromText(context.messageText, allTenantInventory || []);
+  let location = actionResult.location || (matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(context.messageText, allTenantInventory || [])) || lead?.location;
+  if (!location && (actionResult.is_flexible_location || /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|any\s*location|flexible|gamete)\b/i.test(context.lower))) {
+    location = "FLEXIBLE";
+  }
+
+  // Auto-default purpose
+  const isResidential = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(propType || "");
+  if (!purpose) {
+    purpose = isResidential ? "SELF_USE" : "BUSINESS";
+  }
+
+  const rawPropType = String(propType || "").trim();
+  const isGenericCommercial = rawPropType.toLowerCase() === "commercial" || rawPropType === "કોમર્શિયલ";
+  const isGenericResidential = rawPropType.toLowerCase() === "residential" || rawPropType === "રેસિડેન્શિયલ";
+
+  let missingField: string | null = null;
+  if (!propType) {
+    missingField = "PROPERTY_TYPE";
+  } else if (isGenericCommercial) {
+    missingField = "COMMERCIAL_SUBTYPE";
+  } else if (isGenericResidential) {
+    missingField = "RESIDENTIAL_SUBTYPE";
+  } else if (!requirement) {
+    missingField = "REQUIREMENT";
+  } else if (!location && purpose !== "INVESTMENT") {
+    missingField = "LOCATION";
+  } else if (!budget || Number(budget) === 0) {
+    missingField = "BUDGET";
+  }
+
+  const leadUpdates: Record<string, any> = {
+    state: missingField ? "QUALIFYING" : "OPTIONS_SENT",
+    lead_type: "SEEKER",
+    property_type: propType || null,
+    requirement: requirement || null,
+    purpose: purpose || null,
+    location: location || null,
+    budget: budget || null,
+    timeline: timeline || null,
+  };
+
+  if (missingField !== null) {
+    let replyText = "";
+    const isComm = /(commercial|shop|office|showroom|warehouse|godown)/i.test(propType || "");
+    const isRentOrLease = String(requirement || "").toLowerCase().includes("rent") || String(requirement || "").toLowerCase().includes("lease");
+
+    if (missingField === "PROPERTY_TYPE") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? 🏡`
+          : lang === "ENGLISH"
+          ? `What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? 🏡`
+          : `Aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial Shop/Office</b>? 🏡`;
+    } else if (missingField === "COMMERCIAL_SUBTYPE") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space ma tame kaya type ni property shodhva mango chho — Commercial Shop, Office, ke Showroom?</b>`
+          : lang === "ENGLISH"
+          ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>What type of commercial property are you looking for — Commercial Shop, Office, or Showroom?</b>`
+          : `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space me aap kis type ki property search kar rahe hain — Commercial Shop, Office, ya Showroom?</b>`;
+    } else if (missingField === "RESIDENTIAL_SUBTYPE") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential ma tame kaya type ni property shodhva mango chho — 2BHK / 3BHK Flat, ke Villa?</b>`
+          : lang === "ENGLISH"
+          ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>What type of residential property are you looking for — 2BHK / 3BHK Flat, or Villa?</b>`
+          : `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential me aap kis type ki property search kar rahe hain — 2BHK / 3BHK Flat, ya Villa?</b>`;
+    } else if (missingField === "REQUIREMENT") {
+      const typeLabel = propType || "Property";
+      replyText = isComm
+        ? (lang === "GUJLISH"
+          ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Commercial space <b>Buy</b> 💼 karvo chhe ke <b>Rent / Lease</b> 🔑 par joiye chhe?`
+          : lang === "ENGLISH"
+          ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> 💼 or <b>Rent/Lease</b> 🔑 commercial space?`
+          : `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Commercial space <b>Buy</b> 💼 karna chahte hain ya <b>Rent / Lease</b> 🔑 par chahiye?`)
+        : (lang === "GUJLISH"
+          ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva)</b> 🏠 mango chho ke <b>Rent</b> 🔑 par joiye chhe?`
+          : lang === "ENGLISH"
+          ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> 🏠 or <b>Rent</b> 🔑 this property?`
+          : `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> 🏠 chahte hain ya <b>Rent</b> 🔑 par chahiye?`);
+    } else if (missingField === "LOCATION") {
+      const targetCity = resolvedCity || "aapke shehar";
+      replyText =
+        lang === "GUJLISH"
+          ? `Bahuj saras! <b>${propType}</b> note kari lidhu chhe. 👍\n\n👉 ${targetCity} ma tamari preferred <b>location</b> kayi chhe 📍?`
+          : lang === "ENGLISH"
+          ? `Great! Noted <b>${propType}</b>. 👍\n\n👉 Which preferred <b>location</b> in ${targetCity} are you looking for 📍?`
+          : `Bahut badhiya! <b>${propType}</b> note kar liya hai. 👍\n\n👉 ${targetCity} me aapki preferred <b>location</b> konsi hai 📍?`;
+    } else if (missingField === "BUDGET") {
+      const locLabel = location ? `<b>${location}</b>` : "Location";
+      replyText = isRentOrLease
+        ? (lang === "GUJLISH"
+          ? `Noted ${locLabel}! 📍\n\n👉 Tamari monthly rent budget range ketli raheshe 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
+          : lang === "ENGLISH"
+          ? `Noted ${locLabel}! 📍\n\n👉 What is your monthly rent budget range 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
+          : `Noted ${locLabel}! 📍\n\n👉 Monthly rent budget range kya rahegi 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`)
+        : (lang === "GUJLISH"
+          ? `Noted ${locLabel}! 📍\n\n👉 Best options filter karva mate tamaro budget ketlo raheshe 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
+          : lang === "ENGLISH"
+          ? `Noted ${locLabel}! 📍\n\n👉 To filter the best options, what is your comfortable budget range 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
+          : `Noted ${locLabel}! 📍\n\n👉 Best options filter karne ke liye aapka comfortable budget range kya rahega 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`);
+    }
+
+    return {
+      replyText,
+      nextState: "QUALIFYING",
+      leadUpdates,
+    };
+  }
+
+  // All 5 qualified! Query matching inventory
+  const { data: allProps } = await supabase
+    .from("inventory")
+    .select("*")
+    .eq("client_id", activeTenantId)
+    .eq("status", "AVAILABLE");
+
+  const available = allProps || [];
+  const leadBudget = Number(budget || 0);
+  const maxBudget = leadBudget > 0 ? leadBudget * 1.15 : Infinity;
+  const isLeadFlex = location === "FLEXIBLE";
+
+  const strictMatches = available.filter((p: any) => {
+    const price = Number(p.price || 0);
+    if (leadBudget > 0 && price > maxBudget) return false;
+    if (!matchesListingType(requirement, p.listing_type, price)) return false;
+    if (!matchesPropertyType(propType, p.property_category, p.configuration, p.project_name)) return false;
+    if (!isLeadFlex && !matchesLocation(location, p.location, p.landmarks)) return false;
+    return true;
+  });
+
+  strictMatches.sort((a: any, b: any) => {
+    if (leadBudget > 0) {
+      return Math.abs(Number(a.price || 0) - leadBudget) - Math.abs(Number(b.price || 0) - leadBudget);
+    }
+    return 0;
+  });
+
+  const properties = strictMatches.slice(0, 3);
+
+  if (properties.length > 0) {
+    const optionIds = properties.map((p) => p.property_id);
+    leadUpdates.last_option_ids = optionIds;
+    leadUpdates.selected_property_id = properties.length === 1 ? properties[0].property_id : null;
+    leadUpdates.state = "OPTIONS_SENT";
+
+    const optionsCards = properties.map((p, idx) => formatN8nPropertyCard(p, idx, false)).join("\n\n---\n\n");
+    const trailer =
+      properties.length === 1
+        ? (lang === "GUJLISH"
+          ? `👉 <i>Tame <b>${properties[0].project_name}</b> ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho — <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?</i>`
+          : lang === "ENGLISH"
+          ? `👉 <i>When would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>${properties[0].project_name}</b> — <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?</i>`
+          : `👉 <i>Aap <b>${properties[0].project_name}</b> ki <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge — <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?</i>`)
+        : (lang === "GUJLISH"
+          ? `👉 <i>Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho — <b>Option 1</b>, <b>Option 2</b> ke <b>Option 3</b>?</i>`
+          : lang === "ENGLISH"
+          ? `👉 <i>Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for — <b>Option 1</b>, <b>Option 2</b>, or <b>Option 3</b>?</i>`
+          : `👉 <i>Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge — <b>Option 1</b>, <b>Option 2</b> ya <b>Option 3</b>?</i>`);
+
+    const budgetStr = leadBudget > 0 ? `₹${formatPriceShort(leadBudget)} budget` : "aapke budget";
+    const heading =
+      lang === "GUJLISH"
+        ? `🌟 <b>Tamari Requirement Mujab Top Options</b>\n\n${nameStr}, tamara <b>${budgetStr}</b> ane <b>${propType} requirement</b> mujab aa best options chhe:`
+        : lang === "ENGLISH"
+        ? `🌟 <b>Top Options Matching Your Requirement</b>\n\n${nameStr}, based on your budget of <b>${budgetStr}</b> and <b>${propType} requirement</b>, here are the best options:`
+        : `🌟 <b>Aapke Requirement Ke Top Options</b>\n\n${nameStr}, aapke <b>${budgetStr}</b> aur <b>${propType} requirement</b> ke hisab se ye best options hain:`;
+
+    return {
+      replyText: `${heading}\n\n${optionsCards}\n\n${trailer}`,
+      nextState: "OPTIONS_SENT",
+      leadUpdates,
+    };
+  } else {
+    leadUpdates.state = "OPTIONS_SENT";
+    const replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}, tamari requirement (<b>${propType}</b> in <b>${location || "tamara shehar"}</b>) mujab amara senior sales executive specialized <b>off-market options</b> arrange kari rahya chhe ane direct <b>call par connect karshe</b>. 📞`
+        : lang === "ENGLISH"
+        ? `Sure ${nameStr}, our senior sales executives are sourcing specialized <b>off-market options</b> matching your requirement (<b>${propType}</b> in <b>${location || "your city"}</b>) and will <b>connect with you directly over a call</b>. 📞`
+        : `Ji ${nameStr}, aapki requirement (<b>${propType}</b> in <b>${location || "aapke shehar"}</b>) ke mutabiq hamare senior sales executive specialized <b>off-market options</b> arrange kar rahe hain aur aapse direct <b>call par connect karenge</b>. 📞`;
+
+    return {
+      replyText,
+      nextState: "OPTIONS_SENT",
+      leadUpdates,
+      salesAlert: { type: "NO_PROPERTY_MATCH", payload: { userText: context.messageText } },
+    };
+  }
+}
+
+
 // 10. Main Edge Function Request Handler
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -3727,7 +5178,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v58-seamless-visit-booking-and-criteria-persistence-fix",
+        version: "v60-typechat-fsm-engine",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -3805,7 +5256,9 @@ Deno.serve(async (req: Request) => {
           "acquisition-team-real-time-alert",
           "fuzzy-typo-tolerant-location-matcher",
           "conversational-anti-derailment-steer",
-          "short-bifurcated-buyer-rental-flows"
+          "short-bifurcated-buyer-rental-flows",
+          "schema-guided-zero-regex-engine",
+          "deterministic-fsm-state-router"
         ],
         timestamp: new Date().toISOString(),
       }),
@@ -3838,7 +5291,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v58 Ready (Seamless Visit Booking & Criteria Persistence Fix)", { status: 200 });
+    return new Response("Realtor Lead Engine v60 Ready (Schema-Guided Zero-Regex Engine & Deterministic FSM Router)", { status: 200 });
   }
 
   try {
@@ -4090,2399 +5543,59 @@ Deno.serve(async (req: Request) => {
       lead.user_language = lang;
     }
 
-    const isMissedVisitRegex =
-      Boolean(lead.post_visit_feedback_sent || lead.pre_visit_reminder_sent || lead.site_visit_booked || ["SITE_VISIT_BOOKED", "VISIT_BOOKED", "SITE_VISIT_DONE", "VISIT_DONE", "RESCHEDULE_REQUESTED", "VISIT_MISSED"].includes(lead.state)) &&
-      (
-        /(?:^|\b)(?:ha\s+|haan\s+|ji\s+)?(?:me\s+|hum\s+|mai\s+)?(?:nai|nahi|nhi|na)\s*(?:aa\s*sakta|aa\s*sakti|aa\s*paunga|aa\s*paungi|aa\s*payenge|aa\s*paenge|aa\s*raha|aa\s*rahe|aana|aunga|aungi|ja\s*sakta|ja\s*paunga|pahunch\s*sakta|pahunch\s*paunga|ho\s*payega|hoga\s*aaj|possible\s*nahi)/i.test(lower) ||
-        /(nahi\s*aa\s*paya|nahi\s*aa\s*paye|nahi\s*ja\s*saka|nahi\s*ja\s*paye|nahi\s*aa\s*saka|nahi\s*pahunch\s*paya|nahi\s*pahunch\s*paye|nahi\s*pahucha|nahi\s*aaya|miss\s*ho\s*gaya|miss\s*ho\s*gayi|traffic\s*me\s*fas\s*gaya|traffic\s*tha|emergency\s*aa\s*gayi|emergency\s*thi|busy\s*tha|busy\s*ho\s*gaya|cancel\s*ho\s*gaya|tabiyat\s*kharab|tabiyat\s*nathi|bimar|kaam\s*aa\s*gaya|kaam\s*par\s*tha|could\s*not\s*make\s*it|could\s*not\s*attend|couldn't\s*come|couldn't\s*make\s*it|missed\s*the\s*visit|missed\s*it|was\s*stuck|got\s*stuck|emergency|aaj\s*nahi\s*ho\s*payega)/i.test(lower) ||
-        /(?:^|\b)(?:ha\s+|haan\s+|ji\s+)?(?:hu\s+|ame\s+)?(?:nathi|nai|nahi)\s*(?:aavi\s*shakto|aavi\s*shakish|aavi\s*shaku|aavavu|aavay|aavvanu|aavi\s*sakvano|pahonchi\s*shaku|possible\s*nathi|thay\s*em\s*nathi)/i.test(lower) ||
-        /(nathi\s*aavi\s*sakyo|nathi\s*gayo|aavi\s*na\s*sakyo|nathi\s*pahonchi\s*sakyo|busy\s*hato|kam\s*ma\s*fasaai\s*gayo|miss\s*thai\s*gai|miss\s*thai\s*gayo|aaje\s*nathi\s*aavyo|nathi\s*aavayem|aaje\s*nahi\s*aavay|aaje\s*nai\s*aavay)/i.test(lower) ||
-        /(નથી\s*આવી\s*શકાય|નહી\s*આવાય|નહીં\s*આવી\s*શકાય|શક્ય\s*નથી|આવી\s*શકું\s*તેમ\s*નથી)/i.test(lower) ||
-        /(?:cannot|can't|cant|won't|wont|will\s*not|wouldn't|would\s*not|unable\s*to|not\s*able\s*to)(?:\s+be\s*able\s*to)?\s*(?:come|attend|make\s*it|reach|visit|be\s*there)/i.test(lower) ||
-        // Option 2 or direct negative replies to post-visit attendance confirmation
-        (Boolean(lead.post_visit_feedback_sent) && (
-          /(?:^|\b)(?:2|2️⃣|two|option\s*2)\b/i.test(lower) ||
-          /^(?:2|2️⃣|two|option\s*2|nahi|nhi|na|no|nope|nathi|nathi\s*thai|nathi\s*gayo|nathi\s*aavi\s*sakyo|nahi\s*ho\s*payi|nahi\s*ho\s*paayi|nahi\s*gaya|nahi\s*gaye|nahi\s*gayi|missed|not\s*yet|couldn't|attend\s*nahi\s*ki|attend\s*nathi\s*kari|reschedule|cancel)/i.test(lower.trim())
-        )) ||
-        /(not\s*possible\s*today|not\s*possible\s*for\s*me|cannot\s*make\s*it|could\s*not\s*make\s*it|missed\s*the\s*visit|won't\s*make\s*it|wont\s*make\s*it)/i.test(lower)
-      );
-
-    const isMissedVisit = aiAnalysis.intent === "CANNOT_ATTEND_VISIT" || isMissedVisitRegex;
-
     // -------------------------------------------------------------------------
-    // DUAL-ROLE INTENT DETECTION (Seeker vs Provider)
+    // DETERMINISTIC FSM STATE ROUTING (Zero Regex Cascades)
     // -------------------------------------------------------------------------
-    const isInProgressOwnerIntake =
-      lead?.lead_type === "PROVIDER" &&
-      [
-        "OWNER_CONFIG_PENDING",
-        "OWNER_SOCIETY_PENDING",
-        "OWNER_LOCATION_PENDING",
-        "OWNER_AREA_PENDING",
-        "OWNER_PRICE_PENDING",
-        "OWNER_POSSESSION_PENDING",
-        "OWNER_FURNISHING_PENDING",
-        "OWNER_PHONE_PENDING",
-      ].includes(lead?.state);
+    const dialogCtx: DialogContext = {
+      messageText,
+      normalizedMessage,
+      lower,
+      senderName,
+      senderId,
+      platform,
+      tenantId: activeTenantId,
+      agencyName,
+      resolvedCity,
+      displayCity,
+      lang: (lang === "GUJLISH" || lang === "HINGLISH" || lang === "ENGLISH" || lang === "GUJARATI_SCRIPT") ? lang : "HINGLISH",
+    };
 
-    const isExplicitOwnerMessage =
-      lead?.state !== "ROLE_SELECTION_PENDING" &&
-      lead?.state !== "RETURNING_OWNER_MENU_PENDING" &&
-      lead?.state !== "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING" && (
-        aiAnalysis.intent === "OWNER_LISTING" ||
-        isInProgressOwnerIntake ||
-        (lead?.state !== "OWNER_DETAILS_GATHERED" && aiAnalysis.user_role === "OWNER") ||
-        /(?:mera|meri|maro|mari|mere|mara|amaro|apna|own|paas)\s+(?:flat|makan|ghar|house|villa|plot|zameen|jamin|shop|dukan|office|showroom|shed|godown|warehouse|property)\s+(?:bechna|bechni|vechvu|vechvo|vechva|sell|bikri|rent\s+par|bhadu|bhaade|kiraya|kiraye|lease)/i.test(lower) ||
-        /(?:dusri|biji|ek\s*aur|nayi|navi)\s*(?:property|flat|office|shop|plot)\s*(?:sell|bech|list|rent\s*par\s*den|bhade\s*pe|chadani)/i.test(lower) ||
-        /(?:bechna|bechni|vechvu|vechva|bikri|sell\s+my|sell\s+property|want\s+to\s+sell|property\s+sell|rent\s+par\s+den|bhaade\s+aap|kiraye\s+par\s+den|lease\s+par\s+den|list\s+karvi|list\s+karna|owner\s+listing)/i.test(lower) ||
-        /(?:property\s+deni\s+hai|shop\s+deni\s+hai|flat\s+dena\s+hai|office\s+dena\s+hai|office\s+deni\s+hai|ghar\s+bechna|bhade\s+pe\s+chadani|bhade\s+chadani)/i.test(lower)
-      );
-
-    // CRITICAL: An in-progress owner answering location, area, or rent/price must NEVER be treated as an explicit buyer!
-    const isExplicitBuyerMessage =
-      lead?.state !== "ROLE_SELECTION_PENDING" &&
-      lead?.state !== "RETURNING_OWNER_MENU_PENDING" &&
-      lead?.state !== "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING" &&
-      !isInProgressOwnerIntake && (
-        aiAnalysis.user_role === "SEEKER" ||
-        aiAnalysis.intent === "SEEKER_QUALIFICATION" ||
-        aiAnalysis.intent === "ASK_MORE_OPTIONS" ||
-        aiAnalysis.intent === "CONFIRM_SAME_CRITERIA" ||
-        /(?:chahiye|chahye|chahie|chaiye|chaahiye|joiye|joyiye|joie|mangta|dekhna\s+hai|dekhni\s+hai|dekhna\s+chahta|buy|purchase|khareedna|kharidna|levu\s+chhe|rent\s+par\s+chahiye|kiraye\s+par\s+chahiye|lease\s+par\s+chahiye|looking\s+for|want\s+to\s+buy|options|options\s+dikhao|qur\s+property|aur\s+property|dikhavo|dikhao|batavo|batao)/i.test(lower) ||
-        /(?:qur|aur|biji|more|other)\s*(?:property|flat|option|options)\b/i.test(lower) ||
-        /(?:options?\s*(?:dikhao|dikhavo|batao|batavo|aapo))/i.test(lower) ||
-        (/\b([1-5]\s*bhk|flat|villa|office|shop|plot)\b/i.test(lower) && /\b(chahiye|joiye|dekhna|buy|purchase|rent\s+par\s+chahiye|kharid|budget|me|mein)\b/i.test(lower))
-      );
-
-    // If an existing PROVIDER (who has already completed listing) sends an explicit BUYER inquiry, dynamically switch their role to SEEKER
-    if (isExplicitBuyerMessage && !isInProgressOwnerIntake && (lead?.lead_type === "PROVIDER" || lead?.state === "OWNER_DETAILS_GATHERED")) {
-      console.log(`[DUAL ROLE SWITCH] Switching lead ${lead.id} from PROVIDER/OWNER to SEEKER due to buyer intent "${aiAnalysis.intent}"`);
-      await supabase.from("leads").update({
-        lead_type: "SEEKER",
-        state: "QUALIFYING",
-        last_active_at: new Date().toISOString(),
-      }).eq("id", lead.id);
-      lead.lead_type = "SEEKER";
-      lead.state = "QUALIFYING";
+    // Dispatch turn through Deterministic Finite State Machine (FSM) Router
+    const transitionResult = await dispatchStateAction(lead, aiAnalysis, dialogCtx);
+    replyText = transitionResult.replyText;
+    nextState = transitionResult.nextState;
+    if (transitionResult.isSilent) {
+      isSilent = true;
     }
 
-    // =========================================================================
-    // 1b. OFF-TOPIC / SOCIAL BOUNDARY INTERCEPTOR ("Dinner par chale")
-    // =========================================================================
-    if (
-      (/(dinner|lunch|coffee|chai|tea|date|movie|cinema|ghoomne|hangout|hang\s*out|friendship|dosti|girlfriend|boyfriend|shaadi|marriage)\b/i.test(lower) &&
-       /(chale|chaloge|chalo|chalte|chalna|jaoge|jasho|jaye|chalish|kare|karte|karoge|karna|with\s*me|together|free|par|pe|mate|for)/i.test(lower)) ||
-      /(single\s*ho|free\s*ho|dinner\s*par|dinner\s*pe|coffee\s*pe|coffee\s*par|date\s*par|date\s*pe|movie\s*chale|ghoomne\s*chale)/i.test(lower)
-    ) {
-      replyText =
-        lang === "GUJLISH"
-          ? `Hu Nextgen Realty no AI property assistant chhu ane hu fakt property search, site visits ane real estate sambhandhit details ma j tamne help kari shaku chhu. 😊🏢\n\nKripya janavjo, tame kaya type ni property shodhva mango chho - Residential ke Commercial?`
-          : lang === "ENGLISH"
-          ? `I am Nextgen Realty's AI property assistant, and I can only assist you with property search, site visits, and real estate details. 😊🏢\n\nPlease let me know what kind of residential or commercial property you are looking for!`
-          : `Main Nextgen Realty ka AI property assistant hu aur main sirf property search, site visits aur real estate queries me hi aapki help kar sakta hu. 😊🏢\n\nKripya batayein, aap kis type ki property search kar rahe hain - Residential ya Commercial?`;
-    }
-
-    // =========================================================================
-    // 1c. DIRECT HUMAN CALL REQUEST INTERCEPTOR ("Call me", "Call karo", "Phone karo")
-    // =========================================================================
-    else if (
-      /(?:call\s*karo|call\s*kariye|call\s*karjo|call\s*me|phone\s*karo|phone\s*kariye|phone\s*karjo|baat\s*karni|baat\s*karvi|speak\s*to|connect\s*call|number\s*do|contact\s*me|call\s*please|executive\s*se\s*baat)\b/i.test(lower) &&
-      !/(site\s*visit|schedule\s*visit)/i.test(lower)
-    ) {
-      await dispatchSalesAlert(activeTenantId, "CALL_REQUEST", lead, {
-        userText: messageText,
-        reason: "Lead explicitly requested immediate phone call with executive.",
-      });
-
-      const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
-
-      replyText =
-        lang === "GUJLISH"
-          ? `Ji bilkul ${nameStr}! Amara senior property advisor agami <b>5-10 minute ma direct tamne call karshe</b>. 📞\n\nCall pehla kripya janavjo — tamaro preferred area ke budget ketlo chhe jethi teo best options ready rakhi shake?`
-          : lang === "ENGLISH"
-          ? `Certainly ${nameStr}! Our senior property advisor will <b>call you directly within 5-10 minutes</b>. 📞\n\nBefore they connect, could you share your preferred location or budget range so they have tailored options ready?`
-          : `Ji bilkul ${nameStr}! Hamare senior property advisor aapko agle <b>5-10 minutes me direct call par connect kar rahe hain</b>. 📞\n\nCall se pehle bas bata dijiye — aapka preferred area ya budget kya hai taaki wo ready options open rakhein?`;
-    }
-
-    // =========================================================================
-    // 1d. MARKET ADVISORY & TRENDING INTERCEPTOR ("Tum batao kya sasta hai", "Kya rates hain")
-    // =========================================================================
-    else if (
-      /(?:tum\s*batao|tame\s*kaho|aap\s*batao|kya\s*sasta\s*hai|kya\s*acha\s*hai|rates\s*kya\s*hai|bhav\s*shu\s*chhe|market\s*rate|suggest\s*karo|kuch\s*batao|recommend\s*karo)\b/i.test(lower) &&
-      !/(flat|villa|bhk|shop|office|plot)/i.test(lower)
-    ) {
-      const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : "";
-
-      replyText =
-        lang === "GUJLISH"
-          ? `Ji ${nameStr}! Hal ma 2 & 3 BHK premium apartments ane gated villas ma sabse high demand chhe, jya pricing <b>₹45 Lakhs thi shuru</b> thay chhe. 🏡\n\nTame property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe?`
-          : lang === "ENGLISH"
-          ? `Hello ${nameStr}! Currently, 2 & 3 BHK premium apartments and villas are in highest demand, with verified options starting from <b>₹45 Lakhs</b>. 🏡\n\nAre you looking to <b>Buy</b> or <b>Rent</b>?`
-          : `Ji ${nameStr}! Abhi market me 2 & 3 BHK premium apartments aur villas ki sabse high demand hai, jinki pricing <b>₹45 Lakhs se shuru</b> hoti hai. 🏡\n\nAap property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye?`;
-    }
-
-    // =========================================================================
-    // 2. OPT-OUT / DND COMPLIANCE
-    // =========================================================================
-    else if (aiAnalysis.intent === "OPT_OUT" || lower === "stop" || lower.includes("nahi chahiye") || lower.includes("nathi joiye") || lower.includes("not interested") || lower.includes("unsubscribe")) {
-      nextState = "DROPPED";
-      await supabase
-        .from("leads")
-        .update({ state: "DROPPED", bot_active: false, drip_stage: "CANCELLED" })
-        .eq("id", lead.id);
-
-      replyText =
-        lang === "GUJLISH"
-          ? `Aabhar <b>${senderName} bhai</b>. Have tamne koi automated messages nahi aave. Bhawishyaman koi jarur hoy to tame amaro sampark kari shako chho. Tamaro divas shubh rahe! 🙏`
-          : lang === "ENGLISH"
-          ? `Thank you <b>${senderName}</b>. You have been opted out from automated messages. Feel free to contact us anytime if you need property assistance! 🙏`
-          : `Dhanyawad <b>${senderName} ji</b>. Aapka number opt-out kar diya gaya hai. Aage se koi automated message nahi aayega. Have a great day! 🙏`;
-    }
-
-    // =========================================================================
-    // 2b. MISSED VISIT / INABILITY TO ATTEND
-    // =========================================================================
-    else if (
-      aiAnalysis.intent === "CANNOT_ATTEND_VISIT" ||
-      isMissedVisit
-    ) {
-      nextState = "VISIT_MISSED";
+    // Persist lead state and updates to Supabase PostgreSQL
+    if (transitionResult.leadUpdates && Object.keys(transitionResult.leadUpdates).length > 0) {
       await supabase
         .from("leads")
         .update({
-          state: "VISIT_MISSED",
-          site_visit_booked: false,
-          drip_stage: "MISSED_RESCHEDULE_PROMPTED",
+          ...transitionResult.leadUpdates,
+          state: nextState,
           last_active_at: new Date().toISOString(),
         })
         .eq("id", lead.id);
-
+    } else {
       await supabase
-        .from("site_visits")
+        .from("leads")
         .update({
-          status: "MISSED",
-          feedback_notes: `Missed visit: ${messageText}`,
+          state: nextState,
+          last_active_at: new Date().toISOString(),
         })
-        .eq("lead_id", lead.id)
-        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
-
-      await dispatchSalesAlert(activeTenantId, "VISIT_MISSED", lead, {
-        userText: messageText,
-        reason: messageText,
-      });
-
-      const isAdvanceNotice = Boolean(lead.pre_visit_reminder_sent || lead.site_visit_booked);
-
-      replyText =
-        lang === "GUJLISH"
-          ? isAdvanceNotice
-            ? `Arey koi vandho nahi <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 🙏 Pehla thi janavva mate aabhar. Ame samji shakiye chhiye ke urgent kaam ya emergency lidhe tame aaje nathi aavi shakya. Chalo tame bija divase anukool hoy tyare reschedule kari daiye. Shu ame <b>kaale sanje 4:00 vage</b> ke <b>5:30 vage</b> navi VIP site visit plan kariye? 🚗📍`
-            : `Arey koi vandho nahi <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 🙏 Ame samji shakiye chhiye ke urgent kaam ke traffic lidhe tame aaje nathi aavi sakya. Chalo tame bija divase anukool hoy tyare reschedule kari daiye. Shu ame <b>kaale sanje 4:00 vage</b> ke <b>5:30 vage</b> navi VIP site visit plan kariye? 🚗📍`
-          : lang === "ENGLISH"
-          ? isAdvanceNotice
-            ? `No problem at all <b>${senderName}</b>! 🙏 Thank you for letting us know in advance. We completely understand that an urgent commitment prevented you from making it today. Let's reschedule your visit for a convenient time. Would <b>tomorrow at 4:00 PM or 5:30 PM</b> work for you? 🚗📍`
-            : `No problem at all <b>${senderName}</b>! 🙏 We completely understand that an urgent commitment or traffic prevented you from making it today. Let's reschedule your visit for a convenient time. Would <b>tomorrow at 4:00 PM or 5:30 PM</b> work for you? 🚗📍`
-          : isAdvanceNotice
-          ? `Koi baat nahi <b>${senderName ? `${senderName} ji` : "Friend"}</b>! 🙏 Batane ke liye shukriya. Hum samajh sakte hain ki achanak kisi zaroori kaam ya emergency ki wajah se aap visit par nahi aa pa rahe hain. Chaliye aapke liye dusri convenient timing par reschedule kar dete hain. Kya hum <b>kal shaam 4:00 baje ya 5:30 baje</b> aapki nayi VIP site visit plan karein? 🚗📍`
-          : `Koi baat nahi <b>${senderName ? `${senderName} ji` : "Friend"}</b>! 🙏 Hum samajh sakte hain ki achanak kisi zaroori kaam ya traffic ki wajah se aap visit par nahi aa paaye. Chaliye aapke liye dusri convenient timing par reschedule kar dete hain. Kya hum <b>kal shaam 4:00 baje ya 5:30 baje</b> aapki nayi VIP site visit plan karein? 🚗📍`;
+        .eq("id", lead.id);
     }
 
-    // =========================================================================
-    // 2d. OWNER & PROVIDER ENGINE ("Mera flat bechna hai", "Shop rent par deni hai")
-    // =========================================================================
-    else if (
-      isExplicitOwnerMessage ||
-      (isInProgressOwnerIntake && !isExplicitBuyerMessage) ||
-      (lead?.state === "OWNER_DETAILS_GATHERED" && !isExplicitBuyerMessage && aiAnalysis.intent !== "GREETING" && !/^(hi|hello|hey|namaste|kem cho|pranam|namaskar|good morning|good evening)$/i.test(lower.trim()))
-    ) {
-      const ownerRes = await handleOwnerFlow({
+    // Dispatch real-time sales alert if triggered
+    if (transitionResult.salesAlert) {
+      await dispatchSalesAlert(
+        activeTenantId,
+        transitionResult.salesAlert.type,
         lead,
-        messageText,
-        lower,
-        lang,
-        senderName,
-        senderId,
-        platform,
-        tenantId: activeTenantId,
-        supabase,
-        aiAnalysis,
-        city: resolvedCity,
-        agencyName,
-      });
-      replyText = ownerRes.replyText;
-      nextState = ownerRes.nextState;
-    }
-
-    // =========================================================================
-    // 2c. POST-VISIT FEEDBACK (Only for attended / completed visits)
-    // =========================================================================
-    else if (
-      (lead.post_visit_feedback_sent || ["SITE_VISIT_BOOKED", "VISIT_BOOKED", "SITE_VISIT_DONE", "VISIT_DONE"].includes(lead.state)) &&
-      (
-        /(?:^|\b)(?:1|1️⃣|one|option\s*1)\b/i.test(lower) ||
-        /^(?:ha|haan|ji\s*haan|yes|yep|yeah|attended|visit\s*attend\s*ki|visit\s*attend\s*kari|attend\s*kari|gaya\s*tha|gaye\s*the|gayo\s*hato|visit\s*ho\s*gayi|visit\s*thai\s*gai|dekh\s*liya|joee\s*lidhi)/i.test(lower.trim()) ||
-        /(acha|achha|saras|badiya|good|nice|liked|pasand|mast|average|theek|bhav|price|budget|discount|negotiat|loan|bank|emi|interest|builder|developer|sitting|baithak|owner|meeting|offer|process|token|kharab|bekar|nathi\s*gamyu|gamyu|pasand\s*nathi|bahut\s*acha|visit\s*ho\s*gayi|visit\s*done|gaya\s*tha|dekh\s*liya|joee\s*lidhi|gayo\s*hato|visit\s*thai\s*gai|completed|attended|dekh\s*aaye|dekh\s*kar\s*aaye|dekhne\s*gaye)/i.test(lower) ||
-        /(kaisa|kaisi|lagyo|lagi|kem|rate|kharch|cost|query|sawal|prashna)/i.test(lower)
-      )
-    ) {
-        await supabase
-          .from("leads")
-          .update({
-            state: "SITE_VISIT_DONE",
-            drip_stage: "POST_VISIT_DAY_1",
-            last_followup_at: new Date().toISOString(),
-            last_active_at: new Date().toISOString(),
-          })
-          .eq("id", lead.id);
-
-        await supabase
-          .from("site_visits")
-          .update({
-            status: "COMPLETED",
-            feedback_collected: true,
-            feedback_notes: messageText,
-          })
-          .eq("lead_id", lead.id)
-          .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
-
-        let bookedProp: any = null;
-        if (lead.selected_property_id) {
-          const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.selected_property_id).maybeSingle();
-          if (p) bookedProp = p;
-        }
-
-        await dispatchSalesAlert(activeTenantId, "FEEDBACK_RECEIVED", lead, {
-          property: bookedProp,
-          userText: messageText,
-        });
-
-        const isNegotiation = /(discount|negotiat|bhav\s*ochho|rate\s*kam|price|offer|token|sitting|baithak)/i.test(lower);
-        const isLoan = /(loan|bank|emi|interest|finance)/i.test(lower);
-        const isSimpleAttendanceOnly =
-          /(?:^|\b)(?:1|1️⃣|one|option\s*1)\b/i.test(lower) ||
-          /^(?:ha|haan|ji\s*haan|yes|yep|yeah|attended|visit\s*attend\s*ki|visit\s*attend\s*kari|attend\s*kari|gaya\s*tha|gaye\s*the|gayo\s*hato|visit\s*ho\s*gayi|visit\s*thai\s*gai|dekh\s*liya|joee\s*lidhi)/i.test(lower.trim());
-
-        if (isNegotiation) {
-          replyText =
-            lang === "GUJLISH"
-              ? `Tamara feedback mate aabhar <b>${senderName} bhai</b>! 🙏 Ame samjiye chiye. Developer sathe special pricing ane exclusive payment plan finalize karva mate amara senior sales director direct tamaro sampark karshe.`
-              : lang === "ENGLISH"
-              ? `Thank you for your feedback <b>${senderName}</b>! 🙏 Our senior property director will personally connect with you to arrange an exclusive developer sitting and discuss the best negotiated price.`
-              : `Aapke feedback ke liye dhanyawad <b>${senderName} ji</b>! 🙏 Developer ke sath special pricing aur best payment scheme finalize karne ke liye hamare senior sales director direct aapse call par connect karenge.`;
-        } else if (isLoan) {
-          replyText =
-            lang === "GUJLISH"
-              ? `Tamara feedback mate aabhar <b>${senderName} bhai</b>! 🏦 Amari banking & loan expert team lowest interest rate ane easy EMI guidance mate tamne turant call karshe.`
-              : lang === "ENGLISH"
-              ? `Thank you for your feedback <b>${senderName}</b>! 🏦 Our preferred banking partners will reach out shortly to guide you with the lowest home loan interest rates and flexible EMI structures.`
-              : `Aapke feedback ke liye dhanyawad <b>${senderName} ji</b>! 🏦 Hamari home loan & banking team lowest interest rate aur easy EMI structure guide karne ke liye aapse turant connect karegi.`;
-        } else if (isSimpleAttendanceOnly) {
-          replyText =
-            lang === "GUJLISH"
-              ? `Khub saras <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 🌟\n\nTamne property ane layout kevo lagyo? Jo project pasand aavyo hoy to shu ame developer sathe <b>special token pricing baithak</b> plan kariye, ke aa budget ma <b>bija options</b> jova mango chho?`
-              : lang === "ENGLISH"
-              ? `Wonderful <b>${senderName || "there"}</b>! 🌟\n\nHow did you like the property and floor layout? If you liked it, shall we arrange a <b>developer sitting for exclusive negotiated pricing</b>, or would you like to explore <b>more options</b> in this budget?`
-              : `Bohot badiya <b>${senderName ? `${senderName} ji` : "Friend"}</b>! 🌟\n\nAapko property aur layout kaisa laga? Agar pasand aaya ho to kya hum developer ke sath <b>best token pricing sitting</b> arrange karein, ya aap is budget me <b>kuch aur options</b> dekhna chahenge?`;
-        } else {
-          replyText =
-            lang === "GUJLISH"
-              ? `Tamara mulyavan feedback mate khub khub aabhar <b>${senderName} bhai</b>! 🌟 Project booking process ane next steps mate amara senior executive direct tamne call par guide karshe.`
-              : lang === "ENGLISH"
-              ? `Thank you so much for your valuable feedback <b>${senderName}</b>! 🌟 Our senior executive will guide you through the next steps and booking process shortly.`
-              : `Aapke valuable feedback ke liye bohot shukriya <b>${senderName} ji</b>! 🌟 Project booking process aur next steps ke liye hamare senior executive aapse turant call par connect karenge.`;
-        }
-      }
-
-    // =========================================================================
-    // 3. POINT 3: PRICE NEGOTIATION -> SITE VISIT CONVERTER
-    // =========================================================================
-    else if (
-      aiAnalysis.intent === "PRICE_NEGOTIATION" ||
-      /(kuch\s*kam\s*hoga|discount\s*milega|bhav\s*ochho\s*thashe|rate\s*kam\s*karo|final\s*price|final\s*rate|negotiat|kam\s*nahi\s*hoga|price\s*kam)/i.test(lower)
-    ) {
-      await dispatchSalesAlert(activeTenantId, "NEGOTIATION_REQUEST", lead, { userText: messageText });
-
-      replyText =
-        lang === "GUJLISH"
-          ? `Listed price developer ni base pricing chhe <b>${senderName} bhai</b>. Pan serious buyers mate <b>Face-to-Face Site Visit par special token discount ane flexible payment schemes</b> arrange thai shake chhe! 🚗\n\nShu ame kaale ke weekend par tamari VIP Site Visit plan kariye?`
-          : lang === "ENGLISH"
-          ? `The listed price is the developer's base price, <b>${senderName}</b>. However, for serious buyers, <b>special token discounts and flexible payment schemes</b> can be negotiated face-to-face during a site visit! 🚗\n\nShall we schedule your VIP Site Visit for tomorrow or this weekend?`
-          : `Listed price developer ki base pricing hai <b>${senderName} ji</b>. Lekin serious buyers ke liye <b>Face-to-Face Site Visit par special token discount aur flexible payment schemes</b> arrange ho sakti hain! 🚗\n\nKya hum kal ya weekend par aapki VIP Site Visit plan karein?`;
-    }
-
-    // =========================================================================
-    // 4. POINT 4: SMART RESCHEDULE VS DUPLICATE VISITS
-    // =========================================================================
-    else if (
-      aiAnalysis.intent === "RESCHEDULE_VISIT" ||
-      ((lower.includes("reschedule") || lower.includes("change time") || lower.includes("change") || lower.includes("badalna") || lower.includes("badlo") || lower.includes("badli") || lower.includes("badal") || lower.includes("badlavi") || lower.includes("badlavo") || lower.includes("aaj nahi") || lower.includes("aaje nahi") || lower.includes("kale karjo") || lower.includes("kaale karjo") || lower.includes("pachhi") || lower.includes("farithi") || lower.includes("fari thi")) &&
-       (lead.site_visit_booked || lead.state === "VISIT_BOOKED" || lead.state === "SITE_VISIT_BOOKED" || lead.state === "RESCHEDULE_REQUESTED" || lead.state === "VISIT_MISSED")) ||
-      ((lead.state === "RESCHEDULE_REQUESTED" || lead.state === "VISIT_MISSED") && /\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i.test(lower))
-    ) {
-      const hasSpecificSlot = Boolean(aiAnalysis.reschedule_slot) || /\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj|morning|evening|shaam|sanje|dopahar|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i.test(lower);
-
-      if (!hasSpecificSlot) {
-        nextState = "RESCHEDULE_REQUESTED";
-        await supabase
-          .from("leads")
-          .update({ state: "RESCHEDULE_REQUESTED" })
-          .eq("id", lead.id);
-
-        replyText =
-          lang === "GUJLISH"
-            ? `Ha bilkul thai jashe <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 👍 Tamne kayo navo divas ane time slot anukool raheshe — <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>? (Office timings: Saware 10:00 AM thi Sanje 6:00 PM)`
-            : lang === "ENGLISH"
-            ? `Yes, certainly <b>${senderName}</b>! 👍 Which new date and time slot would you prefer — <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>? (Working hours: 10:00 AM to 6:00 PM)`
-            : `Ji bilkul ho jayega <b>${senderName ? `${senderName} ji` : "Friend"}</b>! 👍 Aapko kaunsa naya date aur time slot suit karega — <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>? (Timings: Subah 10:00 AM se Shaam 6:00 PM)`;
-      } else {
-        const slotResult = parseVisitSlot(aiAnalysis.reschedule_slot || messageText);
-
-        if (!slotResult.isValidTime) {
-          replyText =
-            lang === "GUJLISH"
-              ? `Amara site visit timings saware <b>10:00 AM thi sanje 6:00 PM</b> sudhi na hoy chhe. Kripya aa samay vachhe no slot janavjo. 🙏`
-              : lang === "ENGLISH"
-              ? `Our property site visits are scheduled between <b>10:00 AM and 6:00 PM IST</b>. Kindly suggest a convenient slot within this window. 🙏`
-              : `Hamare site visit timings subah <b>10:00 AM se shaam 6:00 PM</b> ke beech hote hain. Kripya is time window me apna convenient slot batayein. 🙏`;
-        } else if (slotResult.isPast) {
-          replyText =
-            lang === "GUJLISH"
-              ? `Aa time viti gayo chhe. Kripya aavnar divas athva timing janavjo. 🙏`
-              : lang === "ENGLISH"
-              ? `This time slot has already passed. Please suggest an upcoming date and time. 🙏`
-              : `Ye time slot nikal chuka hai. Kripya aane wala day ya timing batayein. 🙏`;
-        } else {
-          const newSlot = slotResult.isoUtc;
-          const isInitialBooking = !lead.site_visit_booked && lead.state !== "VISIT_BOOKED" && lead.state !== "SITE_VISIT_BOOKED" && lead.state !== "VISIT_RESCHEDULED";
-
-          // Clean DB: Update EXISTING active visit record or insert new one!
-          const { data: existingVisits } = await supabase
-            .from("site_visits")
-            .select("id, property_id")
-            .eq("lead_id", lead.id)
-            .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED", "MISSED"])
-            .order("created_at", { ascending: false })
-            .limit(1);
-
-          const finalPropId = existingVisits?.[0]?.property_id || lead.selected_property_id || "PROP-NXG-001";
-          let resolvedPropName = "the property";
-          if (finalPropId) {
-            const { data: p } = await supabase
-              .from("inventory")
-              .select("project_name")
-              .eq("property_id", finalPropId)
-              .maybeSingle();
-            if (p?.project_name) resolvedPropName = p.project_name;
-          }
-
-          // Update lead with complete property synchronization
-          nextState = isInitialBooking ? "SITE_VISIT_BOOKED" : "VISIT_RESCHEDULED";
-          await supabase
-            .from("leads")
-            .update({
-              site_visit_at: newSlot,
-              site_visit_datetime: newSlot,
-              site_visit_booked: true,
-              selected_property_id: finalPropId,
-              metadata: {
-                ...(lead.metadata || {}),
-                selected_property_name: resolvedPropName,
-              },
-              pre_visit_reminder_sent: false,
-              post_visit_feedback_sent: false,
-              state: nextState,
-            })
-            .eq("id", lead.id);
-
-          if (existingVisits && existingVisits.length > 0) {
-            await supabase
-              .from("site_visits")
-              .update({ scheduled_at: newSlot, status: isInitialBooking ? "SCHEDULED" : "RESCHEDULED" })
-              .eq("id", existingVisits[0].id);
-          } else {
-            await supabase.from("site_visits").insert({
-              lead_id: lead.id,
-              client_id: activeTenantId,
-              property_id: finalPropId,
-              scheduled_at: newSlot,
-              status: isInitialBooking ? "SCHEDULED" : "RESCHEDULED",
-            });
-          }
-
-          await dispatchSalesAlert(activeTenantId, isInitialBooking ? "SITE_VISIT_BOOKED" : "RESCHEDULE_VISIT", lead, { scheduledAt: newSlot, userText: messageText });
-
-          const formatted = new Date(newSlot).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
-
-          if (isInitialBooking) {
-            replyText =
-              lang === "GUJLISH"
-                ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari VIP site visit <b>${formatted}</b> mate confirm thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chiye)! 🤝📍`
-                : lang === "ENGLISH"
-                ? `Certainly <b>${senderName}</b>! Your VIP site visit has been scheduled for <b>${formatted}</b>. Our senior sales executive will meet you directly at the site location on time! 🤝📍`
-                : `Ji bilkul <b>${senderName ? `${senderName} ji` : "Friend"}</b>! Aapki VIP site visit <b>${formatted}</b> ke liye confirm kar di gayi hai. Hamare senior sales executive time par aapse direct site location par milenge (Milte hain site par)! 🤝📍`;
-          } else {
-            replyText =
-              lang === "GUJLISH"
-                ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari site visit <b>${formatted}</b> mate reschedule thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chiye)! 🤝📍`
-                : lang === "ENGLISH"
-                ? `Certainly <b>${senderName}</b>! Your site visit has been rescheduled to <b>${formatted}</b>. Our senior sales executive will meet you directly at the site location on time! 🤝📍`
-                : `Ji bilkul <b>${senderName ? `${senderName} ji` : "Friend"}</b>! Aapki site visit <b>${formatted}</b> ke liye reschedule kar di gayi hai. Hamare senior sales executive time par aapse direct site location par milenge (Milte hain site par)! 🤝📍`;
-          }
-        }
-      }
-    }
-
-    // =========================================================================
-    // 5. SITE VISIT CANCELLATION
-    // =========================================================================
-    else if (aiAnalysis.intent === "CANCEL_VISIT" || lower.includes("cancel") || lower.includes("cancel visit") || lower.includes("nahi aana") || lower.includes("nahi aavish")) {
-      nextState = "VISIT_CANCELLED";
-      await supabase
-        .from("leads")
-        .update({ state: "VISIT_CANCELLED", site_visit_booked: false })
-        .eq("id", lead.id);
-
-      await supabase
-        .from("site_visits")
-        .update({ status: "CANCELLED" })
-        .eq("lead_id", lead.id)
-        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
-
-      await dispatchSalesAlert(activeTenantId, "CANCEL_VISIT", lead, { userText: messageText });
-
-      replyText =
-        lang === "GUJLISH"
-          ? `Samji gayo <b>${senderName} bhai</b>. Tamari site visit cancel kari didhi chhe. Jyare tame anukool hovo tyare navi visit book kari shako chho. 🙏`
-          : lang === "ENGLISH"
-          ? `Understood <b>${senderName}</b>. Your scheduled site visit has been cancelled. Whenever you are ready, you can book a new slot anytime. 🙏`
-          : `Samajh gaya <b>${senderName} ji</b>. Aapki scheduled site visit cancel kar di gayi hai. Jab bhi aap comfortable hon, naya slot schedule kar sakte hain. 🙏`;
-    }
-
-    // =========================================================================
-    // 6. GREETINGS & RE-ENGAGEMENT CONTEXT ANCHOR
-    // =========================================================================
-    else if (
-      aiAnalysis.intent === "GREETING" ||
-      (
-        [
-          "hi", "hello", "hey", "kem cho", "namaste", "pranam", "start", "restart", "fresh", "naya",
-          "jay shree krishna", "jsk", "jai shree krishna", "radhe radhe", "ram ram", "jai jinendra",
-          "har har mahadev", "namaskar", "good morning", "good evening", "good afternoon"
-        ].some((g) => lower === g || lower.startsWith(g + " ") || lower.endsWith(" " + g)) &&
-        !/(flat|bhk|villa|plot|shop|office|showroom|commercial|godown|warehouse|buy|rent|lease|budget|crore|lakh|hazar|thousand|joiye|chahiye)/i.test(lower)
-      )
-    ) {
-      if ((lead.site_visit_booked || lead.state === "SITE_VISIT_BOOKED" || lead.state === "VISIT_BOOKED") && !lower.includes("start") && !lower.includes("restart")) {
-        // Fetch booked property and visit details
-        let propDetails: any = null;
-        let scheduledTime = lead.site_visit_at || lead.site_visit_datetime;
-
-        const { data: latestVisit } = await supabase
-          .from("site_visits")
-          .select("*, inventory(*)")
-          .eq("lead_id", lead.id)
-          .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (latestVisit) {
-          scheduledTime = latestVisit.scheduled_at || scheduledTime;
-          if (latestVisit.inventory) {
-            propDetails = latestVisit.inventory;
-          } else if (latestVisit.property_id) {
-            const { data: p } = await supabase
-              .from("inventory")
-              .select("*")
-              .eq("property_id", latestVisit.property_id)
-              .maybeSingle();
-            propDetails = p;
-          }
-        }
-
-        if (!propDetails && lead.selected_property_id) {
-          const { data: p } = await supabase
-            .from("inventory")
-            .select("*")
-            .eq("property_id", lead.selected_property_id)
-            .maybeSingle();
-          propDetails = p;
-        }
-
-        const visitTime = scheduledTime
-          ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
-          : "Scheduled Time";
-
-        const propInfo = propDetails
-          ? `\n🏢 <b>Property:</b> ${propDetails.project_name} (${propDetails.location})`
-          : "";
-        const mapInfo = propDetails?.map_url
-          ? `\n📍 <b>Google Map Location:</b> ${propDetails.map_url}`
-          : "";
-
-        replyText =
-          lang === "GUJLISH"
-            ? `Welcome back <b>${senderName} bhai</b>! 🙏\n\nTamari VIP Site Visit already booked chhe:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu tamne timing reschedule karvo chhe ke koi biji query chhe?`
-            : lang === "ENGLISH"
-            ? `Welcome back <b>${senderName}</b>! 🙏\n\nYou already have a VIP Site Visit booked:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time. Would you like to reschedule the time or do you have any questions?`
-            : `Welcome back <b>${senderName} ji</b>! 🙏\n\nAapki VIP Site Visit already booked hai:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge. Kya aapko timing reschedule karna hai ya koi aur query hai?`;
-      } else {
-        // Check if existing property or search criteria known
-        let searchedProp: any = null;
-        const targetPropId = lead.selected_property_id || (Array.isArray(lead.last_option_ids) ? lead.last_option_ids[0] : null);
-        if (targetPropId) {
-          const { data: prop } = await supabase
-            .from("inventory")
-            .select("*")
-            .eq("property_id", targetPropId)
-            .maybeSingle();
-          searchedProp = prop;
-        }
-
-        const budgetFormatted = lead.budget ? formatPriceShort(Number(lead.budget)) : null;
-        const knownFacts = [lead.property_type, lead.location, budgetFormatted].filter(Boolean).join(" in ");
-
-        if (searchedProp && !lower.includes("start") && !lower.includes("fresh") && !lower.includes("naya")) {
-          const leadName = senderName ? `${senderName} ji` : "Friend";
-          const formattedPrice = searchedProp.price ? `₹${Number(searchedProp.price).toLocaleString("en-IN")}` : "Price on Request";
-
-          nextState = "CRITERIA_CONFIRMATION_PENDING";
-          await supabase
-            .from("leads")
-            .update({
-              state: "CRITERIA_CONFIRMATION_PENDING",
-              selected_property_id: searchedProp.property_id,
-              last_option_ids: [searchedProp.property_id]
-            })
-            .eq("id", lead.id);
-
-          replyText =
-            lang === "GUJLISH"
-              ? `Welcome back <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 👋\n\nChheli vaar ame tamara mate <b>${searchedProp.project_name}</b> search karyu hatu:\n🏢 <b>Project:</b> ${searchedProp.project_name} (${searchedProp.configuration}, ${searchedProp.location})\n💰 <b>Price:</b> ${formattedPrice}\n\nShu tame aani <b>VIP Site Visit 🚗</b> plan karva mango chho ke navi requirement search karvi chhe?\n\n1️⃣ <b>Site Visit plan karvi chhe</b>\n2️⃣ <b>Navi requirement search karvi chhe</b>`
-              : lang === "ENGLISH"
-              ? `Welcome back <b>${leadName}</b>! 👋\n\nLast time we searched <b>${searchedProp.project_name}</b> for you:\n🏢 <b>Project:</b> ${searchedProp.project_name} (${searchedProp.configuration}, ${searchedProp.location})\n💰 <b>Price:</b> ${formattedPrice}\n\nWould you like to schedule a <b>VIP Site Visit 🚗</b> or search for a new requirement?\n\n1️⃣ <b>Schedule VIP Site Visit</b>\n2️⃣ <b>Search new requirement</b>`
-              : `Welcome back <b>${leadName}</b>! 👋\n\nPichli baar humne aapke liye <b>${searchedProp.project_name}</b> search kiya tha:\n🏢 <b>Project:</b> ${searchedProp.project_name} (${searchedProp.configuration}, ${searchedProp.location})\n💰 <b>Price:</b> ${formattedPrice}\n\nKya aap iski <b>VIP Site Visit 🚗</b> plan karna chahenge ya nayi requirement search karni hai?\n\n1️⃣ <b>Site Visit plan karni hai</b>\n2️⃣ <b>Nayi requirement search karni hai</b>`;
-        } else if (knownFacts && !lower.includes("start") && !lower.includes("fresh") && !lower.includes("naya")) {
-          const leadName = senderName ? `${senderName} ji` : "Friend";
-          nextState = "CRITERIA_CONFIRMATION_PENDING";
-          await supabase
-            .from("leads")
-            .update({ state: "CRITERIA_CONFIRMATION_PENDING" })
-            .eq("id", lead.id);
-
-          replyText =
-            lang === "GUJLISH"
-              ? `Welcome back <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 👋 Chheli vaar ame <b>${knownFacts}</b> search kari rahya hata. 🏡\n\nShu tame aa search aagal vadharva mango chho ke navi requirement chhe?\n\n1️⃣ <b>Aa j search aagal vadharvo chhe</b>\n2️⃣ <b>Navi requirement search karvi chhe</b>`
-              : lang === "ENGLISH"
-              ? `Welcome back <b>${leadName}</b>! 👋 Last time we were searching for <b>${knownFacts}</b>. 🏡\n\nWould you like to continue this search or start fresh?\n\n1️⃣ <b>Continue this search</b>\n2️⃣ <b>Start fresh requirement</b>`
-              : `Welcome back <b>${leadName}</b>! 👋 Pichli baar hum <b>${knownFacts}</b> search kar rahe the. 🏡\n\nKya aap isi search ko aage badhana chahte hain ya naya requirement dekhna hai?\n\n1️⃣ <b>Isi search ko aage badhana hai</b>\n2️⃣ <b>Nayi requirement search karni hai</b>`;
-        } else if (lead.metadata?.submission_id || lead.state === "OWNER_DETAILS_GATHERED") {
-          nextState = "RETURNING_OWNER_MENU_PENDING";
-          await supabase
-            .from("leads")
-            .update({ state: "RETURNING_OWNER_MENU_PENDING" })
-            .eq("id", lead.id);
-
-          const leadName = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : "ji";
-          replyText =
-            lang === "GUJLISH"
-              ? `Namaste <b>${leadName}</b>! 👋 Nextgen Realty listing desk par swagat chhe. Tamari property verification desk par active review ma chhe. 📋\n\nTame aagal shu karva mango chho?\n\n1️⃣ <b>Navi property search karvi chhe (Buy / Rent)</b> 🏡\n2️⃣ <b>Dusri property list / bechvi ke rent par aapvi chhe</b> 🔑\n3️⃣ <b>Listed property nu status jovu chhe</b> 📊\n\n<i>(Tame 1, 2 ya 3 lakhi ne reply kari shako chho)</i>`
-              : lang === "ENGLISH"
-              ? `Hello <b>${senderName || "Friend"}</b>! 👋 Welcome to Nextgen Realty listing desk. Your property is under active review on our desk. 📋\n\nHow would you like to proceed?\n\n1️⃣ <b>Search for a property (Buy / Rent)</b> 🏡\n2️⃣ <b>List another property (Sell / Rent Out)</b> 🔑\n3️⃣ <b>Check status of your listed property</b> 📊\n\n<i>(You can reply with 1, 2 or 3)</i>`
-              : `Namaste <b>${leadName}</b>! 👋 Nextgen Realty listing desk par aapka swagat hai. Aapki property verification desk par active review me hai. 📋\n\nAap aage kya karna chahenge?\n\n1️⃣ <b>Nayi property search karni hai (Buy / Rent)</b> 🏡\n2️⃣ <b>Dusri property list / bechni ya rent par deni hai</b> 🔑\n3️⃣ <b>Listed property ka status dekhna hai</b> 📊\n\n<i>(Aap 1, 2 ya 3 likh kar reply kar sakte hain)</i>`;
-        } else {
-          // Dual-Role Greeting Fork for Fresh Leads
-          await supabase
-            .from("leads")
-            .update({
-              state: "ROLE_SELECTION_PENDING",
-              property_type: null,
-              requirement: null,
-              purpose: null,
-              location: null,
-              budget: null,
-              timeline: null,
-              selected_property_id: null,
-              site_visit_booked: false,
-              site_visit_at: null,
-              pre_visit_reminder_sent: false,
-              post_visit_feedback_sent: false,
-            })
-            .eq("id", lead.id);
-
-          nextState = "ROLE_SELECTION_PENDING";
-          const leadName = senderName || (lang === "GUJLISH" ? "Mitra" : "Friend");
-          replyText =
-            lang === "GUJLISH"
-              ? `Namaste <b>${leadName}</b>! ${agencyName} ma aapnu swagat chhe. 🏢✨\n\nTame ${agencyName} sathe shu karva mango chho?\n\n1️⃣ <b>Property Leni chhe</b> (Kharidva / Rent par joiye chhe) 🏡\n2️⃣ <b>Property Deni chhe</b> (Vechva / Rent par aapvi chhe) 📋\n\n<i>(Tame 1 ke 2 lakhi ne reply kari shako chho)</i>`
-              : lang === "ENGLISH"
-              ? `Hello <b>${leadName}</b>! Welcome to ${agencyName}. 🏢✨\n\nHow can we assist you today?\n\n1️⃣ <b>Looking for a Property</b> (Buy / Rent) 🏡\n2️⃣ <b>List / Offer a Property</b> (Sell / Rent Out) 📋\n\n<i>(You can reply with 1 or 2)</i>`
-              : `Namaste <b>${leadName}</b>! ${agencyName} me aapka swagat hai. 🏢✨\n\nAap ${agencyName} ke sath kya karna chahte hain?\n\n1️⃣ <b>Property Leni hai</b> (Buy / Rent par chahiye) 🏡\n2️⃣ <b>Property Deni hai</b> (Bechni / Rent par deni hai) 📋\n\n<i>(Aap 1 ya 2 likh kar reply kar sakte hain)</i>`;
-        }
-      }
-    }
-
-    // =========================================================================
-    // 6a: DUAL-ROLE GREETING FORK HANDLER
-    // Triggers when lead.state === "ROLE_SELECTION_PENDING"
-    // =========================================================================
-    else if (lead.state === "ROLE_SELECTION_PENDING") {
-      const hasExplicit2 = /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|rent\s*out|rent\s*pe\s*deni|list|listing|property\s*deni|bhade\s*pe)\b/i.test(lower.trim());
-      const hasExplicit1 = /^(1|1️⃣|option\s*1|first|1st|leni|lene|kharidna|buy|rent\s*pe\s*chahiye|search|flat\s*chahiye|ghar\s*chahiye)\b/i.test(lower.trim());
-
-      const isOption2Owner =
-        hasExplicit2 ||
-        aiAnalysis.user_role === "OWNER" ||
-        aiAnalysis.intent === "OWNER_LISTING" ||
-        lower.includes("deni") || lower.includes("bechn") || lower.includes("rent pe deni") || lower.includes("bhaade aalvu") || lower.includes("bhade pe");
-
-      const isOption1Seeker =
-        !hasExplicit2 && (
-          hasExplicit1 ||
-          aiAnalysis.user_role === "SEEKER" ||
-          aiAnalysis.intent === "SEEKER_QUALIFICATION" ||
-          lower.includes("leni") || lower.includes("kharid") || lower.includes("rent chahiye") || lower.includes("chahiye")
-        );
-
-      if (hasExplicit2 || (isOption2Owner && !isOption1Seeker)) {
-        // Option 2: Lead is an OWNER / PROVIDER
-        nextState = "OWNER_CONFIG_PENDING";
-        const initialDraft: any = {
-          started_at: new Date().toISOString(),
-          ...(aiAnalysis.transaction_type ? { transaction_type: (aiAnalysis.transaction_type === "RENT" || aiAnalysis.transaction_type === "LEASE") ? "RENT_OUT" : "SELL" } : {}),
-          ...(aiAnalysis.property_type ? { property_type: aiAnalysis.property_type, configuration: aiAnalysis.property_type } : {}),
-          ...(aiAnalysis.property_category ? { property_category: aiAnalysis.property_category } : {}),
-          ...(aiAnalysis.location ? { location: aiAnalysis.location } : {}),
-        };
-
-        await supabase
-          .from("leads")
-          .update({
-            lead_type: "PROVIDER",
-            state: "OWNER_CONFIG_PENDING",
-            metadata: {
-              ...(lead.metadata || {}),
-              owner_draft: initialDraft,
-            },
-          })
-          .eq("id", lead.id);
-
-        const leadName = senderName || (lang === "GUJLISH" ? "Mitra" : "ji");
-        replyText =
-          lang === "GUJLISH"
-            ? `Namaste <b>${leadName}</b>! 🙏 NextGen Realty par tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
-            : lang === "ENGLISH"
-            ? `Thank you <b>${leadName}</b>! 🙏 We would be delighted to assist you in listing your property with NextGen Realty.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
-            : `Namaste <b>${leadName}</b>! 🙏 NextGen Realty par apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
-      } else {
-        // Option 1 (or Default): Lead is a SEEKER / BUYER
-        nextState = "QUALIFYING";
-        await supabase
-          .from("leads")
-          .update({
-            lead_type: "SEEKER",
-            state: "QUALIFYING",
-          })
-          .eq("id", lead.id);
-
-        const leadName = senderName || "Friend";
-        replyText =
-          lang === "GUJLISH"
-            ? `Zaroor <b>${leadName}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
-            : lang === "ENGLISH"
-            ? `Certainly <b>${leadName}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
-            : `Zaroor <b>${leadName}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
-      }
-    }
-
-    // =========================================================================
-    // 6a-2: RETURNING COMPLETED OWNER MENU HANDLER (Choices 1, 2, 3)
-    // Triggers when lead.state === "RETURNING_OWNER_MENU_PENDING"
-    // =========================================================================
-    else if (lead.state === "RETURNING_OWNER_MENU_PENDING") {
-      const isOpt1 =
-        /^(1|1️⃣|option\s*1|first|1st|leni|lene|kharidna|buy|rent\s*pe\s*chahiye|search|flat\s*chahiye)\b/i.test(lower.trim()) ||
-        aiAnalysis.intent === "SEEKER_QUALIFICATION" ||
-        /(?:chahiye|joiye|buy|kharid|search|flat|villa|office|shop|plot)\b/i.test(lower);
-
-      const isOpt2 =
-        /^(2|2️⃣|option\s*2|second|2nd|dusri|biji|deni|dene|sell|bechna|list)\b/i.test(lower.trim()) ||
-        aiAnalysis.intent === "OWNER_LISTING" ||
-        /(?:dusri|biji|ek\s*aur|nayi)\s*(?:property|flat|office|shop)/i.test(lower);
-
-      const isOpt3 =
-        /^(3|3️⃣|option\s*3|third|3rd|status|update|check)\b/i.test(lower.trim()) ||
-        /(?:status|kya\s*hua|verification|update)/i.test(lower);
-
-      const leadName = senderName || (lang === "GUJLISH" ? "Mitra" : "ji");
-
-      if (isOpt1) {
-        // Option 1: User wants to search for a new property as a SEEKER (Unconditionally reset all previous search fields!)
-        nextState = "QUALIFYING";
-        const givenPropType = parsePropertyTypeFromText(messageText);
-        const givenBudget = parseBudgetFromText(messageText);
-        const givenLocation = extractLocationFromText(messageText);
-
-        await supabase.from("leads").update({
-          lead_type: "SEEKER",
-          state: "QUALIFYING",
-          property_type: givenPropType || null,
-          requirement: null,
-          purpose: null,
-          location: givenLocation || null,
-          budget: givenBudget || null,
-          timeline: null,
-          selected_property_id: null,
-          last_option_ids: null,
-          last_active_at: new Date().toISOString(),
-        }).eq("id", lead.id);
-
-        lead.lead_type = "SEEKER";
-        lead.state = "QUALIFYING";
-        lead.property_type = givenPropType || null;
-        lead.requirement = null;
-        lead.purpose = null;
-        lead.location = givenLocation || null;
-        lead.budget = givenBudget || null;
-        lead.timeline = null;
-        lead.selected_property_id = null;
-        lead.last_option_ids = null;
-
-        if (givenPropType) {
-          replyText =
-            lang === "GUJLISH"
-              ? `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva)</b> mango chho ke <b>Rent / Lease</b> par joiye chhe? 🔑`
-              : lang === "ENGLISH"
-              ? `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> or <b>Rent/Lease</b> this property? 🔑`
-              : `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent / Lease</b> par chahiye? 🔑`;
-        } else {
-          replyText =
-            lang === "GUJLISH"
-              ? `Bahuj saras <b>${leadName}</b>! 🏡 Chalo navi property search shuru kariye.\n\n👉 <b>Tame kaya type ni property shodhva mango chho — Residential (Flat / Villa) ke Commercial (Shop / Office / Plot)?</b>`
-              : lang === "ENGLISH"
-              ? `Wonderful <b>${leadName}</b>! 🏡 Let's start a fresh property search.\n\n👉 <b>What type of property are you looking for — Residential (Flat / Villa) or Commercial (Shop / Office / Plot)?</b>`
-              : `Bahut badhiya <b>${leadName}</b>! 🏡 Chaliye nayi property search shuru karte hain.\n\n👉 <b>Aap kis type ki property search kar rahe hain — Residential (Flat / Villa) ya Commercial (Shop / Office / Plot)?</b>`;
-        }
-      } else if (isOpt2) {
-        // Option 2: Completed owner wants to list a second property
-        nextState = "OWNER_CONFIG_PENDING";
-        const archived = Array.isArray(lead.metadata?.archived_submissions) ? [...lead.metadata.archived_submissions] : [];
-        if (lead.metadata?.owner_draft && Object.keys(lead.metadata.owner_draft).length > 0) {
-          archived.push({
-            ...lead.metadata.owner_draft,
-            submission_id: lead.metadata.submission_id || null,
-            archived_at: new Date().toISOString(),
-          });
-        }
-
-        const newDraft: any = { started_at: new Date().toISOString(), attributes: {} };
-        const parsedType = parsePropertyTypeFromText(messageText);
-        const isRent = /(?:rent|bhade|bhadu|kiraya|kiraye|chadani|lease)/i.test(lower);
-        newDraft.transaction_type = isRent ? "RENT_OUT" : "SELL";
-        if (parsedType) {
-          newDraft.property_type = parsedType;
-          newDraft.configuration = parsedType;
-          newDraft.property_category = /(office|shop|showroom|commercial)/i.test(parsedType) ? "COMMERCIAL" : /(plot|land)/i.test(parsedType) ? "PLOT" : "RESIDENTIAL";
-        }
-
-        const targetState = newDraft.property_type ? "OWNER_SOCIETY_PENDING" : "OWNER_CONFIG_PENDING";
-        nextState = targetState;
-
-        await supabase.from("leads").update({
-          lead_type: "PROVIDER",
-          state: targetState,
-          metadata: {
-            ...(lead.metadata || {}),
-            owner_draft: newDraft,
-            archived_submissions: archived,
-            submission_id: null,
-          },
-        }).eq("id", lead.id);
-
-        lead.state = targetState;
-        lead.lead_type = "PROVIDER";
-
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji bilkul <b>${leadName}</b>! Nayi property listing desk par swagat chhe. 🏡✨\n\n👉 <b>Tamari nayi property kaya type ni chhe — 2BHK / 3BHK Flat, Villa, ke Commercial Shop/Office?</b> 🏢`
-            : lang === "ENGLISH"
-            ? `Certainly <b>${leadName}</b>! Let's get your next property listed. 🏡✨\n\n👉 <b>What type of property is this — 2BHK / 3BHK Flat, Villa, or Commercial Shop/Office?</b> 🏢`
-            : `Ji bilkul <b>${leadName}</b>! Nayi property listing desk par swagat hai. 🏡✨\n\n👉 <b>Aapki nayi property kis type ki hai — 2BHK / 3BHK Flat, Villa, ya Commercial Shop/Office?</b> 🏢`;
-      } else if (isOpt3) {
-        // Option 3: Check status of listed property
-        nextState = "OWNER_DETAILS_GATHERED";
-        const { data: sub } = await supabase
-          .from("property_submissions")
-          .select("*")
-          .eq("lead_id", lead.lead_id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || "Vadodara"}` : "Aapki property";
-        const statusLabel = sub?.status === "PENDING_VERIFICATION" ? "Physical Verification & Quality Inspection" : (sub?.status || "Under Review");
-
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji <b>${leadName}</b>! Tamari listed property (<b>${propLabel}</b>) hal ma <b>${statusLabel}</b> stage par chhe. 📋 Amari inspection team verification mate jald aapse call par connect karshe! 🙏`
-            : lang === "ENGLISH"
-            ? `Hello <b>${leadName}</b>! Your listed property (<b>${propLabel}</b>) is currently in the <b>${statusLabel}</b> stage. 📋 Our acquisition team will connect with you shortly for on-site inspection! 🙏`
-            : `Ji <b>${leadName}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋 Hamari inspection team verification ke liye jald aapse call par connect karegi! 🙏`;
-      } else {
-        // Fallback: re-show 3 choices
-        replyText =
-          lang === "GUJLISH"
-            ? `Kripya 1, 2 ya 3 lakhi ne janavjo:\n\n1️⃣ <b>Navi property search karvi chhe (Buy / Rent)</b> 🏡\n2️⃣ <b>Dusri property list karvi chhe</b> 🔑\n3️⃣ <b>Listed property nu status jovu chhe</b> 📊`
-            : lang === "ENGLISH"
-            ? `Please reply with 1, 2, or 3:\n\n1️⃣ <b>Search for a property (Buy / Rent)</b> 🏡\n2️⃣ <b>List another property</b> 🔑\n3️⃣ <b>Check status of your listed property</b> 📊`
-            : `Kripya 1, 2 ya 3 likh kar batayein:\n\n1️⃣ <b>Nayi property search karni hai (Buy / Rent)</b> 🏡\n2️⃣ <b>Dusri property list karni hai</b> 🔑\n3️⃣ <b>Listed property ka status dekhna hai</b> 📊`;
-      }
-    }
-
-    // =========================================================================
-    // 6a.2: CANCEL PREVIOUS VISIT CONFIRMATION HANDLER
-    // Triggers when:
-    // - Lead is in CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING
-    // =========================================================================
-    else if (lead.state === "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING") {
-      const isYesCancelOld =
-        aiAnalysis.intent === "CONFIRM_VISIT" ||
-        /^(1|1️⃣|first|1st|option\s*1|ha|haan|yes|yep|sure|cancel|karo|nayi\s*book|ha\s*cancel|cancel\s*karo)/i.test(lower.trim()) ||
-        lower.includes("cancel") || lower.includes("nayi book") || lower.includes("naya book");
-
-      const isNoKeepOld =
-        aiAnalysis.intent === "CONFIRM_SAME_CRITERIA" ||
-        /^(2|2️⃣|second|2nd|option\s*2|nahi|no|nope|purani|continue|keep|mat\s*karo|nahi\s*cancel)/i.test(lower.trim()) ||
-        lower.includes("mat karo") || lower.includes("purani") || lower.includes("continue");
-
-      if (isYesCancelOld) {
-        // 1. Cancel existing active visit in site_visits
-        await supabase
-          .from("site_visits")
-          .update({
-            status: "CANCELLED",
-            notes: "Cancelled by seeker to schedule visit for new property",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("lead_id", lead.id)
-          .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
-
-        // 2. Resolve pending new property
-        const pendingPropId = lead.metadata?.pending_new_visit_property_id;
-        let newProp: any = null;
-        if (pendingPropId) {
-          const { data: p } = await supabase
-            .from("inventory")
-            .select("*")
-            .eq("property_id", pendingPropId)
-            .maybeSingle();
-          newProp = p;
-        }
-
-        const updatedMetadata = { ...(lead.metadata || {}) };
-        delete updatedMetadata.pending_new_visit_property_id;
-        delete updatedMetadata.pending_new_visit_property_name;
-
-        nextState = "OPTIONS_SENT";
-        await supabase.from("leads").update({
-          state: "OPTIONS_SENT",
-          selected_property_id: pendingPropId || lead.selected_property_id,
-          site_visit_booked: false,
-          site_visit_at: null,
-          site_visit_datetime: null,
-          metadata: updatedMetadata,
-        }).eq("id", lead.id);
-
-        lead.selected_property_id = pendingPropId || lead.selected_property_id;
-        lead.state = "OPTIONS_SENT";
-        lead.site_visit_booked = false;
-        lead.site_visit_at = null;
-        lead.site_visit_datetime = null;
-        lead.metadata = updatedMetadata;
-
-        const newPropName = newProp?.project_name || "Project";
-        const newPropConfig = newProp?.configuration ? `${newProp.configuration}, ` : "";
-        const newPropLoc = newProp?.location || "prime location";
-
-        replyText =
-          lang === "GUJLISH"
-            ? `Pichli visit cancel kari didhi chhe! 🚗 <b>${newPropName}</b> (${newPropConfig}${newPropLoc}) ni navi <b>VIP Site Visit</b> mate tamne kayo time anukool ganasho - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
-            : lang === "ENGLISH"
-            ? `Previous visit cancelled! 🚗 When would you like to schedule your new <b>VIP Site Visit</b> for <b>${newPropName}</b> (${newPropConfig}${newPropLoc}) - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
-            : `Pichli visit cancel kar di gayi hai! 🚗 <b>${newPropName}</b> (${newPropConfig}${newPropLoc}) ki nayi <b>VIP Site Visit</b> ke liye aap kaunsa time prefer karenge - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`;
-      } else if (isNoKeepOld) {
-        // User wants to keep the existing visit active
-        const { data: activeVisits } = await supabase
-          .from("site_visits")
-          .select("*, inventory(*)")
-          .eq("lead_id", lead.id)
-          .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
-          .order("created_at", { ascending: false })
-          .limit(1);
-
-        const existingVisit = activeVisits?.[0];
-        const existingPropName = existingVisit?.inventory?.project_name || "Property";
-        const scheduledTime = existingVisit?.scheduled_at || lead.site_visit_at || lead.site_visit_datetime;
-        const visitTime = scheduledTime
-          ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
-          : "Scheduled Time";
-
-        const updatedMetadata = { ...(lead.metadata || {}) };
-        delete updatedMetadata.pending_new_visit_property_id;
-        delete updatedMetadata.pending_new_visit_property_name;
-
-        nextState = "SITE_VISIT_BOOKED";
-        await supabase.from("leads").update({
-          state: "SITE_VISIT_BOOKED",
-          site_visit_booked: true,
-          metadata: updatedMetadata,
-        }).eq("id", lead.id);
-
-        lead.state = "SITE_VISIT_BOOKED";
-        lead.site_visit_booked = true;
-        lead.metadata = updatedMetadata;
-
-        const leadName = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : (lang === "GUJLISH" ? "Mitra" : "ji");
-
-        replyText =
-          lang === "GUJLISH"
-            ? `Samajh gaya <b>${leadName}</b>! Aapki <b>${existingPropName}</b> mate already VIP Site Visit booked chhe (<b>${visitTime}</b>). <b>Usi visit par milte hain!</b> 🤝📍\n\nAmara senior sales executive samay par direct site location par tamari raah joshe. Koi pan query hoy to zaroor janavjo!`
-            : lang === "ENGLISH"
-            ? `Understood <b>${senderName || "Friend"}</b>! Your VIP Site Visit for <b>${existingPropName}</b> is already booked (<b>${visitTime}</b>). <b>Looking forward to seeing you there!</b> 🤝📍\n\nOur senior sales executive will meet you at the site as scheduled. Feel free to reach out if you have any questions!`
-            : `Samajh gaya <b>${leadName}</b>! Aapki <b>${existingPropName}</b> ke liye already site visit booked hai (<b>${visitTime}</b>). <b>Usi visit par milte hain!</b> 🤝📍\n\nHamare senior sales executive time par direct site location par aapka intezar karenge. Koi badlav ya sawal ho to zaroor batayein!`;
-      } else {
-        const pendingPropName = lead.metadata?.pending_new_visit_property_name || "New Property";
-        replyText =
-          lang === "GUJLISH"
-            ? `Kripya 1 ya 2 lakhi ne janavjo:\n\n1️⃣ <b>Haan, pichli visit cancel kari ne ${pendingPropName} mate navi book karo</b> 🚗\n2️⃣ <b>Nahi, purani visit j continue rakho</b> 🤝`
-            : lang === "ENGLISH"
-            ? `Please reply with 1 or 2:\n\n1️⃣ <b>Yes, cancel previous visit & schedule for ${pendingPropName}</b> 🚗\n2️⃣ <b>No, keep existing visit</b> 🤝`
-            : `Kripya 1 ya 2 likh kar batayein:\n\n1️⃣ <b>Haan, pichli visit cancel karke ${pendingPropName} ke liye nayi book karein</b> 🚗\n2️⃣ <b>Nahi, purani visit hi continue rakhein</b> 🤝`;
-      }
-    }
-
-    // =========================================================================
-    // 6b.1: CRITERIA CONFIRMATION RESPONSE & FRESH REQUIREMENT HANDLER
-    // Triggers when:
-    // - Lead is in CRITERIA_CONFIRMATION_PENDING
-    // - AI detects CHANGE_CRITERIA
-    // - User types "nayi requirement", "fresh search", "change criteria", etc.
-    // =========================================================================
-    else if (
-      !isInProgressOwnerIntake &&
-      lead.lead_type !== "PROVIDER" &&
-      lead.state !== "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING" &&
-      !(
-        (aiAnalysis.intent === "BOOK_VISIT" ||
-         (/\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj)\b/i.test(lower) &&
-          /\b\d{1,2}(?::\d{2})?\s*(am|pm|baje|vage)?\b/i.test(lower))) &&
-        !/(nayi|navi|change|badalna|naya|option\s*2)/i.test(lower)
-      ) &&
-      (
-        lead.state === "CRITERIA_CONFIRMATION_PENDING" ||
-        aiAnalysis.intent === "CHANGE_CRITERIA" ||
-        /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|nayi\s*chahiye|navi\s*joiye)/i.test(lower)
-      )
-    ) {
-      const isConfirmSame =
-        aiAnalysis.intent === "CONFIRM_SAME_CRITERIA" ||
-        /^(1|1️⃣|first|1st|ha|haan|ha ji|yes|same|isi me|yahi|yahi criteria|dikhao|sure|chalo|done|ok|okay|sahi hai|barobar|saras)$/i.test(lower) ||
-        lower.includes("isi criteria") || lower.includes("same criteria") || lower.includes("yahi") ||
-        lower.includes("isi me") || lower.includes("site visit") || lower.includes("visit plan");
-
-      const isChangeCriteria =
-        aiAnalysis.intent === "CHANGE_CRITERIA" ||
-        /^(2|2️⃣|second|2nd|nahi|no|change|badalna|dusra|naya|nayi|navi|different|modify)$/i.test(lower) ||
-        /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|nayi\s*chahiye|navi\s*joiye)/i.test(lower) ||
-        lower.includes("change") || lower.includes("badalna") || lower.includes("naya") || lower.includes("nayi") || lower.includes("navi") ||
-        Boolean(parsePropertyTypeFromText(messageText)) ||
-        Boolean(parseBudgetFromText(messageText));
-
-      if (isChangeCriteria) {
-        // User wants to change criteria or start fresh!
-        const newPropType = parsePropertyTypeFromText(messageText);
-        const newBudget = parseBudgetFromText(messageText);
-        let newLocation = extractLocationFromText(messageText);
-        let newReq = parseRequirementFromText(messageText);
-
-        // UNCONDITIONALLY WIPE ALL STALE CRITERIA FROM PREVIOUS PROPERTIES:
-        const isFreshSelection = !newPropType && !newBudget && !newLocation;
-        const targetState = isFreshSelection ? "ROLE_SELECTION_PENDING" : "QUALIFYING";
-
-        const leadUpdates: any = {
-          state: targetState,
-          lead_type: isFreshSelection ? null : lead.lead_type,
-          property_type: newPropType || null,
-          budget: newBudget || null,
-          location: newLocation || null,
-          requirement: newReq || null,
-          purpose: null,
-          timeline: null,
-          selected_property_id: null,
-          last_option_ids: null,
-          site_visit_booked: false,
-          site_visit_at: null,
-          site_visit_datetime: null,
-          pre_visit_reminder_sent: false,
-          post_visit_feedback_sent: false,
-        };
-
-        await supabase.from("leads").update(leadUpdates).eq("id", lead.id);
-        nextState = targetState;
-
-        const leadName = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : (lang === "GUJLISH" ? "Mitra" : "ji");
-
-        if (newPropType || newBudget || newLocation) {
-          const acknowledged = [newPropType, newLocation, newBudget ? formatPriceShort(newBudget) : null].filter(Boolean).join(", ");
-          replyText =
-            lang === "GUJLISH"
-              ? `Noted <b>${leadName}</b>! 👍 Ame tamari navi requirement note kari lidhi chhe: <b>${acknowledged}</b>. Kripya janavjo, tamne kaya nava area ma properties joiye chhe? 📍`
-              : lang === "ENGLISH"
-              ? `Noted <b>${senderName || "Friend"}</b>! 👍 We have updated your preference to <b>${acknowledged}</b>. Which specific area or locality would you prefer? 📍`
-              : `Noted <b>${leadName}</b>! 👍 Humne aapki nayi requirement note kar li hai: <b>${acknowledged}</b>. Kripya apna preferred location ya area batayein. 📍`;
-        } else {
-          // Requirement 2: Ask dual-role fork so user can clarify if they want to BUY/RENT (1) or SELL/LIST (2)
-          replyText =
-            lang === "GUJLISH"
-              ? `Ji bilkul <b>${leadName}</b>! ${agencyName} ma aapnu swagat chhe. 🏢✨\n\nTame ${agencyName} sathe shu karva mango chho?\n\n1️⃣ <b>Property Leni chhe</b> (Kharidva / Rent par joiye chhe) 🏡\n2️⃣ <b>Property Deni chhe</b> (Vechva / Rent par aapvi chhe) 🔑\n\n<i>(Tame 1 ke 2 lakhi ne reply kari shako chho)</i>`
-              : lang === "ENGLISH"
-              ? `Certainly <b>${senderName || "Friend"}</b>! Welcome to ${agencyName}. 🏢✨\n\nHow would you like to proceed?\n\n1️⃣ <b>Looking for a Property</b> (Buy / Rent) 🏡\n2️⃣ <b>List / Offer a Property</b> (Sell / Rent Out) 🔑\n\n<i>(You can reply with 1 or 2)</i>`
-              : `Ji bilkul <b>${leadName}</b>! ${agencyName} me aapka swagat hai. 🏢✨\n\nAap ${agencyName} ke sath kya karna chahenge?\n\n1️⃣ <b>Property leni hai</b> (Kharidna / Rent pe lena) 🏡\n2️⃣ <b>Apni property deni hai</b> (Bechna / Rent out karna) 🔑\n\n<i>(Aap 1 ya 2 likh kar bata sakte hain)</i>`;
-        }
-      } else if (isConfirmSame) {
-        // If lead already had a specific selected property anchored (from greeting re-engagement):
-        let targetProp: any = null;
-        if (lead.selected_property_id) {
-          const { data: p } = await supabase
-            .from("inventory")
-            .select("*")
-            .eq("property_id", lead.selected_property_id)
-            .maybeSingle();
-          targetProp = p;
-        }
-
-        // If user wants to schedule site visit for this anchored property:
-        if (targetProp && (lower.includes("visit") || lower.includes("site") || lower === "1" || lower === "1️⃣" || lower === "ha" || lower === "yes")) {
-          nextState = "OPTIONS_SENT";
-          await supabase
-            .from("leads")
-            .update({
-              state: "OPTIONS_SENT",
-              selected_property_id: targetProp.property_id,
-              last_option_ids: [targetProp.property_id],
-            })
-            .eq("id", lead.id);
-
-          replyText =
-            lang === "GUJLISH"
-              ? `Khub saras pasand <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! <b>${targetProp.project_name}</b> (${targetProp.configuration}, ${targetProp.location}) ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
-              : lang === "ENGLISH"
-              ? `Excellent choice <b>${senderName || "Friend"}</b>! When would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>${targetProp.project_name}</b> (${targetProp.configuration}, ${targetProp.location}) - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
-              : `Bahut badhiya choice <b>${senderName ? `${senderName} ji` : "ji"}</b>! <b>${targetProp.project_name}</b> (${targetProp.configuration}, ${targetProp.location}) ki <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`;
-        } else {
-          // Query next unseen properties matching the existing criteria!
-          const { data: allProps } = await supabase
-            .from("inventory")
-            .select("*")
-            .eq("client_id", activeTenantId)
-            .eq("status", "AVAILABLE");
-
-          const availableInventory = allProps || [];
-          const leadBudget = Number(lead.budget || 0);
-          const maxBudget = leadBudget > 0 ? leadBudget * 1.15 : Infinity;
-
-          // Exclude properties already shown to this lead
-          const excludedIds = new Set<string>([
-            ...(Array.isArray(lead.last_option_ids) ? lead.last_option_ids : []),
-            lead.selected_property_id
-          ].filter(Boolean));
-
-          const strictMatches = availableInventory.filter((p: any) => {
-            if (excludedIds.has(p.property_id)) return false;
-            const price = Number(p.price || 0);
-            if (leadBudget > 0 && price > maxBudget) return false;
-            if (!matchesListingType(lead.requirement, p.listing_type, price)) return false;
-            if (!matchesPropertyType(lead.property_type, p.property_category, p.configuration, p.project_name)) return false;
-            if (!matchesLocation(lead.location, p.location, p.landmarks)) return false;
-            return true;
-          });
-
-          const freshProperties = strictMatches.slice(0, 3);
-
-          if (freshProperties.length > 0) {
-            const newOptionIds = freshProperties.map((p) => p.property_id);
-            const combinedOptionIds = Array.from(new Set([...(lead.last_option_ids || []), ...newOptionIds]));
-
-            nextState = "OPTIONS_SENT";
-            await supabase
-              .from("leads")
-              .update({
-                state: "OPTIONS_SENT",
-                last_option_ids: combinedOptionIds,
-                selected_property_id: freshProperties[0].property_id,
-              })
-              .eq("id", lead.id);
-
-            const optionsCards = freshProperties.map((p, idx) => formatN8nPropertyCard(p, idx, false)).join("\n\n---\n\n");
-            const critSummary = formatLeadCriteriaSummary(lead, lang, resolvedCity);
-
-            const heading =
-              lang === "GUJLISH"
-                ? `🌟 <b>${critSummary} Mujab Nava Verified Options</b>\n\n${senderName ? `<b>${senderName} bhai</b>, ` : ""}tamara criteria mujab aa fresh matching properties chhe:`
-                : lang === "ENGLISH"
-                ? `🌟 <b>Fresh Options Matching ${critSummary}</b>\n\n${senderName ? `<b>${senderName}</b>, ` : ""}here are more verified properties matching your criteria:`
-                : `🌟 <b>${critSummary} Ke Mutabiq Naye Verified Options</b>\n\n${senderName ? `<b>${senderName} ji</b>, ` : ""}aapke criteria ke hisab se ye fresh options hain:`;
-
-            const trailerQuestion =
-              freshProperties.length === 1
-                ? (lang === "GUJLISH"
-                    ? `👉 <i>Tame <b>${freshProperties[0].project_name}</b> ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho — <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?</i>`
-                    : lang === "ENGLISH"
-                    ? `👉 <i>When would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>${freshProperties[0].project_name}</b> — <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?</i>`
-                    : `👉 <i>Aap <b>${freshProperties[0].project_name}</b> ki <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge — <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?</i>`)
-                : (lang === "GUJLISH"
-                    ? `👉 <i>Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho — <b>Option 1</b>, <b>Option 2</b> ke <b>Option 3</b>?</i>`
-                    : lang === "ENGLISH"
-                    ? `👉 <i>Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for — <b>Option 1</b>, <b>Option 2</b>, or <b>Option 3</b>?</i>`
-                    : `👉 <i>Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge — <b>Option 1</b>, <b>Option 2</b> ya <b>Option 3</b>?</i>`);
-
-            replyText = `${heading}\n\n${optionsCards}\n\n${trailerQuestion}`;
-          } else {
-            // No more unseen inventory matching exact criteria
-            nextState = "OPTIONS_SENT";
-            await supabase.from("leads").update({ state: "OPTIONS_SENT" }).eq("id", lead.id);
-            await dispatchSalesAlert(activeTenantId, "NO_PROPERTY_MATCH", lead, { userText: messageText });
-
-            const critSummary = formatLeadCriteriaSummary(lead, lang, resolvedCity);
-            replyText =
-              lang === "GUJLISH"
-                ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>, <b>${critSummary}</b> na criteria ma amari paas aa best verified inventory available hati. Amara senior sales manager tamara mate exclusive <b>off-market options</b> arrange kari rahya chhe ane direct <b>call par connect karshe</b>. 📞\n\nAgar tame aas-paas na areas ke budget ma thodo badlaav karva mango to janavjo!`
-                : lang === "ENGLISH"
-                ? `Sure <b>${senderName}</b>, these were our top verified options matching <b>${critSummary}</b>. Our senior sales executives are sourcing exclusive <b>off-market inventory</b> and will <b>connect with you directly over a call</b>. 📞\n\nIf you would like to explore nearby localities or adjust your budget range, please let me know!`
-                : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>, <b>${critSummary}</b> ke criteria me hamare paas yehi top verified inventory available thi. Hamare senior sales executive aapke liye exclusive <b>off-market options</b> arrange kar rahe hain aur aapse direct <b>call par connect karenge</b>. 📞\n\nAgar aap aas-paas ke areas ya budget me thoda change karna chahein to batayein!`;
-          }
-        }
-      } else {
-        // Fallback for any unrecognized message in CRITERIA_CONFIRMATION_PENDING (never drop silently!)
-        const leadName = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
-        replyText =
-          lang === "GUJLISH"
-            ? `Kripya 1 ke 2 lakhi ne janavjo ${leadName}:\n\n1️⃣ <b>Site Visit plan karvi chhe</b> 🚗\n2️⃣ <b>Navi requirement search karvi chhe</b> 🔍`
-            : lang === "ENGLISH"
-            ? `Please reply with 1 or 2, <b>${senderName || "Friend"}</b>:\n\n1️⃣ <b>Schedule a VIP Site Visit</b> 🚗\n2️⃣ <b>Search for a new requirement</b> 🔍`
-            : `Kripya 1 ya 2 likh kar batayein ${leadName}:\n\n1️⃣ <b>Site Visit plan karni hai</b> 🚗\n2️⃣ <b>Nayi requirement search karni hai</b> 🔍`;
-      }
-    }
-
-    // =========================================================================
-    // 6b.2: RE-SEARCH & ALTERNATE PROPERTY REQUEST (When Qualified or Booked Lead asks for properties)
-    // =========================================================================
-    else if (
-      (aiAnalysis.intent === "ASK_MORE_OPTIONS" ||
-      /(koi\s*dusri|dusri\s*property|dusra\s*option|koi\s*aur\s*property|koi\s*aur\s*option|aur\s*options|aur\s*property|dusre\s*options|biji\s*property|bijo\s*option|biji\s*options|other\s*propert|different\s*propert|more\s*options|other\s*options|koi\s*biji|aur\s*flat|aur\s*dekhna|aur\s*dikhao|kuch\s*aur|kuch\s*naya|property\s*dekhni|flat\s*dekhna|flat\s*dekhne|options\s*dikhao|options\s*batavo)/i.test(lower)) &&
-      (!parseBudgetFromText(messageText) && !parseRequirementFromText(messageText) && !parsePropertyTypeFromText(messageText))
-    ) {
-      const hasExistingCriteria = Boolean((lead.property_type && (lead.location || lead.budget)) || lead.site_visit_booked || ["QUALIFIED", "OPTIONS_SENT", "SITE_VISIT_BOOKED", "VISIT_BOOKED", "VISIT_RESCHEDULED"].includes(lead.state));
-
-      // 1. If lead is already Qualified or Booked, show Existing Criteria Confirmation!
-      if (hasExistingCriteria) {
-        nextState = "CRITERIA_CONFIRMATION_PENDING";
-        await supabase.from("leads").update({ state: "CRITERIA_CONFIRMATION_PENDING" }).eq("id", lead.id);
-
-        const criteriaStr = formatLeadCriteriaSummary(lead, lang);
-        const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
-
-        if (lead.site_visit_booked || ["SITE_VISIT_BOOKED", "VISIT_BOOKED", "VISIT_RESCHEDULED"].includes(lead.state)) {
-          // Scenario A: Active Booked Visit Safeguard
-          let bookedPropName = "Project";
-          const targetPropId = lead.selected_property_id || (Array.isArray(lead.last_option_ids) ? lead.last_option_ids[0] : null);
-          if (targetPropId) {
-            const { data: bp } = await supabase.from("inventory").select("project_name").eq("property_id", targetPropId).maybeSingle();
-            if (bp?.project_name) bookedPropName = bp.project_name;
-          }
-
-          replyText =
-            lang === "GUJLISH"
-              ? `Welcome back ${nameStr}! Tamari <b>${bookedPropName}</b> par VIP Site Visit already booked chhe 🚗📍.\n\nTame pehla <b>${criteriaStr}</b> search karyu hatu 🏡.\n\nShu tame <b>aa j criteria sathe</b> nava alternate options explore karva mango chho, ke criteria (location, budget ke BHK) badalvu chhe?\n\n1️⃣ <b>Aa j criteria ma nava options batavo</b>\n2️⃣ <b>Criteria badalvu chhe</b>`
-              : lang === "ENGLISH"
-              ? `Welcome back <b>${senderName || "Friend"}</b>! You already have a VIP Site Visit booked for <b>${bookedPropName}</b> 🚗📍.\n\nEarlier, you searched for <b>${criteriaStr}</b> 🏡.\n\nWould you like to explore more options with <b>this same criteria</b>, or would you like to update your location, budget, or BHK?\n\n1️⃣ <b>Show more options with same criteria</b>\n2️⃣ <b>Change my criteria</b>`
-              : `Welcome back ${nameStr}! Aapki <b>${bookedPropName}</b> par VIP Site Visit already booked hai 🚗📍.\n\nAapne pehle <b>${criteriaStr}</b> search kiya tha 🏡.\n\nKya aap <b>isi criteria ke sath</b> aur naye options explore karna chahenge, ya criteria (location, budget ya BHK) change karna chahte hain?\n\n1️⃣ <b>Isi criteria me aur options dikhao</b>\n2️⃣ <b>Criteria change karna hai</b>`;
-        } else {
-          // Scenario B: Qualified / Options Sent (No Active Visit)
-          replyText =
-            lang === "GUJLISH"
-              ? `Ji ${nameStr}! Pichli vaar ame tamara mate <b>${criteriaStr}</b> ma options filter karya hata 🏡.\n\nShu tame <b>aa j criteria sathe</b> nava verified options jova mango chho, ke criteria (location, budget ke BHK) badalvu chhe?\n\n1️⃣ <b>Aa j criteria ma nava options batavo</b>\n2️⃣ <b>Criteria badalvu chhe</b>`
-              : lang === "ENGLISH"
-              ? `Sure <b>${senderName || "Friend"}</b>! Last time we filtered properties for you with <b>${criteriaStr}</b> 🏡.\n\nWould you like to view more verified options with <b>this same criteria</b>, or would you like to update your location, budget, or BHK?\n\n1️⃣ <b>Show more options with same criteria</b>\n2️⃣ <b>Change my criteria</b>`
-              : `Ji ${nameStr}! Pichli baar humne aapke liye <b>${criteriaStr}</b> me properties filter ki thi 🏡.\n\nKya aap <b>isi criteria ke sath</b> naye verified options dekhna chahenge, ya criteria (location, budget ya BHK) change karna chahte hain?\n\n1️⃣ <b>Isi criteria me aur options dikhao</b>\n2️⃣ <b>Criteria change karna hai</b>`;
-        }
-      } else {
-        // Fresh Lead without existing criteria: ask for property type
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tame kaya type ni property jova mango chho — 🏡 <b>Residential</b> (Flat / Villa) ke 🏢 <b>Commercial</b> (Shop / Office / Plot)?`
-            : lang === "ENGLISH"
-            ? `Certainly <b>${senderName}</b>! What type of property would you like to explore — 🏡 <b>Residential</b> (Flat / Villa) or 🏢 <b>Commercial</b> (Shop / Office / Plot)?`
-            : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aap kis type ki property dekhna chahte hain — 🏡 <b>Residential</b> (Flat / Villa) ya 🏢 <b>Commercial</b> (Shop / Office / Plot)?`;
-      }
-    }
-
-    // =========================================================================
-    // 7. PROPERTY SELECTION (Option 1, 2, 3 or Name)
-    // =========================================================================
-    else if (
-      (lead.state === "OPTIONS_SENT" || lead.state === "VISIT_REQUESTED") &&
-      !aiAnalysis.reschedule_slot &&
-      !(aiAnalysis.intent === "BOOK_VISIT" ||
-        (/\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj)\b/i.test(lower) && /\b\d{1,2}(?::\d{2})?\s*(am|pm|baje|vage)?\b/i.test(lower)) ||
-        /\b(baje|vage|am|pm|\d{1,2}:\d{2})\b/i.test(lower)) &&
-      !parsePropertyTypeFromText(messageText) &&
-      (aiAnalysis.selected_option_index !== null && aiAnalysis.selected_option_index !== undefined ||
-       /(?:^|\b)(?:1|1️⃣|first|1st|option\s*1|2|2️⃣|second|2nd|option\s*2|3|3️⃣|third|3rd|option\s*3)\b/i.test(lower))
-    ) {
-      let index = aiAnalysis.selected_option_index ?? (/(?:2|2️⃣|second|dusra)/i.test(lower) ? 1 : /(?:3|3️⃣|third|teesra)/i.test(lower) ? 2 : 0);
-
-      // Check if lead already has an anchored / single property for which visit slot was already proposed
-      const hasAnchoredProp = Boolean(lead.selected_property_id || (Array.isArray(lead.last_option_ids) && lead.last_option_ids.length === 1));
-
-      // Fetch matching options from last options
-      let selected: any = null;
-      if (Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > index) {
-        const { data: prop } = await supabase
-          .from("inventory")
-          .select("*")
-          .eq("property_id", lead.last_option_ids[index])
-          .maybeSingle();
-        selected = prop;
-      } else if (lead.selected_property_id) {
-        const { data: prop } = await supabase
-          .from("inventory")
-          .select("*")
-          .eq("property_id", lead.selected_property_id)
-          .maybeSingle();
-        selected = prop;
-      }
-
-      // If a single property was already offered or user already anchored this property,
-      // and user replied with "1", "option 1" etc. without providing a date/time:
-      // Clarify that the agent asked for the site visit time slot!
-      const isAlreadyAnchored = hasAnchoredProp && selected && (lead.selected_property_id === selected.property_id || (Array.isArray(lead.last_option_ids) && lead.last_option_ids.length === 1));
-
-      if (isAlreadyAnchored) {
-        nextState = "OPTIONS_SENT";
-        const propName = selected.project_name || "property";
-        const leadName = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
-
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji ${leadName}! Ame <b>${propName}</b> ni VIP Site Visit mate time puchhyo chhe 🚗.\n\n👉 <b>Kripya tamaro anukool time janavjo — jem ke Kaale sanje 5 vage ke Sunday savare 11 vage?</b>`
-            : lang === "ENGLISH"
-            ? `Hello <b>${senderName || "Friend"}</b>! I asked for your preferred timing for the VIP Site Visit to <b>${propName}</b> 🚗.\n\n👉 <b>Please let me know your preferred slot — such as Tomorrow 5 PM or Sunday 11 AM?</b>`
-            : `Ji ${leadName}! Maine <b>${propName}</b> ki VIP Site Visit ke liye time pucha hai 🚗.\n\n👉 <b>Kripya apna preferred time batayein — jaise ki Kal shaam 5 baje ya Sunday subah 11 baje?</b>`;
-      } else if (!selected) {
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>, tamara exact criteria (<b>${lead.property_type || "Property"}</b> in <b>${lead.location || resolvedCity || "tamara shehar"}</b>) mate aa amaru best verified option hatu. Amara senior sales executive tamara mate exclusive <b>off-market options</b> arrange kari rahya chhe ane direct <b>call par connect karshe</b>. 📞\n\nAgar tame location ke budget badalva mango chho, to kripya janavjo!`
-            : lang === "ENGLISH"
-            ? `Sure <b>${senderName}</b>, this was our top verified option for your criteria (<b>${lead.property_type || "Property"}</b> in <b>${lead.location || resolvedCity || "your city"}</b>). Our senior sales executives are arranging exclusive <b>off-market options</b> and will <b>connect with you directly over a call</b>. 📞\n\nIf you would like to explore nearby areas or adjust your budget, please let me know!`
-            : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>, aapke exact criteria (<b>${lead.property_type || "Property"}</b> in <b>${lead.location || resolvedCity || "aapke shehar"}</b>) ke liye ye hamara top verified option tha. Hamare senior sales executive aapke liye exclusive <b>off-market & alternate options</b> arrange kar rahe hain aur aapse direct <b>call par connect karenge</b>. 📞\n\nAgar aap location ya budget relax karna chahein, to kripya batayein!`;
-      } else {
-        // Normal property selection when user is picking from multiple options (Option 1, 2, or 3)
-        // Check if lead already has an active booked visit for a different property
-        const { data: activeVisits } = await supabase
-          .from("site_visits")
-          .select("*, inventory(*)")
-          .eq("lead_id", lead.id)
-          .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
-          .order("created_at", { ascending: false })
-          .limit(1);
-
-        const currentActiveVisit = activeVisits?.[0];
-        const isDifferentProperty = currentActiveVisit && currentActiveVisit.property_id !== selected.property_id;
-
-        if (isDifferentProperty) {
-          const oldPropName = currentActiveVisit.inventory?.project_name || "Project";
-          const oldLoc = currentActiveVisit.inventory?.location ? ` (${currentActiveVisit.inventory.location})` : "";
-          const scheduledTime = currentActiveVisit.scheduled_at || lead.site_visit_at || lead.site_visit_datetime;
-          const d = scheduledTime ? new Date(scheduledTime) : null;
-          const visitTime = d && !isNaN(d.getTime())
-            ? d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
-            : (scheduledTime || "Scheduled Time");
-
-          nextState = "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING";
-          await supabase.from("leads").update({
-            state: "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING",
-            metadata: {
-              ...(lead.metadata || {}),
-              pending_new_visit_property_id: selected.property_id,
-              pending_new_visit_property_name: selected.project_name,
-            }
-          }).eq("id", lead.id);
-
-          replyText =
-            lang === "GUJLISH"
-              ? `Aapki already ek VIP Site Visit booked hai 🚗:\n🏢 <b>Property:</b> ${oldPropName}${oldLoc}\n⏰ <b>Scheduled Time:</b> ${visitTime}\n\n👉 <b>Shu tame aa pichli visit cancel kari ne ${selected.project_name} mate navi VIP Site Visit book karva mango chho?</b>\n\n1️⃣ <b>Haan, pichli visit cancel kari ne navi book karo</b> 🚗\n2️⃣ <b>Nahi, purani visit j continue rakho (Cancel mat karo)</b> 🤝\n\n<i>(Tame 1 ya 2 lakhi ne reply kari shako chho)</i>`
-              : lang === "ENGLISH"
-              ? `You already have a VIP Site Visit booked 🚗:\n🏢 <b>Property:</b> ${oldPropName}${oldLoc}\n⏰ <b>Scheduled Time:</b> ${visitTime}\n\n👉 <b>Would you like to cancel this previous visit and schedule a new VIP Site Visit for ${selected.project_name}?</b>\n\n1️⃣ <b>Yes, cancel previous visit & schedule new</b> 🚗\n2️⃣ <b>No, keep previous visit active (Do not cancel)</b> 🤝\n\n<i>(You can reply with 1 or 2)</i>`
-              : `Aapki already ek VIP Site Visit booked hai 🚗:\n🏢 <b>Property:</b> ${oldPropName}${oldLoc}\n⏰ <b>Scheduled Time:</b> ${visitTime}\n\n👉 <b>Kya aap is pichli visit ko cancel karke ${selected.project_name} ke liye nayi VIP Site Visit book karna chahte hain?</b>\n\n1️⃣ <b>Haan, pichli visit cancel karke nayi book karein</b> 🚗\n2️⃣ <b>Nahi, purani visit hi continue rakhein (Cancel mat karein)</b> 🤝\n\n<i>(Aap 1 ya 2 likh kar reply kar sakte hain)</i>`;
-        } else {
-          await supabase
-            .from("leads")
-            .update({ selected_property_id: selected.property_id, state: "OPTIONS_SENT" })
-            .eq("id", lead.id);
-
-          replyText =
-            lang === "GUJLISH"
-              ? `Khub saras pasand <b>${senderName} bhai</b>! <b>${selected.project_name}</b> (${selected.configuration}, ${selected.location}) ekdam prime project chhe.\n\n📄 Brochure: ${selected.brochure_url || "Available"}\n\nTame aa project ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
-              : lang === "ENGLISH"
-              ? `Excellent choice <b>${senderName}</b>! <b>${selected.project_name}</b> (${selected.configuration}, ${selected.location}) is a premium project.\n\n📄 Brochure: ${selected.brochure_url || "Available"}\n\nWhen would you like to schedule a <b>VIP Site Visit 🚗</b> - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
-              : `Bahut badhiya choice <b>${senderName} ji</b>! <b>${selected.project_name}</b> (${selected.configuration}, ${selected.location}) kaafi premium project hai.\n\n📄 Brochure: ${selected.brochure_url || "Available"}\n\nAap iski <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`;
-        }
-      }
-    }
-
-    // =========================================================================
-    // 8. SITE VISIT BOOKING WITH 10 AM - 6 PM IST VALIDATION
-    // =========================================================================
-    else if (
-      !(Boolean(parseBudgetFromText(messageText)) || /(chahiye|sodhu|naya\s*search|nayi\s*search|nava\s*search)/i.test(lower)) &&
-      (aiAnalysis.intent === "BOOK_VISIT" ||
-       /(site visit|visit book|book visit|visit schedule|meeting schedule|visit karvi|visit aavvu|visit karni)/i.test(lower) ||
-       (/\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj)\b/i.test(lower) && /\b\d{1,2}(?::\d{2})?\s*(am|pm|baje|vage)?\b/i.test(lower)) ||
-       (/\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i.test(lower)) ||
-       (lead.state === "OPTIONS_SENT" && /\b(ha|haan|yes|yep|sure|chalo|done)\b/i.test(lower)))
-    ) {
-      // Resolve property to book:
-      let propToBookId = lead.selected_property_id;
-
-      // 1. Check if user mentioned option number in visit message (Zero-Regex AI option index with fallback)
-      if (Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0) {
-        if (aiAnalysis.selected_option_index !== null && aiAnalysis.selected_option_index !== undefined && lead.last_option_ids[aiAnalysis.selected_option_index]) {
-          propToBookId = lead.last_option_ids[aiAnalysis.selected_option_index];
-        } else if (/(option\s*1|first|1st|pehla|pehli)/i.test(lower) && lead.last_option_ids[0]) {
-          propToBookId = lead.last_option_ids[0];
-        } else if (/(option\s*2|second|2nd|dusra|dusri)/i.test(lower) && lead.last_option_ids[1]) {
-          propToBookId = lead.last_option_ids[1];
-        } else if (/(option\s*3|third|3rd|teesra|teesri)/i.test(lower) && lead.last_option_ids[2]) {
-          propToBookId = lead.last_option_ids[2];
-        }
-      }
-
-      // 2. If only 1 option was sent previously, anchor to that option!
-      if (!propToBookId && Array.isArray(lead.last_option_ids) && lead.last_option_ids.length === 1) {
-        propToBookId = lead.last_option_ids[0];
-      }
-
-      // 3. Check if user typed project name from options
-      if (Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0) {
-        const { data: optProps } = await supabase
-          .from("inventory")
-          .select("property_id, project_name")
-          .in("property_id", lead.last_option_ids);
-
-        if (optProps) {
-          for (const p of optProps) {
-            if (lower.includes(p.project_name.toLowerCase())) {
-              propToBookId = p.property_id;
-              break;
-            }
-          }
-        }
-      }
-
-      // 4. If lead has multiple options and user hasn't selected one
-      if (!propToBookId && Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 1) {
-        replyText =
-          lang === "GUJLISH"
-            ? `Site visit plan karva mate, pehla kripya batavo tame <b>Option 1, 2 ke 3</b> mathi kayo project pehla jova mango chho? 🚗`
-            : lang === "ENGLISH"
-            ? `To schedule your site visit, please select which property you want to visit first - <b>Option 1, 2, or 3</b>? 🚗`
-            : `Site visit schedule karne ke liye, kripya pehle batayein aap <b>Option 1, 2 ya 3</b> me se kis project ko pehle dekhna chahenge? 🚗`;
-      } else {
-        const hasSpecificSlot = /\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj|morning|evening|shaam|sanje|dopahar|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i.test(lower);
-
-        if (!hasSpecificSlot) {
-          nextState = "VISIT_REQUESTED";
-          await supabase.from("leads").update({ state: "VISIT_REQUESTED" }).eq("id", lead.id);
-          replyText =
-            lang === "GUJLISH"
-              ? `Bahuj saras <b>${senderName} bhai</b>! 👍 Site visit 🚗 mate tamne kayo time anukool raheshe - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>? (Office timings: Saware 10 thi Sanje 6)`
-              : lang === "ENGLISH"
-              ? `Great <b>${senderName}</b>! 👍 Which slot suits you best for the site visit 🚗 - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>? (Working hours: 10 AM to 6 PM)`
-              : `Bahut badhiya <b>${senderName} ji</b>! 👍 Site visit 🚗 confirm karne ke liye aapko kaunsa slot suit karega - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>? (Working hours: 10 AM to 6 PM)`;
-        } else {
-          const slotResult = parseVisitSlot(messageText);
-
-          // Working hours guardrail: 10 AM to 6 PM IST
-          if (!slotResult.isValidTime) {
-            replyText =
-              lang === "GUJLISH"
-                ? `Amara site visit timings saware <b>10:00 AM thi sanje 6:00 PM</b> sudhi na hoy chhe. Kripya aa samay vachhe no slot janavjo. 🙏`
-                : lang === "ENGLISH"
-                ? `Our property site visits are scheduled between <b>10:00 AM and 6:00 PM IST</b>. Kindly suggest a convenient slot within this window. 🙏`
-                : `Hamare site visit timings subah <b>10:00 AM se shaam 6:00 PM</b> ke beech hote hain. Kripya is time window me apna convenient slot batayein. 🙏`;
-          } else if (slotResult.isPast) {
-            replyText =
-              lang === "GUJLISH"
-                ? `Aa time viti gayo chhe. Kripya aavnar divas athva timing janavjo. 🙏`
-                : lang === "ENGLISH"
-                ? `This time slot has already passed. Please suggest an upcoming date and time. 🙏`
-                : `Ye time slot nikal chuka hai. Kripya aane wala day ya timing batayein. 🙏`;
-          } else {
-            const scheduledAt = slotResult.isoUtc;
-            nextState = "SITE_VISIT_BOOKED";
-
-            // Fetch property details for site visit
-            let propDetails: any = null;
-            const finalPropId = propToBookId || lead.selected_property_id || "PROP-NXG-001";
-            if (finalPropId) {
-              const { data: prop } = await supabase
-                .from("inventory")
-                .select("*")
-                .eq("property_id", finalPropId)
-                .maybeSingle();
-              propDetails = prop;
-            }
-
-            await supabase
-              .from("leads")
-              .update({
-                site_visit_booked: true,
-                site_visit_at: scheduledAt,
-                site_visit_datetime: scheduledAt,
-                selected_property_id: finalPropId,
-                metadata: {
-                  ...(lead.metadata || {}),
-                  selected_property_name: propDetails?.project_name || "the property",
-                },
-                state: "SITE_VISIT_BOOKED",
-                pre_visit_reminder_sent: false,
-                post_visit_feedback_sent: false,
-              })
-              .eq("id", lead.id);
-
-            // Invalidate any other active visit if user is booking a different property
-            await supabase
-              .from("site_visits")
-              .update({ status: "CANCELLED", notes: "Superseded by new booking", updated_at: new Date().toISOString() })
-              .eq("lead_id", lead.id)
-              .neq("property_id", finalPropId)
-              .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
-
-            // Insert into site_visits
-            await supabase.from("site_visits").insert({
-              lead_id: lead.id,
-              client_id: activeTenantId,
-              property_id: finalPropId,
-              scheduled_at: scheduledAt,
-              status: "SCHEDULED",
-            });
-
-            // Dispatch Sales Alert to assigned executive or manager
-            await dispatchSalesAlert(activeTenantId, "SITE_VISIT_BOOKED", lead, {
-              scheduledAt,
-              property: propDetails,
-              userText: messageText,
-            });
-
-            const formatted = new Date(scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
-            const mapLink = propDetails?.map_url ? `\n📍 <b>Google Map Location:</b> ${propDetails.map_url}` : "";
-
-            // Point 6: Night-Owl / Out-of-Hours Expectation Note
-            const offHoursNote = !isWithinWorkingHours(10, 19)
-              ? (lang === "GUJLISH"
-                  ? "\n\n<i>(Amara sales advisor saware 10:00 AM e tamaro direct contact karshe.)</i>"
-                  : lang === "ENGLISH"
-                  ? "\n\n<i>(Our sales advisor will connect with you directly at 10:00 AM tomorrow.)</i>"
-                  : "\n\n<i>(Hamare sales advisor subah 10:00 AM par aapse directly connect karenge.)</i>")
-              : "";
-
-            replyText =
-              lang === "GUJLISH"
-                ? `Mubarak <b>${senderName} bhai</b>! 🎉\n\nTamari VIP Site Visit <b>${formatted}</b> par confirm thai gai chhe! 🚗${propDetails ? `\n🏢 <b>Project:</b> ${propDetails.project_name} (${propDetails.location})` : ""}${mapLink}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior property advisor time par direct site location par tamne malshe.${offHoursNote}`
-                : lang === "ENGLISH"
-                ? `Congratulations <b>${senderName}</b>! 🎉\n\nYour VIP Site Visit is confirmed for <b>${formatted}</b>! 🚗${propDetails ? `\n🏢 <b>Project:</b> ${propDetails.project_name} (${propDetails.location})` : ""}${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time.${offHoursNote}`
-                : `Badhai ho <b>${senderName} ji</b>! 🎉\n\nAapki VIP Site Visit <b>${formatted}</b> ke liye confirm ho gayi hai! 🚗${propDetails ? `\n🏢 <b>Project:</b> ${propDetails.project_name} (${propDetails.location})` : ""}${mapLink}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge.${offHoursNote}`;
-          }
-        }
-      }
-    }
-
-    // =========================================================================
-    // 9. BROCHURE & MAP REQUEST
-    // =========================================================================
-    else if (
-      !/(budget|lakh|crore|hazar|thousand|rent|buy|\d+k|chalegi|chalega|chalse|gamete|bhadu|bhade|kharid|flat|bhk|villa|shop|office|commercial|residential|plot)/i.test(lower) &&
-      (
-        /\b(brochure|brocher|brochar|broshur|brochur|pamphlet|pdf|catalog|catalogue|deck)\b/i.test(lower) ||
-        /\b(naksho|google\s*map|location\s*pin|location\s*map|map\s*link)\b/i.test(lower) ||
-        (/\bmap\b/i.test(lower) && !/(roadmap|map\s*karo)/i.test(lower)) ||
-        ((lower.includes("bhejo") || lower.includes("bhej") || lower.includes("moklo") || lower.includes("mokli") || lower.includes("send") || lower.includes("share")) &&
-         (lower.includes("detail") || lower.includes("info") || lower.includes("mahiti") || lower.includes("link") || lower.includes("location pin") || lower.includes("location link") || lower.includes("broch") || lower.includes("brocher")))
-      )
-    ) {
-      let prop: any = null;
-      let hasBookedVisit = Boolean((lead.site_visit_booked || lead.state === "SITE_VISIT_BOOKED" || lead.state === "VISIT_BOOKED") && lead.state !== "QUALIFYING");
-
-      // 1. If lead has an active booked visit, fetch the exact booked property from site_visits
-      if (hasBookedVisit) {
-        const { data: latestVisit } = await supabase
-          .from("site_visits")
-          .select("property_id")
-          .eq("lead_id", lead.id)
-          .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (latestVisit?.property_id) {
-          const { data: p } = await supabase.from("inventory").select("*").eq("property_id", latestVisit.property_id).maybeSingle();
-          if (p) {
-            prop = p;
-          }
-        }
-      }
-
-      // 2. If not from visit, check selected_property_id
-      if (!prop && lead.selected_property_id) {
-        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.selected_property_id).maybeSingle();
-        if (p) prop = p;
-      }
-
-      // 3. If not, check last_option_ids
-      if (!prop && Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0) {
-        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.last_option_ids[0]).maybeSingle();
-        if (p) prop = p;
-      }
-
-      // 4. Fallback to active inventory
-      if (!prop) {
-        const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("status", "AVAILABLE").limit(1).maybeSingle();
-        if (p) prop = p;
-      }
-
-      const isMapReq = lower.includes("map") || lower.includes("location") || lower.includes("naksho");
-      await dispatchSalesAlert(activeTenantId, isMapReq ? "MAP_REQUEST" : "BROCHURE_REQUEST", lead, { property: prop, userText: messageText });
-
-      const link = isMapReq
-        ? (prop?.map_url || "https://maps.google.com")
-        : (prop?.brochure_url || prop?.map_url || "https://maps.google.com");
-
-      if (hasBookedVisit) {
-        nextState = lead.state; // Retain current site visit booked state!
-        replyText =
-          lang === "GUJLISH"
-            ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nTamari VIP Site Visit 🚗 already confirm chhe. 🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe.`
-            : lang === "ENGLISH"
-            ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "the project"}</b>, <b>${senderName}</b>:\n${link}\n\nYour VIP Site Visit 🚗 is already confirmed. 🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time.`
-            : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nAapki VIP Site Visit 🚗 already confirm hai. 🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge.`;
-      } else {
-        replyText =
-          lang === "GUJLISH"
-            ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nAa check kari ne janavjo, VIP Site Visit 🚗 mate kayo time anukool raheshe - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
-            : lang === "ENGLISH"
-            ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "the project"}</b>, <b>${senderName}</b>:\n${link}\n\nWhen would you like to schedule a VIP Site Visit 🚗 once you review this - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
-            : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nIse dekh kar bataiye, VIP Site Visit 🚗 ke liye kaunsa slot prefer karenge - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`;
-      }
-    }
-
-    // =========================================================================
-    // 9b. AUTONOMOUS REAL-ESTATE FAQ & OBJECTION ENGINE (7 Core Real-Estate Categories)
-    // Intercepts queries about Amenities, RERA, Home Loan, Possession, Landmarks,
-    // Pricing/Discounts, and Brokerage, answers with DB specs, and bridges to VIP Site Visit!
-    // =========================================================================
-    else if (
-      aiAnalysis.intent === "GENERAL_FAQ" ||
-      aiAnalysis.intent === "PRICE_NEGOTIATION" ||
-      Boolean(aiAnalysis.faq_topic) ||
-      /\b(lift|parking|rera|loan|possession|brokerage|discount)\b/i.test(lower)
-    ) {
-      // 1. Resolve Target Property Context from DB
-      const { data: allProps } = await supabase
-        .from("inventory")
-        .select("*")
-        .eq("client_id", activeTenantId)
-        .eq("status", "AVAILABLE");
-      const availableProps = allProps || [];
-
-      let prop: any = null;
-
-      // Check if user named a project in message
-      if (availableProps.length > 0) {
-        for (const p of availableProps) {
-          const pName = (p.project_name || "").toLowerCase();
-          const firstWord = pName.split(/\s+/)[0];
-          if (pName && (lower.includes(pName) || (firstWord.length >= 4 && lower.includes(firstWord)))) {
-            prop = p;
-            break;
-          }
-        }
-      }
-
-      // Check lead's selected property
-      if (!prop && lead.selected_property_id) {
-        prop = availableProps.find((p: any) => p.property_id === lead.selected_property_id);
-      }
-
-      // Check lead's last_option_ids[0]
-      if (!prop && Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0) {
-        prop = availableProps.find((p: any) => p.property_id === lead.last_option_ids[0]);
-      }
-
-      // Check booked visit property
-      if (!prop && lead.site_visit_booked) {
-        const { data: latestVisit } = await supabase
-          .from("site_visits")
-          .select("property_id")
-          .eq("lead_id", lead.id)
-          .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (latestVisit?.property_id) {
-          prop = availableProps.find((p: any) => p.property_id === latestVisit.property_id);
-        }
-      }
-
-      // Check matching location
-      if (!prop && lead.location) {
-        prop = availableProps.find((p: any) => matchesLocation(lead.location, p.location, p.landmarks));
-      }
-
-      // Fallback to top available property
-      if (!prop && availableProps.length > 0) {
-        prop = availableProps[0];
-      }
-
-      const projName = prop?.project_name || "Project";
-      const projLoc = prop?.location || resolvedCity || "Prime Location";
-      const hasBookedVisit = Boolean(lead.site_visit_booked || ["SITE_VISIT_BOOKED", "VISIT_BOOKED", "SITE_VISIT_DONE", "VISIT_DONE"].includes(lead.state));
-
-      // Build Conversion CTA Bridge
-      let bridgeCta = "";
-      if (hasBookedVisit) {
-        bridgeCta =
-          lang === "GUJLISH"
-            ? `\n\n🤝 <b>Tamari VIP Site Visit already booked chhe!</b> Amara senior sales executive direct site location par tamne malshe ane aa badhi details personally samjavshe.`
-            : lang === "ENGLISH"
-            ? `\n\n🤝 <b>Your VIP Site Visit is already confirmed!</b> Our senior sales advisor will meet you directly at the site location to verify all details in person.`
-            : `\n\n🤝 <b>Aapki VIP Site Visit already confirm hai!</b> Hamare senior sales executive direct site location par aapse milenge aur saari details personally physically verify karwayenge.`;
-      } else {
-        bridgeCta =
-          lang === "GUJLISH"
-            ? `\n\n👉 <b>Actual space, layout ane quality live jova mate</b>, shu ame <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b> tamari <b>VIP Site Visit 🚗</b> schedule karie?`
-            : lang === "ENGLISH"
-            ? `\n\n👉 <b>To experience the actual space, layout, and finish in person</b>, would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
-            : `\n\n👉 <b>Actual space, layout aur quality physically dekhne ke liye</b>, kya hum <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b> aapki <b>VIP Site Visit 🚗</b> schedule karein?`;
-      }
-
-      // Check Category Flags (Zero-Regex AI Topic Mapping with Fallback)
-      const topic = aiAnalysis.faq_topic;
-      const isAmenities = topic === "AMENITIES" || /\b(lift|elevator|parking|carpet|amenit|suvidha)\b/i.test(lower);
-      const isRera = topic === "RERA" || /\b(rera|clear\s*title|approval|vmc|vuda)\b/i.test(lower);
-      const isLoan = topic === "LOAN" || /\b(loan|emi|sbi|hdfc|icici|interest)\b/i.test(lower);
-      const isPossession = topic === "POSSESSION" || /\b(possession|ready\s*to\s*move|under\s*construction)\b/i.test(lower);
-      const isLocation = topic === "LANDMARKS" || /\b(station|highway|airport|hospital|school|mall|distance)\b/i.test(lower);
-      const isDiscount = topic === "DISCOUNT" || aiAnalysis.intent === "PRICE_NEGOTIATION" || /\b(discount|negotiat|kam\s*hoga|best\s*price)\b/i.test(lower);
-      const isBrokerage = topic === "BROKERAGE" || /\b(brokerage|commission|dalali|zero\s*brokerage)\b/i.test(lower);
-
-      const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
-
-      if (isDiscount) {
-        // Price Negotiation: Alert sales executive & offer token spot discount
-        await dispatchSalesAlert(activeTenantId, "NEGOTIATION_REQUEST", lead, {
-          property: prop,
-          userText: messageText,
-        });
-
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji ${nameStr}! <b>${projName}</b> nu pricing direct developer approved pricing chhe. Serious buyers mate developer taraf thi <b>exclusive token booking discount ane flexible payment plan</b> direct face-to-face site meeting ma finalize thai shake chhe. 💰${bridgeCta}`
-            : lang === "ENGLISH"
-            ? `Hello ${nameStr}! The pricing for <b>${projName}</b> reflects direct builder rates. For serious buyers, exclusive <b>token spot discounts and customized payment schedules</b> are finalized face-to-face directly with the developer during the site visit. 💰${bridgeCta}`
-            : `Ji ${nameStr}! <b>${projName}</b> ki pricing direct developer approved base rate hai. Serious buyers ke liye developer side se <b>exclusive spot token discount aur flexible payment slabs</b> direct face-to-face site visit par finalize ho sakte hain. 💰${bridgeCta}`;
-      } else if (isBrokerage) {
-        // Brokerage Inquiry: 0% Brokerage reassurance
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji ${nameStr}! ${agencyName} par <b>0% Brokerage (Zero Commission)</b> chhe! 🎉\nTame direct builder pricing ane 100% transparent paperwork access karo chho. Tamara thi koi pan extra brokerage charge levama aavshe nahi.${bridgeCta}`
-            : lang === "ENGLISH"
-            ? `Hello ${nameStr}! ${agencyName} offers <b>0% Brokerage (Zero Commission)</b> on all direct builder bookings! 🎉\nYou get direct developer pricing and verified paperwork with absolutely zero advisory charges.${bridgeCta}`
-            : `Ji ${nameStr}! ${agencyName} par <b>0% Brokerage (Zero Commission)</b> hai! 🎉\nAapko direct builder pricing aur 100% verified transparent paperwork milta hai bina kisi hidden ya extra brokerage charges ke.${bridgeCta}`;
-      } else if (isLoan) {
-        // Bank Loan Inquiry: Pre-approved banks & rates
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji ${nameStr}! <b>${projName}</b> 100% approved project chhe ane <b>SBI, HDFC, ICICI, Bank of Baroda</b> jevi top nationalized ane private banks thi pre-approved chhe! 🏦\n\n• 💰 <b>Starting Rate:</b> 8.4% p.a.\n• 📑 <b>Eligibility:</b> Up to 80%-90% funding support\n• 🤝 <b>Doorstep Assistance:</b> Amari in-house banking team tamara mate loan documentation manage karshe.${bridgeCta}`
-            : lang === "ENGLISH"
-            ? `Hello ${nameStr}! <b>${projName}</b> is pre-approved by all leading banks including <b>SBI, HDFC, ICICI, and Bank of Baroda</b>! 🏦\n\n• 💰 <b>Starting Interest Rate:</b> 8.4% p.a.\n• 📑 <b>Loan Quantum:</b> Up to 80%-90% funding assistance\n• 🤝 <b>Doorstep Documentation:</b> Our dedicated banking associates coordinate paperwork end-to-end.${bridgeCta}`
-            : `Ji ${nameStr}! <b>${projName}</b> sabhi leading banks (jaise <b>SBI, HDFC, ICICI, Bank of Baroda</b>) se pre-approved project hai! 🏦\n\n• 💰 <b>Starting Interest Rate:</b> 8.4% p.a.\n• 📑 <b>Funding:</b> 80% se 90% tak loan approval assistance\n• 🤝 <b>Doorstep Support:</b> Hamari banking team aapke liye loan process aur documentation coordinate karegi.${bridgeCta}`;
-      } else if (isRera) {
-        // RERA & Legality: RERA number & clear title
-        const reraNo = prop?.rera_number || "Verified RERA Registered Project";
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji ${nameStr}! <b>${projName}</b> 100% RERA Registered ane Clear Title project chhe! 📜✅\n\n• 🏛️ <b>RERA Registration:</b> <code>${reraNo}</code>\n• ⚖️ <b>Clear Title:</b> All legal approvals, NA permissions ane sanctioned plans complete chhe.${bridgeCta}`
-            : lang === "ENGLISH"
-            ? `Hello ${nameStr}! <b>${projName}</b> is a 100% RERA-registered and clear title property! 📜✅\n\n• 🏛️ <b>RERA Registration:</b> <code>${reraNo}</code>\n• ⚖️ <b>Clear Title:</b> Fully sanctioned layout, NA permissions, and verified legal clearances.${bridgeCta}`
-            : `Ji ${nameStr}! <b>${projName}</b> 100% RERA Registered aur Clear Title project hai! 📜✅\n\n• 🏛️ <b>RERA Registration:</b> <code>${reraNo}</code>\n• ⚖️ <b>Clear Title:</b> Sabhi legal approvals, NA permissions aur sanctioned plans verified hain.${bridgeCta}`;
-      } else if (isPossession) {
-        // Possession & Timeline
-        const possStatus = prop?.possession_status === "READY_TO_MOVE" ? "Ready to Move (Immediate Handover)" : (prop?.possession_status || "Ready to Move");
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji ${nameStr}! <b>${projName}</b> (${projLoc}) ni current status <b>${possStatus}</b> chhe. 🔑\nTame token booking ane registration pachhi direct possession lai shako chho.${bridgeCta}`
-            : lang === "ENGLISH"
-            ? `Hello ${nameStr}! <b>${projName}</b> in ${projLoc} is currently <b>${possStatus}</b>. 🔑\nYou can take immediate possession upon registration and token allotment.${bridgeCta}`
-            : `Ji ${nameStr}! <b>${projName}</b> (${projLoc}) ka current status <b>${possStatus}</b> hai. 🔑\nAap token booking aur registration formalities ke baad direct possession le sakte hain.${bridgeCta}`;
-      } else if (isLocation) {
-        // Location & Connectivity
-        const landmarksStr = Array.isArray(prop?.landmarks) && prop.landmarks.length > 0 ? prop.landmarks.join(", ") : "Prime connectivity hub";
-        const mapUrl = prop?.map_url || "https://maps.google.com";
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji ${nameStr}! <b>${projName}</b> ${projLoc} na ekdam prime location par sthit chhe! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• 🗺️ <b>Location Map:</b> <a href="${mapUrl}">Google Maps Link</a>${bridgeCta}`
-            : lang === "ENGLISH"
-            ? `Hello ${nameStr}! <b>${projName}</b> is situated at a prime location in ${projLoc}! 📍\n\n• 🚗 <b>Nearby Landmarks:</b> ${landmarksStr}\n• 🗺️ <b>Location Map:</b> <a href="${mapUrl}">Google Maps Link</a>${bridgeCta}`
-            : `Ji ${nameStr}! <b>${projName}</b> ${projLoc} ki ekdam prime location par sthit hai! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• 🗺️ <b>Location Map:</b> <a href="${mapUrl}">Google Maps Link</a>${bridgeCta}`;
-      } else {
-        // Amenities & Specs (Default)
-        const hasLift = Array.isArray(prop?.amenities) ? prop.amenities.some((a: string) => /lift/i.test(a)) : true;
-        const hasParking = Array.isArray(prop?.amenities) ? prop.amenities.some((a: string) => /parking/i.test(a)) : true;
-        const carpet = prop?.carpet_area_sqft ? `${prop.carpet_area_sqft} sq.ft` : "Spacious carpet layout";
-        const furn = prop?.furnished_status || "Premium specifications";
-        const liftText = hasLift ? "High-Speed Elevators / Lifts available 🛗" : "Elevator facility in tower";
-        const parkText = hasParking ? "Reserved Car & Two-Wheeler Parking 🚗" : "Dedicated parking space";
-
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji ${nameStr}! <b>${projName}</b> (${projLoc}) ni key specifications aa mujab chhe:\n\n• 🛗 <b>Lift:</b> ${liftText}\n• 🚗 <b>Parking:</b> ${parkText}\n• 📏 <b>Carpet Area:</b> ${carpet}\n• 🛋️ <b>Furnishing:</b> ${furn}${bridgeCta}`
-            : lang === "ENGLISH"
-            ? `Hello ${nameStr}! Here are the verified specifications for <b>${projName}</b> (${projLoc}):\n\n• 🛗 <b>Lift:</b> ${liftText}\n• 🚗 <b>Parking:</b> ${parkText}\n• 📏 <b>Carpet Area:</b> ${carpet}\n• 🛋️ <b>Furnishing:</b> ${furn}${bridgeCta}`
-            : `Ji ${nameStr}! <b>${projName}</b> (${projLoc}) ki verified specifications ye hain:\n\n• 🛗 <b>Lift:</b> ${liftText}\n• 🚗 <b>Parking:</b> ${parkText}\n• 📏 <b>Carpet Area:</b> ${carpet}\n• 🛋️ <b>Furnishing:</b> ${furn}${bridgeCta}`;
-      }
-    }
-
-    // =========================================================================
-    // 10. SEQUENTIAL 6-FIELD QUALIFICATION CASCADE (Workflow 1: iRqYxBAeMGIduXRM)
-    // =========================================================================
-    else {
-      // 1. Extract values from current message (with AI analysis fallback)
-      let propType = parsePropertyTypeFromText(messageText);
-      if (!propType && aiAnalysis?.property_type) {
-        propType = String(aiAnalysis.property_type);
-      }
-      let requirement = parseRequirementFromText(messageText);
-      if (!requirement && (aiAnalysis?.transaction_type || aiAnalysis?.requirement)) {
-        requirement = String(aiAnalysis.transaction_type || aiAnalysis.requirement);
-      }
-      let purpose = parsePurposeFromText(messageText);
-      if (!purpose && aiAnalysis?.purpose) {
-        purpose = String(aiAnalysis.purpose);
-      }
-      let budget = parseBudgetFromText(messageText);
-      if (!budget && aiAnalysis?.price_or_budget) {
-        budget = Number(aiAnalysis.price_or_budget) || parseBudgetFromText(String(aiAnalysis.price_or_budget));
-      } else if (!budget && aiAnalysis?.budget_str) {
-        budget = parseBudgetFromText(aiAnalysis.budget_str);
-      }
-      let timeline = parseTimelineFromText(messageText);
-      if (!timeline && aiAnalysis?.timeline) {
-        timeline = String(aiAnalysis.timeline);
-      }
-
-      // If budget is >= 25 Lakhs and property is explicitly residential, infer BUY
-      const activeTypePre = propType || lead?.property_type || "";
-      const isCommercialPre = /(commercial|shop|office|showroom|warehouse|godown)/i.test(activeTypePre);
-      if (!requirement && budget >= 2500000 && !isCommercialPre) {
-        requirement = "BUY";
-      }
-
-      // Location extraction: check against multi-lingual dictionary, inventory locations, landmarks
-      const { data: allTenantInventory } = await supabase
-        .from("inventory")
-        .select("location, landmarks, project_name")
-        .eq("client_id", activeTenantId)
-        .eq("status", "AVAILABLE");
-
-      const matchedLocs = extractLocationsFromText(messageText, allTenantInventory || []);
-      let location = matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(messageText, allTenantInventory || []);
-      if (!location && aiAnalysis?.location) {
-        location = String(aiAnalysis.location);
-      }
-
-      // Flexible location detection (e.g. "koi bhi", "location koi bhi chalegi", "kahi bhi chalega", "any location", "gamete location")
-      const isFlexibleLoc =
-        Boolean(aiAnalysis?.is_flexible_location) ||
-        /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|kahi\s*pan|koi\s*pan|gamete|any\s*location|any\s*area|anywhere|all\s*over|no\s*preference|flexible|kuch\s*bhi|koi\s*fix\s*nathi|koi\s*fix\s*nahi|chalegi|chalega|chalse)\b/i.test(lower);
-
-      if (!location && isFlexibleLoc) {
-        location = "FLEXIBLE";
-      }
-
-      // If user is specifically answering location step and gave a valid locality name (guarded against false selection)
-      if (
-        !location &&
-        !NON_LOCATION_BLACKLIST.test(messageText) &&
-        lead?.property_type &&
-        !lead?.location &&
-        !budget &&
-        !propType &&
-        !requirement &&
-        messageText.trim().length <= 35 &&
-        !/(hi|hello|hey|namaste|kem cho|kya|kyu|kaise|rates|bhav|discount|call|phone|baat)/i.test(messageText)
-      ) {
-        location = messageText.trim();
-      }
-
-      // If this is a residential property and purpose was not specified, reset any stale commercial "BUSINESS" purpose to "SELF_USE"
-      const activeType = propType || lead?.property_type || "";
-      const isResidential = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(activeType);
-      if (isResidential && (!purpose && lead?.purpose === "BUSINESS")) {
-        purpose = "SELF_USE";
-      }
-
-      // Commercial renting or leasing is inherently for business purposes
-      const combinedType = (propType || lead?.property_type || "").toLowerCase();
-      const combinedReq = (requirement || lead?.requirement || "").toUpperCase();
-      if (!purpose && !lead?.purpose && (combinedReq === "RENT" || combinedReq === "LEASE") &&
-          /(commercial|office|shop|showroom|warehouse|godown|co-working|coworking|industrial)/i.test(combinedType)) {
-        purpose = "BUSINESS";
-      }
-
-      // Detect if user has changed their core property search criteria (new property type, new location, or new budget)
-      const hasExplicitNewPropType = Boolean(parsePropertyTypeFromText(messageText));
-      const hasExplicitNewBudget = Boolean(parseBudgetFromText(messageText));
-      const hasExplicitNewLoc = Boolean(extractLocationFromText(messageText, allTenantInventory || []).length > 0);
-      const hasExplicitChangePhrase = /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|nayi\s*chahiye|navi\s*joiye)/i.test(lower);
-
-      const oldCat = getPropertyCategoryGroup(lead?.property_type);
-      const newCat = getPropertyCategoryGroup(propType);
-      const isCategoryChanged = Boolean(hasExplicitNewPropType && propType && oldCat !== "UNKNOWN" && newCat !== "UNKNOWN" && oldCat !== newCat);
-      const isNewPropTypeGiven = Boolean(hasExplicitNewPropType && propType && propType !== lead?.property_type);
-      const isNewLocationGiven = Boolean(hasExplicitNewLoc && location && location !== lead?.location);
-
-      const hasNewSearchIntent = isNewPropTypeGiven ||
-                                 isNewLocationGiven ||
-                                 Boolean(hasExplicitNewBudget && budget && Math.abs(budget - Number(lead?.budget || 0)) > 1000) ||
-                                 isCategoryChanged ||
-                                 (hasExplicitChangePhrase && aiAnalysis.intent === "CHANGE_CRITERIA");
-
-      // Active Booked Visit Safeguard Circuit Breaker:
-      // If the lead already has an active booked site visit and did not explicitly initiate a new property search,
-      // do NOT wipe or fall through to qualifying/options sending! Anchor back to their existing booked visit.
-      if ((lead.site_visit_booked || lead.state === "SITE_VISIT_BOOKED" || lead.state === "VISIT_BOOKED") && !hasNewSearchIntent) {
-        let bookedPropName = "Project";
-        let bookedLocation = "";
-        const targetPropId = lead.selected_property_id || (Array.isArray(lead.last_option_ids) ? lead.last_option_ids[0] : null);
-        if (targetPropId) {
-          const { data: bp } = await supabase.from("inventory").select("project_name, location").eq("property_id", targetPropId).maybeSingle();
-          if (bp?.project_name) {
-            bookedPropName = bp.project_name;
-            bookedLocation = bp.location ? ` (${bp.location})` : "";
-          }
-        }
-        const scheduledTime = lead.site_visit_at || lead.site_visit_datetime;
-        const formattedTime = scheduledTime
-          ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
-          : "Scheduled Time";
-
-        replyText =
-          lang === "GUJLISH"
-            ? `Tamari VIP Site Visit already booked chhe <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 🚗\n🏢 <b>Project:</b> ${bookedPropName}${bookedLocation}\n⏰ <b>Time:</b> ${formattedTime}\n\n🤝 <b>Site par maliye chiye!</b> Shu tamne timing reschedule karvo chhe ke koi biji property jova mango chho?`
-            : lang === "ENGLISH"
-            ? `Your VIP Site Visit is already confirmed, <b>${senderName}</b>! 🚗\n🏢 <b>Project:</b> ${bookedPropName}${bookedLocation}\n⏰ <b>Time:</b> ${formattedTime}\n\n🤝 <b>See you at the site!</b> Would you like to reschedule the timing or explore a different property?`
-            : `Aapki VIP Site Visit already booked hai <b>${senderName ? `${senderName} ji` : "ji"}</b>! 🚗\n🏢 <b>Project:</b> ${bookedPropName}${bookedLocation}\n⏰ <b>Time:</b> ${formattedTime}\n\n🤝 <b>Milte hain site par!</b> Kya aapko timing reschedule karna hai ya koi aur property dekhna chahte hain?`;
-
-        nextState = lead.state;
-      } else if (lead.state === "OPTIONS_SENT" && !hasNewSearchIntent) {
-        // Options Sent Safeguard: User is in OPTIONS_SENT and sent a generic response without new criteria
-        const targetPropId = lead.selected_property_id || (Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0 ? lead.last_option_ids[0] : null);
-        let propName = "property";
-        if (targetPropId) {
-          const { data: p } = await supabase.from("inventory").select("project_name").eq("property_id", targetPropId).maybeSingle();
-          if (p?.project_name) propName = p.project_name;
-        }
-        nextState = "OPTIONS_SENT";
-        const leadName = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
-        replyText =
-          lang === "GUJLISH"
-            ? `Ji ${leadName}! Ame <b>${propName}</b> ni VIP Site Visit mate time puchhyo chhe 🚗.\n\n👉 <b>Kripya tamaro anukool time janavjo — jem ke Kaale sanje 5 vage ke Sunday savare 11 vage?</b>`
-            : lang === "ENGLISH"
-            ? `Hello <b>${senderName || "Friend"}</b>! I asked for your preferred timing for the VIP Site Visit to <b>${propName}</b> 🚗.\n\n👉 <b>Please let me know your preferred slot — such as Tomorrow 5 PM or Sunday 11 AM?</b>`
-            : `Ji ${leadName}! Maine <b>${propName}</b> ki VIP Site Visit ke liye time pucha hai 🚗.\n\n👉 <b>Kripya apna preferred time batayein — jaise ki Kal shaam 5 baje ya Sunday subah 11 baje?</b>`;
-      } else {
-        // 2. Persist newly extracted fields into leads table
-        const leadUpdates: any = { state: "QUALIFYING" };
-        if (propType) leadUpdates.property_type = propType;
-        if (requirement) leadUpdates.requirement = requirement;
-        if (purpose) leadUpdates.purpose = purpose;
-        if (location) leadUpdates.location = location;
-        if (budget) leadUpdates.budget = budget;
-        if (timeline) leadUpdates.timeline = timeline;
-
-        if (hasNewSearchIntent || isCategoryChanged || isNewPropTypeGiven || isNewLocationGiven) {
-          leadUpdates.selected_property_id = null;
-          leadUpdates.last_option_ids = null;
-          leadUpdates.site_visit_booked = false;
-          leadUpdates.site_visit_datetime = null;
-          leadUpdates.site_visit_at = null;
-
-          // If category changed or user switched property type without giving new budget/requirement,
-          // clear stale residual values!
-          if (isCategoryChanged || isNewPropTypeGiven) {
-            if (!requirement) leadUpdates.requirement = null;
-            if (!budget) leadUpdates.budget = null;
-            if (!timeline) leadUpdates.timeline = null;
-            if (!purpose) {
-              leadUpdates.purpose = (newCat === "COMMERCIAL" || propType?.toLowerCase().includes("office") || propType?.toLowerCase().includes("shop")) ? "BUSINESS" : "SELF_USE";
-            }
-          }
-        }
-
-        // If user mentions a property type or location but didn't specify requirement/budget in this message,
-        // treat requirement and budget as unconfirmed so residual values don't block inventory matching!
-        if (propType && !requirement && (isCategoryChanged || isNewPropTypeGiven || (lead?.state === "OPTIONS_SENT" && !lead?.selected_property_id))) {
-          leadUpdates.requirement = null;
-        }
-        if (propType && !budget && (isCategoryChanged || isNewPropTypeGiven || (lead?.state === "OPTIONS_SENT" && !lead?.selected_property_id))) {
-          leadUpdates.budget = null;
-        }
-
-        // If user did NOT supply a budget in this message, but switched requirement between BUY and RENT,
-        // clear the prior stale budget if it was incompatible:
-        if (!budget) {
-          if (requirement === "BUY" && Number(lead?.budget || 0) > 0 && Number(lead?.budget || 0) < 500000) {
-            leadUpdates.budget = null;
-            leadUpdates.selected_property_id = null;
-            leadUpdates.last_option_ids = null;
-          }
-          if ((requirement === "RENT" || requirement === "LEASE") && Number(lead?.budget || 0) >= 500000) {
-            leadUpdates.budget = null;
-            leadUpdates.selected_property_id = null;
-            leadUpdates.last_option_ids = null;
-          }
-        }
-
-        await supabase.from("leads").update(leadUpdates).eq("id", lead.id);
-
-        // 3. Fetch latest refreshed state of lead
-        const { data: currentLead } = await supabase.from("leads").select("*").eq("id", lead.id).single();
-
-        // =========================================================================
-        // 4. Strict 6-Field Missing Cascade in Sequential Order:
-        // 1. property_type -> 2. subtype -> 3. requirement -> 4. purpose -> 5. location -> 6. budget
-        // If any essential qualification field is missing, ask exactly ONE crisp question.
-        // Never show inventory before budget is qualified!
-        // =========================================================================
-        const rawPropType = String(currentLead?.property_type || "").trim();
-        const isGenericCommercial = rawPropType.toLowerCase() === "commercial" || rawPropType === "કોમર્શિયલ";
-        const isGenericResidential = rawPropType.toLowerCase() === "residential" || rawPropType === "રેસિડેન્શિયલ";
-
-        let missingField: string | null = null;
-        if (!currentLead?.property_type) {
-          missingField = "PROPERTY_TYPE";
-        } else if (isGenericCommercial) {
-          missingField = "COMMERCIAL_SUBTYPE";
-        } else if (isGenericResidential) {
-          missingField = "RESIDENTIAL_SUBTYPE";
-        } else if (!currentLead?.requirement) {
-          missingField = "REQUIREMENT";
-        } else if (!currentLead?.purpose) {
-          // Auto-default purpose for residential and commercial to reduce friction!
-          const isRes = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(String(currentLead.property_type || ""));
-          const defPurpose = isRes ? "SELF_USE" : "BUSINESS";
-          await supabase.from("leads").update({ purpose: defPurpose }).eq("id", lead.id);
-          currentLead.purpose = defPurpose;
-        }
-
-        if (!missingField) {
-          if (!currentLead?.location && currentLead?.purpose !== "INVESTMENT") {
-            missingField = "LOCATION";
-          } else if (!currentLead?.budget || Number(currentLead.budget) === 0) {
-            missingField = "BUDGET";
-          }
-        }
-
-          // IF ANY ESSENTIAL FIELD IS MISSING, ASK AT A TIME EXACTLY ONE CRISP QUESTION (2 lines max!)
-          if (missingField !== null) {
-            nextState = "QUALIFYING";
-
-            const propTypeStr = String(currentLead.property_type || "").toLowerCase();
-            const leadReqStr = String(currentLead.requirement || "").toLowerCase();
-            const isComm = /(commercial|shop|office|showroom|warehouse|godown|industrial|shed|space)/i.test(propTypeStr);
-            const isRentOrLease = leadReqStr.includes("rent") || leadReqStr.includes("lease");
-
-            if (missingField === "PROPERTY_TYPE") {
-              replyText =
-                lang === "GUJLISH"
-                  ? `Tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? 🏡`
-                  : lang === "ENGLISH"
-                  ? `What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? 🏡`
-                  : `Aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial Shop/Office</b>? 🏡`;
-            } else if (missingField === "COMMERCIAL_SUBTYPE") {
-              replyText =
-                lang === "GUJLISH"
-                  ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space ma tame kaya type ni property shodhva mango chho — Commercial Shop, Office, ke Showroom?</b>`
-                  : lang === "ENGLISH"
-                  ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>What type of commercial property are you looking for — Commercial Shop, Office, or Showroom?</b>`
-                  : `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space me aap kis type ki property search kar rahe hain — Commercial Shop, Office, ya Showroom?</b>`;
-            } else if (missingField === "RESIDENTIAL_SUBTYPE") {
-              replyText =
-                lang === "GUJLISH"
-                  ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential ma tame kaya type ni property shodhva mango chho — 2BHK / 3BHK Flat, ke Villa?</b>`
-                  : lang === "ENGLISH"
-                  ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>What type of residential property are you looking for — 2BHK / 3BHK Flat, or Villa?</b>`
-                  : `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential me aap kis type ki property search kar rahe hain — 2BHK / 3BHK Flat, ya Villa?</b>`;
-            } else if (missingField === "REQUIREMENT") {
-              const typeLabel = currentLead.property_type || "Property";
-              if (isComm) {
-                replyText =
-                  lang === "GUJLISH"
-                    ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Commercial space <b>Buy</b> 💼 karvo chhe ke <b>Rent / Lease</b> 🔑 par joiye chhe?`
-                    : lang === "ENGLISH"
-                    ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> 💼 or <b>Rent/Lease</b> 🔑 commercial space?`
-                    : `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Commercial space <b>Buy</b> 💼 karna chahte hain ya <b>Rent / Lease</b> 🔑 par chahiye?`;
-              } else {
-                replyText =
-                  lang === "GUJLISH"
-                    ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva)</b> 🏠 mango chho ke <b>Rent</b> 🔑 par joiye chhe?`
-                    : lang === "ENGLISH"
-                    ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> 🏠 or <b>Rent</b> 🔑 this property?`
-                    : `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> 🏠 chahte hain ya <b>Rent</b> 🔑 par chahiye?`;
-              }
-            } else if (missingField === "LOCATION") {
-              // Dynamic location suggestions from tenant's active inventory (City-Agnostic!)
-              const { data: invLocs } = await supabase
-                .from("inventory")
-                .select("location, city")
-                .eq("client_id", activeTenantId)
-                .eq("status", "AVAILABLE")
-                .limit(10);
-
-              const uniqueLocs = Array.from(new Set((invLocs || []).map((i) => i.location).filter(Boolean))).slice(0, 3);
-              const targetCity = invLocs?.[0]?.city || resolvedCity;
-              const availStr = uniqueLocs.length > 0 ? ` (e.g. <b>${uniqueLocs.join(", ")}</b>)` : "";
-              const reqLabel = currentLead.requirement ? (currentLead.requirement === "BUY" ? "Kharidva" : "Rent") : "";
-              const prefPrefix = currentLead.property_type ? `${currentLead.property_type}${reqLabel ? ` (${reqLabel})` : ""}` : "Property";
-
-              if (targetCity) {
-                replyText =
-                  lang === "GUJLISH"
-                    ? `Bahuj saras! <b>${prefPrefix}</b> note kari lidhu chhe. 👍\n\n👉 ${targetCity} ma tamari preferred <b>location</b> kayi chhe 📍${availStr}?`
-                    : lang === "ENGLISH"
-                    ? `Great! Noted <b>${prefPrefix}</b>. 👍\n\n👉 Which preferred <b>location</b> in ${targetCity} are you looking for 📍${availStr}?`
-                    : `Bahut badhiya! <b>${prefPrefix}</b> note kar liya hai. 👍\n\n👉 ${targetCity} me aapki preferred <b>location</b> konsi hai 📍${availStr}?`;
-              } else {
-                replyText =
-                  lang === "GUJLISH"
-                    ? `Bahuj saras! <b>${prefPrefix}</b> note kari lidhu chhe. 👍\n\n👉 Tamari preferred <b>location</b> kayi chhe 📍${availStr}?`
-                    : lang === "ENGLISH"
-                    ? `Great! Noted <b>${prefPrefix}</b>. 👍\n\n👉 Which preferred <b>location</b> are you looking for 📍${availStr}?`
-                    : `Bahut badhiya! <b>${prefPrefix}</b> note kar liya hai. 👍\n\n👉 Aapki preferred <b>location</b> konsi hai 📍${availStr}?`;
-              }
-            } else if (missingField === "BUDGET") {
-              const locLabel = currentLead.location ? `<b>${currentLead.location}</b>` : "Location";
-              if (isRentOrLease) {
-                replyText =
-                  lang === "GUJLISH"
-                    ? `Noted ${locLabel}! 📍\n\n👉 Tamari monthly rent budget range ketli raheshe 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
-                    : lang === "ENGLISH"
-                    ? `Noted ${locLabel}! 📍\n\n👉 What is your monthly rent budget range 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
-                    : `Noted ${locLabel}! 📍\n\n👉 Monthly rent budget range kya rahegi 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`;
-              } else {
-                replyText =
-                  lang === "GUJLISH"
-                    ? `Noted ${locLabel}! 📍\n\n👉 Best options filter karva mate tamaro budget ketlo raheshe 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
-                    : lang === "ENGLISH"
-                    ? `Noted ${locLabel}! 📍\n\n👉 To filter the best options, what is your comfortable budget range 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
-                    : `Noted ${locLabel}! 📍\n\n👉 Best options filter karne ke liye aapka comfortable budget range kya rahega 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`;
-              }
-            }
-          } else {
-        // =========================================================================
-        // ALL 6 FIELDS QUALIFIED! Query Inventory with City-Agnostic Matching & Framing
-        // =========================================================================
-        nextState = "OPTIONS_SENT";
-        await supabase.from("leads").update({ state: "OPTIONS_SENT" }).eq("id", lead.id);
-
-        // Fetch all available inventory for this tenant
-        const { data: allProps } = await supabase
-          .from("inventory")
-          .select("*")
-          .eq("client_id", activeTenantId)
-          .eq("status", "AVAILABLE");
-
-        const availableInventory = allProps || [];
-        const leadBudget = Number(currentLead.budget || 0);
-        const maxBudget = leadBudget > 0 ? leadBudget * 1.15 : Infinity;
-
-        const isLeadFlex = currentLead.location === "FLEXIBLE" || isFlexibleLoc;
-        const requestedLocs = (currentLead.location || "")
-          .split(/[,/]|(?:\s+ya\s+|\s+or\s+|\s+aur\s+|\s+ane\s+)/i)
-          .map((s: string) => s.trim())
-          .filter(Boolean);
-
-        const displayLoc = isLeadFlex
-          ? (resolvedCity || "aapke shehar")
-          : (currentLead.location || resolvedCity || "aapke shehar");
-
-        let properties: any[] = [];
-        let proximityNote = "";
-
-        if (isLeadFlex) {
-          // Scenario 5: Flexible / City-Wide Search -> Multi-Corridor Variety (1 per distinct location, max 3)
-          const flexMatches = availableInventory.filter((p: any) => {
-            const price = Number(p.price || 0);
-            if (leadBudget > 0 && price > maxBudget) return false;
-            if (!matchesListingType(currentLead.requirement, p.listing_type, price)) return false;
-            if (!matchesPropertyType(currentLead.property_type, p.property_category, p.configuration, p.project_name)) return false;
-            return true;
-          });
-
-          // Sort by closeness to budget
-          flexMatches.sort((a: any, b: any) => {
-            if (leadBudget > 0) {
-              return Math.abs(Number(a.price || 0) - leadBudget) - Math.abs(Number(b.price || 0) - leadBudget);
-            }
-            return 0;
-          });
-
-          const seenLocations = new Set<string>();
-          for (const p of flexMatches) {
-            const locKey = (p.location || "").toLowerCase().trim();
-            if (locKey && !seenLocations.has(locKey)) {
-              seenLocations.add(locKey);
-              properties.push(p);
-              if (properties.length >= 3) break;
-            }
-          }
-
-          // If fewer than 3 corridors found, fill remaining with other best matches
-          if (properties.length < 3) {
-            for (const p of flexMatches) {
-              if (!properties.some((prop) => prop.property_id === p.property_id)) {
-                properties.push(p);
-                if (properties.length >= 3) break;
-              }
-            }
-          }
-        } else {
-          // 1. Strict Filter: Category/Type + Listing Type + Budget + Location
-          const strictMatches = availableInventory.filter((p: any) => {
-            const price = Number(p.price || 0);
-            if (leadBudget > 0 && price > maxBudget) return false;
-            if (!matchesListingType(currentLead.requirement, p.listing_type, price)) return false;
-            if (!matchesPropertyType(currentLead.property_type, p.property_category, p.configuration, p.project_name)) return false;
-
-            // Check if matches any requested locality
-            if (requestedLocs.length > 0) {
-              const matchesAny = requestedLocs.some((reqLoc) => matchesLocation(reqLoc, p.location, p.landmarks));
-              if (!matchesAny) return false;
-            } else if (!matchesLocation(currentLead.location, p.location, p.landmarks)) {
-              return false;
-            }
-            return true;
-          });
-
-          // Sort matches by proximity to user's budget
-          strictMatches.sort((a: any, b: any) => {
-            if (leadBudget > 0) {
-              return Math.abs(Number(a.price || 0) - leadBudget) - Math.abs(Number(b.price || 0) - leadBudget);
-            }
-            return 0;
-          });
-
-          properties = strictMatches.slice(0, 3);
-        }
-
-        // =========================================================================
-        // FALLBACK HIERARCHY (When properties.length === 0)
-        // =========================================================================
-        if (properties.length === 0) {
-          const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>, ` : `<b>${senderName} ji</b>, `) : "";
-
-          // Check if properties exist in this location for this type with alternate listing type (e.g. RENT available when BUY asked)
-          const alternateListings = availableInventory.filter((p: any) => {
-            if (!isLeadFlex && !matchesLocation(currentLead.location, p.location, p.landmarks)) return false;
-            if (!matchesPropertyType(currentLead.property_type, p.property_category, p.configuration, p.project_name)) return false;
-            return true;
-          });
-
-          // Scenario 6: Price Reality Check (Location has same type, but budget is below starting price)
-          const locSameTypeProps = availableInventory.filter((p: any) => {
-            if (isLeadFlex) return false;
-            if (!matchesLocation(currentLead.location, p.location, p.landmarks)) return false;
-            if (!matchesPropertyType(currentLead.property_type, p.property_category, p.configuration, p.project_name)) return false;
-            if (!matchesListingType(currentLead.requirement, p.listing_type, Number(p.price || 0))) return false;
-            return true;
-          });
-
-          const minLocPrice = locSameTypeProps.length > 0 ? Math.min(...locSameTypeProps.map((p: any) => Number(p.price || 0))) : 0;
-          const isLowBudgetReality = leadBudget > 0 && minLocPrice > 0 && leadBudget < minLocPrice * 0.85;
-
-          if (isLowBudgetReality) {
-            // Find where else in this tenant's inventory user's budget CAN afford this property type
-            const affordableElsewhere = availableInventory.filter((p: any) => {
-              if (matchesLocation(currentLead.location, p.location, p.landmarks)) return false;
-              if (!matchesPropertyType(currentLead.property_type, p.property_category, p.configuration, p.project_name)) return false;
-              if (!matchesListingType(currentLead.requirement, p.listing_type, Number(p.price || 0))) return false;
-              if (leadBudget > 0 && Number(p.price || 0) > maxBudget) return false;
-              return true;
-            });
-
-            const altLocs = Array.from(new Set(affordableElsewhere.map((p: any) => p.location).filter(Boolean))).slice(0, 3);
-
-            await dispatchSalesAlert(activeTenantId, "NO_PROPERTY_MATCH", currentLead, {
-              userText: messageText,
-              hint: `Customer budget ₹${formatPriceShort(leadBudget)} is below ${displayLoc} starting rate of ₹${formatPriceShort(minLocPrice)}. Alternative affordable corridors: ${altLocs.join(', ') || 'None in DB'}.`
-            });
-
-            if (altLocs.length > 0) {
-              replyText =
-                lang === "GUJLISH"
-                  ? `${nameStr}<b>${displayLoc}</b> ma <b>${currentLead.property_type}</b> usually <b>₹${formatPriceShort(minLocPrice)}+</b> thi start thay chhe. Lekin tamara <b>₹${formatPriceShort(leadBudget)} budget</b> ma <b>${altLocs.join(", ")}</b> ma best verified options available chhe! 🏡\n\nShu tame <b>${altLocs[0]}</b> na options jova mango chho?`
-                  : lang === "ENGLISH"
-                  ? `${nameStr}in <b>${displayLoc}</b>, <b>${currentLead.property_type}</b> options typically start from <b>₹${formatPriceShort(minLocPrice)}+</b>. However, within your comfortable budget of <b>₹${formatPriceShort(leadBudget)}</b>, excellent verified options are available in <b>${altLocs.join(", ")}</b>! 🏡\n\nWould you like to explore options in <b>${altLocs[0]}</b>?`
-                  : `${nameStr}<b>${displayLoc}</b> me <b>${currentLead.property_type}</b> usually <b>₹${formatPriceShort(minLocPrice)}+</b> se start hoti hain. Lekin aapke <b>₹${formatPriceShort(leadBudget)} budget</b> me <b>${altLocs.join(", ")}</b> me best verified options available hain! 🏡\n\nKya aap <b>${altLocs[0]}</b> ke options dekhna chahenge?`;
-            } else {
-              replyText =
-                lang === "GUJLISH"
-                  ? `${nameStr}<b>${displayLoc}</b> ma <b>${currentLead.property_type}</b> usually <b>₹${formatPriceShort(minLocPrice)}+</b> thi start thay chhe. Amara senior sales executive tamara budget (₹${formatPriceShort(leadBudget)}) mujab specialized options arrange kari rahya chhe ane jaldi thi direct <b>call par connect karshe</b>. 📞`
-                  : lang === "ENGLISH"
-                  ? `${nameStr}in <b>${displayLoc}</b>, <b>${currentLead.property_type}</b> properties typically start from <b>₹${formatPriceShort(minLocPrice)}+</b>. Our senior sales executive is sourcing tailored options matching your budget (₹${formatPriceShort(leadBudget)}) and will <b>call you directly</b> shortly. 📞`
-                  : `${nameStr}<b>${displayLoc}</b> me <b>${currentLead.property_type}</b> usually <b>₹${formatPriceShort(minLocPrice)}+</b> se start hoti hain. Hamare senior sales executive aapke budget (₹${formatPriceShort(leadBudget)}) ke mutabiq specialized options arrange kar rahe hain aur jaldi hi aapse direct <b>call par connect karenge</b>. 📞`;
-            }
-          } else if (!isLeadFlex && currentLead.location) {
-            // Scenario 7: Locality Proximity Search (AI-driven nearest corridor)
-            const distinctAvailableLocs = Array.from(new Set(
-              availableInventory
-                .filter((p: any) =>
-                  matchesPropertyType(currentLead.property_type, p.property_category, p.configuration, p.project_name) &&
-                  matchesListingType(currentLead.requirement, p.listing_type, Number(p.price || 0)) &&
-                  (leadBudget <= 0 || Number(p.price || 0) <= maxBudget)
-                )
-                .map((p: any) => p.location)
-                .filter(Boolean)
-            ));
-
-            let adjacentLoc: string | null = null;
-            if (distinctAvailableLocs.length > 0) {
-              const aiAdj = await findAdjacentLocalityWithAI(currentLead.location, resolvedCity, distinctAvailableLocs);
-              adjacentLoc = aiAdj?.adjacent_location || null;
-            }
-
-            if (adjacentLoc) {
-              const adjMatches = availableInventory.filter((p: any) =>
-                matchesLocation(adjacentLoc, p.location, p.landmarks) &&
-                matchesPropertyType(currentLead.property_type, p.property_category, p.configuration, p.project_name) &&
-                matchesListingType(currentLead.requirement, p.listing_type, Number(p.price || 0)) &&
-                (leadBudget <= 0 || Number(p.price || 0) <= maxBudget)
-              );
-
-              if (adjMatches.length > 0) {
-                properties = adjMatches.slice(0, 3);
-                proximityNote =
-                  lang === "GUJLISH"
-                    ? `Tamara requested area <b>${currentLead.location}</b> ma filhal direct unit available nathi, pan 5-10 minute ni proximity ma <b>${adjacentLoc}</b> ma aa verified options available chhe:\n\n`
-                    : lang === "ENGLISH"
-                    ? `Currently, verified units in <b>${currentLead.location}</b> are occupied, but within 5-10 mins proximity in <b>${adjacentLoc}</b>, here are the best available options:\n\n`
-                    : `Aapke requested area <b>${currentLead.location}</b> me abhi direct unit occupied hai, lekin pass hi 5-10 minute ki doori par <b>${adjacentLoc}</b> me ye best options available hain:\n\n`;
-              }
-            }
-          }
-
-          // If still no properties found after proximity check, check Cross-Listing (BUY vs RENT)
-          if (properties.length === 0 && !isLowBudgetReality) {
-            if (alternateListings.length > 0 && currentLead.requirement === "BUY") {
-              const alt = alternateListings[0];
-              const altPrice = `₹${Number(alt.price || 0).toLocaleString("en-IN")}/mo`;
-
-              await dispatchSalesAlert(activeTenantId, "NO_PROPERTY_MATCH", currentLead, {
-                userText: messageText,
-                hint: `Customer wants to BUY ${currentLead.property_type} in ${displayLoc}. Only Rental available (${alt.project_name} at ${altPrice}). Source off-market sale or convert to rental.`
-              });
-
-              const altTypeDesc = alt.configuration ? `${alt.configuration} (${altPrice})` : `Rental Space (${altPrice})`;
-              replyText =
-                lang === "GUJLISH"
-                  ? `${nameStr}<b>${displayLoc}</b> ma filhal <b>${alt.project_name}</b> ma verified <b>${altTypeDesc}</b> available chhe. Amara senior sales executive tamara mate exclusive <b>Purchase (Buy) options</b> arrange kari rahya chhe ane jaldi direct <b>call par connect karshe</b>. 📞`
-                  : lang === "ENGLISH"
-                  ? `${nameStr}in <b>${displayLoc}</b>, we currently have verified <b>${altTypeDesc}</b> at <b>${alt.project_name}</b>. Our senior sales team is sourcing exclusive <b>Purchase (Sale) options</b> for you and will <b>connect with you directly over a call</b>. 📞`
-                  : `${nameStr}<b>${displayLoc}</b> me filhal <b>${alt.project_name}</b> me verified <b>${altTypeDesc}</b> available hai. Hamare senior sales executive aapke liye exclusive <b>Purchase (Buy) options</b> arrange kar rahe hain aur jaldi direct <b>call par connect karenge</b>. 📞`;
-            } else if (alternateListings.length > 0 && (currentLead.requirement === "RENT" || currentLead.requirement === "LEASE")) {
-              const alt = alternateListings[0];
-              const altPrice = `₹${formatPriceShort(Number(alt.price || 0))}`;
-
-              await dispatchSalesAlert(activeTenantId, "NO_PROPERTY_MATCH", currentLead, {
-                userText: messageText,
-                hint: `Customer wants to RENT in ${displayLoc}. Only Sale units available (${alt.project_name} at ${altPrice}). Source off-market rental.`
-              });
-
-              replyText =
-                lang === "GUJLISH"
-                  ? `${nameStr}<b>${displayLoc}</b> ma filhal <b>${alt.project_name}</b> ma sale options available chhe. Amara senior team rental options source kari rahi chhe ane jaldi thi direct <b>call par connect karshe</b>. 📞`
-                  : lang === "ENGLISH"
-                  ? `${nameStr}in <b>${displayLoc}</b>, we currently have sale options at <b>${alt.project_name}</b>. Our team is actively sourcing rental properties and will <b>connect with you directly over a call</b>. 📞`
-                  : `${nameStr}<b>${displayLoc}</b> me filhal <b>${alt.project_name}</b> me sale units available hain. Hamari team rental options source kar rahi hai aur jaldi direct <b>call par connect karegi</b>. 📞`;
-            } else {
-              // Scenario 14: Hard Out of Stock
-              await dispatchSalesAlert(activeTenantId, "NO_PROPERTY_MATCH", currentLead, {
-                userText: messageText,
-                hint: `No inventory in ${displayLoc} for ${currentLead.property_type || 'property'} (Budget: ₹${formatPriceShort(leadBudget)}). Source off-market.`
-              });
-              const pType = currentLead.property_type || "property";
-
-              replyText =
-                lang === "GUJLISH"
-                  ? `${nameStr}tamari requirement (<b>${pType}</b> in <b>${displayLoc}</b>) mujab matching property mate amara senior sales executive specialized options arrange kari rahya chhe ane jaldi thi tamari sathe direct <b>call par connect karshe</b>. 📞`
-                  : lang === "ENGLISH"
-                  ? `${nameStr}our senior sales executives are sourcing specialized options matching your requirement (<b>${pType}</b> in <b>${displayLoc}</b>) and will <b>connect with you directly over a call</b> shortly. 📞`
-                  : `${nameStr}aapki requirement (<b>${pType}</b> in <b>${displayLoc}</b>) ke mutabiq matching property ke liye hamare senior sales executive specialized options arrange kar rahe hain aur jaldi hi aapse direct <b>call par connect karenge</b>. 📞`;
-            }
-          }
-        }
-
-        if (properties.length > 0) {
-          // Store option IDs on lead
-          const optionIds = properties.map((p) => p.property_id);
-          await supabase
-            .from("leads")
-            .update({
-              last_option_ids: optionIds,
-              selected_property_id: properties.length === 1 ? properties[0].property_id : null,
-            })
-            .eq("id", lead.id);
-
-          // EXACT N8N WORKFLOW PROPERTY CARDS & QUESTION TEMPLATE
-          const optionsCards = properties.map((p, idx) => formatN8nPropertyCard(p, idx, false)).join("\n\n---\n\n");
-
-          // Trailer question (n8n Response Context - Properties genericQuestion)
-          const trailerQuestion =
-            properties.length === 1
-              ? (lang === "GUJLISH"
-                  ? `👉 <i>Tame <b>${properties[0].project_name}</b> ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho — <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?</i>`
-                  : lang === "ENGLISH"
-                  ? `👉 <i>When would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>${properties[0].project_name}</b> — <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?</i>`
-                  : `👉 <i>Aap <b>${properties[0].project_name}</b> ki <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge — <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?</i>`)
-              : (lang === "GUJLISH"
-                  ? `👉 <i>Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho — <b>Option 1</b>, <b>Option 2</b> ke <b>Option 3</b>?</i>`
-                  : lang === "ENGLISH"
-                  ? `👉 <i>Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for — <b>Option 1</b>, <b>Option 2</b>, or <b>Option 3</b>?</i>`
-                  : `👉 <i>Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge — <b>Option 1</b>, <b>Option 2</b> ya <b>Option 3</b>?</i>`);
-
-          const budgetStr = leadBudget > 0 ? `₹${formatPriceShort(leadBudget)} budget` : "aapke budget";
-          const heading =
-            lang === "GUJLISH"
-              ? `🌟 <b>Tamari Requirement Mujab Top Options</b>\n\n${senderName ? `<b>${senderName} bhai</b>, ` : ""}${proximityNote}tamara <b>${budgetStr}</b> ane <b>${currentLead.property_type || "property"} requirement</b> mujab aa best options chhe:`
-              : lang === "ENGLISH"
-              ? `🌟 <b>Top Options Matching Your Requirement</b>\n\n${senderName ? `<b>${senderName}</b>, ` : ""}${proximityNote}based on your budget of <b>${budgetStr}</b> and <b>${currentLead.property_type || "property"} requirement</b>, here are the best options:`
-              : `🌟 <b>Aapke Requirement Ke Top Options</b>\n\n${senderName ? `<b>${senderName} ji</b>, ` : ""}${proximityNote}aapke <b>${budgetStr}</b> aur <b>${currentLead.property_type || "property"} requirement</b> ke hisab se ye best options hain:`;
-
-          replyText = `${heading}\n\n${optionsCards}\n\n${trailerQuestion}`;
-        }
-      }
-      }
+        transitionResult.salesAlert.payload || {}
+      );
     }
 
     // =========================================================================
