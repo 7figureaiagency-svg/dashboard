@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlarmClockOff,
   Bot,
+  Building2,
   CalendarCheck,
   CalendarX,
   CheckCircle2,
   History,
+  MapPin,
   MessageCircle,
   MessageSquare,
   MessageSquareText,
@@ -14,6 +16,7 @@ import {
   Save,
   Send,
   Sparkles,
+  Star,
   Trash2,
   Trophy,
   UserCheck,
@@ -51,13 +54,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
+import { DualRoleBadge, PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
 import { WhatsAppChatView } from "@/components/crm/whatsapp-chat-view";
 import { WorkflowTimeline } from "@/components/crm/workflow-timeline";
 import { HistoryTimeline } from "@/components/crm/history-timeline";
-import { useInventory, useLeadEvents, useUpdateLead } from "@/lib/crm-data";
+import { useInventory, useLeadEvents, usePropertySubmissions, useUpdateLead } from "@/lib/crm-data";
 import {
   LEAD_STATUSES,
+  PROPERTY_SUBMISSION_STATUS_MAP,
   STATUS_MAP,
   actionLabel,
   buildAiActivity,
@@ -65,6 +69,7 @@ import {
   contactResolution,
   formatDate,
   formatMoney,
+  isDualRoleLead,
   toNumber,
   type Activity,
   type Lead,
@@ -130,6 +135,7 @@ export function LeadDrawer({
 }) {
   const update = useUpdateLead();
   const { data: inventory = [] } = useInventory();
+  const { data: allSubmissions = [] } = usePropertySubmissions();
   const uniq = (vals: (string | null)[]) =>
     Array.from(new Set(vals.filter((v): v is string => !!v))).sort();
   const locations = uniq(inventory.map((p) => p.location));
@@ -139,6 +145,23 @@ export function LeadDrawer({
   const [dropOpen, setDropOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [profile, setProfile] = useState<Partial<Lead>>({});
+
+  const submissions = useMemo(() => {
+    if (!lead?.lead_id) return [];
+    const cleanLeadPhone = lead.phone ? lead.phone.replace(/\D/g, "").slice(-10) : "";
+    return allSubmissions.filter((s) => {
+      if (s.lead_id === lead.lead_id) return true;
+      if (cleanLeadPhone && s.owner_phone) {
+        const cleanOwnerPhone = s.owner_phone.replace(/\D/g, "").slice(-10);
+        if (cleanOwnerPhone && cleanOwnerPhone === cleanLeadPhone) return true;
+      }
+      return false;
+    });
+  }, [allSubmissions, lead?.lead_id, lead?.phone]);
+
+  const isDual = useMemo(() => {
+    return isDualRoleLead(lead) || submissions.length > 0;
+  }, [lead, submissions.length]);
 
   // Reset local edits whenever a different lead is opened so stale profile
   // values from the previous lead don't bleed into the newly opened one.
@@ -280,6 +303,7 @@ export function LeadDrawer({
             <div className="flex flex-wrap gap-2 pt-1">
               <StatusBadge value={lead.status} />
               <PropertyStateBadge value={lead.property_state} />
+              {isDual && <DualRoleBadge />}
             </div>
           </SheetHeader>
           {closed && (
@@ -288,6 +312,32 @@ export function LeadDrawer({
                 ? "Deal won — this lead is closed. Use Revert below if you need to reopen it."
                 : "This lead is dropped. Most actions are disabled — use Revert Lead below to reactivate."}
             </p>
+          )}
+
+          {isDual && (
+            <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 p-4 shadow-xs backdrop-blur-xs relative overflow-hidden">
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-purple-500/20 text-purple-600 dark:text-purple-300">
+                  <Star className="size-5 fill-amber-400 text-amber-500" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-sm text-foreground">
+                      🌟 High-Value Dual Client: Active Property Seeker + Verified Property Seller
+                    </span>
+                    <DualRoleBadge />
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    <strong>Senior Rep Pitch Hint:</strong> Client is actively looking to buy while listing their property. Prioritize senior partner callback for simultaneous exchange or double commission closure.
+                  </p>
+                  {submissions.length > 0 && (
+                    <p className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 pt-0.5">
+                      📦 {submissions.length} property listing{submissions.length > 1 ? "s" : ""} on record.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
 
           <section className="space-y-2">
@@ -302,24 +352,32 @@ export function LeadDrawer({
           <Separator />
 
           <Tabs defaultValue="chat" className="w-full">
-            <TabsList className="w-full grid grid-cols-3 h-10 p-1 bg-muted/60 rounded-xl">
+            <TabsList className={`w-full grid ${submissions.length > 0 ? "grid-cols-4" : "grid-cols-3"} h-10 p-1 bg-muted/60 rounded-xl`}>
               <TabsTrigger
                 value="chat"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-[#008069] data-[state=active]:text-white transition-all rounded-lg"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-[#008069] data-[state=active]:text-white transition-all rounded-lg truncate"
               >
-                <MessageCircle className="size-3.5" /> WhatsApp ({chatMessages.length})
+                <MessageCircle className="size-3.5 shrink-0" /> WhatsApp ({chatMessages.length})
               </TabsTrigger>
               <TabsTrigger
                 value="ai"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all rounded-lg"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all rounded-lg truncate"
               >
-                <Sparkles className="size-3.5" /> Workflow
+                <Sparkles className="size-3.5 shrink-0" /> Workflow
               </TabsTrigger>
+              {submissions.length > 0 && (
+                <TabsTrigger
+                  value="seller"
+                  className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-purple-600 data-[state=active]:text-white transition-all rounded-lg truncate"
+                >
+                  <Building2 className="size-3.5 shrink-0" /> Seller ({submissions.length})
+                </TabsTrigger>
+              )}
               <TabsTrigger
                 value="exec"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all rounded-lg"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all rounded-lg truncate"
               >
-                <History className="size-3.5" /> History ({activity.length})
+                <History className="size-3.5 shrink-0" /> History ({activity.length})
               </TabsTrigger>
             </TabsList>
 
@@ -343,6 +401,142 @@ export function LeadDrawer({
                 }
               />
             </TabsContent>
+
+            {submissions.length > 0 && (
+              <TabsContent value="seller" className="mt-3 space-y-3">
+                <div className="flex items-center justify-between pb-1">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="size-4 text-purple-600 dark:text-purple-400" />
+                    <h4 className="text-sm font-semibold text-foreground">Seller Property Submissions</h4>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {submissions.length} listed {submissions.length === 1 ? "unit" : "units"}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {submissions.map((sub) => {
+                    const statusMeta = (sub.status && PROPERTY_SUBMISSION_STATUS_MAP[sub.status]) || {
+                      label: sub.status ?? "Pending Verification",
+                      tone: "yellow" as const,
+                    };
+                    const ownerPhone = sub.owner_phone || lead.phone;
+                    const title = sub.project_name || sub.society_name || "Unspecified Property";
+                    const areaStr = sub.carpet_area_sqft
+                      ? `${sub.carpet_area_sqft} sq.ft carpet`
+                      : sub.super_built_up_sqft
+                      ? `${sub.super_built_up_sqft} sq.ft built-up`
+                      : null;
+                    const priceStr = sub.expected_price
+                      ? formatMoney(sub.expected_price)
+                      : sub.expected_rent
+                      ? `₹${sub.expected_rent.toLocaleString("en-IN")}/mo`
+                      : "Price on request";
+
+                    return (
+                      <div
+                        key={sub.id}
+                        className="rounded-2xl border border-border/60 bg-card p-4 shadow-xs space-y-3 hover:border-purple-500/30 transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h5 className="font-bold text-sm text-foreground truncate">{title}</h5>
+                              <ToneBadge label={statusMeta.label} tone={statusMeta.tone} />
+                            </div>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
+                              <MapPin className="size-3 shrink-0 text-muted-foreground/80" />
+                              <span>{sub.location || "Vadodara"}</span>
+                              {sub.property_category && <span>· {sub.property_category}</span>}
+                              {sub.transaction_type && <span>· For {sub.transaction_type}</span>}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-sm font-bold text-foreground tabular-nums">
+                              {priceStr}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Inset specification specs */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-2.5 rounded-xl bg-muted/40 border border-border/40 text-xs">
+                          <div>
+                            <span className="text-[10.5px] text-muted-foreground block">Configuration</span>
+                            <span className="font-medium text-foreground">{sub.configuration || "Standard"}</span>
+                          </div>
+                          {areaStr && (
+                            <div>
+                              <span className="text-[10.5px] text-muted-foreground block">Area</span>
+                              <span className="font-medium text-foreground">{areaStr}</span>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-[10.5px] text-muted-foreground block">Furnishing</span>
+                            <span className="font-medium text-foreground">{sub.furnishing_status || "Unfurnished"}</span>
+                          </div>
+                          {sub.possession_status && (
+                            <div>
+                              <span className="text-[10.5px] text-muted-foreground block">Possession</span>
+                              <span className="font-medium text-foreground">{sub.possession_status}</span>
+                            </div>
+                          )}
+                          {sub.owner_name && (
+                            <div>
+                              <span className="text-[10.5px] text-muted-foreground block">Owner</span>
+                              <span className="font-medium text-foreground truncate">{sub.owner_name}</span>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-[10.5px] text-muted-foreground block">Submitted On</span>
+                            <span className="font-medium text-foreground">{formatDate(sub.created_at)}</span>
+                          </div>
+                        </div>
+
+                        {sub.notes && (
+                          <p className="text-xs text-muted-foreground bg-muted/20 p-2 rounded-lg italic">
+                            "{sub.notes}"
+                          </p>
+                        )}
+
+                        {/* Inspection & Owner Contact Action Buttons (44pt touch target) */}
+                        <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                          {ownerPhone ? (
+                            <>
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="apple-button min-h-[44px] h-11 flex-1 gap-2 text-xs font-semibold rounded-xl border-border/60 bg-card hover:bg-muted/60 shadow-2xs"
+                              >
+                                <a href={`tel:${ownerPhone}`}>
+                                  <Phone className="size-3.5 text-primary" /> Call Owner
+                                </a>
+                              </Button>
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="apple-button min-h-[44px] h-11 flex-1 gap-2 text-xs font-semibold rounded-xl border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-2xs"
+                              >
+                                <a
+                                  href={`https://wa.me/${ownerPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hello, Nextgen Realtors inspection team contacting you regarding your property listing at ${title}.`)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <Send className="size-3.5" /> WhatsApp Owner
+                                </a>
+                              </Button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">No owner phone attached</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </TabsContent>
+            )}
 
             <TabsContent value="exec" className="mt-3 space-y-2">
               <HistoryTimeline activity={activity} />

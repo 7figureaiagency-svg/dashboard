@@ -12,6 +12,7 @@ import {
   Send,
   SlidersHorizontal,
   Sparkles,
+  Star,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,7 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
+import { DualRoleBadge, PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
 import { LeadDrawer } from "@/components/crm/lead-drawer";
 import { ExecutiveDrawer } from "@/components/crm/executive-drawer";
 import { useActivity, useUpdateLead } from "@/lib/crm-data";
@@ -43,6 +44,7 @@ import {
   formatDate,
   formatMoney,
   inDatePreset,
+  isDualRoleLead,
   isVisitBookedStatus,
   isVisitDoneStatus,
   STATUS_MAP,
@@ -53,6 +55,7 @@ import {
 const ALL = "__all__";
 
 const STATUS_FILTER_OPTIONS = [
+  "DUAL_ROLE",
   "SITE_VISIT_BOOKED",
   "VISIT_DONE",
   "QUALIFIED",
@@ -134,7 +137,7 @@ export function LeadsTab({
     [leads],
   );
 
-  type ActionFilter = "ALL" | "TODAY_VISITS" | "ACTION_NEEDED" | "QUALIFIED" | "FRESH";
+  type ActionFilter = "ALL" | "TODAY_VISITS" | "ACTION_NEEDED" | "QUALIFIED" | "FRESH" | "DUAL_ROLE";
   const [actionFilter, setActionFilter] = useState<ActionFilter>("ALL");
 
   const todayVisitsCount = useMemo(
@@ -180,6 +183,11 @@ export function LeadsTab({
     [leads],
   );
 
+  const dualRoleCount = useMemo(
+    () => leads.filter((l) => isDualRoleLead(l)).length,
+    [leads],
+  );
+
   const rows = useMemo(
     () =>
       leads.filter((l) => {
@@ -210,11 +218,15 @@ export function LeadsTab({
             l.status !== "QUALIFYING"
           )
             return false;
+        } else if (actionFilter === "DUAL_ROLE") {
+          if (!isDualRoleLead(l)) return false;
         }
 
         if (executive !== ALL && l.assigned_executive_name !== executive) return false;
         if (status !== ALL) {
-          if (status === "SITE_VISIT_BOOKED") {
+          if (status === "DUAL_ROLE") {
+            if (!isDualRoleLead(l)) return false;
+          } else if (status === "SITE_VISIT_BOOKED") {
             if (!isVisitBookedStatus(l.status)) return false;
           } else if (status === "VISIT_DONE") {
             if (!isVisitDoneStatus(l.status)) return false;
@@ -303,7 +315,7 @@ export function LeadsTab({
   return (
     <div className="space-y-4">
       {/* ── 🚀 Apple HIG Complication Triage Widgets ── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <button
           type="button"
           onClick={() => setActionFilter(actionFilter === "TODAY_VISITS" ? "ALL" : "TODAY_VISITS")}
@@ -381,15 +393,15 @@ export function LeadsTab({
           onClick={() => setActionFilter(actionFilter === "FRESH" ? "ALL" : "FRESH")}
           className={`apple-button flex flex-col text-left rounded-2xl border p-4 transition-all shadow-xs ${
             actionFilter === "FRESH"
-              ? "border-purple-500/50 bg-purple-500/10 ring-2 ring-purple-500/30"
+              ? "border-sky-500/50 bg-sky-500/10 ring-2 ring-sky-500/30"
               : "bg-card hover:bg-muted/40 border-border/50"
           }`}
         >
           <div className="flex items-center justify-between">
-            <div className="flex size-9 items-center justify-center rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400">
+            <div className="flex size-9 items-center justify-center rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400">
               <Sparkles className="size-4" />
             </div>
-            <span className="rounded-full bg-purple-500/15 px-2.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 tabular-nums">
+            <span className="rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300 tabular-nums">
               {freshCount}
             </span>
           </div>
@@ -397,6 +409,30 @@ export function LeadsTab({
           <div className="mt-1">
             <span className="text-xs font-semibold text-foreground">In Qualifying</span>
             <p className="text-[11px] text-muted-foreground">Active AI conversations</p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActionFilter(actionFilter === "DUAL_ROLE" ? "ALL" : "DUAL_ROLE")}
+          className={`apple-button flex flex-col text-left rounded-2xl border p-4 transition-all shadow-xs ${
+            actionFilter === "DUAL_ROLE"
+              ? "border-purple-500/50 bg-purple-500/10 ring-2 ring-purple-500/30"
+              : "bg-card hover:bg-muted/40 border-border/50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex size-9 items-center justify-center rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400">
+              <Star className="size-4 fill-amber-400 text-amber-500" />
+            </div>
+            <span className="rounded-full bg-purple-500/15 px-2.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 tabular-nums">
+              {dualRoleCount}
+            </span>
+          </div>
+          <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">{dualRoleCount}</p>
+          <div className="mt-1">
+            <span className="text-xs font-semibold text-foreground">Dual Clients 🌟</span>
+            <p className="text-[11px] text-muted-foreground">Buyer + Seller</p>
           </div>
         </button>
       </div>
@@ -410,6 +446,7 @@ export function LeadsTab({
               {actionFilter === "ACTION_NEEDED" && "Action Needed (Missed Visits / Handover)"}
               {actionFilter === "QUALIFIED" && "Qualified Prospects"}
               {actionFilter === "FRESH" && "In Qualifying"}
+              {actionFilter === "DUAL_ROLE" && "Dual Role Clients (Buyer + Seller 🌟)"}
             </strong>{" "}
             ({rows.length} leads shown)
           </span>
@@ -574,6 +611,12 @@ export function LeadsTab({
                           </span>
                         </div>
 
+                        {isDualRoleLead(lead) && (
+                          <div className="mt-1">
+                            <DualRoleBadge />
+                          </div>
+                        )}
+
                         {/* Middle Info */}
                         <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
                           {(lead.property_type || lead.location) && (
@@ -703,6 +746,11 @@ export function LeadsTab({
                       >
                         {lead.name || "Unnamed Client"}
                       </h4>
+                      {isDualRoleLead(lead) && (
+                        <div className="mt-1">
+                          <DualRoleBadge />
+                        </div>
+                      )}
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
                         <span className="font-medium text-foreground/80">{lead.assigned_executive_name || "Unassigned"}</span>
                         <span>·</span>
@@ -838,7 +886,12 @@ export function LeadsTab({
                   )}
                   {rows.map((lead) => (
                     <TableRow key={lead.lead_id} className="border-b border-border/30 hover:bg-muted/35 transition-colors">
-                      <TableCell className="font-semibold text-foreground py-3.5">{lead.name || "Unnamed"}</TableCell>
+                      <TableCell className="font-semibold text-foreground py-3.5">
+                        <div className="flex flex-col gap-1 items-start">
+                          <span>{lead.name || "Unnamed"}</span>
+                          {isDualRoleLead(lead) && <DualRoleBadge />}
+                        </div>
+                      </TableCell>
                       <TableCell className="py-3.5">
                         {lead.assigned_executive_name ? (
                           <button

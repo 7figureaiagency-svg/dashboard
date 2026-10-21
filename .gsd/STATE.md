@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-21T15:25:00+05:30
+updated: 2026-10-21T16:15:00+05:30
 ---
 
 # Project State
@@ -8,20 +8,19 @@ updated: 2026-10-21T15:25:00+05:30
 
 **Milestone:** Apple HIG Modernization & Conversational Architecture  
 **Phase:** 4 - Bi-Directional Dual-Persona Lifecycle Architecture (Buyer ↔ Seller Multi-Role Engine)  
-**Status:** In Progress (Wave 1 Complete, Wave 2 Ready)  
+**Status:** Complete (Wave 1 & Wave 2 Complete)  
 **Plans:**
 - `.gsd/phases/4/4.1-PLAN.md` (Dual-Persona Data Model, FSM Transitions, and Dual-Reminder Disambiguation Menu) — ✅ Complete
-- `.gsd/phases/4/4.2-PLAN.md` (CRM Dashboard Dual-Role Badges, Drawer Sub-Tabs & High-Value Sales Alerts) — ⏳ Ready
+- `.gsd/phases/4/4.2-PLAN.md` (CRM Dashboard Dual-Role Badges, Drawer Sub-Tabs & High-Value Sales Alerts) — ✅ Complete
 
 ## Last Action
 
-Executed Phase 4 Plan 4.1:
-- Implemented `DUAL_ROLE` multi-persona lead model and `DUAL_ROLE_MENU_PENDING` dialog state in `supabase/functions/realtor-lead-engine/index.ts`.
-- Integrated Scenario 3 Dual-Reminder Greeting Disambiguation Menu for returning dual leads.
-- Added `HIGH_VALUE_DUAL_ROLE` alert type to sales alert dispatcher.
-- Deployed Edge Function `v61-dual-role-engine` to live Supabase edge serverless runtime.
-- Executed `scratch/test_dual_role_lifecycle.cjs` with 100% passing empirical assertions across all 6 scenarios.
-- Confirmed production build passes (`npm.cmd run build`).
+Executed Phase 4 Plan 4.2:
+- Added `DUAL_ROLE` type and status mappings in `src/lib/crm.ts` and `DualRoleBadge` component in `src/components/crm/badges.tsx`.
+- Integrated Dual-Role triage complication widget, quick filters, and badges into Table, Mobile, and Kanban pipeline views in `src/components/crm/leads-tab.tsx`.
+- Implemented high-value sales partner pitch card and dedicated Seller Listings sub-tab in `src/components/crm/lead-drawer.tsx`.
+- Enhanced WhatsApp chat header and live event bubbles in `src/components/crm/whatsapp-chat-view.tsx`.
+- Confirmed production build passes (`npm.cmd run build`) with zero errors.
 
 ## Active Decisions
 

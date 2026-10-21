@@ -48,3 +48,15 @@ This project is integrated with [CodeRabbit Skills](https://github.com/coderabbi
   * `/review`: Run CodeRabbit code quality and security reviews on changes or specified paths (see [`.agent/workflows/review.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agent/workflows/review.md)).
   * `/autofix`: Gather and prepare fixes for CodeRabbit PR comments (see [`.agent/workflows/autofix.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agent/workflows/autofix.md)).
 
+---
+
+## 🔍 Autonomous Product QA & E2E Bug Hunter Integration
+
+This project is equipped with the specialized [`product-qa-analyst`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/product-qa-analyst/SKILL.md) skill and [`qa-bug-hunter`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/agents/qa-bug-hunter.md) subagent for deep product understanding, end-to-end journey testing, and bug finding.
+* **Skill**: [`product-qa-analyst`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/product-qa-analyst/SKILL.md)
+  * [Product Mental Map](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/product-qa-analyst/references/product-mental-map.md): Database topology, finite state machine, UI surface topology, and system invariants.
+  * [E2E User Journeys](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/product-qa-analyst/references/e2e-user-journeys.md): 5 canonical user journeys (Inbound Lead -> Qualification -> CRM Table -> Site Visit -> WABA Drip Sweep).
+  * [Bug Classification](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/product-qa-analyst/references/bug-classification.md): Severity rubric (P0 to P3), PropTech domain anti-patterns, and reproduction bug report format.
+* **Subagent**: [`qa-bug-hunter`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/agents/qa-bug-hunter.md)
+* **Slash Command**: `/qa` (see [`.agent/workflows/qa.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agent/workflows/qa.md)) to run product QA audits and find bugs.
+

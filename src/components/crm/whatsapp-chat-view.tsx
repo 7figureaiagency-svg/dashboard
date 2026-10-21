@@ -12,7 +12,7 @@ import {
   User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatDate, type Lead } from "@/lib/crm";
+import { formatDate, isDualRoleLead, type Lead } from "@/lib/crm";
 
 export interface ChatMessage {
   sender: "user" | "bot";
@@ -176,6 +176,7 @@ export function WhatsAppChatView({
   };
 
   const leadName = lead.name || lead.first_name || "Lead #" + lead.lead_id?.slice(-4);
+  const isDual = isDualRoleLead(lead);
   const isOwner = lead.lead_type === "PROVIDER" || lead.property_state?.startsWith("OWNER_");
   const channel = lead.source?.toUpperCase().includes("TELEGRAM") ? "Telegram" : "WhatsApp";
 
@@ -205,9 +206,15 @@ export function WhatsAppChatView({
               <h4 className="font-semibold text-sm leading-tight text-white truncate max-w-[200px] sm:max-w-xs">
                 {leadName}
               </h4>
-              <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-white/15 text-white/90 border border-white/20 shrink-0">
-                {isOwner ? "Owner" : "Buyer"}
-              </span>
+              {isDual ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-500/40 text-purple-100 border border-purple-300/40 shrink-0 flex items-center gap-0.5">
+                  🌟 DUAL
+                </span>
+              ) : (
+                <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-white/15 text-white/90 border border-white/20 shrink-0">
+                  {isOwner ? "Owner" : "Buyer"}
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-white/80 leading-tight truncate mt-0.5">
               {lead.phone ? `${lead.phone} · ` : ""}
@@ -319,8 +326,16 @@ export function WhatsAppChatView({
                           <Sparkles className="size-3" />
                           <span>Nextgen AI Bot</span>
                           {msg.badge && (
-                            <span className="ml-1 text-[9px] font-medium px-1 py-0.2 rounded bg-black/5 dark:bg-black/20 text-[#54656F] dark:text-white/70">
-                              {msg.badge.replace(/_/g, " ")}
+                            <span
+                              className={`ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                                msg.badge.includes("DUAL_ROLE")
+                                  ? "bg-purple-500/25 text-purple-900 dark:text-purple-200 border border-purple-500/30"
+                                  : "bg-black/5 dark:bg-black/20 text-[#54656F] dark:text-white/70"
+                              }`}
+                            >
+                              {msg.badge === "DUAL_ROLE_MENU_PENDING"
+                                ? "🌟 DUAL ROLE MENU"
+                                : msg.badge.replace(/_/g, " ")}
                             </span>
                           )}
                         </div>

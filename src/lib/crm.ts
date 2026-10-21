@@ -58,6 +58,7 @@ export type Lead = LeadRow & {
   selected_property_map_url: string | null;
   selected_property_brochure_url: string | null;
   portal_property_id: string | null;
+  lead_type?: string | null;
 };
 
 export type Property = PropertyRow & {
@@ -97,6 +98,8 @@ export const PROPERTY_STATE_MAP: Record<string, { label: string; tone: Tone; pul
   SITE_VISIT_BOOKED: { label: "Site Visit Scheduled", tone: "green" },
   HUMAN_HANDOVER: { label: "Action Required", tone: "red", pulse: true },
   NO_MATCHING_PROPERTY: { label: "No Match Found", tone: "orange" },
+  DUAL_ROLE_ACTIVE: { label: "Dual Role Active 🌟", tone: "purple" },
+  DUAL_ROLE_MENU_PENDING: { label: "Dual Role Menu", tone: "purple" },
 };
 
 export const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
@@ -119,7 +122,20 @@ export const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   COLD: { label: "Gone Cold", tone: "gray" },
   COLD_UNQUALIFIED: { label: "Gone Cold", tone: "gray" },
   NOT_INTERESTED: { label: "Closed/Dropped", tone: "gray" },
+  DUAL_ROLE: { label: "Dual: Buyer + Seller 🌟", tone: "purple" },
+  DUAL_ROLE_MENU_PENDING: { label: "Dual Role Menu", tone: "purple" },
 };
+
+export function isDualRoleLead(lead?: Lead | null): boolean {
+  if (!lead) return false;
+  if (lead.lead_type === "DUAL_ROLE") return true;
+  if (lead.status === "DUAL_ROLE" || lead.status === "DUAL_ROLE_MENU_PENDING") return true;
+  if (lead.state === "DUAL_ROLE_MENU_PENDING" || lead.state === "DUAL_ROLE") return true;
+  const meta = (lead.metadata as Record<string, unknown> | null) ?? {};
+  if (meta.lead_type === "DUAL_ROLE") return true;
+  if (meta.has_seller_profile && (meta.has_buyer_profile || lead.property_type || lead.budget)) return true;
+  return false;
+}
 
 export const PROPERTY_SUBMISSION_STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   PENDING_VERIFICATION: { label: "Pending Verification", tone: "yellow" },
@@ -708,6 +724,10 @@ export function hydrateLead(
       metaStr(meta, "selected_property_map_url") || matchedProp?.map_url || null,
     selected_property_brochure_url: metaStr(meta, "selected_property_brochure_url"),
     portal_property_id: metaStr(meta, "portal_property_id"),
+    lead_type:
+      metaStr(meta, "lead_type") ||
+      (raw.lead_type as string) ||
+      (status === "DUAL_ROLE" || status === "DUAL_ROLE_MENU_PENDING" ? "DUAL_ROLE" : null),
   };
 }
 
