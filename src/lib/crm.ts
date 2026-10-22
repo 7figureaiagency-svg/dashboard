@@ -418,35 +418,111 @@ export function formatDate(value: string | null | undefined): string {
   }).format(d);
 }
 
+export const FSM_STATE_EXPLANATIONS: Record<string, string> = {
+  // Fresh & Role Selection
+  NEW: "Fresh inquiry abhi CRM desk par aayi hai; AI initial qualification greeting send karne ke process mein hai.",
+  FRESH: "Fresh inquiry start hui hai; AI ne greeting bhej kar Buyer vs Seller role preference poocha hai.",
+  ROLE_SELECTION_PENDING: "Customer se role confirmation ka wait hai — property leni hai (Buy/Rent) ya list karni hai (Sell/Rent Out).",
+  DUAL_ROLE_MENU_PENDING: "Dual-Role customer ko VIP menu (Site Visit update, Listed Property status, Nayi search) bhej kar response ka wait kiya ja raha hai.",
+
+  // Buyer Qualification & Options
+  QUALIFYING: "Requirement gathering in progress. Property configuration, budget, ya location details gather kiye ja rahe hain.",
+  OPTIONS_SENT: "Top matching verified inventory cards customer ko share kar di gayi hain. Customer se option select karne ya VIP Site Visit date/time ka wait hai.",
+  CRITERIA_CONFIRMATION_PENDING: "Lead ne re-engage kiya hai; AI purana search criteria confirm karke fresh matching options unlock karne ka wait kar raha hai.",
+  VISIT_REQUESTED: "Customer ne VIP Site Visit attend karne mein interest express kiya hai; date/time slot confirmation pending hai.",
+
+  // Site Visits
+  SITE_VISIT_BOOKED: "VIP Site Visit confirm ho chuki hai. Location map pin send kiya gaya hai aur site advisor coordination active hai.",
+  VISIT_BOOKED: "VIP Site Visit confirm ho chuki hai. Pre-visit reminder aur briefing cycle active hai.",
+  VISIT_RESCHEDULED: "Site visit nayi date aur time par reschedule ki gayi hai. Customer ko updated briefing send ho chuki hai.",
+  SITE_VISIT_RESCHEDULED: "Site visit successfully reschedule ho chuki hai. Fresh calendar invite coordinate ho raha hai.",
+  VISIT_CANCELLED: "Customer ne visit cancel ki hai. Alternate convenient dates ya fresh matching options pitch kiye ja rahe hain.",
+  SITE_VISIT_DONE: "Customer ne VIP Site Visit attend kar li hai! AI post-visit feedback, spot token booking offers, aur home loan drips chala raha hai.",
+  VISIT_DONE: "Site visit successfully attend ho chuki hai. Lead high-intent post-visit closing cadence mein hai.",
+  VISIT_COMPLETED: "Site visit successfully complete ho chuki hai.",
+  VISIT_MISSED: "Customer scheduled timing par visit attend nahi kar paaya. AI empathetic reschedule loop bhej raha hai; senior rep callback required.",
+  SITE_VISIT_MISSED: "Site visit miss ho gayi hai. Priority reschedule follow-up active hai.",
+
+  // Owner Intake State Machine (All 9 steps)
+  OWNER_CONFIG_PENDING: "Property Listing shuru hui hai — configuration (Flat, Villa, Commercial Office, Shop, Plot) specify karne ka wait hai.",
+  OWNER_SOCIETY_PENDING: "Configuration mil gayi hai — Society, Project, Commercial Hub ya Road name receive hona baaki hai.",
+  OWNER_LOCATION_PENDING: "Society name mil chuka hai — locality / prime area confirm karne ka step chal raha hai.",
+  OWNER_AREA_PENDING: "Area details (Carpet sq.ft ya Built-up area) enter karne ka wait hai.",
+  OWNER_SIZE_PENDING: "Property size / plot area sq.ft enter karne ka wait hai.",
+  OWNER_PRICE_PENDING: "Owner se expected selling price (demand) ya monthly rent quote gather kiya ja raha hai.",
+  OWNER_POSSESSION_PENDING: "Possession status (Ready to Move ya Under Construction) confirm hona baaki hai.",
+  OWNER_FURNISHING_PENDING: "Furnishing status (Fully Furnished, Semi-Furnished, Unfurnished) select karne ka wait hai.",
+  OWNER_PHONE_PENDING: "Direct calling number verify kiya ja raha hai taaki acquisition team connect kar sake.",
+  OWNER_DETAILS_GATHERED: "Owner listing 100% complete ho chuki hai! Sabhi documents & property details Admin desk par verification ke liye submit hain.",
+  OWNER_COMPLETED: "Property submission verified queue mein submit ho chuki hai.",
+
+  // Closing & Drop States
+  NEGOTIATING: "Price sheet aur developer token discount negotiation chal rahi hai. Senior rep closing intervention required.",
+  DEAL_WON: "Deal successfully close ho chuki hai! 🎉 Token booking / agreement paperwork stage active hai.",
+  NOT_INTERESTED: "Lead ne filhaal continue karne se mana kiya hai; bot automation pause kar diya gaya hai.",
+  DROPPED: "Lead drop/close ho chuka hai. Re-engagement drip schedule ke liye archived hai.",
+  COLD: "Inactivity ki wajah se lead cold stage par hai; periodic re-activation drips active hain.",
+};
+
 /**
- * Builds a Hinglish AI conversation summary as JSX from lead column values.
- * Key details are bolded. Zero network calls — synchronous render-time compute.
+ * Builds a multi-persona Hinglish AI conversation summary as structured JSX from lead data,
+ * metadata drafts, and property submissions.
+ * Accurately represents Owners/Sellers, Buyers, and Dual-Role clients with an exhaustive FSM state matrix.
  */
-export function buildLeadSummary(lead: Lead): ReactNode {
-  const b = (text: string) => createElement("strong", null, text);
-  const firstName = lead.name?.trim().split(" ")[0] || "Yeh lead";
+export function buildLeadSummary(lead: Lead, submissions?: PropertySubmission[]): ReactNode {
+  const div = (className: string, ...children: (ReactNode | string | null | undefined | false)[]) =>
+    createElement("div", { className }, ...children.filter((c) => c !== false && c !== null && c !== undefined));
+  const p = (className: string, ...children: (ReactNode | string | null | undefined | false)[]) =>
+    createElement("p", { className }, ...children.filter((c) => c !== false && c !== null && c !== undefined));
+  const span = (className: string, ...children: (ReactNode | string | null | undefined | false)[]) =>
+    createElement("span", { className }, ...children.filter((c) => c !== false && c !== null && c !== undefined));
+  const b = (text: ReactNode) => createElement("strong", { className: "font-semibold text-foreground" }, text);
 
-  const propLabel = lead.property_type
-    ? lead.property_type.replace(/_/g, " ").toLowerCase()
-    : null;
+  const firstName = lead.first_name || lead.name?.trim().split(" ")[0] || "Client";
+  const meta = (lead.metadata as Record<string, any> | null) ?? {};
+  const ownerDraft = (meta.owner_draft as Record<string, any> | null) ?? null;
+  const primarySub = submissions && submissions.length > 0 ? submissions[0] : null;
 
-  const reqLabel =
-    lead.requirement === "BUY"
-      ? "kharidna chahte hain"
-      : lead.requirement === "RENT"
-        ? "rent par lena chahte hain"
-        : null;
+  // Resolve listed property attributes
+  const listedPropType = primarySub?.configuration || primarySub?.property_type || ownerDraft?.configuration || ownerDraft?.property_type || null;
+  const listedProject = primarySub?.society_name || primarySub?.project_name || ownerDraft?.society_name || ownerDraft?.project_name || null;
+  const listedLoc = primarySub?.location || ownerDraft?.location || null;
+  const listedArea = Number(primarySub?.carpet_area_sqft || primarySub?.super_built_up_sqft || ownerDraft?.carpet_area_sqft || ownerDraft?.super_built_up_sqft || 0);
+  const isCarpet = Boolean(primarySub?.carpet_area_sqft || ownerDraft?.carpet_area_sqft);
+  const listedDemand = Number(primarySub?.expected_price || primarySub?.expected_rent || ownerDraft?.expected_price || ownerDraft?.expected_rent || 0);
+  const listedTxType = primarySub?.transaction_type || ownerDraft?.transaction_type || (primarySub?.expected_rent ? "RENT" : "SELL");
+  const isRent = listedTxType === "RENT" || listedTxType === "RENT_OUT" || Boolean(primarySub?.expected_rent);
+  const listedPossession = primarySub?.possession_status || ownerDraft?.possession_status || null;
+  const listedFurnishing = primarySub?.furnishing_status || ownerDraft?.furnishing_status || null;
+  const subStatus = primarySub?.status || (ownerDraft ? "PENDING_VERIFICATION" : null);
 
-  const purposeLabel =
-    lead.purpose === "INVESTMENT"
-      ? "investment"
-      : lead.purpose === "SELF_USE"
-        ? "self-use"
-        : null;
+  // Status badge label & tone for listed property
+  let reviewBadgeLabel = "Under Review";
+  let reviewBadgeClass = "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30";
+  if (subStatus === "CONVERTED_TO_INVENTORY" || subStatus === "VERIFIED") {
+    reviewBadgeLabel = "Verified / In Inventory";
+    reviewBadgeClass = "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30";
+  } else if (subStatus === "REJECTED") {
+    reviewBadgeLabel = "Rejected";
+    reviewBadgeClass = "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30";
+  } else if (subStatus === "PENDING_VERIFICATION") {
+    reviewBadgeLabel = "Pending Verification";
+    reviewBadgeClass = "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30";
+  }
 
-  const visitLabel = (() => {
-    if (!lead.site_visit_datetime) return null;
-    const d = new Date(lead.site_visit_datetime);
+  // Resolve buyer attributes
+  const buyerPropType = lead.property_type ? lead.property_type.replace(/_/g, " ") : null;
+  const buyerReqLabel = lead.requirement === "BUY" ? "kharidna chahte hain" : lead.requirement === "RENT" ? "rent par lena chahte hain" : "dekh rahe hain";
+  const buyerLoc = lead.location || null;
+  const buyerBudget = lead.budget && lead.budget > 0 ? Number(lead.budget) : null;
+  const purposeLabel = lead.purpose === "INVESTMENT" ? "Investment" : lead.purpose === "SELF_USE" ? "Self-use" : null;
+  const timelineLabel = lead.timeline || null;
+  const shortlistedProp = lead.selected_property_name || null;
+
+  const visitTime = (() => {
+    const raw = lead.site_visit_datetime || lead.site_visit_at;
+    if (!raw) return null;
+    const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return null;
     return new Intl.DateTimeFormat("en-IN", {
       day: "2-digit",
@@ -459,68 +535,149 @@ export function buildLeadSummary(lead: Lead): ReactNode {
     }).format(d);
   })();
 
-  const stageNote: Record<string, string> = {
-    NEW: "Abhi qualify karna baaki hai.",
-    QUALIFYING: "Kuch details pending hain.",
-    QUALIFIED: "Fully qualified — options share kar sakte hain.",
-    SITE_VISIT_BOOKED: "Site visit confirmed hai.",
-    NEGOTIATING: "Negotiation chal rahi hai.",
-    DEAL_WON: "Deal close ho gayi! 🎉",
-    NOT_INTERESTED: "Filhaal interested nahi hain.",
-  };
+  // Persona Detection
+  const hasListedProperty = Boolean(listedPropType || listedProject || primarySub || ownerDraft || meta.has_seller_profile);
+  const hasBuyerInterest = Boolean(buyerPropType || buyerBudget || lead.requirement === "BUY" || lead.requirement === "RENT" || visitTime || meta.has_buyer_profile);
 
-  // Build sentence fragments as ReactNode[]
-  const nodes: ReactNode[] = [];
+  const isDual = isDualRoleLead(lead) || lead.lead_type === "DUAL_ROLE" || (hasListedProperty && hasBuyerInterest);
+  const isPureOwner = !isDual && (lead.lead_type === "PROVIDER" || String(lead.state || "").startsWith("OWNER_") || (hasListedProperty && !hasBuyerInterest));
 
-  // Opening
-  if (reqLabel && propLabel) {
-    nodes.push(b(firstName), " ji ek ", b(propLabel), ` ${reqLabel}`);
-  } else if (propLabel) {
-    nodes.push(b(firstName), " ji ", b(propLabel), " mein interested hain");
-  } else {
-    nodes.push(b(firstName), " ji property mein interested hain");
+  // Resolve FSM state explanation
+  const rawState = String(lead.state || lead.status || "NEW").toUpperCase();
+  const stateExplanation = FSM_STATE_EXPLANATIONS[rawState] || FSM_STATE_EXPLANATIONS[String(lead.status || "").toUpperCase()] || "Conversation active hai; AI customer requirements ke sath coordinate kar raha hai.";
+  const stateLabel = (STATUS_MAP[rawState] || PROPERTY_STATE_MAP[rawState])?.label || rawState.replace(/_/g, " ");
+
+  const followupText = (lead.followup_count && lead.followup_count > 0)
+    ? ` (AI ne ${lead.followup_count} automated follow-up send kiye hain)`
+    : "";
+
+  // 1. DUAL-ROLE CLIENT BRIEFING
+  if (isDual) {
+    return div(
+      "space-y-2",
+      div(
+        "flex items-center justify-between text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-md",
+        span("flex items-center gap-1.5", "🌟", b("Dual-Role Client (Buyer + Seller)")),
+        span("text-[10px] opacity-80", "High Value Opportunity")
+      ),
+      div(
+        "rounded-md bg-muted/40 border border-border/50 p-2.5 space-y-1 text-xs",
+        div(
+          "flex items-center justify-between font-medium text-foreground",
+          span("flex items-center gap-1.5", "📋", b("Listed Property (Seller Side)")),
+          span(`text-[10px] font-medium px-1.5 py-0.5 rounded border ${reviewBadgeClass}`, reviewBadgeLabel)
+        ),
+        p(
+          "text-muted-foreground leading-relaxed",
+          b(firstName), " ji ne ",
+          b(listedPropType || "Property"),
+          listedProject ? ` in ${listedProject}` : "",
+          listedLoc ? `, ${listedLoc}` : "",
+          " list kiya hai",
+          listedArea > 0 ? `. Size: ${listedArea} sq.ft ${isCarpet ? "Carpet" : "Area"}` : "",
+          listedDemand > 0 ? `. Expected ${isRent ? "Rent" : "Demand"}: ${formatMoney(listedDemand)}` : "",
+          listedPossession ? `. ${listedPossession.replace(/_/g, " ")}` : "",
+          listedFurnishing ? `. ${listedFurnishing.replace(/_/g, " ")}` : "",
+          "."
+        )
+      ),
+      div(
+        "rounded-md bg-muted/40 border border-border/50 p-2.5 space-y-1 text-xs",
+        div("flex items-center gap-1.5 font-medium text-foreground", "🏡", b("Property Search (Buyer Side)")),
+        p(
+          "text-muted-foreground leading-relaxed",
+          b(firstName), " ji ",
+          buyerPropType ? `${buyerPropType} ` : "property ",
+          buyerReqLabel,
+          buyerLoc ? `, ${buyerLoc} mein` : "",
+          buyerBudget ? `, budget ${formatMoney(buyerBudget)}` : "",
+          purposeLabel ? `. ${purposeLabel} ke liye` : "",
+          timelineLabel ? `, timeline ${timelineLabel}` : "",
+          shortlistedProp ? `. Shortlist: ${shortlistedProp}` : "",
+          visitTime ? `. VIP Site Visit: ${visitTime}` : "",
+          "."
+        )
+      ),
+      div(
+        "rounded-md bg-blue-500/5 border border-blue-500/20 p-2 text-xs space-y-0.5",
+        div(
+          "flex items-center justify-between text-blue-700 dark:text-blue-300 font-medium text-[11px]",
+          span("flex items-center gap-1", "⚡", b(`Current Stage: ${stateLabel}`)),
+          followupText ? span("text-[10px] opacity-75", followupText) : null
+        ),
+        p("text-muted-foreground leading-relaxed text-[11px]", stateExplanation)
+      )
+    );
   }
 
-  // Location + budget inline
-  if (lead.location && lead.budget && lead.budget > 0) {
-    nodes.push(", ", b(lead.location), " mein ", b(formatMoney(lead.budget)), " budget ke saath");
-  } else if (lead.location) {
-    nodes.push(", preferred location ", b(lead.location));
-  } else if (lead.budget && lead.budget > 0) {
-    nodes.push(", budget ", b(formatMoney(lead.budget)));
+  // 2. PURE OWNER / SELLER BRIEFING
+  if (isPureOwner) {
+    return div(
+      "space-y-2",
+      div(
+        "flex items-center justify-between text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md",
+        span("flex items-center gap-1.5", "📋", b("Property Owner / Seller Inquiry")),
+        span(`text-[10px] font-medium px-1.5 py-0.5 rounded border ${reviewBadgeClass}`, reviewBadgeLabel)
+      ),
+      div(
+        "rounded-md bg-muted/40 border border-border/50 p-2.5 space-y-1 text-xs",
+        div("font-medium text-foreground", b("Property Offering Details")),
+        p(
+          "text-muted-foreground leading-relaxed",
+          b(firstName), " ji apni property ",
+          b(isRent ? "Rent par dena" : "Bechna"), " chahte hain: ",
+          b(listedPropType || "Property"),
+          listedProject ? ` in ${listedProject}` : "",
+          listedLoc ? `, ${listedLoc}` : "",
+          listedArea > 0 ? `. Area: ${listedArea} sq.ft ${isCarpet ? "Carpet" : ""}` : "",
+          listedDemand > 0 ? `. Expected ${isRent ? "Rent" : "Price"}: ${formatMoney(listedDemand)}` : "",
+          listedPossession ? `. ${listedPossession.replace(/_/g, " ")}` : "",
+          listedFurnishing ? `. ${listedFurnishing.replace(/_/g, " ")}` : "",
+          "."
+        )
+      ),
+      div(
+        "rounded-md bg-blue-500/5 border border-blue-500/20 p-2 text-xs space-y-0.5",
+        div(
+          "flex items-center justify-between text-blue-700 dark:text-blue-300 font-medium text-[11px]",
+          span("flex items-center gap-1", "⚡", b(`Intake Status: ${stateLabel}`)),
+          followupText ? span("text-[10px] opacity-75", followupText) : null
+        ),
+        p("text-muted-foreground leading-relaxed text-[11px]", stateExplanation)
+      )
+    );
   }
 
-  // Purpose + timeline inline
-  if (purposeLabel && lead.timeline) {
-    nodes.push(". ", b(purposeLabel), " ke liye, timeline ", b(lead.timeline), " hai");
-  } else if (purposeLabel) {
-    nodes.push(". ", b(purposeLabel), " ke liye dekh rahe hain");
-  } else if (lead.timeline) {
-    nodes.push(". Timeline ", b(lead.timeline), " hai");
-  }
-
-  nodes.push(". ");
-
-  // Selected property
-  if (lead.selected_property_name) {
-    nodes.push(b(lead.selected_property_name), " shortlist mein hai. ");
-  }
-
-  // Site visit
-  if (visitLabel) {
-    nodes.push("Site visit ", b(visitLabel), " ke liye scheduled hai. ");
-  }
-
-  // Stage note
-  const note = lead.status ? stageNote[lead.status] : null;
-  if (note) nodes.push(note, " ");
-
-  // Follow-ups
-  if (lead.followup_count && lead.followup_count > 0) {
-    nodes.push("AI ne ", b(String(lead.followup_count)), " follow-up bheje hain.");
-  }
-
-  return createElement(Fragment, null, ...nodes);
+  // 3. PURE BUYER / SEEKER BRIEFING
+  return div(
+    "space-y-2",
+    div(
+      "rounded-md bg-muted/40 border border-border/50 p-2.5 space-y-1 text-xs",
+      div("font-medium text-foreground flex items-center gap-1.5", "🎯", b("Buyer Requirement")),
+      p(
+        "text-muted-foreground leading-relaxed",
+        b(firstName), " ji ek ",
+        b(buyerPropType || "property"), " ",
+        buyerReqLabel,
+        buyerLoc ? `, ${buyerLoc} mein` : "",
+        buyerBudget ? `, budget ${formatMoney(buyerBudget)} ke saath` : "",
+        purposeLabel ? `. ${purposeLabel} ke liye` : "",
+        timelineLabel ? `, timeline ${timelineLabel}` : "",
+        shortlistedProp ? `. ${shortlistedProp} shortlist mein hai` : "",
+        visitTime ? `. Site visit ${visitTime} ke liye scheduled hai` : "",
+        "."
+      )
+    ),
+    div(
+      "rounded-md bg-blue-500/5 border border-blue-500/20 p-2 text-xs space-y-0.5",
+      div(
+        "flex items-center justify-between text-blue-700 dark:text-blue-300 font-medium text-[11px]",
+        span("flex items-center gap-1", "⚡", b(`Current Stage: ${stateLabel}`)),
+        followupText ? span("text-[10px] opacity-75", followupText) : null
+      ),
+      p("text-muted-foreground leading-relaxed text-[11px]", stateExplanation)
+    )
+  );
 }
 
 export function isValidUrl(value: string): boolean {

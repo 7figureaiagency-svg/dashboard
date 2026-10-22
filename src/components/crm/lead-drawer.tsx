@@ -342,12 +342,12 @@ export function LeadDrawer({
           )}
 
           <section className="space-y-2">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <MessageSquareText className="size-4" /> AI Conversation summary
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <MessageSquareText className="size-4 text-primary" /> AI Conversation summary
             </h3>
-            <p className="rounded-lg border bg-card p-3 text-sm text-muted-foreground leading-relaxed">
-              {buildLeadSummary(lead)}
-            </p>
+            <div className="rounded-xl border bg-card/60 p-3 shadow-xs">
+              {buildLeadSummary(lead, submissions)}
+            </div>
           </section>
 
           <Separator />
