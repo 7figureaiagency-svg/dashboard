@@ -554,21 +554,21 @@ export function buildLeadSummary(lead: Lead, submissions?: PropertySubmission[])
   // 1. DUAL-ROLE CLIENT BRIEFING
   if (isDual) {
     return div(
-      "space-y-2",
+      "space-y-2.5",
       div(
-        "flex items-center justify-between text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-md",
+        "flex items-center justify-between text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/15 border border-purple-500/30 px-3 py-1.5 rounded-xl shadow-2xs",
         span("flex items-center gap-1.5", "🌟", b("Dual-Role Client (Buyer + Seller)")),
-        span("text-[10px] opacity-80", "High Value Opportunity")
+        span("text-[10px] font-bold opacity-90", "High Value Opportunity")
       ),
       div(
-        "rounded-md bg-muted/40 border border-border/50 p-2.5 space-y-1 text-xs",
+        "rounded-xl bg-card border border-border/70 p-3 space-y-1.5 text-xs shadow-2xs",
         div(
-          "flex items-center justify-between font-medium text-foreground",
+          "flex items-center justify-between font-semibold text-foreground",
           span("flex items-center gap-1.5", "📋", b("Listed Property (Seller Side)")),
-          span(`text-[10px] font-medium px-1.5 py-0.5 rounded border ${reviewBadgeClass}`, reviewBadgeLabel)
+          span(`text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${reviewBadgeClass}`, reviewBadgeLabel)
         ),
         p(
-          "text-muted-foreground leading-relaxed",
+          "text-foreground/90 leading-relaxed font-normal",
           b(firstName), " ji ne ",
           b(listedPropType || "Property"),
           listedProject ? ` in ${listedProject}` : "",
@@ -582,10 +582,10 @@ export function buildLeadSummary(lead: Lead, submissions?: PropertySubmission[])
         )
       ),
       div(
-        "rounded-md bg-muted/40 border border-border/50 p-2.5 space-y-1 text-xs",
-        div("flex items-center gap-1.5 font-medium text-foreground", "🏡", b("Property Search (Buyer Side)")),
+        "rounded-xl bg-card border border-border/70 p-3 space-y-1.5 text-xs shadow-2xs",
+        div("flex items-center gap-1.5 font-semibold text-foreground", "🏡", b("Property Search (Buyer Side)")),
         p(
-          "text-muted-foreground leading-relaxed",
+          "text-foreground/90 leading-relaxed font-normal",
           b(firstName), " ji ",
           buyerPropType ? `${buyerPropType} ` : "property ",
           buyerReqLabel,
@@ -599,13 +599,13 @@ export function buildLeadSummary(lead: Lead, submissions?: PropertySubmission[])
         )
       ),
       div(
-        "rounded-md bg-blue-500/5 border border-blue-500/20 p-2 text-xs space-y-0.5",
+        "rounded-xl bg-blue-500/10 border border-blue-500/25 p-2.5 text-xs space-y-1 shadow-2xs",
         div(
-          "flex items-center justify-between text-blue-700 dark:text-blue-300 font-medium text-[11px]",
+          "flex items-center justify-between text-blue-700 dark:text-blue-300 font-bold text-[11px]",
           span("flex items-center gap-1", "⚡", b(`Current Stage: ${stateLabel}`)),
-          followupText ? span("text-[10px] opacity-75", followupText) : null
+          followupText ? span("text-[10px] font-medium opacity-85", followupText) : null
         ),
-        p("text-muted-foreground leading-relaxed text-[11px]", stateExplanation)
+        p("text-foreground/80 leading-relaxed text-[11px] font-medium", stateExplanation)
       )
     );
   }
@@ -613,17 +613,17 @@ export function buildLeadSummary(lead: Lead, submissions?: PropertySubmission[])
   // 2. PURE OWNER / SELLER BRIEFING
   if (isPureOwner) {
     return div(
-      "space-y-2",
+      "space-y-2.5",
       div(
-        "flex items-center justify-between text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md",
+        "flex items-center justify-between text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1.5 rounded-xl shadow-2xs",
         span("flex items-center gap-1.5", "📋", b("Property Owner / Seller Inquiry")),
-        span(`text-[10px] font-medium px-1.5 py-0.5 rounded border ${reviewBadgeClass}`, reviewBadgeLabel)
+        span(`text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${reviewBadgeClass}`, reviewBadgeLabel)
       ),
       div(
-        "rounded-md bg-muted/40 border border-border/50 p-2.5 space-y-1 text-xs",
-        div("font-medium text-foreground", b("Property Offering Details")),
+        "rounded-xl bg-card border border-border/70 p-3 space-y-1.5 text-xs shadow-2xs",
+        div("font-semibold text-foreground", b("Property Offering Details")),
         p(
-          "text-muted-foreground leading-relaxed",
+          "text-foreground/90 leading-relaxed font-normal",
           b(firstName), " ji apni property ",
           b(isRent ? "Rent par dena" : "Bechna"), " chahte hain: ",
           b(listedPropType || "Property"),
@@ -637,25 +637,25 @@ export function buildLeadSummary(lead: Lead, submissions?: PropertySubmission[])
         )
       ),
       div(
-        "rounded-md bg-blue-500/5 border border-blue-500/20 p-2 text-xs space-y-0.5",
+        "rounded-xl bg-blue-500/10 border border-blue-500/25 p-2.5 text-xs space-y-1 shadow-2xs",
         div(
-          "flex items-center justify-between text-blue-700 dark:text-blue-300 font-medium text-[11px]",
+          "flex items-center justify-between text-blue-700 dark:text-blue-300 font-bold text-[11px]",
           span("flex items-center gap-1", "⚡", b(`Intake Status: ${stateLabel}`)),
-          followupText ? span("text-[10px] opacity-75", followupText) : null
+          followupText ? span("text-[10px] font-medium opacity-85", followupText) : null
         ),
-        p("text-muted-foreground leading-relaxed text-[11px]", stateExplanation)
+        p("text-foreground/80 leading-relaxed text-[11px] font-medium", stateExplanation)
       )
     );
   }
 
   // 3. PURE BUYER / SEEKER BRIEFING
   return div(
-    "space-y-2",
+    "space-y-2.5",
     div(
-      "rounded-md bg-muted/40 border border-border/50 p-2.5 space-y-1 text-xs",
-      div("font-medium text-foreground flex items-center gap-1.5", "🎯", b("Buyer Requirement")),
+      "rounded-xl bg-card border border-border/70 p-3 space-y-1.5 text-xs shadow-2xs",
+      div("font-semibold text-foreground flex items-center gap-1.5", "🎯", b("Buyer Requirement")),
       p(
-        "text-muted-foreground leading-relaxed",
+        "text-foreground/90 leading-relaxed font-normal",
         b(firstName), " ji ek ",
         b(buyerPropType || "property"), " ",
         buyerReqLabel,
@@ -669,13 +669,13 @@ export function buildLeadSummary(lead: Lead, submissions?: PropertySubmission[])
       )
     ),
     div(
-      "rounded-md bg-blue-500/5 border border-blue-500/20 p-2 text-xs space-y-0.5",
+      "rounded-xl bg-blue-500/10 border border-blue-500/25 p-2.5 text-xs space-y-1 shadow-2xs",
       div(
-        "flex items-center justify-between text-blue-700 dark:text-blue-300 font-medium text-[11px]",
+        "flex items-center justify-between text-blue-700 dark:text-blue-300 font-bold text-[11px]",
         span("flex items-center gap-1", "⚡", b(`Current Stage: ${stateLabel}`)),
-        followupText ? span("text-[10px] opacity-75", followupText) : null
+        followupText ? span("text-[10px] font-medium opacity-85", followupText) : null
       ),
-      p("text-muted-foreground leading-relaxed text-[11px]", stateExplanation)
+      p("text-foreground/80 leading-relaxed text-[11px] font-medium", stateExplanation)
     )
   );
 }

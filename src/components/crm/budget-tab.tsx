@@ -460,13 +460,13 @@ export function BudgetTab({
           return (
             <div
               key={tier.key}
-              className="rounded-2xl border border-border/50 bg-card shadow-xs flex flex-col justify-between overflow-hidden hover:border-primary/40 transition-all"
+              className="rounded-2xl border border-border/70 bg-card shadow-xs flex flex-col justify-between overflow-hidden hover:border-primary/50 transition-all"
             >
-              <div className="p-4 pb-3 border-b border-border/30 bg-muted/20">
+              <div className="p-4 pb-3 border-b border-border/40 bg-muted/40">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h4 className="text-sm font-bold tracking-tight text-foreground">{tier.label}</h4>
-                    <p className="text-xs font-medium text-muted-foreground mt-0.5">{tier.hint}</p>
+                    <p className="text-xs font-semibold text-muted-foreground mt-0.5">{tier.hint}</p>
                   </div>
                   <span className="crm-badge" data-tone={tier.tone}>
                     <span className="tabular-nums font-bold">{tier.leads.length}</span> Leads
@@ -474,16 +474,16 @@ export function BudgetTab({
                 </div>
 
                 {/* Supply vs Demand Comparison Bar */}
-                <div className="mt-3 space-y-1.5 pt-2 border-t border-border/30 border-dashed">
+                <div className="mt-3 space-y-1.5 pt-2 border-t border-border/40 border-dashed">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Buyer Demand:</span>
-                    <span className="font-semibold text-foreground tabular-nums">
+                    <span className="text-foreground/80 font-medium">Buyer Demand:</span>
+                    <span className="font-bold text-foreground tabular-nums">
                       {formatMoney(tier.demandValue, { isRent: tier.isRentMode })}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Inventory Available:</span>
-                    <span className="font-semibold text-foreground tabular-nums">
+                    <span className="text-foreground/80 font-medium">Inventory Available:</span>
+                    <span className="font-bold text-foreground tabular-nums">
                       {tier.matchingInventory.length} unit{tier.matchingInventory.length === 1 ? "" : "s"}
                       {tier.supplyValue > 0 && ` (${formatMoney(tier.supplyValue, { isRent: tier.isRentMode })})`}
                     </span>
@@ -619,16 +619,16 @@ function LeadMiniCard({ lead, isRent }: { lead: Lead; isRent?: boolean }) {
   const isLeadRent = isRent || getLeadDealType(lead) === "RENT";
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card p-3 shadow-2xs hover:border-primary/40 transition-all">
+    <div className="rounded-xl border border-border/70 bg-card p-3 shadow-2xs hover:border-primary/50 transition-all">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-semibold text-foreground text-sm truncate">{lead.name || "Unnamed Lead"}</p>
+          <p className="font-bold text-foreground text-sm truncate">{lead.name || "Unnamed Lead"}</p>
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
             <span className="font-bold text-foreground tabular-nums">
               {formatMoney(lead.budget, { isRent: isLeadRent })}
             </span>
             <span>·</span>
-            <span className="truncate max-w-[120px]">{lead.location || "Location pending"}</span>
+            <span className="truncate max-w-[120px] font-medium text-foreground/85">{lead.location || "Location pending"}</span>
           </div>
         </div>
 

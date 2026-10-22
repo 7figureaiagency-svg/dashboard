@@ -405,15 +405,15 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
           <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
-                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Executive</TableHead>
-                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Active Pipeline</TableHead>
-                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Site Visits (Done/Booked)</TableHead>
-                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Speed to Call (SLA)</TableHead>
-                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Conversion</TableHead>
-                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Client Mix</TableHead>
-                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Last Active</TableHead>
-                  <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3 text-right">Action</TableHead>
+                <TableRow className="bg-muted/50 border-b border-border/60 hover:bg-muted/50">
+                  <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Executive</TableHead>
+                  <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Active Pipeline</TableHead>
+                  <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Site Visits (Done/Booked)</TableHead>
+                  <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Speed to Call (SLA)</TableHead>
+                  <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Conversion</TableHead>
+                  <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Client Mix</TableHead>
+                  <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Last Active</TableHead>
+                  <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -426,7 +426,7 @@ export function PerformanceTab({ leads, clientId }: { leads: Lead[]; clientId: s
                 )}
                 {board.map((row) => (
                   <Fragment key={row.name}>
-                    <TableRow className="border-b border-border/30 hover:bg-muted/35 transition-colors">
+                    <TableRow className="border-b border-border/50 hover:bg-muted/40 transition-colors">
                       <TableCell className="py-3.5">
                         <button
                           className="flex items-center gap-1.5 font-semibold text-foreground hover:text-primary transition-colors"

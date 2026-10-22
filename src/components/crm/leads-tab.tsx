@@ -439,10 +439,10 @@ export function LeadsTab({
       </div>
 
       {actionFilter !== "ALL" && (
-        <div className="flex items-center gap-2 rounded-xl bg-muted/60 border border-border/40 px-3.5 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-xl bg-muted/80 border border-border/60 px-3.5 py-2 text-xs text-foreground/90">
           <span>
             Active quick filter:{" "}
-            <strong className="text-foreground">
+            <strong className="text-foreground font-bold">
               {actionFilter === "TODAY_VISITS" && "Today's Site Visits"}
               {actionFilter === "ACTION_NEEDED" && "Action Needed (Missed Visits / Handover)"}
               {actionFilter === "QUALIFIED" && "Qualified Prospects"}
@@ -454,16 +454,16 @@ export function LeadsTab({
           <button
             type="button"
             onClick={() => setActionFilter("ALL")}
-            className="apple-button ml-auto inline-flex items-center gap-1 text-primary hover:underline font-medium"
+            className="apple-button ml-auto inline-flex items-center gap-1 text-primary hover:underline font-bold"
           >
             <X className="size-3" /> Clear quick filter
           </button>
         </div>
       )}
 
-      <Card className="rounded-2xl border border-border/50 bg-card shadow-xs">
+      <Card className="rounded-2xl border border-border/60 bg-card shadow-xs">
         <CardContent className="flex flex-wrap items-end gap-3 pt-4 pb-4">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <SlidersHorizontal className="size-3.5 text-primary" /> Filters
           </div>
           {lockedExecutive ? (
@@ -833,26 +833,26 @@ export function LeadsTab({
           </div>
 
           {/* ── 💻 Apple Inset Grouped Table View (Desktop & Tablet >= 768px) ── */}
-          <div className="hidden md:block overflow-hidden rounded-2xl border border-border/50 bg-card shadow-xs">
+          <div className="hidden md:block overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
-                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Customer</TableHead>
-                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Executive</TableHead>
-                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Phone</TableHead>
-                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Status</TableHead>
-                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">AI Bot</TableHead>
-                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Selected Property</TableHead>
-                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Budget</TableHead>
-                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3">Created</TableHead>
-                    <TableHead className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase py-3 text-right">Actions</TableHead>
+                  <TableRow className="bg-muted/50 border-b border-border/60 hover:bg-muted/50">
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Customer</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Executive</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Phone</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Status</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">AI Bot</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Selected Property</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Budget</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Created</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading &&
                     Array.from({ length: 5 }).map((_, i) => (
-                      <TableRow key={`skeleton-${i}`} className="animate-pulse border-b border-border/30">
+                      <TableRow key={`skeleton-${i}`} className="animate-pulse border-b border-border/40">
                         <TableCell><div className="h-4 w-28 rounded-lg bg-muted/60" /></TableCell>
                         <TableCell><div className="h-4 w-20 rounded-lg bg-muted/50" /></TableCell>
                         <TableCell><div className="h-4 w-24 rounded-lg bg-muted/50" /></TableCell>
@@ -898,7 +898,7 @@ export function LeadsTab({
                   {rows.map((lead) => (
                     <TableRow
                       key={lead.lead_id}
-                      className="border-b border-border/30 hover:bg-muted/40 transition-colors cursor-pointer group"
+                      className="border-b border-border/50 hover:bg-muted/50 transition-colors cursor-pointer group"
                       onClick={() => setSelected(lead)}
                     >
                       <TableCell className="font-semibold text-foreground py-3.5">
@@ -910,7 +910,7 @@ export function LeadsTab({
                       <TableCell className="py-3.5" onClick={(e) => e.stopPropagation()}>
                         {lead.assigned_executive_name ? (
                           <button
-                            className="font-medium text-primary hover:underline"
+                            className="font-semibold text-primary hover:underline"
                             onClick={() => setProfile(lead.assigned_executive_name)}
                           >
                             {lead.assigned_executive_name}
@@ -919,7 +919,7 @@ export function LeadsTab({
                           <span className="text-muted-foreground text-xs">Unassigned</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground py-3.5">
+                      <TableCell className="text-foreground/90 font-medium py-3.5">
                         {lead.phone ? (
                           <span className="font-mono text-xs tabular-nums">{lead.phone}</span>
                         ) : (
@@ -935,12 +935,12 @@ export function LeadsTab({
                             <PropertyStateBadge value="HUMAN_HANDOVER" />
                           )}
                           {lead.pre_visit_reminder_sent && (
-                            <span className="text-[10px] text-muted-foreground font-medium">
+                            <span className="text-[10px] text-muted-foreground font-semibold">
                               ⏰ Reminder Sent
                             </span>
                           )}
                           {lead.post_visit_feedback_sent && (
-                            <span className="text-[10px] text-muted-foreground font-medium">
+                            <span className="text-[10px] text-muted-foreground font-semibold">
                               💬 Survey Sent
                             </span>
                           )}
@@ -967,9 +967,9 @@ export function LeadsTab({
                           />
                         </div>
                       </TableCell>
-                      <TableCell className="py-3.5">{lead.selected_property_name || "—"}</TableCell>
-                      <TableCell className="font-bold tabular-nums py-3.5">{formatMoney(lead.budget)}</TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground text-xs tabular-nums py-3.5">
+                      <TableCell className="py-3.5 font-medium text-foreground">{lead.selected_property_name || "—"}</TableCell>
+                      <TableCell className="font-bold text-foreground tabular-nums py-3.5">{formatMoney(lead.budget)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground font-medium text-xs tabular-nums py-3.5">
                         {formatDate(lead.created_at)}
                       </TableCell>
                       <TableCell className="text-right py-3.5" onClick={(e) => e.stopPropagation()}>

@@ -751,7 +751,7 @@ export function InventoryTab({
                 return (
                   <div
                     key={p.property_id}
-                    className="rounded-2xl border border-border/50 bg-card overflow-hidden flex flex-col justify-between hover:border-primary/40 transition-all shadow-xs"
+                    className="rounded-2xl border border-border/70 bg-card overflow-hidden flex flex-col justify-between hover:border-primary/50 transition-all shadow-xs"
                   >
                     <div>
                       <div className="relative">
@@ -796,12 +796,12 @@ export function InventoryTab({
                               label={p.status ?? "—"}
                             />
                           </div>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-muted-foreground font-medium">
                             {p.property_category} · {p.configuration?.replaceAll("_", " ") || "—"} · {p.location}
                             {p.city ? `, ${p.city}` : ""}
                           </p>
                           {Array.isArray(p.landmarks) && p.landmarks.length > 0 && (
-                            <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                            <p className="line-clamp-1 text-[11px] text-muted-foreground font-medium">
                               📍 {p.landmarks.join(", ")}
                             </p>
                           )}
@@ -813,26 +813,26 @@ export function InventoryTab({
                               {formatMoney(p.price, { isRent })}
                             </span>
                             {ratePerSqft && (
-                              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium tabular-nums">
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">
                                 ({ratePerSqft})
                               </span>
                             )}
                           </div>
-                          <span className="text-xs text-muted-foreground font-medium tabular-nums">
+                          <span className="text-xs text-foreground/80 font-semibold tabular-nums">
                             {p.area_sqft ?? p.carpet_area_sqft ?? "—"} sq.ft
                           </span>
                         </div>
 
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-[11px] text-muted-foreground font-medium">
                           Stock: {p.stock_type} · {p.possession_status || "Possession N/A"}
                         </p>
 
-                        <div className="rounded-xl bg-muted/40 p-2.5 text-xs flex items-center justify-between border border-border/40">
+                        <div className="rounded-xl bg-muted/50 p-2.5 text-xs flex items-center justify-between border border-border/60">
                           <div>
-                            <p className="font-semibold text-foreground">{p.assigned_executive_name || "Unassigned"}</p>
-                            <p className="text-muted-foreground text-[11px] tabular-nums">{p.assigned_executive_phone || "No phone"}</p>
+                            <p className="font-bold text-foreground">{p.assigned_executive_name || "Unassigned"}</p>
+                            <p className="text-foreground/80 font-medium text-[11px] tabular-nums">{p.assigned_executive_phone || "No phone"}</p>
                           </div>
-                          <span className="text-[10px] font-mono text-muted-foreground px-1.5 py-0.5 rounded-md bg-card border border-border/40">
+                          <span className="text-[10px] font-mono font-semibold text-foreground/80 px-2 py-0.5 rounded-md bg-card border border-border/60 shadow-2xs">
                             {p.property_id}
                           </span>
                         </div>
