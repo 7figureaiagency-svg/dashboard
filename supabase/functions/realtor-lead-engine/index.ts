@@ -2470,6 +2470,96 @@ const BATCH_LIMIT = 20;
 const sleepJitter = (minMs = 350, maxMs = 550) =>
   new Promise((resolve) => setTimeout(resolve, minMs + Math.random() * (maxMs - minMs)));
 
+/**
+ * Robustly resolve property project name and details for a lead across all sweep modules.
+ * Fallback chain:
+ * 1. l.selected_property_id -> query inventory
+ * 2. l.site_visits (query latest site visit for this lead) -> query inventory using visit.property_id
+ * 3. l.metadata?.selected_property_name
+ * 4. l.last_option_ids?.[0] -> query inventory
+ * 5. Tenant default available inventory
+ * 6. Fallback string: "VIP Property" (Never bare lowercase "the property" or "the project")
+ */
+async function resolveLeadProjectName(
+  l: any,
+  supabase: any,
+  tenantId?: string
+): Promise<{ projectName: string; prop: any }> {
+  let prop: any = null;
+  const candidatePropId = l?.selected_property_id;
+
+  // 1. Direct selected_property_id from leads table
+  if (candidatePropId) {
+    const { data: p } = await supabase
+      .from("inventory")
+      .select("*")
+      .eq("property_id", candidatePropId)
+      .maybeSingle();
+    if (p) prop = p;
+  }
+
+  // 2. Query site_visits table linked to this lead (for booked/completed/rescheduled visits)
+  if (!prop && l?.id) {
+    const { data: visits } = await supabase
+      .from("site_visits")
+      .select("property_id")
+      .eq("lead_id", l.id)
+      .not("status", "eq", "CANCELLED")
+      .order("scheduled_at", { ascending: false, nullsFirst: false })
+      .limit(1);
+
+    if (visits && visits.length > 0 && visits[0].property_id) {
+      const { data: p } = await supabase
+        .from("inventory")
+        .select("*")
+        .eq("property_id", visits[0].property_id)
+        .maybeSingle();
+      if (p) prop = p;
+    }
+  }
+
+  // 3. Fallback to last_option_ids?.[0]
+  if (!prop && Array.isArray(l?.last_option_ids) && l.last_option_ids.length > 0) {
+    const { data: p } = await supabase
+      .from("inventory")
+      .select("*")
+      .eq("property_id", l.last_option_ids[0])
+      .maybeSingle();
+    if (p) prop = p;
+  }
+
+  // 4. Fallback to tenant default available inventory
+  if (!prop && tenantId) {
+    const { data: p } = await supabase
+      .from("inventory")
+      .select("*")
+      .eq("client_id", tenantId)
+      .eq("status", "AVAILABLE")
+      .limit(1)
+      .maybeSingle();
+    if (p) prop = p;
+  }
+
+  // Determine cleanest project name
+  const rawMetaName =
+    l?.metadata?.selected_property_name ||
+    l?.metadata?.owner_draft?.project_name;
+
+  let projectName = prop?.project_name || rawMetaName;
+
+  if (
+    !projectName ||
+    typeof projectName !== "string" ||
+    projectName.trim() === "" ||
+    projectName.toLowerCase() === "the property" ||
+    projectName.toLowerCase() === "the project"
+  ) {
+    projectName = "VIP Property";
+  }
+
+  return { projectName: projectName.trim(), prop };
+}
+
 async function executeAutomatedCronSweep(options: SweepOptions = {}) {
   const sweepLog: any = {
     started_at: new Date().toISOString(),
@@ -2526,18 +2616,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const metadata = l.metadata || {};
             if (metadata.morning_briefing_sent && !options.force) continue;
 
-            let prop: any = null;
-            const propId = l.selected_property_id || l.last_option_ids?.[0];
-            if (propId) {
-              const { data: p } = await supabase.from("inventory").select("*").eq("property_id", propId).maybeSingle();
-              if (p) prop = p;
-            }
-            if (!prop) {
-              const { data: p } = await supabase.from("inventory").select("*").eq("client_id", defaultTenantId).eq("status", "AVAILABLE").limit(1).maybeSingle();
-              if (p) prop = p;
-            }
-
-            const projectName = prop?.project_name || "the project";
+            const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
             const propLoc = prop?.location || "the site";
             const mapUrl = prop?.map_url || "https://maps.google.com";
             const formattedTime = visitDate.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
@@ -2621,18 +2700,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             if (!inWindow) continue;
 
             // Property details
-            let prop: any = null;
-            const propId = l.selected_property_id || l.last_option_ids?.[0];
-            if (propId) {
-              const { data: p } = await supabase.from("inventory").select("*").eq("property_id", propId).maybeSingle();
-              if (p) prop = p;
-            }
-            if (!prop) {
-              const { data: p } = await supabase.from("inventory").select("*").eq("client_id", defaultTenantId).eq("status", "AVAILABLE").limit(1).maybeSingle();
-              if (p) prop = p;
-            }
-
-            const projectName = prop?.project_name || "the project";
+            const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
             const propLoc = prop?.location || "the site";
             const mapUrl = prop?.map_url || "https://maps.google.com";
             const formattedTime = new Date(visitTime).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
@@ -2710,13 +2778,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const inWindow = options.force ? (diffMinutesPast >= 0) : (diffMinutesPast >= 45 && diffMinutesPast <= 1440);
             if (!inWindow) continue;
 
-            let prop: any = null;
-            const propId = l.selected_property_id || l.last_option_ids?.[0];
-            if (propId) {
-              const { data: p } = await supabase.from("inventory").select("*").eq("property_id", propId).maybeSingle();
-              if (p) prop = p;
-            }
-            const projectName = prop?.project_name || "the property";
+            const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
             const lang = l.user_language || "HINGLISH";
             const name = l.first_name || "Customer";
 
@@ -2799,13 +2861,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               // Send soft nudge between 20 and 48 hours after the post-visit check
               if (!options.force && (hoursSinceCheck < 20 || hoursSinceCheck > 72)) continue;
 
-              let prop: any = null;
-              const propId = l.selected_property_id || l.last_option_ids?.[0];
-              if (propId) {
-                const { data: p } = await supabase.from("inventory").select("*").eq("property_id", propId).maybeSingle();
-                if (p) prop = p;
-              }
-              const projectName = prop?.project_name || "the property";
+              const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
               const lang = l.user_language || "HINGLISH";
               const name = l.first_name || "Customer";
 
@@ -2888,13 +2944,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               // Send reschedule invitation between 2 and 48 hours after visit was marked missed
               if (!options.force && (hoursSinceLast < 2 || hoursSinceLast > 48)) continue;
 
-              let prop: any = null;
-              const propId = l.selected_property_id || l.last_option_ids?.[0];
-              if (propId) {
-                const { data: p } = await supabase.from("inventory").select("*").eq("property_id", propId).maybeSingle();
-                if (p) prop = p;
-              }
-              const projectName = prop?.project_name || "the property";
+              const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
               const lang = l.user_language || "HINGLISH";
               const name = l.first_name || "Customer";
 
@@ -3131,13 +3181,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 if (stage === "POST_VISIT_DAY_7" && hoursSinceLast < 90) continue;
               }
 
-              let prop: any = null;
-              const propId = l.selected_property_id || l.last_option_ids?.[0];
-              if (propId) {
-                const { data: p } = await supabase.from("inventory").select("*").eq("property_id", propId).maybeSingle();
-                if (p) prop = p;
-              }
-              const projectName = prop?.project_name || "the property";
+              const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
               const lang = l.user_language || "HINGLISH";
               const name = l.first_name || "Customer";
 
@@ -5921,7 +5965,7 @@ export async function dispatchStateAction(
           selected_property_id: finalPropId,
           metadata: {
             ...(lead.metadata || {}),
-            selected_property_name: propDetails?.project_name || "the property",
+            selected_property_name: propDetails?.project_name || "VIP Property",
           },
           state: "SITE_VISIT_BOOKED",
           pre_visit_reminder_sent: false,
@@ -6232,12 +6276,12 @@ async function handleBrochureOrMapResponse(
     ? (lang === "GUJLISH"
       ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nTamari VIP Site Visit 🚗 already confirm chhe. 🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe.`
       : lang === "ENGLISH"
-      ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "the project"}</b>, <b>${senderName}</b>:\n${link}\n\nYour VIP Site Visit 🚗 is already confirmed. 🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time.`
+      ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "Project"}</b>, <b>${senderName}</b>:\n${link}\n\nYour VIP Site Visit 🚗 is already confirmed. 🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time.`
       : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nAapki VIP Site Visit 🚗 already confirm hai. 🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge.`)
     : (lang === "GUJLISH"
       ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nAa check kari ne janavjo, VIP Site Visit 🚗 mate kayo time anukool raheshe - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
       : lang === "ENGLISH"
-      ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "the project"}</b>, <b>${senderName}</b>:\n${link}\n\nWhen would you like to schedule a VIP Site Visit 🚗 once you review this - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
+      ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "Project"}</b>, <b>${senderName}</b>:\n${link}\n\nWhen would you like to schedule a VIP Site Visit 🚗 once you review this - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
       : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nIse dekh kar bataiye, VIP Site Visit 🚗 ke liye kaunsa slot prefer karenge - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`);
 
   return {
