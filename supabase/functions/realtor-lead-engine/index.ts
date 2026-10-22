@@ -2419,6 +2419,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
     morning_briefings: [],
     pre_visit_reminders: [],
     post_visit_feedbacks: [],
+    missed_visit_followups: [],
     daily_followups: [],
     post_visit_drips: [],
     errors: [],
@@ -2428,6 +2429,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
   const runAll = !options.types || options.types.length === 0;
   const runPreVisit = runAll || options.types.includes("pre_visit");
   const runPostVisit = runAll || options.types.includes("post_visit");
+  const runMissedVisit = runAll || options.types.includes("missed_visit") || options.types.includes("post_visit");
   const runDaily = runAll || options.types.includes("daily_followup");
   const runPostVisitDrip = runAll || options.types.includes("post_visit_drip");
 
@@ -2791,6 +2793,96 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               sweepLog.post_visit_feedbacks.push({ lead_id: l.lead_id, name, type: "UNCONFIRMED_ATTENDANCE_NUDGE" });
             } catch (nudgeErr: any) {
               sweepLog.errors.push({ module: "post_visit_nudge_item", lead_id: l.lead_id, error: nudgeErr.message });
+            }
+          }
+        }
+      }
+    }
+
+    // =========================================================================
+    // 2C. MODULE 2C: MISSED VISIT RESCHEDULE SWEEP (2-48 Hours After Missed Visit)
+    // =========================================================================
+    if (runMissedVisit) {
+      const inBusinessHours = isWithinWorkingHours(11, 19);
+      if (inBusinessHours || options.force) {
+        let qMissed = supabase
+          .from("leads")
+          .select("*")
+          .eq("state", "VISIT_MISSED")
+          .or("bot_active.is.null,bot_active.eq.true");
+
+        if (options.testLeadId) {
+          qMissed = qMissed.eq("lead_id", options.testLeadId);
+        }
+        qMissed = qMissed.order("last_active_at", { ascending: true, nullsFirst: true }).limit(BATCH_LIMIT);
+
+        const { data: missedLeads, error: mErr } = await qMissed;
+        if (mErr) {
+          sweepLog.errors.push({ module: "missed_visit_sweep", error: mErr.message });
+        } else if (missedLeads) {
+          for (const l of missedLeads) {
+            try {
+              const meta = (typeof l.metadata === "object" && l.metadata !== null) ? (l.metadata as Record<string, unknown>) : {};
+              if (meta.missed_visit_reschedule_nudge_sent && !options.force) continue;
+
+              const lastActive = l.last_active_at || l.updated_at || l.created_at;
+              const hoursSinceLast = lastActive ? (nowMs - new Date(lastActive).getTime()) / (1000 * 3600) : 999;
+
+              // Send reschedule invitation between 2 and 48 hours after visit was marked missed
+              if (!options.force && (hoursSinceLast < 2 || hoursSinceLast > 48)) continue;
+
+              let prop: any = null;
+              const propId = l.selected_property_id || l.last_option_ids?.[0];
+              if (propId) {
+                const { data: p } = await supabase.from("inventory").select("*").eq("property_id", propId).maybeSingle();
+                if (p) prop = p;
+              }
+              const projectName = prop?.project_name || "the property";
+              const lang = l.user_language || "HINGLISH";
+              const name = l.first_name || "Customer";
+
+              let rescheduleMsg = "";
+              if (lang === "GUJLISH") {
+                rescheduleMsg = `Namaste <b>${name} bhai</b>! 🙏\n\nTamari <b>${projectName}</b> mate VIP site visit miss thai hati. Shu ame aa athvadiye tamara anukool samay par navi visit plan kariye? 🚗📍\n\n👉 <b>Tame anukool divas ane samay (jem ke: 'Kaale 4 vage' ke 'Sunday 11 vage') lakhi ne mokli shako chho!</b>`;
+              } else if (lang === "ENGLISH") {
+                rescheduleMsg = `Hello <b>${name}</b>! 🙏\n\nWe noticed your VIP site visit for <b>${projectName}</b> was missed. Would you like to reschedule for a convenient day this week? 🚗📍\n\n👉 <b>Simply reply with your preferred day and time (e.g., 'Tomorrow 4 PM' or 'Saturday 11 AM')!</b>`;
+              } else {
+                rescheduleMsg = `Namaste <b>${name} ji</b>! 🙏\n\nAapki <b>${projectName}</b> ke liye VIP site visit miss ho gayi thi. Kya hum is week aapke liye ek fresh convenient timing par visit schedule karein? 🚗📍\n\n👉 <b>Aap apna convenient din aur samay (jaise: 'Kal 4 baje' ya 'Sunday subah 11 baje') likhkar bhej sakte hain!</b>`;
+              }
+
+              await sleepJitter();
+
+              const isTelegram = /^[0-9]+$/.test(l.lead_id) || !l.phone || l.phone.startsWith("tg_") || String(l.metadata?.platform).toUpperCase() === "TELEGRAM";
+              let dispatchRes: any;
+              if (isTelegram) {
+                dispatchRes = await sendTelegramMessage(defaultBotToken, l.lead_id, rescheduleMsg);
+              } else {
+                const waPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
+                const waToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+                dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, rescheduleMsg);
+              }
+
+              const updatedMeta = {
+                ...meta,
+                missed_visit_reschedule_nudge_sent: true,
+                missed_visit_reschedule_nudge_at: new Date().toISOString(),
+              };
+
+              await supabase.from("leads").update({
+                metadata: updatedMeta,
+                last_followup_at: new Date().toISOString(),
+              }).eq("id", l.id);
+
+              await supabase.from("lead_events").insert({
+                client_id: defaultTenantId,
+                lead_id: l.lead_id,
+                event_type: "MISSED_VISIT_RESCHEDULE_NUDGE_SENT",
+                payload: { projectName, hoursSinceLast: Math.round(hoursSinceLast * 10) / 10, dispatchRes },
+              });
+
+              sweepLog.missed_visit_followups.push({ lead_id: l.lead_id, name, projectName, hoursSinceLast });
+            } catch (itemErr: any) {
+              sweepLog.errors.push({ module: "missed_visit_item", lead_id: l.lead_id, error: itemErr.message });
             }
           }
         }
@@ -3950,30 +4042,58 @@ export async function dispatchStateAction(
 
     const latestSub = subs && subs.length > 0 ? subs[0] : null;
 
-    // 2. Query active booked visit or buyer criteria
-    let activeVisit: any = null;
+    // 2. Query latest site visit (scheduled, confirmed, rescheduled, or missed)
+    let latestVisit: any = null;
     const { data: visits } = await supabase
       .from("site_visits")
       .select("*, inventory(*)")
       .eq("lead_id", lead.id)
-      .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
       .order("created_at", { ascending: false })
       .limit(1);
 
     if (visits && visits.length > 0) {
-      activeVisit = visits[0];
+      latestVisit = visits[0];
     }
 
-    const hasActiveVisit = Boolean(activeVisit || lead.site_visit_at || lead.site_visit_datetime || lead.site_visit_booked);
-    const hasBuyerCriteria = Boolean(lead.budget || lead.property_type || lead.location || lead.metadata?.has_buyer_profile || hasActiveVisit);
+    const scheduledTime = latestVisit?.scheduled_at || (lead.site_visit_booked ? (lead.site_visit_at || lead.site_visit_datetime) : null);
+    const visitTimeMs = scheduledTime ? new Date(scheduledTime).getTime() : 0;
+    const nowMs = Date.now();
+    const isVisitInFuture = visitTimeMs > nowMs;
+
+    const isUpcomingVisit = Boolean(
+      latestVisit &&
+      ["SCHEDULED", "CONFIRMED", "RESCHEDULED"].includes(latestVisit.status) &&
+      lead.site_visit_booked &&
+      isVisitInFuture
+    );
+
+    const isPastUnconfirmed = Boolean(
+      latestVisit &&
+      ["SCHEDULED", "CONFIRMED", "RESCHEDULED"].includes(latestVisit.status) &&
+      !isVisitInFuture
+    );
+
+    const isMissedVisit = Boolean(
+      lead.state === "VISIT_MISSED" ||
+      latestVisit?.status === "MISSED"
+    );
+
+    const hasBuyerCriteria = Boolean(
+      lead.budget ||
+      lead.property_type ||
+      lead.location ||
+      lead.metadata?.has_buyer_profile ||
+      isUpcomingVisit ||
+      isPastUnconfirmed ||
+      isMissedVisit
+    );
     const hasSellerListing = Boolean(latestSub || lead.metadata?.submission_id || lead.metadata?.has_seller_profile);
 
-    if (hasSellerListing && (hasActiveVisit || hasBuyerCriteria)) {
-      const scheduledTime = activeVisit?.scheduled_at || lead.site_visit_at || lead.site_visit_datetime;
+    if (hasSellerListing && hasBuyerCriteria) {
       const formattedVisitTime = scheduledTime
         ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
         : "Scheduled Time";
-      const visitProjectName = activeVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? `${lead.property_type} (${lead.location || "Vadodara"})` : "VIP Property");
+      const visitProjectName = latestVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? `${lead.property_type} (${lead.location || "Vadodara"})` : "VIP Property");
 
       const listingSocietyName = latestSub?.project_name || latestSub?.society_name || lead.metadata?.owner_draft?.project_name || lead.metadata?.owner_draft?.society_name || "Listed Property";
       const listingStatusRaw = latestSub?.status || "PENDING_VERIFICATION";
@@ -3987,36 +4107,65 @@ export async function dispatchStateAction(
         ? "Pending Verification / Under Review"
         : listingStatusRaw;
 
+      // Dynamic Option 1 CTA and visit header
+      let visitSnippetGujlish = "";
+      let visitSnippetEnglish = "";
+      let visitSnippetHinglish = "";
+      let opt1LabelGujlish = "1️⃣ <b>Property Search Options 🏡</b>";
+      let opt1LabelEnglish = "1️⃣ <b>Property Search Options 🏡</b>";
+      let opt1LabelHinglish = "1️⃣ <b>Property Search Options 🏡</b>";
+
+      if (isUpcomingVisit) {
+        visitSnippetGujlish = `🚗 <b>Upcoming Site Visit:</b> <b>${visitProjectName}</b> scheduled chhe at <b>${formattedVisitTime}</b>.\n`;
+        visitSnippetEnglish = `🚗 <b>Upcoming Site Visit:</b> Scheduled for <b>${visitProjectName}</b> on <b>${formattedVisitTime}</b>.\n`;
+        visitSnippetHinglish = `🚗 <b>Upcoming Site Visit:</b> <b>${visitProjectName}</b> ke liye scheduled hai at <b>${formattedVisitTime}</b>.\n`;
+        opt1LabelGujlish = "1️⃣ <b>Site Visit Details / Property Search 🏡</b>";
+        opt1LabelEnglish = "1️⃣ <b>Site Visit Details / Property Search 🏡</b>";
+        opt1LabelHinglish = "1️⃣ <b>Site Visit Details / Property Search 🏡</b>";
+      } else if (isPastUnconfirmed) {
+        visitSnippetGujlish = `🚗 <b>Site Visit Update:</b> <b>${visitProjectName}</b> (${formattedVisitTime}) no samay viti gayo chhe. Shu tame attend kari shakya hata? 🤝\n`;
+        visitSnippetEnglish = `🚗 <b>Site Visit Update:</b> Your visit for <b>${visitProjectName}</b> (${formattedVisitTime}) has passed. Were you able to attend? 🤝\n`;
+        visitSnippetHinglish = `🚗 <b>Site Visit Update:</b> <b>${visitProjectName}</b> (${formattedVisitTime}) ka samay ho chuka hai. Kya aap visit attend kar paaye the? 🤝\n`;
+        opt1LabelGujlish = "1️⃣ <b>Visit Attendance / Reschedule 🚗</b>";
+        opt1LabelEnglish = "1️⃣ <b>Visit Attendance / Reschedule 🚗</b>";
+        opt1LabelHinglish = "1️⃣ <b>Visit Attendance / Reschedule 🚗</b>";
+      } else if (isMissedVisit) {
+        visitSnippetGujlish = `🚗 <b>Site Visit:</b> <b>${visitProjectName}</b> (${formattedVisitTime}) miss thai hati. Shu navo slot reschedule karvo chhe? 📅\n`;
+        visitSnippetEnglish = `🚗 <b>Site Visit:</b> Your visit for <b>${visitProjectName}</b> (${formattedVisitTime}) was missed. Would you like to reschedule? 📅\n`;
+        visitSnippetHinglish = `🚗 <b>Site Visit:</b> <b>${visitProjectName}</b> (${formattedVisitTime}) miss ho gayi thi. Kya naya slot reschedule karna hai? 📅\n`;
+        opt1LabelGujlish = "1️⃣ <b>Visit Reschedule / Nayi Property Search 🏡</b>";
+        opt1LabelEnglish = "1️⃣ <b>Visit Reschedule / Search Properties 🏡</b>";
+        opt1LabelHinglish = "1️⃣ <b>Visit Reschedule / Nayi Property Search 🏡</b>";
+      } else {
+        visitSnippetGujlish = `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`;
+        visitSnippetEnglish = `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`;
+        visitSnippetHinglish = `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`;
+      }
+
       const replyText =
         lang === "GUJLISH"
           ? `Welcome back <b>${nameStr}</b>! ${agencyName} desk par tamaru swagat chhe. 🙏✨\n\n` +
-            (hasActiveVisit
-              ? `🚗 <b>Upcoming Site Visit:</b> <b>${visitProjectName}</b> scheduled chhe at <b>${formattedVisitTime}</b>.\n`
-              : `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`) +
+            visitSnippetGujlish +
             `📋 <b>Listed Property:</b> <b>${listingSocietyName}</b> (Status: <b>${listingStatus}</b>).\n\n` +
             `Aaje tame kaya vishay ma aagal vadharva mango chho?\n\n` +
-            `1️⃣ <b>Site Visit / Property Search 🏡</b>\n` +
+            `${opt1LabelGujlish}\n` +
             `2️⃣ <b>Meri Listed Property Status 📋</b>\n` +
             `3️⃣ <b>Senior Advisor se call chahiye 📞</b>\n\n` +
             `<i>(Tame 1, 2 ke 3 reply kari shako chho)</i>`
           : lang === "ENGLISH"
           ? `Welcome back <b>${nameStr}</b>! Welcome to ${agencyName}. 🙏✨\n\n` +
-            (hasActiveVisit
-              ? `🚗 <b>Upcoming Site Visit:</b> Scheduled for <b>${visitProjectName}</b> on <b>${formattedVisitTime}</b>.\n`
-              : `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`) +
+            visitSnippetEnglish +
             `📋 <b>Listed Property:</b> <b>${listingSocietyName}</b> (Status: <b>${listingStatus}</b>).\n\n` +
             `How would you like to proceed today?\n\n` +
-            `1️⃣ <b>Site Visit / Property Search 🏡</b>\n` +
+            `${opt1LabelEnglish}\n` +
             `2️⃣ <b>Meri Listed Property Status 📋</b>\n` +
             `3️⃣ <b>Senior Advisor se call chahiye 📞</b>\n\n` +
             `<i>(You can reply with 1, 2, or 3)</i>`
           : `Welcome back <b>${nameStr}</b>! ${agencyName} desk par aapka swagat hai. 🙏✨\n\n` +
-            (hasActiveVisit
-              ? `🚗 <b>Upcoming Site Visit:</b> <b>${visitProjectName}</b> ke liye scheduled hai at <b>${formattedVisitTime}</b>.\n`
-              : `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`) +
+            visitSnippetHinglish +
             `📋 <b>Listed Property:</b> <b>${listingSocietyName}</b> (Status: <b>${listingStatus}</b>).\n\n` +
             `Aaj aap kis bare me aage badhna chahte hain?\n\n` +
-            `1️⃣ <b>Site Visit / Property Search 🏡</b>\n` +
+            `${opt1LabelHinglish}\n` +
             `2️⃣ <b>Meri Listed Property Status 📋</b>\n` +
             `3️⃣ <b>Senior Advisor se call chahiye 📞</b>\n\n` +
             `<i>(Aap 1, 2 ya 3 likh kar reply kar sakte hain)</i>`;
@@ -4340,29 +4489,72 @@ export async function dispatchStateAction(
 
     // Option 1: Route to Buyer context / anchor site visit
     if (isOpt1) {
-      let activeVisit: any = null;
+      let latestVisit: any = null;
       const { data: visits } = await supabase
         .from("site_visits")
         .select("*, inventory(*)")
         .eq("lead_id", lead.id)
-        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
         .order("created_at", { ascending: false })
         .limit(1);
 
-      if (visits && visits.length > 0) activeVisit = visits[0];
-      const scheduledTime = activeVisit?.scheduled_at || lead.site_visit_at || lead.site_visit_datetime;
+      if (visits && visits.length > 0) latestVisit = visits[0];
+      const scheduledTime = latestVisit?.scheduled_at || (lead.site_visit_booked ? (lead.site_visit_at || lead.site_visit_datetime) : null);
+      const visitTimeMs = scheduledTime ? new Date(scheduledTime).getTime() : 0;
+      const isVisitInFuture = visitTimeMs > Date.now();
+      const isUpcoming = Boolean(latestVisit && ["SCHEDULED", "CONFIRMED", "RESCHEDULED"].includes(latestVisit.status) && lead.site_visit_booked && isVisitInFuture);
+      const isMissed = Boolean(lead.state === "VISIT_MISSED" || latestVisit?.status === "MISSED");
+      const isPastUnconf = Boolean(latestVisit && !isVisitInFuture && ["SCHEDULED", "CONFIRMED", "RESCHEDULED"].includes(latestVisit.status));
+      const propName = latestVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? `${lead.property_type} (${lead.location || "Vadodara"})` : "VIP Property");
+      const visitTime = scheduledTime ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" }) : "Scheduled Time";
+      const mapLink = latestVisit?.inventory?.map_url ? `\n📍 <b>Map Location:</b> ${latestVisit.inventory.map_url}` : "";
 
-      if (scheduledTime) {
-        const visitTime = new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
-        const propName = activeVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? `${lead.property_type} (${lead.location || "Vadodara"})` : "VIP Property");
-        const mapLink = activeVisit?.inventory?.map_url ? `\n📍 <b>Map Location:</b> ${activeVisit.inventory.map_url}` : "";
-
+      if (isUpcoming) {
         const replyText =
           lang === "GUJLISH"
             ? `Ji bilkul <b>${nameStr}</b>! Tamari VIP Site Visit <b>${propName}</b> mate <b>${visitTime}</b> par confirmed chhe. 🚗${mapLink}\n\nAape shu karvu chhe?\n1️⃣ <b>Visit Details & Location Map 📍</b>\n2️⃣ <b>Reschedule / Cancel Visit ⏰</b>\n3️⃣ <b>Nayi Property Search karvi chhe 🏡</b>\n\n<i>(Tame 1, 2 ke 3 reply kari shako chho)</i>`
             : lang === "ENGLISH"
             ? `Certainly <b>${nameStr}</b>! Your VIP Site Visit for <b>${propName}</b> is confirmed for <b>${visitTime}</b>. 🚗${mapLink}\n\nWhat would you like to do?\n1️⃣ <b>Visit Details & Location Map 📍</b>\n2️⃣ <b>Reschedule / Cancel Visit ⏰</b>\n3️⃣ <b>Search for New Properties 🏡</b>\n\n<i>(You can reply with 1, 2, or 3)</i>`
             : `Ji bilkul <b>${nameStr}</b>! Aapki VIP Site Visit <b>${propName}</b> ke liye <b>${visitTime}</b> par confirmed hai. 🚗${mapLink}\n\nAap kya karna chahte hain?\n1️⃣ <b>Visit Details & Location Map 📍</b>\n2️⃣ <b>Reschedule / Cancel Visit ⏰</b>\n3️⃣ <b>Nayi Property Search karni hai 🏡</b>\n\n<i>(Aap 1, 2 ya 3 reply kar sakte hain)</i>`;
+
+        return {
+          replyText,
+          nextState: "SITE_VISIT_BOOKED",
+          leadUpdates: {
+            state: "SITE_VISIT_BOOKED",
+            lead_type: "DUAL_ROLE",
+            metadata: {
+              ...(lead.metadata || {}),
+              active_persona: "BUYER",
+            },
+          },
+        };
+      } else if (isMissed) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji bilkul <b>${nameStr}</b>! <b>${propName}</b> mate tamari site visit (${visitTime}) miss thai hati. Shu tame navo slot reschedule karva mango chho? 📅\n\n👉 <b>Kaale sanje 4:00 vage</b> ke <b>5:30 vage</b> navi visit plan kariye? Athva 'Search' lakhi navi property shodhvo. 🚗📍`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! Your site visit for <b>${propName}</b> (${visitTime}) was missed. Would you like to reschedule for a fresh convenient time? 📅\n\n👉 Would <b>tomorrow at 4:00 PM or 5:30 PM</b> work for you? Or reply 'Search' to look for new properties. 🚗📍`
+            : `Ji bilkul <b>${nameStr}</b>! <b>${propName}</b> ke liye aapki site visit (${visitTime}) miss ho gayi thi. Kya hum aapke liye ek convenient naye time par reschedule karein? 📅\n\n👉 Kya hum <b>kal shaam 4:00 baje ya 5:30 baje</b> aapki nayi VIP site visit plan karein? Ya 'Search' likhkar nayi property dekhein. 🚗📍`;
+
+        return {
+          replyText,
+          nextState: "VISIT_MISSED",
+          leadUpdates: {
+            state: "VISIT_MISSED",
+            lead_type: "DUAL_ROLE",
+            metadata: {
+              ...(lead.metadata || {}),
+              active_persona: "BUYER",
+            },
+          },
+        };
+      } else if (isPastUnconf) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji bilkul <b>${nameStr}</b>! <b>${propName}</b> mate tamari VIP site visit (${visitTime}) no samay viti gayo chhe. 🚗\n\nShu tame visit attend kari shakya hata?\n1️⃣ <b>Haan, visit attend kari hati 👍</b>\n2️⃣ <b>Nahi, reschedule karvi chhe ⏰</b>\n3️⃣ <b>Nayi property search karvi chhe 🏡</b>`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! Your VIP site visit for <b>${propName}</b> (${visitTime}) has passed. 🚗\n\nWere you able to attend the visit?\n1️⃣ <b>Yes, attended the visit 👍</b>\n2️⃣ <b>No, need to reschedule ⏰</b>\n3️⃣ <b>Search for new properties 🏡</b>`
+            : `Ji bilkul <b>${nameStr}</b>! <b>${propName}</b> ke liye aapki VIP site visit (${visitTime}) ka samay ho chuka hai. 🚗\n\nKya aap visit attend kar paaye the?\n1️⃣ <b>Haan, visit attend ki thi 👍</b>\n2️⃣ <b>Nahi, reschedule karni hai ⏰</b>\n3️⃣ <b>Nayi property search karni hai 🏡</b>`;
 
         return {
           replyText,
@@ -4845,18 +5037,26 @@ export async function dispatchStateAction(
         propDetails = p;
       }
 
+      const visitTimeMs = scheduledTime ? new Date(scheduledTime).getTime() : 0;
+      const isFuture = visitTimeMs > Date.now();
+
       const visitTime = scheduledTime
         ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
         : "Scheduled Time";
       const propInfo = propDetails ? `\n🏢 <b>Property:</b> ${propDetails.project_name} (${propDetails.location})` : "";
       const mapInfo = propDetails?.map_url ? `\n📍 <b>Google Map Location:</b> ${propDetails.map_url}` : "";
 
-      const replyText =
-        lang === "GUJLISH"
+      const replyText = isFuture
+        ? (lang === "GUJLISH"
           ? `Welcome back <b>${nameStr}</b>! 🙏\n\nTamari VIP Site Visit already booked chhe:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu tamne timing reschedule karvo chhe ke koi biji query chhe?`
           : lang === "ENGLISH"
           ? `Welcome back <b>${nameStr}</b>! 🙏\n\nYou already have a VIP Site Visit booked:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time. Would you like to reschedule the time or do you have any questions?`
-          : `Welcome back <b>${nameStr}</b>! 🙏\n\nAapki VIP Site Visit already booked hai:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge. Kya aapko timing reschedule karna hai ya koi aur query hai?`;
+          : `Welcome back <b>${nameStr}</b>! 🙏\n\nAapki VIP Site Visit already booked hai:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge. Kya aapko timing reschedule karna hai ya koi aur query hai?`)
+        : (lang === "GUJLISH"
+          ? `Welcome back <b>${nameStr}</b>! 🙏\n\nTamari VIP Site Visit (${visitTime})${propInfo} no samay viti gayo chhe. 🚗\n\nShu tame visit attend kari shakya hata ke navo slot reschedule karvo chhe? ⏰`
+          : lang === "ENGLISH"
+          ? `Welcome back <b>${nameStr}</b>! 🙏\n\nYour VIP Site Visit (${visitTime})${propInfo} has passed. 🚗\n\nWere you able to attend the visit, or would you like to reschedule a fresh slot? ⏰`
+          : `Welcome back <b>${nameStr}</b>! 🙏\n\nAapki VIP Site Visit (${visitTime})${propInfo} ka samay ho chuka hai. 🚗\n\nKya aap visit attend kar paaye the ya naya slot reschedule karna chahte hain? ⏰`);
 
       return {
         replyText,
@@ -6127,7 +6327,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v65-visit-intent-guard",
+        version: "v66-temporal-visit-greeting",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -6243,7 +6443,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v65 Ready (Visit Intent Guard, Approved Listing Templates, Anti-OFF_TOPIC Guard, Owner Multi-Listing & Dual Search Path)", { status: 200 });
+    return new Response("Realtor Lead Engine v66 Ready (Temporal Visit Greeting Guards, Missed Visit Reschedule Sweep, Dual-Role Lifecycle)", { status: 200 });
   }
 
   try {
