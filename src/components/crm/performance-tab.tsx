@@ -56,6 +56,7 @@ import {
 import { ToneBadge } from "@/components/crm/badges";
 import { ExecutiveDrawer } from "@/components/crm/executive-drawer";
 import { useActivity, useAddExecutive, useDeleteExecutive, useExecutives, useUpdateExecutive } from "@/lib/crm-data";
+import { useCurrentUser } from "@/lib/auth";
 import type { Executive } from "@/lib/crm";
 import { buildExecStats, buildTeamSummary, dailyActivity, type ExecStats } from "@/lib/crm-metrics";
 import {
@@ -694,6 +695,8 @@ function Kpi({
  */
 function TeamManager({ clientId }: { clientId: string | null }) {
   const { data: executives = [] } = useExecutives();
+  const { data: me } = useCurrentUser();
+  const isAdmin = me?.role === "admin";
   const add = useAddExecutive();
   const del = useDeleteExecutive();
   const update = useUpdateExecutive();
@@ -723,14 +726,24 @@ function TeamManager({ clientId }: { clientId: string | null }) {
     setEditEmail(ex.email ?? "");
     setEditPhone(ex.phone ?? "");
     setEditTelegramId(ex.telegram_id ?? "");
-    setEditRole((ex as Executive & { role?: string }).role ?? "sales_executive");
+    const rawRole = ((ex as Executive & { role?: string }).role || "").toLowerCase();
+    const normalizedRole = rawRole.includes("admin")
+      ? "admin"
+      : rawRole.includes("manager")
+      ? "manager"
+      : "sales_executive";
+    setEditRole(normalizedRole);
   };
 
   const hasManager = executives.some(
-    (ex) => (ex as Executive & { role?: string }).role === "manager",
+    (ex) => ((ex as Executive & { role?: string }).role || "").toLowerCase() === "manager",
   );
 
   const submitAdd = () => {
+    if (!isAdmin) {
+      toast.error("Admin access required: Only an Admin can add new team members.");
+      return;
+    }
     if (!clientId) {
       toast.error("No tenant selected");
       return;
@@ -766,14 +779,19 @@ function TeamManager({ clientId }: { clientId: string | null }) {
   };
 
   const submitEdit = () => {
+    if (!isAdmin) {
+      toast.error("Admin access required: Only an Admin can modify team member settings.");
+      return;
+    }
     if (!editEx) return;
     if (!editName.trim() || !editEmail.trim()) {
       toast.error("Name and email are required");
       return;
     }
-    const currentRole = (editEx as Executive & { role?: string }).role ?? "sales_executive";
+    const currentRole = ((editEx as Executive & { role?: string }).role || "").toLowerCase();
     const changingToManager = editRole === "manager" && currentRole !== "manager";
-    if (changingToManager && hasManager) {
+    const otherManagerExists = executives.some((e) => e.id !== editEx.id && ((e as Executive & { role?: string }).role || "").toLowerCase() === "manager");
+    if (changingToManager && otherManagerExists) {
       toast.error("A manager already exists for this team. Only one manager is allowed.");
       return;
     }
@@ -799,10 +817,17 @@ function TeamManager({ clientId }: { clientId: string | null }) {
             Add team executives and managers. Account binding occurs automatically when signing in with the designated email.
           </p>
         </div>
-        <Button size="sm" onClick={() => setOpen(true)} className="apple-button rounded-xl h-10 px-4 text-xs font-semibold shadow-2xs w-full sm:w-auto">
-          <Plus className="size-4" /> Add team member
-        </Button>
+        {isAdmin && (
+          <Button size="sm" onClick={() => setOpen(true)} className="apple-button rounded-xl h-10 px-4 text-xs font-semibold shadow-2xs w-full sm:w-auto">
+            <Plus className="size-4" /> Add team member
+          </Button>
+        )}
       </div>
+      {!isAdmin && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 mb-3 font-medium">
+          🔒 View-only mode: Only Admins can add members, change roles, or delete executives.
+        </p>
+      )}
       <div className="space-y-2.5">
         {executives.length === 0 && (
           <p className="text-xs text-muted-foreground py-4 text-center">No executives added yet.</p>
@@ -820,31 +845,47 @@ function TeamManager({ clientId }: { clientId: string | null }) {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <ToneBadge
-                tone={(ex as Executive & { role?: string }).role === "manager" ? "blue" : "gray"}
-                label={(ex as Executive & { role?: string }).role === "manager" ? "Manager" : "Sales Executive"}
+                tone={
+                  (ex as Executive & { role?: string }).role === "admin"
+                    ? "purple"
+                    : (ex as Executive & { role?: string }).role === "manager"
+                    ? "blue"
+                    : "gray"
+                }
+                label={
+                  (ex as Executive & { role?: string }).role === "admin"
+                    ? "Admin"
+                    : (ex as Executive & { role?: string }).role === "manager"
+                    ? "Manager"
+                    : "Sales Executive"
+                }
               />
               <ToneBadge
                 tone={ex.user_id ? "green" : "yellow"}
                 label={ex.user_id ? "Linked" : "Pending sign-in"}
               />
-              <Button
-                size="sm"
-                variant="ghost"
-                className="apple-button size-8.5 rounded-lg p-0 text-muted-foreground hover:text-foreground"
-                onClick={() => openEdit(ex)}
-                title="Edit member"
-              >
-                <Pencil className="size-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="apple-button size-8.5 rounded-lg p-0 text-destructive hover:text-destructive"
-                onClick={() => setDeleteId(ex.id)}
-                title="Remove member"
-              >
-                <Trash2 className="size-4" />
-              </Button>
+              {isAdmin && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="apple-button size-8.5 rounded-lg p-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => openEdit(ex)}
+                    title="Edit member"
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="apple-button size-8.5 rounded-lg p-0 text-destructive hover:text-destructive"
+                    onClick={() => setDeleteId(ex.id)}
+                    title="Remove member"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -907,8 +948,9 @@ function TeamManager({ clientId }: { clientId: string | null }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sales_executive">Sales Executive</SelectItem>
+                  <SelectItem value="admin">Admin / Director</SelectItem>
                   <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="sales_executive">Sales Executive</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -976,8 +1018,9 @@ function TeamManager({ clientId }: { clientId: string | null }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sales_executive">Sales Executive</SelectItem>
+                  <SelectItem value="admin">Admin / Director</SelectItem>
                   <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="sales_executive">Sales Executive</SelectItem>
                 </SelectContent>
               </Select>
             </div>

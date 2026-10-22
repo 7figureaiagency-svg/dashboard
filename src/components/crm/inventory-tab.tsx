@@ -15,6 +15,7 @@ import {
   Phone,
   Plus,
   Search,
+  ShieldAlert,
   Sparkles,
   Trash2,
   Upload,
@@ -23,6 +24,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useCurrentUser } from "@/lib/auth";
 
 import {
   AlertDialog,
@@ -1348,6 +1350,9 @@ function OwnerSubmissionsView({
   const [detailsSubmission, setDetailsSubmission] = useState<PropertySubmission | null>(null);
   const [editSubmission, setEditSubmission] = useState<PropertySubmission | null>(null);
 
+  const { data: me } = useCurrentUser();
+  const isAdmin = me?.role === "admin";
+
   const { data: submissions = [], isLoading } = usePropertySubmissions();
   const approveMutation = useApprovePropertySubmission();
   const updateMutation = useUpdatePropertySubmission();
@@ -1465,6 +1470,15 @@ function OwnerSubmissionsView({
         </Card>
       )}
 
+      {!isAdmin && (
+        <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/20 px-3.5 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+          <ShieldAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            <b>Restricted Mode:</b> You are signed in as a Sales Executive. Only <b>Admin</b> users can verify legal paperwork and approve owner submissions into Live Inventory.
+          </span>
+        </div>
+      )}
+
       {!isLoading && filtered.length > 0 && (
         <div className="space-y-3">
           {/* 📱 Mobile Owner Submissions Cards (< 768px) */}
@@ -1521,9 +1535,20 @@ function OwnerSubmissionsView({
                       <>
                         <Button
                           size="sm"
-                          className="apple-button min-h-[40px] flex-1 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
-                          disabled={approveMutation.isPending}
-                          onClick={() => approveMutation.mutate({ submission: s, clientId })}
+                          className={`apple-button min-h-[40px] flex-1 rounded-xl text-xs font-semibold shadow-2xs ${
+                            isAdmin
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                              : "bg-muted text-muted-foreground cursor-not-allowed opacity-60"
+                          }`}
+                          disabled={approveMutation.isPending || !isAdmin}
+                          onClick={() => {
+                            if (!isAdmin) {
+                              toast.error("Admin approval required: Only an Admin can convert owner listings into Live Inventory.");
+                              return;
+                            }
+                            approveMutation.mutate({ submission: s, clientId });
+                          }}
+                          title={isAdmin ? "Approve & Convert to Live Inventory" : "Admin approval required"}
                         >
                           <CheckCircle2 className="size-3.5 mr-1" /> Approve
                         </Button>
@@ -1531,9 +1556,16 @@ function OwnerSubmissionsView({
                           size="sm"
                           variant="ghost"
                           className="apple-button min-h-[40px] px-3 rounded-xl text-xs text-destructive hover:bg-destructive/10"
-                          disabled={updateMutation.isPending}
-                          onClick={() => updateMutation.mutate({ id: s.id, values: { status: "REJECTED" } })}
+                          disabled={updateMutation.isPending || !isAdmin}
+                          onClick={() => {
+                            if (!isAdmin) {
+                              toast.error("Admin access required: Only an Admin can reject owner listings.");
+                              return;
+                            }
+                            updateMutation.mutate({ id: s.id, values: { status: "REJECTED" } });
+                          }}
                           aria-label="Reject submission"
+                          title={isAdmin ? "Reject submission" : "Admin access required"}
                         >
                           <XCircle className="size-3.5" />
                         </Button>
@@ -1664,10 +1696,20 @@ function OwnerSubmissionsView({
                           <>
                             <Button
                               size="sm"
-                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-                              disabled={approveMutation.isPending}
-                              onClick={() => approveMutation.mutate({ submission: s, clientId })}
-                              title="Convert to Live Inventory for Seeker Matching"
+                              className={`h-7 text-xs ${
+                                isAdmin
+                                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  : "bg-muted text-muted-foreground cursor-not-allowed opacity-60"
+                              }`}
+                              disabled={approveMutation.isPending || !isAdmin}
+                              onClick={() => {
+                                if (!isAdmin) {
+                                  toast.error("Admin approval required: Only an Admin can convert owner listings into Live Inventory.");
+                                  return;
+                                }
+                                approveMutation.mutate({ submission: s, clientId });
+                              }}
+                              title={isAdmin ? "Convert to Live Inventory for Seeker Matching" : "Admin approval required to convert submission"}
                             >
                               <CheckCircle2 className="size-3.5 mr-1" />
                               Approve
@@ -1676,9 +1718,15 @@ function OwnerSubmissionsView({
                               size="sm"
                               variant="ghost"
                               className="h-7 text-xs text-destructive hover:bg-destructive/10"
-                              disabled={updateMutation.isPending}
-                              onClick={() => updateMutation.mutate({ id: s.id, values: { status: "REJECTED" } })}
-                              title="Reject submission"
+                              disabled={updateMutation.isPending || !isAdmin}
+                              onClick={() => {
+                                if (!isAdmin) {
+                                  toast.error("Admin access required: Only an Admin can reject owner listings.");
+                                  return;
+                                }
+                                updateMutation.mutate({ id: s.id, values: { status: "REJECTED" } });
+                              }}
+                              title={isAdmin ? "Reject submission" : "Admin access required"}
                             >
                               <XCircle className="size-3.5" />
                             </Button>
@@ -1694,8 +1742,15 @@ function OwnerSubmissionsView({
                             size="sm"
                             variant="outline"
                             className="h-7 text-xs"
-                            disabled={updateMutation.isPending}
-                            onClick={() => updateMutation.mutate({ id: s.id, values: { status: "PENDING_VERIFICATION" } })}
+                            disabled={updateMutation.isPending || !isAdmin}
+                            onClick={() => {
+                              if (!isAdmin) {
+                                toast.error("Admin access required: Only an Admin can reopen rejected submissions.");
+                                return;
+                              }
+                              updateMutation.mutate({ id: s.id, values: { status: "PENDING_VERIFICATION" } });
+                            }}
+                            title={isAdmin ? "Reopen submission" : "Admin access required"}
                           >
                             Reopen
                           </Button>
@@ -1853,12 +1908,21 @@ function OwnerSubmissionsView({
                 {detailsSubmission.status !== "CONVERTED_TO_INVENTORY" && (
                   <Button
                     size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    disabled={approveMutation.isPending}
+                    className={
+                      isAdmin
+                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                        : "bg-muted text-muted-foreground cursor-not-allowed opacity-60"
+                    }
+                    disabled={approveMutation.isPending || !isAdmin}
                     onClick={() => {
+                      if (!isAdmin) {
+                        toast.error("Admin approval required: Only an Admin can convert owner listings into Live Inventory.");
+                        return;
+                      }
                       approveMutation.mutate({ submission: detailsSubmission, clientId });
                       setDetailsSubmission(null);
                     }}
+                    title={isAdmin ? "Approve & Add to Live Inventory" : "Admin approval required"}
                   >
                     <CheckCircle2 className="size-4 mr-1.5" />
                     Approve & Add to Live Inventory

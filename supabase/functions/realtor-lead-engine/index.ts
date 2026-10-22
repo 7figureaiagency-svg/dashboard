@@ -98,9 +98,48 @@ async function dispatchSalesAlert(
   extra: { scheduledAt?: string; property?: any; userText?: string; submission?: any; hint?: string } = {}
 ) {
   try {
-    // 1. Fetch assigned executive, tenant manager, or any active executive
+    // 1. Role-Based Routing & Auto-Assignment Matrix
     let targetExecutive: any = null;
-    if (lead?.assigned_executive_id && alertType !== "NO_PROPERTY_MATCH") {
+
+    // Rule A: NEW_OWNER_LISTING -> Route strictly to Admin (role = 'admin') for document verification & inventory approval
+    if (alertType === "NEW_OWNER_LISTING") {
+      const { data: adminExec } = await supabase
+        .from("executives")
+        .select("*")
+        .eq("client_id", tenantId)
+        .ilike("role", "admin")
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      targetExecutive = adminExec;
+
+      // Auto-assign owner lead directly to Admin in DB
+      if (adminExec && lead?.id && lead.assigned_executive_id !== adminExec.id) {
+        await supabase.from("leads").update({ assigned_executive_id: adminExec.id }).eq("id", lead.id);
+        lead.assigned_executive_id = adminExec.id;
+      }
+    }
+    // Rule B: NO_PROPERTY_MATCH or UNASSIGNED_LEAD -> Route strictly to Manager (role = 'manager') for off-market triage
+    else if (alertType === "NO_PROPERTY_MATCH" || alertType === "UNASSIGNED_LEAD") {
+      const { data: mgr } = await supabase
+        .from("executives")
+        .select("*")
+        .eq("client_id", tenantId)
+        .ilike("role", "manager")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      targetExecutive = mgr;
+
+      // Assign to Manager for triage if unassigned
+      if (mgr && lead?.id && !lead.assigned_executive_id) {
+        await supabase.from("leads").update({ assigned_executive_id: mgr.id }).eq("id", lead.id);
+        lead.assigned_executive_id = mgr.id;
+      }
+    }
+    // Rule C: Specific buyer/tenant lead with assigned executive (e.g. Sales Specialist)
+    else if (lead?.assigned_executive_id) {
       const { data: exec } = await supabase
         .from("executives")
         .select("*")
@@ -109,21 +148,25 @@ async function dispatchSalesAlert(
       targetExecutive = exec;
     }
 
+    // Fallback 1: Route unassigned leads to Manager (role = 'manager')
     if (!targetExecutive) {
-      // Route to Manager (role = 'manager')
       const { data: mgr } = await supabase
         .from("executives")
         .select("*")
         .eq("client_id", tenantId)
-        .eq("role", "manager")
+        .ilike("role", "manager")
         .eq("is_active", true)
         .limit(1)
         .maybeSingle();
       targetExecutive = mgr;
+      if (mgr && lead?.id && !lead.assigned_executive_id) {
+        await supabase.from("leads").update({ assigned_executive_id: mgr.id }).eq("id", lead.id);
+        lead.assigned_executive_id = mgr.id;
+      }
     }
 
+    // Fallback 2: Fallback to any active executive for this tenant
     if (!targetExecutive) {
-      // Fallback: any active executive for this tenant who has telegram_id or phone configured
       const { data: anyExec } = await supabase
         .from("executives")
         .select("*")
@@ -220,15 +263,15 @@ ${extra.scheduledAt ? `⏰ <b>Site Visit:</b> ${new Date(extra.scheduledAt).toLo
 👤 <b>Owner:</b> ${lead?.first_name || sub.owner_name || "Property Owner"}
 📱 <b>Phone / ID:</b> <code>${lead?.phone || lead?.lead_id}</code>
 🏢 <b>Property:</b> ${sub.configuration || ""} ${sub.property_type || "Property"} in ${sub.society_name || sub.project_name || "Society"} (${sub.location || "Prime Location"})
-📐 <b>Size:</b> ${sub.carpet_area_sqft ? `${sub.carpet_area_sqft} sq.ft Carpet` : "—"} | ${sub.furnishing_status || "Standard"}
-💰 <b>Expected ${sub.transaction_type || "Price"}:</b> ₹${Number(sub.expected_price || sub.expected_rent || 0).toLocaleString("en-IN")}
-🔑 <b>Possession:</b> ${sub.possession_status || "Ready to Move"}
+📐 <b>Size:</b> ${sub.carpet_area_sqft ? `${sub.carpet_area_sqft} sq.ft Carpet` : "—"} | ${(sub.furnishing_status || "Standard").replace(/_/g, " ")}
+💰 <b>Expected ${sub.transaction_type || "Price"}:</b> ${Number(sub.expected_price || sub.expected_rent || 0) > 0 ? `₹${Number(sub.expected_price || sub.expected_rent).toLocaleString("en-IN")}` : "Price on Request"}
+🔑 <b>Possession:</b> ${(sub.possession_status || "Ready to Move").replace(/_/g, " ")}
 💬 <b>User Message:</b> <i>"${extra.userText || "—"}"</i>
 ━━━━━━━━━━━━━━━━━━━━
 💡 <b>Actionable Hint:</b>
 <i>${pitchHint}</i>
 ━━━━━━━━━━━━━━━━━━━━
-👉 <i>Assigned to: ${targetExecutive?.name || "Acquisition / Listing Desk"}</i>
+👉 <i>Assigned to: ${targetExecutive?.name || "Admin Desk"} (Role: ${targetExecutive?.role || "Admin"})</i>
 `.trim()
       : `
 <b>${badge}</b>
@@ -242,18 +285,15 @@ ${extra.scheduledAt ? `⏰ <b>Scheduled Slot:</b> ${new Date(extra.scheduledAt).
 💡 <b>Pitching Hint:</b>
 <i>${pitchHint}</i>
 ━━━━━━━━━━━━━━━━━━━━
-👉 <i>Assigned to: ${targetExecutive?.name || "General Sales Desk"}</i>
+👉 <i>Assigned to: ${targetExecutive?.name || "General Sales Desk"} (Role: ${targetExecutive?.role || "Executive"})</i>
 `.trim();
 
-    // 4. Resolve Telegram Chat ID (check telegram_id first, then fallback to phone if numeric ID)
+    // 4. Resolve Telegram Chat ID (check numeric telegram_id only)
     let telegramChatId: string | null = null;
     const cleanTelId = (targetExecutive?.telegram_id || "").trim();
-    const cleanPhone = (targetExecutive?.phone || "").replace(/\D/g, "");
 
     if (/^-?\d+$/.test(cleanTelId)) {
       telegramChatId = cleanTelId;
-    } else if (cleanPhone.length >= 8 && cleanPhone.length <= 15) {
-      telegramChatId = cleanPhone;
     }
 
     if (telegramChatId) {
@@ -3215,6 +3255,22 @@ async function handleOwnerFlow({
   const isDualLead = lead.lead_type === "DUAL_ROLE" || Boolean(existingMeta.has_buyer_profile || lead.budget || lead.property_type || lead.site_visit_at || lead.site_visit_booked);
   const effectiveOwnerLeadType = isDualLead ? "DUAL_ROLE" : "PROVIDER";
 
+  // Auto-assign owner leads to Admin executive immediately upon starting intake
+  if (!lead.assigned_executive_id) {
+    const { data: adminExec } = await supabase
+      .from("executives")
+      .select("id")
+      .eq("client_id", tenantId)
+      .ilike("role", "admin")
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    if (adminExec?.id) {
+      lead.assigned_executive_id = adminExec.id;
+      await supabase.from("leads").update({ assigned_executive_id: adminExec.id }).eq("id", lead.id);
+    }
+  }
+
   // 1b. Direct accumulative AI entities merge (100% Zero-Regex Architecture):
   if (aiAnalysis) {
     // A. Transaction Type Immutability:
@@ -3836,10 +3892,48 @@ async function handleOwnerFlow({
     console.error("[Property Submissions] Insert Error:", subError);
   }
 
+  // Fetch Admin executive for this tenant to assign the owner listing (with fallbacks)
+  let targetAdmin = (await supabase
+    .from("executives")
+    .select("id")
+    .eq("client_id", tenantId)
+    .ilike("role", "admin")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()).data;
+
+  if (!targetAdmin) {
+    // Fallback 1: Assign to active Manager
+    targetAdmin = (await supabase
+      .from("executives")
+      .select("id")
+      .eq("client_id", tenantId)
+      .ilike("role", "manager")
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle()).data;
+  }
+
+  if (!targetAdmin) {
+    // Fallback 2: Assign to any active executive for tenant
+    targetAdmin = (await supabase
+      .from("executives")
+      .select("id")
+      .eq("client_id", tenantId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()).data;
+  }
+
+  const assignedAdminId = targetAdmin?.id || lead.assigned_executive_id;
+
   await supabase.from("leads").update({
     lead_type: effectiveOwnerLeadType,
     state: "OWNER_DETAILS_GATHERED",
     phone: effectivePhone || lead.phone,
+    ...(assignedAdminId ? { assigned_executive_id: assignedAdminId } : {}),
     metadata: {
       ...existingMeta,
       owner_draft: draft,
@@ -3850,8 +3944,9 @@ async function handleOwnerFlow({
   }).eq("id", lead.id);
   lead.lead_type = effectiveOwnerLeadType;
   lead.state = "OWNER_DETAILS_GATHERED";
+  if (assignedAdminId) lead.assigned_executive_id = assignedAdminId;
 
-  // Dispatch High-Priority Alert to Acquisition / Listing Desk
+  // Dispatch High-Priority Alert to Admin / Acquisition Desk
   await dispatchSalesAlert(tenantId, "NEW_OWNER_LISTING", lead, {
     submission: sub || draft,
     userText: messageText,
@@ -6458,7 +6553,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v66-temporal-visit-greeting",
+        version: "v67-role-based-routing",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -6574,7 +6669,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v66 Ready (Temporal Visit Greeting Guards, Missed Visit Reschedule Sweep, Dual-Role Lifecycle)", { status: 200 });
+    return new Response("Realtor Lead Engine v67 Ready (Role-Based Executive Routing, Admin Listing Approvals, Manager Triage)", { status: 200 });
   }
 
   try {
