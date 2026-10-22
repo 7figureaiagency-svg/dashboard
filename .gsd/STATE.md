@@ -7,18 +7,19 @@ updated: 2026-10-22T19:46:00+05:30
 ## Current Position
 
 **Milestone:** Apple HIG Modernization & Conversational Architecture  
-**Phase:** 5 - Role-Based Lead Routing, Admin Listing Approvals & Manager Unassigned Triage  
-**Status:** In Progress (Plan 5.1 Planned)  
+**Phase:** 6 - Multi-Persona AI Briefing & FSM State Explainer  
+**Status:** Plan 6.1 Complete  
 **Plans:**
 - `.gsd/phases/4/4.7-PLAN.md` (Past Site Visit Temporal Greeting Guards & Missed Visit Cron Follow-up) — ✅ Complete (`v66`)
 - `.gsd/phases/5/5.1-PLAN.md` (Role-Based Executive Routing, Admin Listing Approvals, and Manager Unassigned Lead Triage) — 🔄 Active
+- `.gsd/phases/6/6.1-PLAN.md` (Multi-Persona AI Conversation Summary & Comprehensive FSM State Explainer) — ✅ Complete
 
 ## Last Action
 
-Completed Phase 4 (Plan 4.7) deployed `v66-temporal-visit-greeting`.
-Currently in Phase 5:
-- Created Plan 5.1 (`.gsd/phases/5/5.1-PLAN.md`).
-- Running `/plan-checker` audit on Plan 5.1.
+Completed Phase 6 (Plan 6.1):
+- Implemented bifurcated AI briefing for Dual-Role, Owner/Seller, and Buyer leads.
+- Added comprehensive Hinglish explainer matrix covering 25+ FSM states.
+- Connected `submissions` into `lead-drawer.tsx` and tested with `npm run build`.
 
 ## Active Decisions
 
