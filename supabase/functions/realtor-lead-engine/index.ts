@@ -1615,6 +1615,15 @@ interface IntentResult {
 14. "aaj nahi aa paunga traffic hai" / "aaje nathi aavi shakay" / "Hu site visit pr nai aavi saku aaje" / "nathi aavi saku" ->
 {"action": {"intent": "CANNOT_ATTEND_VISIT", "reason": "cannot_attend"}, "language": "GUJLISH", "user_role": "SEEKER"}
 
+14a. "mene site visit nahi kiya" / "visit nahi ho paayi" / "visit attend nahi kiya" / "visit miss ho gaya" / "nathi aavi sakyo" ->
+{"action": {"intent": "CANNOT_ATTEND_VISIT", "reason": "missed_visit"}, "language": "HINGLISH", "user_role": "SEEKER"}
+
+14b. "2" / "nahi attend kiya" / "nahi ja paya" (when responding to post-visit attendance survey) ->
+{"action": {"intent": "CANNOT_ATTEND_VISIT", "reason": "could_not_attend"}, "language": "HINGLISH", "user_role": "SEEKER"}
+
+14c. "1" / "haan visit attend ki" / "visit complete thai" (when responding to post-visit attendance survey) ->
+{"action": {"intent": "CONFIRM_VISIT_ATTENDANCE", "attended": true}, "language": "HINGLISH", "user_role": "SEEKER"}
+
 15. "મને અલ્કાપુરીમાં 3BHK ફ્લેટ જોઈએ છે 75 લાખ સુધી" ->
 {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "3BHK Flat", "location": "Alkapuri", "budget": 7500000, "requirement": "BUY"}, "language": "GUJARATI_SCRIPT", "user_role": "SEEKER"}
 
@@ -2002,9 +2011,16 @@ async function classifyLeadIntent(
   if (lower === "stop" || lower.includes("unsubscribe") || lower.includes("not interested")) {
     fallbackIntent = "OPT_OUT";
   } else if (lead?.post_visit_feedback_sent) {
-    if (/(?:^|\b)(?:2|2️⃣|two|option\s*2)\b/i.test(lower) || /^(?:nahi|nhi|na|no|nope|nathi|missed|couldn't|cancel)/i.test(lower.trim())) {
+    if (
+      /(?:^|\b)(?:2|2️⃣|two|option\s*2)\b/i.test(lower) ||
+      /(?:nahi|nhi|na|no|nope|nathi|miss|missed|couldn't|cancel)/i.test(lower) ||
+      /(?:site\s*visit|visit).*?(?:nahi|nhi|nathi|not|nai)\s*(?:kar|kiya|ki|karyo|attend)?/i.test(lower)
+    ) {
       fallbackIntent = "CANNOT_ATTEND_VISIT";
-    } else if (/(?:^|\b)(?:1|1️⃣|one|option\s*1)\b/i.test(lower) || /^(?:ha|haan|ji\s*haan|yes|yep|yeah|attended)/i.test(lower.trim())) {
+    } else if (
+      /(?:^|\b)(?:1|1️⃣|one|option\s*1)\b/i.test(lower) ||
+      /(?:ha|haan|ji\s*haan|yes|yep|yeah|attended|gaya|gaye|kari|kiya|karyo|thayo)/i.test(lower)
+    ) {
       fallbackIntent = "CONFIRM_VISIT";
     }
   } else if (lead?.state === "CRITERIA_CONFIRMATION_PENDING") {
@@ -2017,6 +2033,7 @@ async function classifyLeadIntent(
     /(?:^|\b)(?:ha\s+|haan\s+|ji\s+)?(?:me\s+|hum\s+|mai\s+|hu\s+|ame\s+)?(?:nai|nahi|nhi|na|nathi)\s*(?:aa\s*sakta|aa\s*sakti|aa\s*paunga|aa\s*paungi|aa\s*payenge|aa\s*paenge|aa\s*raha|aa\s*rahe|aana|aunga|aungi|ja\s*sakta|ja\s*paunga|pahunch\s*sakta|pahunch\s*paunga|ho\s*payega|hoga\s*aaj|possible\s*nahi|aavi\s*saku|aavi\s*shaku|aavi\s*sakyo|aavi\s*shakay|aavay|aavish|aa\s*saku)/i.test(lower) ||
     /(nahi\s*aa\s*paya|nahi\s*aa\s*paye|miss\s*ho\s*gaya|emergency|couldn't\s*come|cannot\s*make\s*it|won't\s*be\s*able\s*to\s*come)/i.test(lower) ||
     /(nathi\s*aavi\s*sakyo|nathi\s*aavi\s*saku|nai\s*aavi\s*saku|aaje\s*nahi\s*aavay|aaje\s*nai\s*aavay|aaje\s*nathi\s*aavay)/i.test(lower) ||
+    /(?:mene|maine|hu|ame|hum|hamne)?\s*(?:site\s*visit|visit)\s*(?:nahi|nhi|nathi|nai)\s*(?:kiya|ki|kari|karyo|attend|gaya)/i.test(lower) ||
     (/(?:site\s*visit|visit).*?(?:nai|nahi|nathi|not|cannot|can't|miss)/i.test(lower) && !lower.includes("reschedule") && !lower.includes("cancel"))
   ) {
     fallbackIntent = "CANNOT_ATTEND_VISIT";
@@ -5064,6 +5081,89 @@ export async function dispatchStateAction(
       };
     }
 
+    // =========================================================================
+    // A1. POST-VISIT SURVEY RESPONSE & ATTENDANCE / MISSED CONFIRMATION
+    // (Handles "mene site visit nahi kiya", option 1/2 from post-visit survey, etc.)
+    // =========================================================================
+    const isVisitAttended =
+      (intent === "CONFIRM_VISIT_ATTENDANCE" && (action as ConfirmVisitAttendanceAction).attended !== false) ||
+      intent === "CONFIRM_VISIT" ||
+      (Boolean(lead.post_visit_feedback_sent) && /^(?:1|1️⃣|first|1st|option\s*1|ha|haan|yes|attended|gaya|gaye|kiya|kari)\b/i.test(lower.trim()));
+
+    const isVisitMissed =
+      (intent === "CONFIRM_VISIT_ATTENDANCE" && (action as ConfirmVisitAttendanceAction).attended === false) ||
+      intent === "CANNOT_ATTEND_VISIT" ||
+      (Boolean(lead.post_visit_feedback_sent) && /^(?:2|2️⃣|second|2nd|option\s*2|nahi|nhi|na|no|nope|nathi|miss|missed|couldn't)\b/i.test(lower.trim())) ||
+      /(?:mene|maine|hu|ame|hum|hamne)?\s*(?:site\s*visit|visit)\s*(?:nahi|nhi|nathi|nai)\s*(?:kiya|ki|kari|karyo|attend|gaya)/i.test(lower) ||
+      (/(?:site\s*visit|visit).*?(?:nahi|nhi|nathi|miss)/i.test(lower) && !lower.includes("reschedule") && !lower.includes("cancel"));
+
+    if (isVisitAttended) {
+      await supabase
+        .from("site_visits")
+        .update({ status: "COMPLETED", feedback_notes: context.messageText })
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
+
+      const isNeg = /(discount|negotiat|bhav\s*ochho|rate\s*kam|price|offer|token)/i.test(lower);
+      const isLoan = /(loan|bank|emi|interest|finance)/i.test(lower);
+
+      const replyText = isNeg
+        ? (lang === "GUJLISH"
+          ? `Tamara feedback mate aabhar <b>${nameStr}</b>! 🙏 Developer sathe special pricing ane exclusive payment plan finalize karva mate amara senior sales director direct tamaro sampark karshe.`
+          : lang === "ENGLISH"
+          ? `Thank you for your feedback <b>${nameStr}</b>! 🙏 Our senior property director will personally connect with you to arrange an exclusive developer sitting and discuss the best negotiated price.`
+          : `Aapke feedback ke liye dhanyawad <b>${nameStr}</b>! 🙏 Developer ke sath special pricing aur best payment scheme finalize karne ke liye hamare senior sales director direct aapse call par connect karenge.`)
+        : isLoan
+        ? (lang === "GUJLISH"
+          ? `Tamara feedback mate aabhar <b>${nameStr}</b>! 🏦 Amari banking & loan expert team lowest interest rate ane easy EMI guidance mate tamne turant call karshe.`
+          : lang === "ENGLISH"
+          ? `Thank you for your feedback <b>${nameStr}</b>! 🏦 Our preferred banking partners will reach out shortly to guide you with the lowest home loan interest rates and flexible EMI structures.`
+          : `Aapke feedback ke liye dhanyawad <b>${nameStr}</b>! 🏦 Hamari home loan & banking team lowest interest rate aur easy EMI structure guide karne ke liye aapse turant connect karegi.`)
+        : (lang === "GUJLISH"
+          ? `Khub saras <b>${nameStr}</b>! 🌟 Tamne property ane layout kevo lagyo? Jo project pasand aavyo hoy to shu ame developer sathe <b>special token pricing baithak</b> plan kariye?`
+          : lang === "ENGLISH"
+          ? `Wonderful <b>${nameStr}</b>! 🌟 How did you like the property and floor layout? If you liked it, shall we arrange a <b>developer sitting for exclusive negotiated pricing</b>?`
+          : `Bohot badiya <b>${nameStr}</b>! 🌟 Aapko property aur layout kaisa laga? Agar pasand aaya ho to kya hum developer ke sath <b>best token pricing sitting</b> arrange karein?`);
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_DONE",
+        leadUpdates: {
+          state: "SITE_VISIT_DONE",
+          status: "VISIT_DONE",
+          site_visit_booked: false,
+        },
+        salesAlert: { type: "FEEDBACK_RECEIVED", payload: { userText: context.messageText } },
+      };
+    }
+
+    if (isVisitMissed) {
+      await supabase
+        .from("site_visits")
+        .update({ status: "MISSED", feedback_notes: `Missed visit: ${context.messageText}` })
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Arey koi vandho nahi <b>${nameStr}</b>! 🙏 Janavva mate aabhar. Ame samji shakiye chhiye ke urgent kaam na lidhe tame scheduled visit par nathi aavi shakya. Chalo bija divase anukool hoy tyare visit reschedule kari daiye.\n\n👉 <b>Shu ame kaale sanje 5:00 vage ke Sunday savare 11:00 vage navi VIP Site Visit 🚗 schedule kariye?</b>`
+          : lang === "ENGLISH"
+          ? `No problem at all <b>${nameStr}</b>! 🙏 Thank you for letting us know. We completely understand that an urgent commitment prevented you from attending the scheduled visit. Let's reschedule your VIP visit for a convenient time.\n\n👉 <b>Would tomorrow at 5:00 PM or Sunday at 11:00 AM work best for your new VIP Site Visit 🚗?</b>`
+          : `Koi baat nahi <b>${nameStr}</b>! 🙏 Batane ke liye shukriya. Hum samajh sakte hain ki achanak kisi zaroori kaam ki wajah se aap scheduled visit par nahi aa paaye. Chaliye aapke liye nayi timing par visit reschedule kar dete hain.\n\n👉 <b>Kya hum kal shaam 5:00 baje ya Sunday subah 11:00 baje aapki nayi VIP Site Visit 🚗 schedule karein?</b>`;
+
+      return {
+        replyText,
+        nextState: "VISIT_MISSED",
+        leadUpdates: {
+          state: "VISIT_MISSED",
+          status: "VISIT_MISSED",
+          site_visit_booked: false,
+          drip_stage: "MISSED_RESCHEDULE_PROMPTED",
+        },
+        salesAlert: { type: "VISIT_MISSED", payload: { userText: context.messageText, reason: (action as CannotAttendVisitAction).reason || context.messageText } },
+      };
+    }
+
     // A2. SUB-CHOICES FROM DUAL-ROLE SITE VISIT CONFIRMATION (1, 2, or 3)
     const isSearchNewChoice =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
@@ -5208,7 +5308,18 @@ export async function dispatchStateAction(
         leadUpdates: {
           site_visit_at: newSlot,
           site_visit_datetime: newSlot,
+          site_visit_booked: true,
           state: "VISIT_RESCHEDULED",
+          status: "VISIT_RESCHEDULED",
+          pre_visit_reminder_sent: false,
+          post_visit_feedback_sent: false,
+          metadata: {
+            ...(lead.metadata || {}),
+            morning_briefing_sent: false,
+            morning_briefing_at: null,
+            post_visit_nudge_sent: false,
+            missed_visit_reschedule_nudge_sent: false,
+          },
         },
         salesAlert: { type: "RESCHEDULE_VISIT", payload: { scheduledAt: newSlot, userText: context.messageText } },
       };
@@ -5339,6 +5450,16 @@ export async function dispatchStateAction(
             site_visit_datetime: newSlot,
             site_visit_booked: true,
             state: "SITE_VISIT_BOOKED",
+            status: "SITE_VISIT_BOOKED",
+            pre_visit_reminder_sent: false,
+            post_visit_feedback_sent: false,
+            metadata: {
+              ...(lead.metadata || {}),
+              morning_briefing_sent: false,
+              morning_briefing_at: null,
+              post_visit_nudge_sent: false,
+              missed_visit_reschedule_nudge_sent: false,
+            },
           },
           salesAlert: { type: "SITE_VISIT_BOOKED", payload: { scheduledAt: newSlot, userText: context.messageText } },
         };
@@ -5457,6 +5578,16 @@ export async function dispatchStateAction(
             site_visit_datetime: newSlot,
             site_visit_booked: true,
             state: "SITE_VISIT_BOOKED",
+            status: "SITE_VISIT_BOOKED",
+            pre_visit_reminder_sent: false,
+            post_visit_feedback_sent: false,
+            metadata: {
+              ...(lead.metadata || {}),
+              morning_briefing_sent: false,
+              morning_briefing_at: null,
+              post_visit_nudge_sent: false,
+              missed_visit_reschedule_nudge_sent: false,
+            },
           },
           salesAlert: { type: "SITE_VISIT_BOOKED", payload: { scheduledAt: newSlot, userText: context.messageText } },
         };
