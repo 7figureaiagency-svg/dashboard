@@ -14,15 +14,21 @@ updated: 2026-10-21T20:00:00+05:30
 - `.gsd/phases/4/4.2-PLAN.md` (CRM Dashboard Dual-Role Badges, Drawer Sub-Tabs & High-Value Sales Alerts) — ✅ Complete
 - `.gsd/phases/4/4.3-PLAN.md` (Natural Slot Booking & Anti-Reset Safeguard in OPTIONS_SENT) — ✅ Complete
 - `.gsd/phases/4/4.4-PLAN.md` (Fix OFF_TOPIC False Positives on Real Estate Terms, Second Listing Affirmations & Option 1 Search Access) — ✅ Complete
+- `.gsd/phases/4/4.5-PLAN.md` (Approved Listing Status Templates with Active Buyer Matching Copy) — ✅ Complete
+- `.gsd/phases/4/4.6-PLAN.md` (Visit Intent Guard in OWNER_DETAILS_GATHERED for DUAL_ROLE Leads) — ✅ Complete
+- `.gsd/phases/4/4.7-PLAN.md` (Past Site Visit Temporal Greeting Guards & Missed Visit Cron Follow-up) — 🔄 Active
 
 ## Last Action
 
-Executed Phase 4 Plan 4.4:
-- Deployed `v63-telegram-qa-hotfix` to Supabase Edge Serverless (Build 95).
-- Real Estate Keyword Immunity Guard: Real estate terms (`"Office"`, `"Commercial"`, `"Residential"`, `"Shop"`, `"Flat"`, `"Villa"`) are protected from global `OFF_TOPIC` rejection.
-- Affirmation Detection: `"Haan"` and `"Yes"` in `OWNER_DETAILS_GATHERED` seamlessly transition to `OWNER_CONFIG_PENDING` for multi-property intake without buyer hijacking.
-- Dual-Role Menu Expansion: Option 1 in `DUAL_ROLE_MENU_PENDING` provides sub-choices for Map Details (`1`), Reschedule (`2`), and New Property Search (`3`).
-- Live Verification: `scratch/test_telegram_713pm_bugs.cjs` passed 100% on live Supabase serverless edge function.
+Executed Phase 4 Plan 4.6:
+- Deployed `v65-visit-intent-guard` to Supabase Edge Serverless (Build 98).
+- Implemented visit intent guard in `dispatchStateAction()` for `OWNER_DETAILS_GATHERED` state.
+- Enhanced Gujarati intent classification for `"Hu site visit pr nai aavi saku aaje"`.
+- Verified 28/28 test cases passing on live edge function.
+
+Currently planning Plan 4.7:
+- Fixing past site visit labeled as 'Upcoming' in greetings when scheduled time has passed.
+- Enhancing post-visit / missed-visit cron sweep automation.
 
 ## Active Decisions
 
