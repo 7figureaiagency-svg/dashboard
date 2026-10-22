@@ -4041,6 +4041,106 @@ export async function dispatchStateAction(
   // ---------------------------------------------------------------------------
 
   if (isInOwnerIntake || currentState === "OWNER_DETAILS_GATHERED") {
+    // ── Site-visit intent guard: DUAL_ROLE leads can be in OWNER_DETAILS_GATHERED
+    //    while still having an active site visit. Catch visit intents here so they
+    //    are never swallowed by the owner-flow handlers. ───────────────────────────
+    if (
+      lead.site_visit_booked &&
+      (intent === "CANNOT_ATTEND_VISIT" || intent === "RESCHEDULE_VISIT" || intent === "CANCEL_VISIT")
+    ) {
+      if (intent === "CANNOT_ATTEND_VISIT") {
+        await supabase
+          .from("site_visits")
+          .update({ status: "MISSED", feedback_notes: `Missed visit: ${context.messageText}` })
+          .eq("lead_id", lead.id)
+          .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
+
+        const replyText =
+          lang === "GUJLISH"
+            ? `Arey koi vandho nahi <b>${nameStr}</b>! 🙏 Pehla thi janavva mate aabhar. Ame samji shakiye chhiye ke urgent kaam ya emergency lidhe tame aaje nathi aavi shakya. Chalo tame bija divase anukool hoy tyare reschedule kari daiye. Shu ame <b>kaale sanje 4:00 vage</b> ke <b>5:30 vage</b> navi VIP site visit plan kariye? 🚗📍`
+            : lang === "ENGLISH"
+            ? `No problem at all <b>${nameStr}</b>! 🙏 Thank you for letting us know in advance. We completely understand that an urgent commitment prevented you from making it today. Let's reschedule your visit for a convenient time. Would <b>tomorrow at 4:00 PM or 5:30 PM</b> work for you? 🚗📍`
+            : `Koi baat nahi <b>${nameStr}</b>! 🙏 Batane ke liye shukriya. Hum samajh sakte hain ki aaj aap visit par nahi aa pa rahe hain. Chaliye aapke liye ek aur convenient timing par reschedule kar dete hain. Kya hum <b>kal shaam 4:00 baje ya 5:30 baje</b> aapki nayi VIP site visit plan karein? 🚗📍`;
+
+        return {
+          replyText,
+          nextState: "VISIT_MISSED",
+          leadUpdates: {
+            state: "VISIT_MISSED",
+            site_visit_booked: false,
+            drip_stage: "MISSED_RESCHEDULE_PROMPTED",
+          },
+          salesAlert: { type: "VISIT_MISSED", payload: { userText: context.messageText, reason: (action as CannotAttendVisitAction).reason || context.messageText } },
+        };
+      }
+
+      if (intent === "RESCHEDULE_VISIT") {
+        const slotRaw = (action as RescheduleVisitAction).new_slot_raw || context.messageText;
+        const slotResult = parseVisitSlot(slotRaw);
+
+        if (slotResult.isValidTime && !slotResult.isPast) {
+          const newSlot = slotResult.isoUtc;
+          await supabase
+            .from("site_visits")
+            .update({ scheduled_at: newSlot, status: "RESCHEDULED" })
+            .eq("lead_id", lead.id)
+            .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED", "MISSED"]);
+
+          const formatted = new Date(newSlot).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+          const replyText =
+            lang === "GUJLISH"
+              ? `Ji bilkul <b>${nameStr}</b>! Tamari site visit <b>${formatted}</b> mate reschedule thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chiye)! 🤝📍`
+              : lang === "ENGLISH"
+              ? `Certainly <b>${nameStr}</b>! Your site visit has been rescheduled to <b>${formatted}</b>. Our senior sales executive will meet you directly at the site location on time! 🤝📍`
+              : `Ji bilkul <b>${nameStr}</b>! Aapki site visit <b>${formatted}</b> ke liye reschedule kar di gayi hai. Hamare senior sales executive time par aapse direct site location par milenge! 🤝📍`;
+
+          return {
+            replyText,
+            nextState: "VISIT_RESCHEDULED",
+            leadUpdates: {
+              site_visit_at: newSlot,
+              site_visit_datetime: newSlot,
+              state: "VISIT_RESCHEDULED",
+            },
+            salesAlert: { type: "RESCHEDULE_VISIT", payload: { scheduledAt: newSlot, userText: context.messageText } },
+          };
+        }
+
+        // No parseable slot provided — ask for it
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji bilkul <b>${nameStr}</b>! Tame kaya divase ane timing par visit reschedule karva mango chho? (e.g. <b>Kaale sanje 5 vage</b> ke <b>Sunday subah 11 baje</b>). 🙏`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! Which day and time would you like to reschedule your visit to? (e.g. <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>). 🙏`
+            : `Ji bilkul <b>${nameStr}</b>! Aap kis din aur timing par visit reschedule karna chahte hain? (e.g. <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>). 🙏`;
+
+        return { replyText, nextState: "SITE_VISIT_BOOKED" };
+      }
+
+      if (intent === "CANCEL_VISIT") {
+        await supabase
+          .from("site_visits")
+          .update({ status: "CANCELLED" })
+          .eq("lead_id", lead.id)
+          .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
+
+        const replyText =
+          lang === "GUJLISH"
+            ? `Samji gayo <b>${nameStr}</b>. Tamari site visit cancel kari didhi chhe. Jyare tame anukool hovo tyare navi visit book kari shako chho. 🙏`
+            : lang === "ENGLISH"
+            ? `Understood <b>${nameStr}</b>. Your scheduled site visit has been cancelled. Whenever you are ready, you can book a new slot anytime. 🙏`
+            : `Samajh gaya <b>${nameStr}</b>. Aapki scheduled site visit cancel kar di gayi hai. Jab bhi aap comfortable hon, naya slot schedule kar sakte hain. 🙏`;
+
+        return {
+          replyText,
+          nextState: "VISIT_CANCELLED",
+          leadUpdates: { state: "VISIT_CANCELLED", site_visit_booked: false },
+          salesAlert: { type: "CANCEL_VISIT", payload: { userText: context.messageText } },
+        };
+      }
+    }
+    // ── end site-visit intent guard ──────────────────────────────────────────────
+
     // If owner explicitly asks for buyer property search, route to qualification cascade
     const isExplicitBuyerSearch =
       (intent === "CHANGE_REQUIREMENT" || intent === "SEEKER_QUALIFICATION") &&
@@ -6011,7 +6111,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v64-approved-listing-template",
+        version: "v65-visit-intent-guard",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -6127,7 +6227,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v64 Ready (Approved Listing Templates, Anti-OFF_TOPIC Guard, Owner Multi-Listing & Dual Search Path)", { status: 200 });
+    return new Response("Realtor Lead Engine v65 Ready (Visit Intent Guard, Approved Listing Templates, Anti-OFF_TOPIC Guard, Owner Multi-Listing & Dual Search Path)", { status: 200 });
   }
 
   try {
