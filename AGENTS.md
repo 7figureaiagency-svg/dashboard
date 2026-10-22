@@ -60,3 +60,16 @@ This project is equipped with the specialized [`product-qa-analyst`](file:///c:/
 * **Subagent**: [`qa-bug-hunter`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/agents/qa-bug-hunter.md)
 * **Slash Command**: `/qa` (see [`.agent/workflows/qa.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agent/workflows/qa.md)) to run product QA audits and find bugs.
 
+---
+
+## 🎨 Apple HIG Frontend Dashboard Designer & UI/UX Architect
+
+This project is equipped with the specialized [`frontend-dashboard-designer`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/frontend-dashboard-designer/SKILL.md) skill and [`frontend-designer`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/agents/frontend-designer.md) subagent for high-taste, Apple Human Interface Guidelines (HIG) UI/UX design, anti-AI-slop governance, and tactile CRM workstation ergonomics.
+* **Skill**: [`frontend-dashboard-designer`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/frontend-dashboard-designer/SKILL.md)
+  * [Apple HIG Design System](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/frontend-dashboard-designer/references/apple-hig-design-system.md): Squircles, OKLCH tokens, `.apple-glass`, hairline borders, typography scale, and dark obsidian materials.
+  * [Dashboard UX Patterns](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/frontend-dashboard-designer/references/dashboard-ux-patterns.md): Triage tables, `.crm-badge` dot-pills, inspector drawer sheet, buyer/seller dual-role cards, and KPI tiles.
+  * [UI/UX Rules & Anti-Patterns Rubric](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/frontend-dashboard-designer/references/anti-patterns-and-rules.md): 10 Priority rules adapted from `ui-ux-pro-max`, Anthropic anti-AI-slop guidance, and mobile 44px tap ergonomics.
+* **Subagent**: [`frontend-designer`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/agents/frontend-designer.md)
+* **Slash Command**: `/design` (see [`.agent/workflows/design.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agent/workflows/design.md)) to audit and polish CRM dashboard UI/UX surfaces.
+
+
