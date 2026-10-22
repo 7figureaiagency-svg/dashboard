@@ -1612,8 +1612,8 @@ interface IntentResult {
 13. "mera flat bechna hai" / "maro flat vechvo che" ->
 {"action": {"intent": "SUBMIT_LISTING", "transaction_type": "SELL", "property_type": "Flat"}, "language": "HINGLISH", "user_role": "OWNER"}
 
-14. "aaj nahi aa paunga traffic hai" / "aaje nathi aavi shakay" ->
-{"action": {"intent": "CANNOT_ATTEND_VISIT", "reason": "traffic"}, "language": "HINGLISH", "user_role": "SEEKER"}
+14. "aaj nahi aa paunga traffic hai" / "aaje nathi aavi shakay" / "Hu site visit pr nai aavi saku aaje" / "nathi aavi saku" ->
+{"action": {"intent": "CANNOT_ATTEND_VISIT", "reason": "cannot_attend"}, "language": "GUJLISH", "user_role": "SEEKER"}
 
 15. "મને અલ્કાપુરીમાં 3BHK ફ્લેટ જોઈએ છે 75 લાખ સુધી" ->
 {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "3BHK Flat", "location": "Alkapuri", "budget": 7500000, "requirement": "BUY"}, "language": "GUJARATI_SCRIPT", "user_role": "SEEKER"}
@@ -2014,9 +2014,10 @@ async function classifyLeadIntent(
       fallbackIntent = "CHANGE_CRITERIA";
     }
   } else if (
-    /(?:^|\b)(?:ha\s+|haan\s+|ji\s+)?(?:me\s+|hum\s+|mai\s+)?(?:nai|nahi|nhi|na)\s*(?:aa\s*sakta|aa\s*sakti|aa\s*paunga|aa\s*paungi|aa\s*payenge|aa\s*paenge|aa\s*raha|aa\s*rahe|aana|aunga|aungi|ja\s*sakta|ja\s*paunga|pahunch\s*sakta|pahunch\s*paunga|ho\s*payega|hoga\s*aaj|possible\s*nahi)/i.test(lower) ||
+    /(?:^|\b)(?:ha\s+|haan\s+|ji\s+)?(?:me\s+|hum\s+|mai\s+|hu\s+|ame\s+)?(?:nai|nahi|nhi|na|nathi)\s*(?:aa\s*sakta|aa\s*sakti|aa\s*paunga|aa\s*paungi|aa\s*payenge|aa\s*paenge|aa\s*raha|aa\s*rahe|aana|aunga|aungi|ja\s*sakta|ja\s*paunga|pahunch\s*sakta|pahunch\s*paunga|ho\s*payega|hoga\s*aaj|possible\s*nahi|aavi\s*saku|aavi\s*shaku|aavi\s*sakyo|aavi\s*shakay|aavay|aavish|aa\s*saku)/i.test(lower) ||
     /(nahi\s*aa\s*paya|nahi\s*aa\s*paye|miss\s*ho\s*gaya|emergency|couldn't\s*come|cannot\s*make\s*it|won't\s*be\s*able\s*to\s*come)/i.test(lower) ||
-    /(nathi\s*aavi\s*sakyo|aaje\s*nahi\s*aavay|aaje\s*nai\s*aavay)/i.test(lower)
+    /(nathi\s*aavi\s*sakyo|nathi\s*aavi\s*saku|nai\s*aavi\s*saku|aaje\s*nahi\s*aavay|aaje\s*nai\s*aavay|aaje\s*nathi\s*aavay)/i.test(lower) ||
+    (/(?:site\s*visit|visit).*?(?:nai|nahi|nathi|not|cannot|can't|miss)/i.test(lower) && !lower.includes("reschedule") && !lower.includes("cancel"))
   ) {
     fallbackIntent = "CANNOT_ATTEND_VISIT";
   } else if (/(kuch\s*kam\s*hoga|discount|bhav\s*ochho|rate\s*kam|final\s*price|negotiat)/i.test(lower)) {
@@ -4044,11 +4045,26 @@ export async function dispatchStateAction(
     // ── Site-visit intent guard: DUAL_ROLE leads can be in OWNER_DETAILS_GATHERED
     //    while still having an active site visit. Catch visit intents here so they
     //    are never swallowed by the owner-flow handlers. ───────────────────────────
+    const isUnableToAttendVisit =
+      intent === "CANNOT_ATTEND_VISIT" ||
+      (/(?:site\s*visit|visit).*?(?:nai|nahi|nathi|cannot|can't|not\s*possible|miss|late|aaje)/i.test(lower) && /(?:nai|nahi|nathi|cannot|can't|miss)/i.test(lower)) ||
+      /(?:nai|nahi|nathi|na)\s*(?:aavi\s*saku|aavi\s*shaku|aavi\s*sakyo|aavay|aavish|aa\s*saku|aa\s*sakta|aa\s*paunga)/i.test(lower);
+
+    const isRescheduleVisit =
+      intent === "RESCHEDULE_VISIT" ||
+      (/(?:site\s*visit|visit).*?(?:reschedule|change\s*time|badal|timing)/i.test(lower) && !isUnableToAttendVisit) ||
+      /(?:reschedule|timing\s*change|time\s*badlo)/i.test(lower);
+
+    const isCancelVisit =
+      intent === "CANCEL_VISIT" ||
+      (/(?:site\s*visit|visit).*?(?:cancel|cancel\s*kar)/i.test(lower) && !isUnableToAttendVisit) ||
+      /^(?:cancel|visit\s*cancel)\b/i.test(lower);
+
     if (
       lead.site_visit_booked &&
-      (intent === "CANNOT_ATTEND_VISIT" || intent === "RESCHEDULE_VISIT" || intent === "CANCEL_VISIT")
+      (isUnableToAttendVisit || isRescheduleVisit || isCancelVisit)
     ) {
-      if (intent === "CANNOT_ATTEND_VISIT") {
+      if (isUnableToAttendVisit) {
         await supabase
           .from("site_visits")
           .update({ status: "MISSED", feedback_notes: `Missed visit: ${context.messageText}` })
@@ -4074,7 +4090,7 @@ export async function dispatchStateAction(
         };
       }
 
-      if (intent === "RESCHEDULE_VISIT") {
+      if (isRescheduleVisit) {
         const slotRaw = (action as RescheduleVisitAction).new_slot_raw || context.messageText;
         const slotResult = parseVisitSlot(slotRaw);
 
@@ -4117,7 +4133,7 @@ export async function dispatchStateAction(
         return { replyText, nextState: "SITE_VISIT_BOOKED" };
       }
 
-      if (intent === "CANCEL_VISIT") {
+      if (isCancelVisit) {
         await supabase
           .from("site_visits")
           .update({ status: "CANCELLED" })
