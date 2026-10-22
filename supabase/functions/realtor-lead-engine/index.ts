@@ -849,6 +849,55 @@ function formatSocietyAndLocationLabel(society?: string | null, location?: strin
   return deduped.join(", ") || soc;
 }
 
+/**
+ * Detects random keystroke mashes, consonant-only strings, repeated chars,
+ * and unintelligible inputs (e.g. "gfnfgn", "asdfghj", "zzzzz", "?????")
+ */
+function isGibberishOrInvalidInput(text: string): boolean {
+  if (!text || typeof text !== "string") return true;
+  const clean = text.trim();
+  if (clean.length === 0) return true;
+
+  // If text contains Indic Unicode script (Gujarati, Hindi, Devanagari), do not treat as Latin gibberish
+  if (/[\u0A80-\u0AFF\u0900-\u097F]/.test(clean)) {
+    if (/(.)\1{4,}/u.test(clean)) return true;
+    return false;
+  }
+
+  // Pure punctuation or symbols without alphanumeric characters
+  if (!/[a-zA-Z0-9]/.test(clean)) return true;
+
+  // Single or double character valid tokens (e.g. "1", "2", "3", "hi", "ha", "ok", "k")
+  if (clean.length <= 2) return false;
+
+  // Repeated same character 4 or more times (e.g. "aaaa", "zzzzz", "11111")
+  if (/(.)\1{3,}/i.test(clean)) return true;
+
+  // Check words for consonant-only keystroke mashes
+  const words = clean.toLowerCase().split(/\s+/).filter(Boolean);
+  const knownVowellessAcronyms = new Set([
+    "bhk", "1bhk", "2bhk", "3bhk", "4bhk", "5bhk",
+    "rk", "1rk", "2rk",
+    "sqft", "sft", "sqyd", "sqm", "sq",
+    "rtm", "bua", "sba", "cr", "k", "l", "lac", "lacs",
+    "rd", "opp", "nr", "dr", "mr", "mrs"
+  ]);
+
+  for (const word of words) {
+    const lettersOnly = word.replace(/[^a-z]/g, "");
+    // If a word is 4+ letters long, has letters only, has NO vowels, and is not a known acronym
+    if (lettersOnly.length >= 4 && !/[aeiou]/i.test(lettersOnly) && !knownVowellessAcronyms.has(lettersOnly)) {
+      return true;
+    }
+    // High consonant cluster (5 or more consecutive consonants)
+    if (/[bcdfghjklmnpqrstvwxyz]{5,}/i.test(lettersOnly) && !knownVowellessAcronyms.has(lettersOnly)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function parsePropertyTypeFromText(text: string): string {
   const normalized = normalizeIndicDigits(text || "");
   const lower = normalized.toLowerCase();
@@ -2009,6 +2058,21 @@ async function classifyLeadIntent(
   lead: any
 ): Promise<ClassifiedIntent> {
   const start = Date.now();
+
+  // 0. Deterministic Gibberish / Keystroke Mash Guard
+  if (isGibberishOrInvalidInput(messageText)) {
+    console.log(`[classifyLeadIntent] Intercepted gibberish input: "${messageText}" -> Returning OFF_TOPIC`);
+    const action: UserAction = { intent: "OFF_TOPIC" };
+    return buildClassifiedActionResult(
+      action,
+      "UNKNOWN",
+      lead?.user_language || "HINGLISH",
+      "DETERMINISTIC_FALLBACK",
+      0,
+      { action }
+    );
+  }
+
   const geminiKey = Deno.env.get("GEMINI_API_KEY") || "";
   const groqKey = Deno.env.get("GROQ_API_KEY") || "";
 
@@ -4107,30 +4171,44 @@ export async function dispatchStateAction(
   }
 
   // Anti-OFF_TOPIC Property Keyword Immunity Guard:
-  // If user mentioned real estate terms, NEVER reject as OFF_TOPIC!
+  // If user mentioned genuine real estate terms, NEVER reject as OFF_TOPIC!
+  const isGibberish = isGibberishOrInvalidInput(context.messageText);
+  const detectedPropType = isGibberish ? "" : parsePropertyTypeFromText(context.messageText);
   const isRealEstateTerm =
-    parsePropertyTypeFromText(context.messageText) !== null ||
-    /\b(office|shop|dukaan|dukan|showroom|flat|apartment|villa|bungalow|plot|land|commercial|residential|residence|bhk|buy|rent|sell|bechna|vechvu|kharidna|kharidvu)\b/i.test(context.messageText);
+    Boolean(detectedPropType) ||
+    (!isGibberish && /\b(office|shop|dukaan|dukan|showroom|flat|apartment|villa|bungalow|plot|land|commercial|residential|residence|bhk|buy|rent|sell|bechna|vechvu|kharidna|kharidvu)\b/i.test(context.messageText));
 
   if (intent === "OFF_TOPIC" && isRealEstateTerm) {
     console.log(`[dispatchStateAction] Overriding OFF_TOPIC false positive for message: "${context.messageText}"`);
-    const propType = parsePropertyTypeFromText(context.messageText) || (/\b(office|shop|dukaan|dukan|showroom|commercial)\b/i.test(context.messageText) ? "Commercial Office" : "Residential");
-    intent = "CHANGE_REQUIREMENT";
-    action = {
-      intent: "CHANGE_REQUIREMENT",
-      property_type: propType,
-    } as any;
-    actionResult.property_type = propType;
-    (actionResult as any).action = action;
+    const propType = detectedPropType || (/\b(office|shop|dukaan|dukan|showroom|commercial)\b/i.test(context.messageText) ? "Commercial Office" : (/\b(flat|apartment|villa|bungalow|residential|residence)\b/i.test(context.messageText) ? "Residential" : null));
+    if (propType) {
+      intent = "CHANGE_REQUIREMENT";
+      action = {
+        intent: "CHANGE_REQUIREMENT",
+        property_type: propType,
+      } as any;
+      actionResult.property_type = propType;
+      (actionResult as any).action = action;
+    }
   }
 
-  if (intent === "OFF_TOPIC") {
-    const replyText =
-      lang === "GUJLISH"
-        ? `Hu Nextgen Realty no AI property assistant chhu ane hu fakt property search, site visits ane real estate sambhandhit details ma j tamne help kari shaku chhu. 😊🏢\n\nKripya janavjo, tame kaya type ni property shodhva mango chho - Residential ke Commercial?`
-        : lang === "ENGLISH"
-        ? `I am Nextgen Realty's AI property assistant, and I can only assist you with property search, site visits, and real estate details. 😊🏢\n\nPlease let me know what kind of residential or commercial property you are looking for!`
-        : `Main Nextgen Realty ka AI property assistant hu aur main sirf property search, site visits aur real estate queries me hi aapki help kar sakta hu. 😊🏢\n\nKripya batayein, aap kis type ki property search kar rahe hain - Residential ya Commercial?`;
+  if (intent === "OFF_TOPIC" || isGibberish) {
+    let replyText = "";
+    if (isGibberish) {
+      replyText =
+        lang === "GUJLISH"
+          ? `Mane barobar samajh na padi. 😊 Hu fakt property search, site visits ane real estate details ma j tamne madad kari shaku chhu. 🏢\n\nKripya janavjo, tame kaya type ni property shodhva mango chho — <b>2BHK / 3BHK Flat, Villa ke Commercial Space?</b> 🏡`
+          : lang === "ENGLISH"
+          ? `I couldn't quite understand that. 😊 I can assist you with property search, site visits, and verified real estate options. 🏢\n\nPlease let us know what type of property you are looking for — <b>Flat, Villa, or Commercial Space?</b> 🏡`
+          : `Main samajh nahi paaya. 😊 Main sirf property search, site visits aur real estate queries me hi aapki help kar sakta hu. 🏢\n\nKripya batayein, aap kis type ki property search kar rahe hain — <b>2BHK / 3BHK Flat, Villa ya Commercial Space?</b> 🏡`;
+    } else {
+      replyText =
+        lang === "GUJLISH"
+          ? `Hu Nextgen Realty no AI property assistant chhu ane hu fakt property search, site visits ane real estate sambhandhit details ma j tamne help kari shaku chhu. 😊🏢\n\nKripya janavjo, tame kaya type ni property shodhva mango chho — <b>Residential ke Commercial?</b> 🏡`
+          : lang === "ENGLISH"
+          ? `I am Nextgen Realty's AI property assistant, and I can only assist you with property search, site visits, and real estate details. 😊🏢\n\nPlease let me know what kind of residential or commercial property you are looking for! 🏡`
+          : `Main Nextgen Realty ka AI property assistant hu aur main sirf property search, site visits aur real estate queries me hi aapki help kar sakta hu. 😊🏢\n\nKripya batayein, aap kis type ki property search kar rahe hain — <b>Residential ya Commercial?</b> 🏡`;
+    }
 
     return {
       replyText,
