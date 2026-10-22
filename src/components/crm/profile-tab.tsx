@@ -91,46 +91,53 @@ export function ProfileTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-4xl">
       {/* Personal info */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <User className="size-4" /> Personal Information
+      <Card className="apple-card overflow-hidden border border-border/50 bg-card shadow-xs rounded-2xl">
+        <CardHeader className="bg-muted/15 border-b border-border/30 px-5 py-4">
+          <CardTitle className="flex items-center gap-2.5 text-base font-bold tracking-tight text-foreground">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <User className="size-4" />
+            </div>
+            <span>Personal Information</span>
           </CardTitle>
-          <CardDescription>Update your name and contact details.</CardDescription>
+          <CardDescription className="text-xs text-muted-foreground mt-0.5">
+            Update your full name, direct phone number, and account credentials.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-5 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="fullName">Full name</Label>
+              <Label htmlFor="fullName" className="text-xs font-semibold text-foreground">Full name</Label>
               <Input
                 id="fullName"
                 value={fullName}
                 placeholder="Your full name"
                 onChange={(e) => setFullName(e.target.value)}
+                className="h-10 rounded-xl border-border/40 bg-muted/20 focus:bg-background transition-colors text-sm"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" value={me?.email ?? ""} disabled className="opacity-60" />
-              <p className="text-xs text-muted-foreground">Email cannot be changed here.</p>
+              <Label htmlFor="email" className="text-xs font-semibold text-foreground">Email address</Label>
+              <Input id="email" value={me?.email ?? ""} disabled className="h-10 rounded-xl opacity-60 bg-muted/40 font-mono text-xs" />
+              <p className="text-[11px] text-muted-foreground">Primary login email cannot be changed here.</p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="phone">Phone number</Label>
+              <Label htmlFor="phone" className="text-xs font-semibold text-foreground">Phone number</Label>
               <Input
                 id="phone"
                 value={phone}
                 placeholder="+91 98765 43210"
                 onChange={(e) => setPhone(e.target.value)}
+                className="h-10 rounded-xl border-border/40 bg-muted/20 focus:bg-background transition-colors text-sm tabular-nums"
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Role</Label>
+              <Label className="text-xs font-semibold text-foreground">Assigned Role</Label>
               <Input
-                value={me?.role === "admin" ? "Admin" : "Sales Executive"}
+                value={me?.role === "admin" ? "Organization Admin" : "Sales Executive"}
                 disabled
-                className="opacity-60"
+                className="h-10 rounded-xl opacity-60 bg-muted/40 font-medium text-xs"
               />
             </div>
           </div>
@@ -139,42 +146,48 @@ export function ProfileTab() {
 
       {/* Company info — admin only */}
       {isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Building2 className="size-4" /> Company / Client Settings
+        <Card className="apple-card overflow-hidden border border-border/50 bg-card shadow-xs rounded-2xl">
+          <CardHeader className="bg-muted/15 border-b border-border/30 px-5 py-4">
+            <CardTitle className="flex items-center gap-2.5 text-base font-bold tracking-tight text-foreground">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-foreground">
+                <Building2 className="size-4" />
+              </div>
+              <span>Company & Brokerage Branding</span>
             </CardTitle>
-            <CardDescription>
-              Update your company name and logo as they appear across the platform.
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+              Configure your brokerage name and logo as they appear on client site visit invites and portal leads.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="p-5 space-y-4">
             {/* Logo upload */}
             <div className="space-y-2">
-              <Label>Company logo</Label>
+              <Label className="text-xs font-semibold text-foreground">Company logo</Label>
               <div className="flex items-center gap-4">
                 {(logoPreview || logoUrl) ? (
-                  <img
-                    src={logoPreview ?? logoUrl ?? ""}
-                    alt="Company logo"
-                    className="h-16 w-16 rounded-lg border object-contain p-1"
-                  />
+                  <div className="relative size-18 rounded-2xl border border-border/60 bg-muted/20 p-2 shadow-2xs flex items-center justify-center overflow-hidden">
+                    <img
+                      src={logoPreview ?? logoUrl ?? ""}
+                      alt="Company logo"
+                      className="size-full object-contain"
+                    />
+                  </div>
                 ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-lg border bg-muted text-muted-foreground">
-                    <Building2 className="size-6" />
+                  <div className="flex size-18 items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/30 text-muted-foreground shadow-2xs">
+                    <Building2 className="size-7 opacity-60" />
                   </div>
                 )}
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="apple-button h-9 rounded-xl border-border/50 text-xs font-semibold gap-1.5 shadow-2xs"
                     onClick={() => logoInputRef.current?.click()}
                   >
-                    <Upload className="mr-2 size-4" />
-                    {logoUrl || logoPreview ? "Change logo" : "Upload logo"}
+                    <Upload className="size-3.5" />
+                    <span>{logoUrl || logoPreview ? "Change logo" : "Upload logo"}</span>
                   </Button>
-                  <p className="text-xs text-muted-foreground">PNG, JPG, SVG up to 2MB</p>
+                  <p className="text-[11px] text-muted-foreground">PNG, JPG, SVG or WebP up to 2MB</p>
                 </div>
                 <input
                   ref={logoInputRef}
@@ -186,37 +199,33 @@ export function ProfileTab() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 pt-1">
               <div className="space-y-1.5">
-                <Label htmlFor="companyName">Company name</Label>
+                <Label htmlFor="companyName" className="text-xs font-semibold text-foreground">Brokerage / Company name</Label>
                 <Input
                   id="companyName"
                   value={companyName}
-                  placeholder="Your company name"
+                  placeholder="e.g. Nextgn Realtors"
                   onChange={(e) => setCompanyName(e.target.value)}
+                  className="h-10 rounded-xl border-border/40 bg-muted/20 focus:bg-background transition-colors text-sm font-semibold"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Contact email</Label>
-                <Input value={client?.email ?? ""} disabled className="opacity-60" />
+                <Label className="text-xs font-semibold text-foreground">Billing email</Label>
+                <Input value={client?.email ?? ""} disabled className="h-10 rounded-xl opacity-60 bg-muted/40 font-mono text-xs" />
               </div>
               {client?.display_phone_number && (
                 <div className="space-y-1.5">
-                  <Label>WhatsApp number</Label>
-                  <Input value={client.display_phone_number} disabled className="opacity-60" />
+                  <Label className="text-xs font-semibold text-foreground">WhatsApp Business Number</Label>
+                  <Input value={client.display_phone_number} disabled className="h-10 rounded-xl opacity-60 bg-muted/40 font-mono text-xs tabular-nums" />
                 </div>
               )}
               <div className="space-y-1.5">
-                <Label>WhatsApp status</Label>
-                <Input
-                  value={
-                    client?.meta_signup_status === "connected"
-                      ? "Connected"
-                      : "Not connected"
-                  }
-                  disabled
-                  className="opacity-60"
-                />
+                <Label className="text-xs font-semibold text-foreground">WhatsApp API Status</Label>
+                <div className="flex h-10 items-center rounded-xl border border-border/40 bg-muted/30 px-3.5 text-xs font-medium text-foreground">
+                  <span className={`inline-block size-2 rounded-full mr-2 ${client?.meta_signup_status === "connected" ? "bg-emerald-500 shadow-xs" : "bg-amber-500"}`} />
+                  <span>{client?.meta_signup_status === "connected" ? "Connected & Active" : "Not connected"}</span>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -224,88 +233,95 @@ export function ProfileTab() {
       )}
 
       {/* Appearance & Theme */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Sun className="size-4 text-amber-500" /> Appearance & Theme
+      <Card className="apple-card overflow-hidden border border-border/50 bg-card shadow-xs rounded-2xl">
+        <CardHeader className="bg-muted/15 border-b border-border/30 px-5 py-4">
+          <CardTitle className="flex items-center gap-2.5 text-base font-bold tracking-tight text-foreground">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              <Sun className="size-4" />
+            </div>
+            <span>Appearance & Theme</span>
           </CardTitle>
-          <CardDescription>
-            Choose your preferred dashboard interface appearance or match your system settings.
+          <CardDescription className="text-xs text-muted-foreground mt-0.5">
+            Select your preferred display theme. All colors adhere to Apple Human Interface Guidelines and OKLCH system tokens.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-5">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => setTheme("light")}
-              className={`apple-button flex items-center justify-between p-3.5 rounded-xl border text-left transition-all ${
+              className={`apple-button flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all ${
                 theme === "light"
-                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                  : "border-border/60 bg-card hover:bg-muted/40"
+                  ? "border-primary bg-primary/8 ring-2 ring-primary/25 shadow-xs"
+                  : "border-border/50 bg-card hover:bg-muted/40"
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${theme === "light" ? "bg-amber-500/10 text-amber-600" : "bg-muted text-muted-foreground"}`}>
-                  <Sun className="size-4" />
+                <div className={`p-2.5 rounded-xl ${theme === "light" ? "bg-amber-500/15 text-amber-600" : "bg-muted text-muted-foreground"}`}>
+                  <Sun className="size-4.5" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium leading-none">Light</div>
-                  <div className="text-xs text-muted-foreground mt-1">Apple HIG light canvas</div>
+                  <div className="text-sm font-bold text-foreground">Light</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">Apple System Gray 6</div>
                 </div>
               </div>
-              {theme === "light" && <div className="size-2 rounded-full bg-primary" />}
+              {theme === "light" && <div className="size-2.5 rounded-full bg-primary shadow-xs" />}
             </button>
 
             <button
               type="button"
               onClick={() => setTheme("dark")}
-              className={`apple-button flex items-center justify-between p-3.5 rounded-xl border text-left transition-all ${
+              className={`apple-button flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all ${
                 theme === "dark"
-                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                  : "border-border/60 bg-card hover:bg-muted/40"
+                  ? "border-primary bg-primary/8 ring-2 ring-primary/25 shadow-xs"
+                  : "border-border/50 bg-card hover:bg-muted/40"
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${theme === "dark" ? "bg-indigo-500/10 text-indigo-400" : "bg-muted text-muted-foreground"}`}>
-                  <Moon className="size-4" />
+                <div className={`p-2.5 rounded-xl ${theme === "dark" ? "bg-indigo-500/15 text-indigo-400" : "bg-muted text-muted-foreground"}`}>
+                  <Moon className="size-4.5" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium leading-none">Dark</div>
-                  <div className="text-xs text-muted-foreground mt-1">Deep Apple dark space</div>
+                  <div className="text-sm font-bold text-foreground">Dark</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">Deep Obsidian Canvas</div>
                 </div>
               </div>
-              {theme === "dark" && <div className="size-2 rounded-full bg-primary" />}
+              {theme === "dark" && <div className="size-2.5 rounded-full bg-primary shadow-xs" />}
             </button>
 
             <button
               type="button"
               onClick={() => setTheme("system")}
-              className={`apple-button flex items-center justify-between p-3.5 rounded-xl border text-left transition-all ${
+              className={`apple-button flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all ${
                 theme === "system"
-                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                  : "border-border/60 bg-card hover:bg-muted/40"
+                  ? "border-primary bg-primary/8 ring-2 ring-primary/25 shadow-xs"
+                  : "border-border/50 bg-card hover:bg-muted/40"
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${theme === "system" ? "bg-blue-500/10 text-blue-500" : "bg-muted text-muted-foreground"}`}>
-                  <Monitor className="size-4" />
+                <div className={`p-2.5 rounded-xl ${theme === "system" ? "bg-blue-500/15 text-blue-500" : "bg-muted text-muted-foreground"}`}>
+                  <Monitor className="size-4.5" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium leading-none">System</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Auto ({resolvedTheme === "dark" ? "Dark" : "Light"})
+                  <div className="text-sm font-bold text-foreground">System</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    Match OS ({resolvedTheme === "dark" ? "Dark" : "Light"})
                   </div>
                 </div>
               </div>
-              {theme === "system" && <div className="size-2 rounded-full bg-primary" />}
+              {theme === "system" && <div className="size-2.5 rounded-full bg-primary shadow-xs" />}
             </button>
           </div>
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
-        <Button onClick={save} disabled={busy}>
-          {busy ? "Saving…" : "Save changes"}
+      <div className="flex justify-end pt-2">
+        <Button
+          onClick={save}
+          disabled={busy}
+          className="apple-button h-11 px-7 rounded-xl font-bold text-xs bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 transition-all flex items-center gap-2"
+        >
+          {busy ? "Saving Changes…" : "Save Changes"}
         </Button>
       </div>
     </div>

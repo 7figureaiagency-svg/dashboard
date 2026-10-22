@@ -462,14 +462,14 @@ export function LeadsTab({
       )}
 
       <Card className="rounded-2xl border border-border/50 bg-card shadow-xs">
-        <CardContent className="flex flex-wrap items-end gap-3 pt-5 pb-5">
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <SlidersHorizontal className="size-4" /> Filters
+        <CardContent className="flex flex-wrap items-end gap-3 pt-4 pb-4">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <SlidersHorizontal className="size-3.5 text-primary" /> Filters
           </div>
           {lockedExecutive ? (
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Executive</p>
-              <div className="flex h-9 min-w-[150px] items-center rounded-md border bg-muted px-3 text-sm">
+              <p className="text-xs font-semibold text-muted-foreground">Executive</p>
+              <div className="flex h-9 min-w-[150px] items-center rounded-xl border border-border/40 bg-muted/30 px-3 text-xs font-medium">
                 {lockedExecutive}
               </div>
             </div>
@@ -491,19 +491,29 @@ export function LeadsTab({
           />
           <FilterSelect label="Source" value={source} onChange={setSource} options={sources} />
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">From</p>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <p className="text-xs font-semibold text-muted-foreground">From</p>
+            <Input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="h-9 rounded-xl border-border/40 bg-muted/20 focus:bg-background text-xs transition-colors"
+            />
           </div>
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">To</p>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <p className="text-xs font-semibold text-muted-foreground">To</p>
+            <Input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="h-9 rounded-xl border-border/40 bg-muted/20 focus:bg-background text-xs transition-colors"
+            />
           </div>
           <div className="relative min-w-[180px] flex-1 space-y-1">
-            <p className="text-xs text-muted-foreground">Search</p>
-            <Search className="absolute left-3 top-[30px] size-4 text-muted-foreground" />
+            <p className="text-xs font-semibold text-muted-foreground">Search</p>
+            <Search className="absolute left-3 top-[30px] size-3.5 text-muted-foreground" />
             <Input
-              className="pl-9"
-              placeholder="Name, phone or property"
+              className="pl-9 h-9 rounded-xl border-border/40 bg-muted/20 focus:bg-background text-xs transition-colors"
+              placeholder="Name, phone or property..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -515,11 +525,11 @@ export function LeadsTab({
                 size="sm"
                 onClick={handleRunSweep}
                 disabled={sweeping}
-                className="h-9 gap-1.5 font-medium border-primary/20 text-primary hover:bg-primary/5"
+                className="apple-button h-9 rounded-xl px-3.5 gap-1.5 text-xs font-semibold border-primary/25 text-primary hover:bg-primary/10 shadow-2xs"
                 title="Run Automated Pre-Visit Reminders, Post-Visit Feedback & Daily Qualification Follow-Up (Admin Only)"
               >
                 <Send className={`size-3.5 ${sweeping ? "animate-spin" : ""}`} />
-                {sweeping ? "Sweeping..." : "Run Follow-Up Sweep"}
+                <span>{sweeping ? "Sweeping..." : "Run Sweep"}</span>
               </Button>
             </div>
           )}
@@ -886,14 +896,18 @@ export function LeadsTab({
                     </TableRow>
                   )}
                   {rows.map((lead) => (
-                    <TableRow key={lead.lead_id} className="border-b border-border/30 hover:bg-muted/35 transition-colors">
+                    <TableRow
+                      key={lead.lead_id}
+                      className="border-b border-border/30 hover:bg-muted/40 transition-colors cursor-pointer group"
+                      onClick={() => setSelected(lead)}
+                    >
                       <TableCell className="font-semibold text-foreground py-3.5">
                         <div className="flex flex-col gap-1 items-start">
-                          <span>{lead.name || "Unnamed"}</span>
+                          <span className="group-hover:text-primary transition-colors">{lead.name || "Unnamed"}</span>
                           {isDualRoleLead(lead) && <DualRoleBadge />}
                         </div>
                       </TableCell>
-                      <TableCell className="py-3.5">
+                      <TableCell className="py-3.5" onClick={(e) => e.stopPropagation()}>
                         {lead.assigned_executive_name ? (
                           <button
                             className="font-medium text-primary hover:underline"
@@ -932,7 +946,7 @@ export function LeadsTab({
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="py-3.5">
+                      <TableCell className="py-3.5" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={!!lead.bot_active}
@@ -958,7 +972,7 @@ export function LeadsTab({
                       <TableCell className="whitespace-nowrap text-muted-foreground text-xs tabular-nums py-3.5">
                         {formatDate(lead.created_at)}
                       </TableCell>
-                      <TableCell className="text-right py-3.5">
+                      <TableCell className="text-right py-3.5" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end items-center gap-1.5">
                           <Button asChild size="sm" variant="outline" className="apple-button h-8 rounded-lg gap-1.5 shadow-2xs" disabled={!lead.phone}>
                             <a href={`tel:${lead.phone ?? ""}`}>
@@ -985,8 +999,8 @@ export function LeadsTab({
                           </Button>
                           <Button
                             size="sm"
-                            variant="ghost"
-                            className="apple-button h-8 rounded-lg text-xs"
+                            variant="default"
+                            className="apple-button h-8 rounded-lg text-xs shadow-2xs font-semibold"
                             onClick={() => setSelected(lead)}
                           >
                             Open
@@ -1039,15 +1053,15 @@ function FilterSelect({
 }) {
   return (
     <div className="space-y-1">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="min-w-[150px]">
+        <SelectTrigger className="h-9 min-w-[150px] rounded-xl border-border/40 bg-muted/20 text-xs focus:bg-background transition-colors">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>{allLabel}</SelectItem>
+        <SelectContent className="rounded-xl border-border/50 shadow-md">
+          <SelectItem value={ALL} className="rounded-lg text-xs">{allLabel}</SelectItem>
           {options.map((o) => (
-            <SelectItem key={o} value={o}>
+            <SelectItem key={o} value={o} className="rounded-lg text-xs">
               {render ? render(o) : o}
             </SelectItem>
           ))}

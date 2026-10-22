@@ -320,10 +320,22 @@ function IntegrationRow({
             label={row.is_enabled ? "Active" : "Paused"}
           />
         </div>
-        <div className="mt-1.5">
+        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
           <span className="break-all text-xs text-muted-foreground font-mono bg-muted/40 rounded-lg px-2.5 py-1 border border-border/30 inline-block">
             {row.webhook_url || "No URL set"}
           </span>
+          {row.webhook_url && (
+            <button
+              type="button"
+              className="apple-button text-[11px] text-primary hover:underline font-medium inline-flex items-center gap-1"
+              onClick={() => {
+                navigator.clipboard?.writeText(row.webhook_url || "");
+                toast.success("Webhook URL copied to clipboard");
+              }}
+            >
+              <Copy className="size-3" /> Copy
+            </button>
+          )}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/30">
@@ -341,12 +353,10 @@ function IntegrationRow({
   );
 }
 
-/** Best-effort suggested webhook URL for a given portal + tenant, matching the n8n convention already in use. */
+/** Suggested webhook URL for incoming portal leads routing direct to Supabase Edge Function (100% Non-n8n). */
 export function suggestedWebhookUrl(provider: string, clientId: string | null): string {
-  const base =
-    (import.meta.env["VITE_N8N_WEBHOOK_BASE_URL"] as string | undefined) ||
-    "https://n8n.yourdomain.com/webhook";
+  const base = "https://yeiygfysijptjdepctnx.supabase.co/functions/v1/realtor-lead-engine";
   if (!clientId) return "";
-  if (provider === "custom") return "";
-  return `${base}/portal/${provider}/${clientId}`;
+  if (provider === "custom") return `${base}?source=custom&client_id=${clientId}`;
+  return `${base}?source=${provider}&client_id=${clientId}`;
 }

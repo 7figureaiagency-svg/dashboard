@@ -221,16 +221,21 @@ function Dashboard() {
             <TabsList className="hidden md:flex touch-scroll h-auto w-60 shrink-0 flex-col items-stretch gap-1.5 bg-transparent p-0 overflow-visible">
               {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) => {
                 const Icon = item.icon;
+                const isActive = activeTab === item.value;
                 return (
                   <TabsTrigger
                     key={item.value}
                     value={item.value}
-                    className="justify-start gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all apple-button data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border data-[state=active]:border-border/60 text-muted-foreground hover:text-foreground hover:bg-card/50 w-full"
+                    className="group relative justify-start gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all apple-button data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=active]:border data-[state=active]:border-border/60 text-muted-foreground hover:text-foreground hover:bg-card/50 w-full"
                   >
-                    <Icon className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="flex-1 text-left">{item.label}</span>
+                    <Icon className={`size-4.5 shrink-0 transition-colors ${isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`} />
+                    <span className="flex-1 text-left tracking-tight">{item.label}</span>
                     {item.value === "leads" && leads.length > 0 && (
-                      <span className="ml-auto rounded-full bg-muted/80 px-2 py-0.5 text-[11px] font-semibold text-foreground tabular-nums">
+                      <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums transition-colors ${
+                        isActive
+                          ? "bg-primary/12 text-primary"
+                          : "bg-muted/80 text-muted-foreground"
+                      }`}>
                         {leads.length}
                       </span>
                     )}
