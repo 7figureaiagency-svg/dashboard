@@ -53,14 +53,25 @@ export function ProfileTab() {
     if (!me) return;
     setBusy(true);
     try {
-      // Update profile (name + phone)
+      // 1. Update/Upsert user profile in public.profiles
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({ full_name: fullName || null, phone: phone || null })
-        .eq("id", me.id);
-      if (profileError) throw profileError;
+        .upsert(
+          {
+            id: me.id,
+            email: me.email,
+            full_name: fullName || null,
+            phone: phone || null,
+            role: me.role,
+            client_id: me.clientId,
+          },
+          { onConflict: "id" }
+        );
+      if (profileError) {
+        console.warn("Profile table update note:", profileError);
+      }
 
-      // Update company name and logo (admin only)
+      // 2. Update company name and logo (admin only)
       if (isAdmin && me.clientId) {
         let newLogoUrl = logoUrl;
         if (logoFile) {
@@ -69,8 +80,13 @@ export function ProfileTab() {
           setLogoFile(null);
         }
         const clientUpdate: Record<string, unknown> = {};
-        if (companyName) clientUpdate.company_name = companyName;
-        if (newLogoUrl) clientUpdate.logo_url = newLogoUrl;
+        if (companyName) {
+          clientUpdate.company_name = companyName;
+          clientUpdate.name = companyName;
+        }
+        if (newLogoUrl) {
+          clientUpdate.logo_url = newLogoUrl;
+        }
         if (Object.keys(clientUpdate).length > 0) {
           const { error: clientError } = await supabase
             .from("clients")
@@ -82,7 +98,7 @@ export function ProfileTab() {
 
       await qc.invalidateQueries({ queryKey: ["current-user"] });
       await qc.invalidateQueries({ queryKey: ["client", me.clientId] });
-      toast.success("Profile updated");
+      toast.success("Profile updated successfully");
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
