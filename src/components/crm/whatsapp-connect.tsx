@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   Clock,
+  Copy,
+  KeyRound,
   Loader2,
   MessageCircle,
+  ShieldCheck,
   WifiOff,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,10 +26,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ToneBadge } from "@/components/crm/badges";
 import {
   disconnectWhatsApp,
   linkWhatsAppAccount,
+  saveManualWhatsAppCredentials,
   testWhatsAppConnection,
 } from "@/lib/onboarding.functions";
 import type { Client } from "@/lib/crm";
@@ -50,29 +65,81 @@ const META_CONFIG_ID =
 const META_GRAPH_VERSION =
   (import.meta.env["VITE_META_GRAPH_VERSION"] as string | undefined) || "v21.0";
 
+const WEBHOOK_CALLBACK_URL =
+  "https://yeiygfysijptjdepctnx.supabase.co/functions/v1/realtor-lead-engine/webhook";
+
 let fbSdkPromise: Promise<void> | null = null;
 
 /** Lazily injects the Facebook JS SDK exactly once and resolves once `FB` is ready. */
 function loadFacebookSdk(): Promise<void> {
   if (fbSdkPromise) return fbSdkPromise;
-  fbSdkPromise = new Promise((resolve) => {
-    if (window.FB) {
-      resolve();
-      return;
+  fbSdkPromise = new Promise((resolve, reject) => {
+    // If window.FB already exists and has init method
+    if (window.FB && typeof window.FB.init === "function") {
+      try {
+        window.FB.init({
+          appId: META_APP_ID,
+          autoLogAppEvents: true,
+          xfbml: false,
+          version: META_GRAPH_VERSION,
+          cookie: true,
+        });
+        resolve();
+        return;
+      } catch (err) {
+        console.warn("FB.init on pre-existing window.FB failed:", err);
+      }
     }
+
+    // Safety timeout in case the script hangs or is silently dropped by an ad blocker / firewall
+    const timeoutId = setTimeout(() => {
+      fbSdkPromise = null;
+      reject(
+        new Error(
+          "Facebook SDK load timed out. Your browser or an ad-blocker (uBlock, Brave Shields) may be blocking connect.facebook.net. Please pause ad-blocking or use 'Enter Credentials Manually'.",
+        ),
+      );
+    }, 8000);
+
     window.fbAsyncInit = () => {
-      window.FB?.init({
-        appId: META_APP_ID,
-        autoLogAppEvents: true,
-        xfbml: false,
-        version: META_GRAPH_VERSION,
-      });
-      resolve();
+      clearTimeout(timeoutId);
+      try {
+        window.FB?.init({
+          appId: META_APP_ID,
+          autoLogAppEvents: true,
+          xfbml: false,
+          version: META_GRAPH_VERSION,
+          cookie: true,
+        });
+        resolve();
+      } catch (err) {
+        fbSdkPromise = null;
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     };
+
+    // Remove any previously failed or dangling facebook script tag
+    const existingScript = document.getElementById("facebook-jssdk");
+    if (existingScript) {
+      existingScript.remove();
+    }
+
     const script = document.createElement("script");
+    script.id = "facebook-jssdk";
     script.src = "https://connect.facebook.net/en_US/sdk.js";
     script.async = true;
     script.defer = true;
+    script.crossOrigin = "anonymous";
+    script.onerror = () => {
+      clearTimeout(timeoutId);
+      fbSdkPromise = null;
+      reject(
+        new Error(
+          "Facebook SDK script failed to load. Browser extensions (uBlock, AdBlock, Brave Shields) block connect.facebook.net. Please pause ad-blockers for this site or use 'Enter Credentials Manually'.",
+        ),
+      );
+    };
+
     document.body.appendChild(script);
   });
   return fbSdkPromise;
@@ -101,6 +168,24 @@ export function WhatsAppConnectCard({
   const [disconnecting, setDisconnecting] = useState(false);
   const [testing, setTesting] = useState(false);
   const signupData = useRef<SignupPayload>({});
+
+  // Manual Credentials Dialog State
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualPhoneId, setManualPhoneId] = useState(client?.phone_number_id || "");
+  const [manualWabaId, setManualWabaId] = useState(client?.waba_id || "");
+  const [manualToken, setManualToken] = useState(client?.access_token || "");
+  const [manualDisplayPhone, setManualDisplayPhone] = useState(client?.display_phone_number || "");
+  const [savingManual, setSavingManual] = useState(false);
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
+
+  useEffect(() => {
+    if (client) {
+      if (client.phone_number_id && !manualPhoneId) setManualPhoneId(client.phone_number_id);
+      if (client.waba_id && !manualWabaId) setManualWabaId(client.waba_id);
+      if (client.display_phone_number && !manualDisplayPhone) setManualDisplayPhone(client.display_phone_number);
+      if (client.access_token && !manualToken) setManualToken(client.access_token);
+    }
+  }, [client]);
 
   const configured = !!META_APP_ID && !!META_CONFIG_ID;
 
@@ -150,6 +235,7 @@ export function WhatsAppConnectCard({
       toast.error(
         "WhatsApp connect isn't configured yet — set VITE_META_APP_ID and VITE_META_CONFIG_ID (see SETUP.md).",
       );
+      setManualOpen(true);
       return;
     }
     setConnecting(true);
@@ -198,9 +284,17 @@ export function WhatsAppConnectCard({
           extras: { sessionInfoVersion: "3" },
         },
       );
-    } catch {
-      toast.error("Couldn't load the Facebook SDK. Check your network and try again.");
+    } catch (err) {
+      console.error("Facebook SDK connection failure:", err);
+      const errMsg =
+        (err as Error)?.message ||
+        "Couldn't load the Facebook SDK. Check your network or ad-blockers.";
+      toast.error(errMsg, {
+        description: "Opening Manual Setup so you can connect directly with your credentials.",
+        duration: 7000,
+      });
       setConnecting(false);
+      setManualOpen(true);
     }
   };
 
@@ -227,8 +321,8 @@ export function WhatsAppConnectCard({
         toast.success(`Connection live — number confirmed: ${result.displayPhoneNumber}`);
       } else {
         const messages: Record<string, string> = {
-          token_invalid: "Token is invalid or expired — reconnect to refresh it.",
-          number_not_found: "Phone number ID not found on this WABA — reconnect to fix it.",
+          token_invalid: "Token is invalid or expired — reconnect or update token.",
+          number_not_found: "Phone number ID not found on this WABA — verify Phone Number ID.",
           no_credentials: "No credentials stored — please connect first.",
           network_error: "Couldn't reach Meta — check your network.",
         };
@@ -241,11 +335,214 @@ export function WhatsAppConnectCard({
     }
   };
 
+  const saveManual = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!clientId) {
+      toast.error("No tenant selected");
+      return;
+    }
+    if (!manualPhoneId.trim()) {
+      toast.error("Please enter your WhatsApp Phone Number ID");
+      return;
+    }
+    if (!manualToken.trim()) {
+      toast.error("Please enter your Permanent Access Token (System User Token)");
+      return;
+    }
+    setSavingManual(true);
+    try {
+      const res = await saveManualWhatsAppCredentials({
+        data: {
+          clientId,
+          phoneNumberId: manualPhoneId.trim(),
+          wabaId: manualWabaId.trim() || undefined,
+          accessToken: manualToken.trim(),
+          displayPhoneNumber: manualDisplayPhone.trim() || undefined,
+        },
+      });
+      toast.success(
+        res.displayPhoneNumber
+          ? `WhatsApp connected successfully for ${res.displayPhoneNumber}!`
+          : "WhatsApp credentials saved successfully!",
+      );
+      qc.invalidateQueries({ queryKey: ["client", clientId] });
+      setManualOpen(false);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to save WhatsApp credentials.");
+    } finally {
+      setSavingManual(false);
+    }
+  };
+
+  const copyWebhookUrl = () => {
+    navigator.clipboard.writeText(WEBHOOK_CALLBACK_URL);
+    setCopiedWebhook(true);
+    toast.success("Webhook Callback URL copied to clipboard!");
+    setTimeout(() => setCopiedWebhook(false), 2000);
+  };
+
+  const manualDialog = (
+    <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border-border/50 p-6 shadow-xl">
+        <DialogHeader className="space-y-1.5 pb-2 border-b border-border/30">
+          <div className="flex items-center gap-2 text-primary font-bold">
+            <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+              <KeyRound className="size-4" />
+            </div>
+            <DialogTitle className="text-lg font-bold tracking-tight text-foreground">
+              WhatsApp Cloud API Manual Setup
+            </DialogTitle>
+          </div>
+          <DialogDescription className="text-xs text-muted-foreground leading-relaxed">
+            Directly connect your Meta WhatsApp Cloud API credentials. This bypasses browser ad-blockers (uBlock, Brave Shields) and Meta Embedded Signup popup restrictions.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={saveManual} className="space-y-4 pt-2">
+          {/* Phone Number ID */}
+          <div className="space-y-1.5">
+            <Label htmlFor="manual-phone-id" className="text-xs font-semibold text-foreground flex items-center justify-between">
+              <span>WhatsApp Phone Number ID <span className="text-destructive">*</span></span>
+              <span className="text-[11px] font-normal text-muted-foreground">Numeric ID (e.g. 104829104820194)</span>
+            </Label>
+            <Input
+              id="manual-phone-id"
+              value={manualPhoneId}
+              onChange={(e) => setManualPhoneId(e.target.value)}
+              placeholder="e.g. 104829104820194"
+              className="apple-input text-xs font-mono h-9 rounded-xl"
+              required
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Found in <strong className="text-foreground">Meta Business Suite → WhatsApp → API Setup → Phone number ID</strong>.
+            </p>
+          </div>
+
+          {/* Permanent Access Token */}
+          <div className="space-y-1.5">
+            <Label htmlFor="manual-token" className="text-xs font-semibold text-foreground flex items-center justify-between">
+              <span>Permanent Access Token (System User Token) <span className="text-destructive">*</span></span>
+              <span className="text-[11px] font-normal text-muted-foreground">Starts with EAA...</span>
+            </Label>
+            <textarea
+              id="manual-token"
+              value={manualToken}
+              onChange={(e) => setManualToken(e.target.value)}
+              placeholder="EAAG... (paste permanent System User Token here)"
+              rows={3}
+              className="w-full rounded-xl border border-input bg-background/50 px-3 py-2 text-xs font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+              required
+            />
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Generate from <strong className="text-foreground">Meta Business Settings → Users → System Users</strong> with <code className="text-primary font-mono text-[10px] bg-muted px-1 py-0.5 rounded">whatsapp_business_messaging</code> and <code className="text-primary font-mono text-[10px] bg-muted px-1 py-0.5 rounded">whatsapp_business_management</code>.
+            </p>
+          </div>
+
+          {/* WABA ID & Display Phone in 2-col grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="space-y-1.5">
+              <Label htmlFor="manual-waba-id" className="text-xs font-semibold text-foreground">
+                WhatsApp Business Account ID (WABA ID)
+              </Label>
+              <Input
+                id="manual-waba-id"
+                value={manualWabaId}
+                onChange={(e) => setManualWabaId(e.target.value)}
+                placeholder="e.g. 104829104820193"
+                className="apple-input text-xs font-mono h-9 rounded-xl"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                From Meta WhatsApp Accounts → Account ID.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="manual-display-phone" className="text-xs font-semibold text-foreground">
+                Display Phone Number <span className="text-muted-foreground font-normal">(Optional)</span>
+              </Label>
+              <Input
+                id="manual-display-phone"
+                value={manualDisplayPhone}
+                onChange={(e) => setManualDisplayPhone(e.target.value)}
+                placeholder="e.g. +91 98765 43210"
+                className="apple-input text-xs h-9 rounded-xl"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Auto-detected from Meta if omitted.
+              </p>
+            </div>
+          </div>
+
+          {/* Webhook Configuration Guide Callout */}
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2 text-xs">
+            <div className="flex items-center justify-between font-semibold text-primary">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="size-4" />
+                <span>Meta Webhook Configuration (for incoming leads)</span>
+              </span>
+              <button
+                type="button"
+                onClick={copyWebhookUrl}
+                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-mono"
+              >
+                {copiedWebhook ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
+                <span>{copiedWebhook ? "Copied" : "Copy URL"}</span>
+              </button>
+            </div>
+            <div className="font-mono text-[11px] bg-background/80 p-2 rounded-lg border border-border/40 select-all break-all text-foreground">
+              {WEBHOOK_CALLBACK_URL}
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              In Meta App Dashboard → WhatsApp → Configuration: paste this as the <strong>Callback URL</strong>, set any Verify Token (e.g. <code className="font-mono text-primary text-[10px]">realtor_webhook</code>), and subscribe to the <code className="font-mono text-primary text-[10px]">messages</code> field.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border/30">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setManualOpen(false)}
+              className="apple-button h-9 rounded-xl text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={savingManual || !manualPhoneId || !manualToken}
+              className="apple-button h-9 rounded-xl text-xs font-semibold px-4 shadow-2xs gap-1.5"
+            >
+              {savingManual ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+              <span>{savingManual ? "Saving credentials…" : "Save & Connect WhatsApp"}</span>
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (compact) {
     return (
-      <Button size="sm" onClick={connect} disabled={connecting} className="apple-button min-h-[44px] sm:min-h-0 sm:h-8 rounded-lg text-xs font-semibold gap-1.5 shadow-2xs">
-        <MessageCircle className="size-4" /> <span>{connecting ? "Connecting…" : "Connect WhatsApp"}</span>
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          onClick={connect}
+          disabled={connecting}
+          className="apple-button min-h-[44px] sm:min-h-0 sm:h-8 rounded-lg text-xs font-semibold gap-1.5 shadow-2xs"
+        >
+          <MessageCircle className="size-4" />
+          <span>{connecting ? "Connecting…" : "Connect WhatsApp"}</span>
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setManualOpen(true)}
+          className="apple-button min-h-[44px] sm:min-h-0 sm:h-8 rounded-lg text-xs font-semibold gap-1.5 bg-background/80"
+        >
+          <KeyRound className="size-3.5" />
+          <span>Manual setup</span>
+        </Button>
+        {manualDialog}
+      </div>
     );
   }
 
@@ -270,12 +567,18 @@ export function WhatsAppConnectCard({
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <div className="flex-1">
               <p className="font-semibold text-amber-800 dark:text-amber-300">
-                Token pending — manual setup required
+                Token pending — manual setup available
               </p>
               <p className="mt-0.5 text-amber-700 dark:text-amber-400 leading-relaxed">
-                WhatsApp details saved, but a permanent access token hasn't been issued yet. Follow
-                the System User Token steps in <span className="font-mono text-[11px] bg-background/80 px-1 py-0.5 rounded border border-border/30">SETUP.md</span>{" "}
-                or reconnect below to complete the setup.
+                WhatsApp details saved, but a permanent access token hasn't been issued yet. Click{" "}
+                <button
+                  type="button"
+                  onClick={() => setManualOpen(true)}
+                  className="font-bold underline cursor-pointer text-amber-900 dark:text-amber-200"
+                >
+                  Manual setup
+                </button>{" "}
+                to paste your System User token immediately.
               </p>
             </div>
           </div>
@@ -316,7 +619,7 @@ export function WhatsAppConnectCard({
                     : "text-amber-700 dark:text-amber-400"
                 }`}
               >
-                Reconnect to refresh the token and keep incoming leads flowing.
+                Reconnect or use Manual Setup to refresh your permanent token and keep incoming leads flowing.
               </p>
             </div>
           </div>
@@ -373,7 +676,22 @@ export function WhatsAppConnectCard({
                 onClick={connect}
                 disabled={connecting}
               >
-                {connecting ? "Connecting…" : "Reconnect / switch"}
+                {connecting ? "Connecting…" : "Reconnect via Meta"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="apple-button min-h-[44px] sm:min-h-0 sm:h-8 rounded-lg text-xs font-semibold px-3 gap-1"
+                onClick={() => {
+                  setManualWabaId(client?.waba_id || "");
+                  setManualPhoneId(client?.phone_number_id || "");
+                  setManualDisplayPhone(client?.display_phone_number || "");
+                  setManualToken(client?.access_token || "");
+                  setManualOpen(true);
+                }}
+              >
+                <KeyRound className="size-3.5" />
+                <span>Manual setup</span>
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -411,18 +729,32 @@ export function WhatsAppConnectCard({
         ) : (
           /* ── Not connected ─────────────────────────────────────── */
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <Button onClick={connect} disabled={connecting} className="apple-button min-h-[44px] sm:min-h-0 sm:h-9 rounded-xl font-semibold text-xs px-4 shadow-2xs gap-1.5">
+            <Button
+              onClick={connect}
+              disabled={connecting}
+              className="apple-button min-h-[44px] sm:min-h-0 sm:h-9 rounded-xl font-semibold text-xs px-4 shadow-2xs gap-1.5"
+            >
               <MessageCircle className="size-4" />
               <span>{connecting ? "Connecting…" : "Connect WhatsApp Business account"}</span>
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setManualOpen(true)}
+              className="apple-button min-h-[44px] sm:min-h-0 sm:h-9 rounded-xl font-semibold text-xs px-4 gap-1.5"
+            >
+              <KeyRound className="size-4" />
+              <span>Enter Credentials Manually</span>
+            </Button>
             {!configured && (
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Not configured yet on this deployment — see <span className="font-mono text-[11px] bg-background/80 px-1 py-0.5 rounded border border-border/30">SETUP.md</span> for the Meta App steps needed before connecting.
+                Embedded signup not configured yet — use <strong className="text-foreground">Enter Credentials Manually</strong> above or see <span className="font-mono text-[11px] bg-background/80 px-1 py-0.5 rounded border border-border/30">SETUP.md</span>.
               </p>
             )}
           </div>
         )}
       </div>
+
+      {manualDialog}
     </div>
   );
 }

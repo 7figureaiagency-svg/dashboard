@@ -274,6 +274,7 @@ export const linkWhatsAppAccount = createServerFn({ method: "POST" })
       .update({
         waba_id: data.wabaId ?? null,
         phone_number_id: data.phoneNumberId ?? null,
+        whatsapp_phone_number_id: data.phoneNumberId ?? null,
         waba_business_id: data.businessId ?? null,
         access_token: accessToken,
         access_token_expires_at: accessTokenExpiresAt,
@@ -410,3 +411,106 @@ export const testWhatsAppConnection = createServerFn({ method: "POST" })
       return { ok: false, reason: "network_error" };
     }
   });
+
+type SaveManualWhatsAppInput = {
+  clientId: string;
+  wabaId?: string;
+  phoneNumberId: string;
+  accessToken: string;
+  displayPhoneNumber?: string;
+};
+
+/**
+ * Saves WhatsApp Cloud API credentials directly without needing the Facebook JS SDK.
+ * Used when connecting with a permanent Meta System User token, or when browser
+ * ad-blockers / Brave Shields block connect.facebook.net.
+ */
+export const saveManualWhatsAppCredentials = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: SaveManualWhatsAppInput) => data)
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const userId = context.userId;
+
+    const { data: profile, error: profileErr } = await supabaseAdmin
+      .from("profiles")
+      .select("client_id, role")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profileErr) throw new Error(profileErr.message);
+    if (!profile?.client_id || profile.client_id !== data.clientId || profile.role !== "admin") {
+      throw new Error("You're not authorized to configure WhatsApp for this tenant.");
+    }
+
+    const cleanPhoneId = (data.phoneNumberId || "").trim();
+    const cleanToken = (data.accessToken || "").trim();
+    const cleanWabaId = (data.wabaId || "").trim();
+    let displayPhone = (data.displayPhoneNumber || "").trim() || null;
+
+    if (!cleanPhoneId) {
+      throw new Error("WhatsApp Phone Number ID is required.");
+    }
+    if (!cleanToken) {
+      throw new Error("Permanent Access Token is required.");
+    }
+
+    // Attempt to verify with Meta Graph API and detect display phone number if not supplied
+    try {
+      const phoneRes = await fetch(
+        `https://graph.facebook.com/${META_GRAPH_VERSION}/${cleanPhoneId}?fields=display_phone_number,verified_name&access_token=${cleanToken}`,
+      );
+      const phoneJson = (await phoneRes.json()) as {
+        display_phone_number?: string;
+        verified_name?: string;
+        error?: { message?: string; code?: number };
+      };
+      if (phoneJson.display_phone_number && !displayPhone) {
+        displayPhone = phoneJson.display_phone_number;
+      }
+    } catch (metaErr) {
+      console.warn("Meta phone number verification non-fatal warning:", metaErr);
+    }
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("clients")
+      .update({
+        waba_id: cleanWabaId || null,
+        phone_number_id: cleanPhoneId,
+        whatsapp_phone_number_id: cleanPhoneId,
+        access_token: cleanToken,
+        access_token_expires_at: null, // System User permanent token
+        display_phone_number: displayPhone,
+        is_active: true,
+        meta_signup_status: "connected",
+      })
+      .eq("id", data.clientId);
+    if (updateErr) throw new Error(updateErr.message);
+
+    const { data: existingIntegration } = await supabaseAdmin
+      .from("client_integrations")
+      .select("id")
+      .eq("client_id", data.clientId)
+      .eq("provider", "meta")
+      .maybeSingle();
+
+    if (existingIntegration) {
+      await supabaseAdmin
+        .from("client_integrations")
+        .update({ is_enabled: true, webhook_url: META_WEBHOOK_URL })
+        .eq("id", existingIntegration.id);
+    } else {
+      await supabaseAdmin.from("client_integrations").insert({
+        client_id: data.clientId,
+        provider: "meta",
+        is_enabled: true,
+        webhook_url: META_WEBHOOK_URL,
+        label: "WhatsApp (Meta Cloud API)",
+      });
+    }
+
+    return {
+      status: "connected" as const,
+      displayPhoneNumber: displayPhone,
+    };
+  });
+
