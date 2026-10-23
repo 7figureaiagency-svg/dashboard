@@ -59,6 +59,14 @@ export type Lead = LeadRow & {
   selected_property_brochure_url: string | null;
   portal_property_id: string | null;
   lead_type?: string | null;
+  portal_source?: string | null;
+  phone_missing?: boolean | null;
+  portal_inquiries?: Array<{
+    source: string;
+    received_at: string;
+    project_name?: string | null;
+    raw?: any;
+  }> | null;
 };
 
 export type Property = PropertyRow & {
@@ -95,6 +103,7 @@ export const PROPERTY_STATE_MAP: Record<string, { label: string; tone: Tone; pul
   PROPERTY_OPTIONS_SENT: { label: "Options Shared", tone: "blue" },
   PROPERTY_SELECTED: { label: "Property Selected", tone: "purple" },
   SITE_VISIT_INTENT: { label: "Visit Requested", tone: "yellow" },
+  SITE_VISIT_PROPOSED: { label: "Visit Proposed", tone: "indigo" },
   SITE_VISIT_BOOKED: { label: "Site Visit Scheduled", tone: "green" },
   HUMAN_HANDOVER: { label: "Action Required", tone: "red", pulse: true },
   NO_MATCHING_PROPERTY: { label: "No Match Found", tone: "orange" },
@@ -108,6 +117,7 @@ export const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   QUALIFYING: { label: "In Conversation", tone: "blue" },
   OPTIONS_SENT: { label: "Options Shared", tone: "blue" },
   QUALIFIED: { label: "Qualified Prospect", tone: "indigo" },
+  SITE_VISIT_PROPOSED: { label: "Visit Proposed", tone: "indigo" },
   SITE_VISIT_BOOKED: { label: "Site Visit Booked", tone: "green" },
   VISIT_BOOKED: { label: "Site Visit Booked", tone: "green" },
   VISIT_RESCHEDULED: { label: "Visit Rescheduled", tone: "yellow" },
@@ -356,6 +366,8 @@ export const INTEGRATION_PROVIDERS = [
   { key: "99acres", label: "99acres" },
   { key: "housing", label: "Housing.com" },
   { key: "magicbricks", label: "MagicBricks" },
+  { key: "commonfloor", label: "CommonFloor" },
+  { key: "facebook", label: "Facebook Lead Ads" },
   { key: "olx", label: "OLX" },
   { key: "meta", label: "WhatsApp (Meta Cloud API)" },
   { key: "custom", label: "Custom / other" },

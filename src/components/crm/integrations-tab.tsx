@@ -144,8 +144,8 @@ export function IntegrationsTab({
             </h3>
             <p className="text-xs text-muted-foreground mt-1 max-w-2xl leading-relaxed">
               Add the webhook URL for every portal you list on — 99acres, Housing.com, MagicBricks,
-              OLX or custom channels. Each lead routes straight into your automated lead engine
-              with zero manual entry.
+              CommonFloor, Facebook Lead Ads, OLX, or custom channels. Each lead routes straight into
+              your automated lead engine with zero manual entry.
             </p>
           </div>
           <Button onClick={openAdd} className="apple-button h-9 rounded-xl px-3.5 text-xs font-semibold gap-1.5 shadow-2xs w-full sm:w-auto">
@@ -158,7 +158,7 @@ export function IntegrationsTab({
             <div className="rounded-xl border border-dashed p-8 text-center bg-card/40 space-y-2">
               <p className="text-sm font-semibold text-foreground">No portal webhooks configured yet</p>
               <p className="text-xs text-muted-foreground">
-                Click "Add webhook" above to generate a webhook endpoint for 99acres, MagicBricks, or Housing.com.
+                Click "Add webhook" above to generate a webhook endpoint for 99acres, MagicBricks, Housing.com, CommonFloor, Facebook, or Custom.
               </p>
             </div>
           )}

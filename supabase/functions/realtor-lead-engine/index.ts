@@ -235,6 +235,14 @@ async function dispatchSalesAlert(
         badge = "💎 HIGH-VALUE DUAL-ROLE CLIENT (BUYER + SELLER)";
         pitchHint = extra.hint || "High-value dual-intent client: Connect within 5 minutes. Prepare both listed property valuation/progress and exclusive high-ticket buyer inventory. Ideal for reinvestment / 1031 upgrade pitch.";
         break;
+      case "NEW_PORTAL_LEAD":
+        badge = "🔥 NEW PORTAL LEAD (WHATSAPP OUTREACH SENT)";
+        pitchHint = extra.hint || "Portal inquiry converted to WhatsApp dialog. Lead is in SITE_VISIT_PROPOSED state. Keep sample keys ready.";
+        break;
+      case "UNASSIGNED_LEAD":
+        badge = "⚠️ UNASSIGNED PORTAL INQUIRY (MISSING PHONE)";
+        pitchHint = extra.hint || "Portal inquiry from portal received without mobile number. Check portal inbox or call/email client.";
+        break;
     }
 
     // 3. Compose rich HTML alert for Sales / Acquisition Team
@@ -360,6 +368,381 @@ ${extra.scheduledAt ? `⏰ <b>Scheduled Slot:</b> ${new Date(extra.scheduledAt).
   } catch (err: any) {
     console.error("Sales alert dispatch error:", err.message);
   }
+}
+
+// =========================================================================
+// 3b. MULTI-PORTAL WEBHOOK INGESTION, NORMALIZER & AUTO-OUTREACH (Phase 7)
+// =========================================================================
+export interface NormalizedPortalLead {
+  name: string;
+  phone: string | null;
+  email: string | null;
+  source: string;
+  projectName: string | null;
+  propertyType: string | null;
+  budget: number | null;
+  location: string | null;
+  userComments: string | null;
+  rawPayload: any;
+}
+
+function sanitizePortalPhone(rawPhone: any): string | null {
+  if (!rawPhone) return null;
+  const str = String(rawPhone).trim();
+  // Masked check: contains asterisks or 'x'
+  if (str.includes("*") || /[a-wy-z]/i.test(str)) {
+    return null;
+  }
+  let digits = str.replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  if (digits.startsWith("0")) digits = digits.replace(/^0+/, "");
+  if (digits.startsWith("91") && digits.length === 12) digits = digits.slice(2);
+
+  if (digits.length === 10 && /^[6-9]\d{9}$/.test(digits)) {
+    // Check dummy repeats
+    if (/^(\d)\1{9}$/.test(digits) || digits === "1234567890" || digits === "9876543210") return null;
+    return digits;
+  }
+  if (digits.length > 10 && digits.length <= 13) {
+    const last10 = digits.slice(-10);
+    if (/^[6-9]\d{9}$/.test(last10) && !/^(\d)\1{9}$/.test(last10)) {
+      return last10;
+    }
+  }
+  return null;
+}
+
+function parsePortalBudget(val: any): number | null {
+  if (val === null || val === undefined || val === "") return null;
+  if (typeof val === "number" && !isNaN(val) && val > 0) return Math.round(val);
+  const str = String(val).trim().toLowerCase();
+
+  // Cr / Crore check
+  const crMatch = str.match(/([\d.]+)\s*(?:cr|crore|crores)/i);
+  if (crMatch) {
+    const num = parseFloat(crMatch[1]);
+    if (!isNaN(num) && num > 0) return Math.round(num * 10000000);
+  }
+  // Lac / Lakh check
+  const lacMatch = str.match(/([\d.]+)\s*(?:lakh|lakhs|lac|lacs|l)/i);
+  if (lacMatch) {
+    const num = parseFloat(lacMatch[1]);
+    if (!isNaN(num) && num > 0) return Math.round(num * 100000);
+  }
+  // Plain number check with symbols stripped
+  const cleaned = str.replace(/[^0-9.]/g, "");
+  if (cleaned) {
+    const num = parseFloat(cleaned);
+    if (!isNaN(num) && num > 0) return Math.round(num);
+  }
+  return null;
+}
+
+function parsePortalPropertyType(raw: any): string | null {
+  if (!raw) return null;
+  const s = String(raw).toLowerCase().trim();
+  if (s.includes("flat") || s.includes("apartment") || /\b\d\s*bhk\b/.test(s)) return "Flat";
+  if (s.includes("villa") || s.includes("bungalow") || s.includes("row house") || s.includes("duplex")) return "Villa";
+  if (s.includes("office") || s.includes("shop") || s.includes("commercial") || s.includes("showroom")) return "Commercial";
+  if (s.includes("plot") || s.includes("land")) return "Plot";
+  return String(raw).trim() || null;
+}
+
+function isPortalWebhook(url: URL, body: any): boolean {
+  const sourceParam = (url.searchParams.get("source") || url.searchParams.get("provider") || "").toLowerCase().trim();
+  const known = ["99acres", "housing", "magicbricks", "commonfloor", "facebook", "meta_leads", "olx", "custom", "portal"];
+  if (sourceParam && known.some((k) => sourceParam.includes(k))) return true;
+
+  // Protect Telegram & WhatsApp Cloud API user messages
+  if (body?.update_id || body?.message?.chat?.id) return false;
+  if (body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) return false;
+
+  // Facebook Leadgen webhook
+  if (body?.entry?.[0]?.changes?.[0]?.field === "leadgen" || body?.entry?.[0]?.changes?.[0]?.value?.leadgen_id || body?.leadgen_id) return true;
+
+  // Portal signatures
+  if (body?.LeadId || body?.leadDetails || (body?.ProjectName && (body?.Mobile || body?.custName))) return true;
+  if (body?.customerName || body?.userComments || body?.mb_lead_id) return true;
+  if (body?.lead_phone || (body?.lead_name && (body?.min_budget || body?.max_budget))) return true;
+  if (body?.contact_number && (body?.budget_max || body?.project)) return true;
+  if (body?.ad_id || (body?.buyer_name && body?.buyer_phone)) return true;
+  if (body?.type === "portal_lead" || body?.action === "portal_lead" || body?.source) return true;
+
+  return false;
+}
+
+function normalizePortalPayload(body: any, url: URL): NormalizedPortalLead {
+  const sourceParam = (url.searchParams.get("source") || url.searchParams.get("provider") || "").toLowerCase().trim();
+
+  // 1. 99acres
+  if (sourceParam.includes("99acres") || body.LeadId || body.leadDetails || body.custName || (body.ProjectName && body.Mobile)) {
+    const item = Array.isArray(body.leadDetails) && body.leadDetails.length > 0 ? body.leadDetails[0] : body;
+    return {
+      name: (item.custName || item.CustomerName || item.cust_name || item.name || body.custName || body.name || "Customer").trim(),
+      phone: sanitizePortalPhone(item.Mobile || item.mobile || item.phone || item.Phone || body.Mobile || body.mobile),
+      email: (item.email || item.Email || body.email || "").trim() || null,
+      source: "99acres",
+      projectName: (item.ProjectName || item.projectName || item.project_name || body.ProjectName || "").trim() || null,
+      propertyType: parsePortalPropertyType(item.PropertyType || item.propType || body.PropertyType),
+      budget: parsePortalBudget(item.budget || item.Budget || body.budget),
+      location: (item.Location || item.city || item.Locality || body.Location || body.locality || "").trim() || null,
+      userComments: (item.Query || item.userComments || item.Comments || body.Query || body.userComments || "").trim() || null,
+      rawPayload: body,
+    };
+  }
+
+  // 2. MagicBricks
+  if (sourceParam.includes("magicbricks") || body.customerName || body.userComments || body.mb_lead_id) {
+    return {
+      name: (body.customerName || body.name || body.userName || "Customer").trim(),
+      phone: sanitizePortalPhone(body.mobile || body.customerMobile || body.phone),
+      email: (body.email || body.customerEmail || "").trim() || null,
+      source: "MagicBricks",
+      projectName: (body.projectName || body.project || body.society || "").trim() || null,
+      propertyType: parsePortalPropertyType(body.propertyType || body.property_type),
+      budget: parsePortalBudget(body.budget || body.price),
+      location: (body.locality || body.location || body.city || "").trim() || null,
+      userComments: (body.userComments || body.comments || body.requirement || "").trim() || null,
+      rawPayload: body,
+    };
+  }
+
+  // 3. Housing.com
+  if (sourceParam.includes("housing") || body.lead_phone || (body.lead_name && (body.min_budget || body.max_budget))) {
+    return {
+      name: (body.lead_name || body.name || body.customer_name || "Customer").trim(),
+      phone: sanitizePortalPhone(body.lead_phone || body.phone || body.mobile),
+      email: (body.lead_email || body.email || "").trim() || null,
+      source: "Housing.com",
+      projectName: (body.project_name || body.projectName || body.project || "").trim() || null,
+      propertyType: parsePortalPropertyType(body.property_type || body.propertyType),
+      budget: parsePortalBudget(body.max_budget || body.budget || body.min_budget),
+      location: (body.locality || body.location || body.city || "").trim() || null,
+      userComments: (body.comments || body.message || body.lead_details || "").trim() || null,
+      rawPayload: body,
+    };
+  }
+
+  // 4. CommonFloor
+  if (sourceParam.includes("commonfloor") || (body.contact_number && (body.budget_max || body.project))) {
+    return {
+      name: (body.name || body.contact_name || body.userName || "Customer").trim(),
+      phone: sanitizePortalPhone(body.contact_number || body.phone || body.mobile),
+      email: (body.email || body.contact_email || "").trim() || null,
+      source: "CommonFloor",
+      projectName: (body.project || body.project_name || body.listing_title || "").trim() || null,
+      propertyType: parsePortalPropertyType(body.property_type || body.unit_type),
+      budget: parsePortalBudget(body.budget_max || body.budget || body.budget_min),
+      location: (body.city || body.locality || body.location || "").trim() || null,
+      userComments: (body.comments || body.remarks || body.message || "").trim() || null,
+      rawPayload: body,
+    };
+  }
+
+  // 5. Facebook Lead Ads
+  if (sourceParam.includes("facebook") || sourceParam.includes("meta_leads") || Array.isArray(body.field_data) || body.leadgen_id) {
+    const fMap: Record<string, string> = {};
+    if (Array.isArray(body.field_data)) {
+      body.field_data.forEach((f: any) => {
+        const k = (f.name || "").toLowerCase().trim();
+        const v = Array.isArray(f.values) ? f.values[0] : f.value;
+        if (k && v !== undefined && v !== null) fMap[k] = String(v);
+      });
+    }
+    return {
+      name: (fMap.full_name || fMap.name || fMap.first_name || body.name || "Customer").trim(),
+      phone: sanitizePortalPhone(fMap.phone_number || fMap.phone || fMap.mobile_number || body.phone),
+      email: (fMap.email || body.email || "").trim() || null,
+      source: "Facebook",
+      projectName: (fMap.project || fMap.project_name || fMap.property_name || body.project || body.projectName || "").trim() || null,
+      propertyType: parsePortalPropertyType(fMap.property_type || fMap.type || body.propertyType),
+      budget: parsePortalBudget(fMap.budget || fMap.price || body.budget),
+      location: (fMap.city || fMap.location || body.location || "").trim() || null,
+      userComments: (fMap.message || fMap.comments || body.message || "").trim() || null,
+      rawPayload: body,
+    };
+  }
+
+  // 6. OLX
+  if (sourceParam.includes("olx") || body.ad_id || (body.buyer_name && body.buyer_phone)) {
+    return {
+      name: (body.buyer_name || body.name || "Customer").trim(),
+      phone: sanitizePortalPhone(body.buyer_phone || body.phone),
+      email: (body.buyer_email || body.email || "").trim() || null,
+      source: "OLX",
+      projectName: (body.ad_title || body.project || "").trim() || null,
+      propertyType: parsePortalPropertyType(body.property_type),
+      budget: parsePortalBudget(body.price || body.budget),
+      location: (body.location || body.city || "").trim() || null,
+      userComments: (body.message || body.comments || "").trim() || null,
+      rawPayload: body,
+    };
+  }
+
+  // 7. Custom / Fallback
+  const detectedSource = sourceParam ? (sourceParam.charAt(0).toUpperCase() + sourceParam.slice(1)) : (body.source || "Custom");
+  return {
+    name: (body.name || body.fullName || body.lead_name || body.customer_name || "Customer").trim(),
+    phone: sanitizePortalPhone(body.phone || body.mobile || body.contact || body.phone_number || body.contact_number),
+    email: (body.email || body.mail || "").trim() || null,
+    source: detectedSource,
+    projectName: (body.project || body.projectName || body.project_name || body.property || "").trim() || null,
+    propertyType: parsePortalPropertyType(body.propertyType || body.property_type || body.type),
+    budget: parsePortalBudget(body.budget || body.price || body.max_budget),
+    location: (body.location || body.locality || body.city || "").trim() || null,
+    userComments: (body.message || body.comments || body.query || body.userComments || body.notes || "").trim() || null,
+    rawPayload: body,
+  };
+}
+
+// Auto-Matcher for Portal Leads (Task 2)
+async function matchInventoryForPortalLead(
+  tenantId: string,
+  leadInquiry: NormalizedPortalLead
+): Promise<any | null> {
+  const { data: properties, error } = await supabase
+    .from("inventory")
+    .select("*")
+    .eq("client_id", tenantId)
+    .eq("status", "AVAILABLE");
+
+  let propList = properties;
+  if (error || !propList || propList.length === 0) {
+    const { data: fallbackProps } = await supabase
+      .from("inventory")
+      .select("*")
+      .eq("client_id", defaultTenantId)
+      .eq("status", "AVAILABLE");
+    if (!fallbackProps || fallbackProps.length === 0) return null;
+    propList = fallbackProps;
+  }
+
+  // Match 1: Project Name (Fuzzy / Substring)
+  if (leadInquiry.projectName && leadInquiry.projectName.trim()) {
+    const qProject = leadInquiry.projectName.trim().toLowerCase();
+    const projectMatch = propList.find((p: any) => {
+      const pName = (p.project_name || "").toLowerCase();
+      return pName.includes(qProject) || qProject.includes(pName);
+    });
+    if (projectMatch) return projectMatch;
+  }
+
+  // Match 2: Location + Configuration / Property Type
+  if (leadInquiry.location || leadInquiry.propertyType) {
+    const qLoc = (leadInquiry.location || "").toLowerCase().trim();
+    const qType = (leadInquiry.propertyType || "").toLowerCase().trim();
+
+    if (qLoc && qType) {
+      const locAndType = propList.find((p: any) => {
+        const pLoc = (p.location || "").toLowerCase();
+        const pCity = (p.city || "").toLowerCase();
+        const pCat = (p.property_category || "").toLowerCase();
+        const pConf = (p.configuration || "").toLowerCase();
+        const matchLoc = pLoc.includes(qLoc) || pCity.includes(qLoc) || qLoc.includes(pLoc);
+        const matchType = pCat.includes(qType) || pConf.includes(qType) || qType.includes(pCat);
+        return matchLoc && matchType;
+      });
+      if (locAndType) return locAndType;
+    }
+
+    if (qLoc) {
+      const locMatch = propList.find((p: any) => {
+        const pLoc = (p.location || "").toLowerCase();
+        const pCity = (p.city || "").toLowerCase();
+        return pLoc.includes(qLoc) || pCity.includes(qLoc) || qLoc.includes(pLoc);
+      });
+      if (locMatch) return locMatch;
+    }
+
+    if (qType) {
+      const typeMatch = propList.find((p: any) => {
+        const pCat = (p.property_category || "").toLowerCase();
+        const pConf = (p.configuration || "").toLowerCase();
+        return pCat.includes(qType) || pConf.includes(qType) || qType.includes(pCat);
+      });
+      if (typeMatch) return typeMatch;
+    }
+  }
+
+  // Match 3: Budget Corridor (±30% of budget)
+  if (leadInquiry.budget && leadInquiry.budget > 0) {
+    const minB = leadInquiry.budget * 0.7;
+    const maxB = leadInquiry.budget * 1.3;
+    const budgetMatch = propList.find((p: any) => {
+      const price = Number(p.price || 0);
+      return price >= minB && price <= maxB;
+    });
+    if (budgetMatch) return budgetMatch;
+  }
+
+  // Match 4: Tenant Featured Default
+  return propList[0] || null;
+}
+
+// Instant Consultative Hinglish WhatsApp Outreach (Task 2)
+async function dispatchPortalWhatsAppOutreach(
+  tenantId: string,
+  lead: any,
+  property: any,
+  source: string
+): Promise<{ success: boolean; res?: any; messageText: string; error?: string }> {
+  if (!lead.phone) {
+    return { success: false, error: "Missing phone number", messageText: "" };
+  }
+
+  const { data: clientRec } = await supabase
+    .from("clients")
+    .select("company_name, name, city, access_token, phone_number_id, whatsapp_phone_number_id")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  const agencyName = clientRec?.company_name || clientRec?.name || "NextGen Realty";
+  const phoneNumberId = clientRec?.phone_number_id || clientRec?.whatsapp_phone_number_id || Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
+  const accessToken = clientRec?.access_token || Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+
+  const rawDigits = String(lead.phone).replace(/\D/g, "");
+  const formattedPhone = rawDigits.startsWith("91") && rawDigits.length === 12
+    ? rawDigits
+    : rawDigits.length === 10
+    ? `91${rawDigits}`
+    : rawDigits;
+
+  const leadName = lead.first_name || lead.name || "Customer";
+  const projectName = property?.project_name || lead.requirement || "Prime Luxury Project";
+  const location = property?.location || clientRec?.city || "Prime Location";
+  const configuration = property?.configuration || property?.property_category || "2 & 3 BHK Luxury Apartments";
+  const price = property?.price ? formatPriceShort(Number(property.price)) : "Price on Request";
+
+  let keyAmenities = "Clubhouse, Swimming Pool, 24/7 Security & Landscaped Gardens";
+  if (Array.isArray(property?.amenities) && property.amenities.length > 0) {
+    keyAmenities = property.amenities.slice(0, 4).join(", ");
+  }
+
+  const brochureUrl = property?.brochure_url || "https://yeiygfysijptjdepctnx.supabase.co/storage/v1/object/public/brochures/brochure.pdf";
+  const mapUrl = property?.map_url || "https://maps.google.com";
+
+  const messageText = `Namaste ${leadName} ji! 🙏
+
+Humne ${source} par aapki inquiry dekhi regarding ${projectName}.
+
+Main ${agencyName} se senior property advisor baat kar raha hu. Aapki requirement ke according hamara verified project:
+
+🏡 *${projectName}*
+📍 Location: ${location}
+📐 Configuration: ${configuration}
+💰 Price: ${price}
+✨ Highlights: ${keyAmenities}
+
+📄 *Project Brochure & Layouts:*
+${brochureUrl}
+
+📍 *Google Maps Location:*
+${mapUrl}
+
+👉 Kya hum kal shaam 5 baje ya Sunday subah 11 baje aapki exclusive *VIP Site Visit 🚗* schedule karein?`;
+
+  const sendResult = await sendWhatsAppMessage(phoneNumberId, accessToken, formattedPhone, messageText);
+  return { success: !sendResult?.error, res: sendResult, messageText };
 }
 
 // 4. Working Hours Check (IST: UTC + 5:30)
@@ -1801,8 +2184,8 @@ function buildLeadContextForClassifier(lead: any, messageText: string): string {
     else if (!lead?.location) currentPendingQuestion = "SEEKER_LOCATION";
     else if (!lead?.budget) currentPendingQuestion = "SEEKER_BUDGET (A numeric reply is price_or_budget)";
     else if (!lead?.timeline) currentPendingQuestion = "SEEKER_TIMELINE";
-  } else if (lead?.state === "OPTIONS_SENT" || lead?.state === "VISIT_REQUESTED") {
-    currentPendingQuestion = "VISIT_SLOT_OR_OPTION_SELECTION (Bot sent property cards. Any date, time, day, or 'Option N' is strictly BOOK_VISIT or SELECT_OPTION!)";
+  } else if (lead?.state === "OPTIONS_SENT" || lead?.state === "VISIT_REQUESTED" || lead?.state === "SITE_VISIT_PROPOSED") {
+    currentPendingQuestion = "VISIT_SLOT_OR_OPTION_SELECTION (Bot sent property cards or proposed a site visit. Any date, time, day, slot, or affirmative response is strictly BOOK_VISIT or SELECT_OPTION!)";
   }
 
   return `LEAD STATUS:
@@ -2172,9 +2555,11 @@ async function classifyLeadIntent(
     fallbackIntent = "GREETING";
   }
 
-  // Robust Slot Detection for OPTIONS_SENT or VISIT_REQUESTED in deterministic fallback
+  // Robust Slot Detection for OPTIONS_SENT, VISIT_REQUESTED or SITE_VISIT_PROPOSED in deterministic fallback
   const slotRegex = /\b(aaj|kal|kale|kaale|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i;
-  if ((lead?.state === "OPTIONS_SENT" || lead?.state === "VISIT_REQUESTED") && slotRegex.test(lower)) {
+  if ((lead?.state === "OPTIONS_SENT" || lead?.state === "VISIT_REQUESTED" || lead?.state === "SITE_VISIT_PROPOSED") && slotRegex.test(lower)) {
+    fallbackIntent = "BOOK_VISIT";
+  } else if (lead?.state === "SITE_VISIT_PROPOSED" && /^(haan|ha|yes|yep|sure|done|theek hai|chalse|chalshe|ok|okay|ha ji|haanji)\b/i.test(lower)) {
     fallbackIntent = "BOOK_VISIT";
   }
 
@@ -4093,6 +4478,7 @@ export type DialogState =
   | "OPTIONS_SENT"
   | "CRITERIA_CONFIRMATION_PENDING"
   | "VISIT_REQUESTED"
+  | "SITE_VISIT_PROPOSED"
   | "SITE_VISIT_BOOKED"
   | "VISIT_RESCHEDULED"
   | "VISIT_MISSED"
@@ -5856,9 +6242,9 @@ export async function dispatchStateAction(
   }
 
   // ---------------------------------------------------------------------------
-  // 10. OPTIONS SENT or VISIT REQUESTED (State: OPTIONS_SENT / VISIT_REQUESTED)
+  // 10. OPTIONS SENT, VISIT REQUESTED or SITE VISIT PROPOSED (State: OPTIONS_SENT / VISIT_REQUESTED / SITE_VISIT_PROPOSED)
   // ---------------------------------------------------------------------------
-  if (currentState === "OPTIONS_SENT" || currentState === "VISIT_REQUESTED") {
+  if (currentState === "OPTIONS_SENT" || currentState === "VISIT_REQUESTED" || currentState === "SITE_VISIT_PROPOSED") {
     // ZERO OPTION HIJACKING: Option selection picks property and asks slot!
     if (intent === "SELECT_OPTION") {
       const idx = (action as SelectOptionAction).option_index;
@@ -6091,15 +6477,21 @@ export async function dispatchStateAction(
       return handleBrochureOrMapResponse(lead, intent, context, false);
     }
 
-    // ANTI-RESET SAFEGUARD FOR OPTIONS_SENT / VISIT_REQUESTED:
+    // ANTI-RESET SAFEGUARD FOR OPTIONS_SENT / VISIT_REQUESTED / SITE_VISIT_PROPOSED:
     // If the message is not an explicit change of criteria or other recognized intent,
     // NEVER fall through to FRESH/ROLE_SELECTION_PENDING. Retain currentState and guide the user!
     const reminderReply =
-      lang === "GUJLISH"
-        ? `Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho, ane kayo time anukool raheshe (jem ke <b>'Kaale sanje 5 vage'</b>)?`
-        : lang === "ENGLISH"
-        ? `Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for, and what time works best for you (e.g. <b>'Tomorrow 5 PM'</b>)?`
-        : `Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge, aur kaunsa time aapke liye best rahega (jaise <b>'Kal shaam 5 baje'</b>)?`;
+      currentState === "SITE_VISIT_PROPOSED"
+        ? (lang === "GUJLISH"
+            ? `Shu ame tamari aa project ni <b>VIP Site Visit 🚗</b> schedule kariye - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
+            : lang === "ENGLISH"
+            ? `Shall we schedule your exclusive <b>VIP Site Visit 🚗</b> for this project - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
+            : `Kya hum is project ke liye aapki <b>VIP Site Visit 🚗</b> schedule karein - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`)
+        : (lang === "GUJLISH"
+            ? `Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho, ane kayo time anukool raheshe (jem ke <b>'Kaale sanje 5 vage'</b>)?`
+            : lang === "ENGLISH"
+            ? `Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for, and what time works best for you (e.g. <b>'Tomorrow 5 PM'</b>)?`
+            : `Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge, aur kaunsa time aapke liye best rahega (jaise <b>'Kal shaam 5 baje'</b>)?`);
 
     return {
       replyText: reminderReply,
@@ -6791,11 +7183,38 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v67 Ready (Role-Based Executive Routing, Admin Listing Approvals, Manager Triage)", { status: 200 });
+    return new Response("Realtor Lead Engine v68 Ready (Multi-Portal Webhook Normalizer, Property Auto-Matcher & Instant WhatsApp Outreach)", { status: 200 });
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
+    let body: any = {};
+    const contentType = req.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      body = await req.json().catch(() => ({}));
+    } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+      const formData = await req.formData().catch(() => null);
+      if (formData) {
+        body = {};
+        for (const [key, value] of formData.entries()) {
+          body[key] = value;
+        }
+      }
+    } else {
+      body = await req.json().catch(async () => {
+        const text = await req.text().catch(() => "");
+        try {
+          return JSON.parse(text);
+        } catch (_) {
+          const p = new URLSearchParams(text);
+          const obj: any = {};
+          for (const [k, v] of p.entries()) {
+            obj[k] = v;
+          }
+          return Object.keys(obj).length > 0 ? obj : {};
+        }
+      });
+    }
+
     if (body.action === "cron-sweep" || body.sweep === true) {
       const sweepResult = await executeAutomatedCronSweep({
         force: body.force === true,
@@ -6806,6 +7225,287 @@ Deno.serve(async (req: Request) => {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // =========================================================================
+    // Multi-Portal Lead Webhook Handling (99acres, MagicBricks, Housing, CommonFloor, Facebook, OLX, Custom)
+    // =========================================================================
+    if (isPortalWebhook(url, body)) {
+      console.log(`[PortalWebhook] Ingesting portal lead payload from: ${url.search || "(direct POST)"}`);
+      const normalized = normalizePortalPayload(body, url);
+      console.log(`[PortalWebhook] Normalized portal lead:`, JSON.stringify(normalized));
+
+      // Resolve tenant
+      let activeTenantId = (
+        url.searchParams.get("client_id") ||
+        url.searchParams.get("tenant_id") ||
+        body.client_id ||
+        body.tenant_id ||
+        ""
+      ).trim();
+
+      if (!activeTenantId) {
+        activeTenantId = defaultTenantId;
+      }
+
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      let existingLead: any = null;
+
+      // 24-Hour Lead Deduplication
+      if (normalized.phone) {
+        const { data: matchedLeads } = await supabase
+          .from("leads")
+          .select("*")
+          .eq("client_id", activeTenantId)
+          .or(`phone.eq.${normalized.phone},phone.eq.91${normalized.phone},lead_id.eq.${normalized.phone}`)
+          .gte("last_interaction_at", twentyFourHoursAgo)
+          .order("last_interaction_at", { ascending: false })
+          .limit(1);
+
+        if (matchedLeads && matchedLeads.length > 0) {
+          existingLead = matchedLeads[0];
+        } else {
+          const { data: matchedByCreated } = await supabase
+            .from("leads")
+            .select("*")
+            .eq("client_id", activeTenantId)
+            .or(`phone.eq.${normalized.phone},phone.eq.91${normalized.phone},lead_id.eq.${normalized.phone}`)
+            .gte("created_at", twentyFourHoursAgo)
+            .order("created_at", { ascending: false })
+            .limit(1);
+          if (matchedByCreated && matchedByCreated.length > 0) {
+            existingLead = matchedByCreated[0];
+          }
+        }
+      } else if (normalized.email) {
+        const { data: matchedByEmail } = await supabase
+          .from("leads")
+          .select("*")
+          .eq("client_id", activeTenantId)
+          .gte("created_at", twentyFourHoursAgo)
+          .order("created_at", { ascending: false });
+
+        if (matchedByEmail) {
+          existingLead = matchedByEmail.find((l: any) => {
+            const email = l.metadata?.email || l.metadata?.original_payload?.email;
+            return email && email.toLowerCase() === normalized.email!.toLowerCase();
+          }) || null;
+        }
+      }
+
+      let targetLead: any = null;
+
+      if (existingLead) {
+        console.log(`[PortalWebhook] Duplicate lead found within 24h: ${existingLead.id} (${existingLead.lead_id}). Merging.`);
+        const existingInquiries = Array.isArray(existingLead.metadata?.portal_inquiries)
+          ? existingLead.metadata.portal_inquiries
+          : [];
+
+        const updatedInquiries = [
+          ...existingInquiries,
+          {
+            source: normalized.source,
+            received_at: new Date().toISOString(),
+            project_name: normalized.projectName,
+            user_comments: normalized.userComments,
+            raw: normalized.rawPayload,
+          },
+        ];
+
+        const { data: updated, error: updateErr } = await supabase
+          .from("leads")
+          .update({
+            last_interaction_at: new Date().toISOString(),
+            metadata: {
+              ...(existingLead.metadata || {}),
+              portal_inquiries: updatedInquiries,
+              last_portal_source: normalized.source,
+            },
+          })
+          .eq("id", existingLead.id)
+          .select()
+          .single();
+
+        targetLead = updated || existingLead;
+
+        await supabase.from("lead_events").insert({
+          client_id: activeTenantId,
+          lead_id: existingLead.lead_id,
+          event_type: "PORTAL_INQUIRY_MERGED",
+          payload: {
+            source: normalized.source,
+            existing_state: existingLead.state,
+            project_name: normalized.projectName,
+            comments: normalized.userComments,
+          },
+        });
+      } else {
+        const newLeadId = normalized.phone ? normalized.phone : `portal_${crypto.randomUUID().slice(0, 8)}`;
+        const { data: inserted, error: insertErr } = await supabase
+          .from("leads")
+          .insert({
+            lead_id: newLeadId,
+            client_id: activeTenantId,
+            first_name: normalized.name,
+            name: normalized.name,
+            phone: normalized.phone,
+            source: normalized.source,
+            property_type: normalized.propertyType,
+            budget: normalized.budget,
+            location: normalized.location,
+            state: "FRESH",
+            bot_active: Boolean(normalized.phone),
+            last_interaction_at: new Date().toISOString(),
+            metadata: {
+              portal_source: normalized.source,
+              original_payload: normalized.rawPayload,
+              user_comments: normalized.userComments,
+              phone_missing: !normalized.phone,
+              email: normalized.email,
+              portal_inquiries: [
+                {
+                  source: normalized.source,
+                  received_at: new Date().toISOString(),
+                  project_name: normalized.projectName,
+                  user_comments: normalized.userComments,
+                  raw: normalized.rawPayload,
+                },
+              ],
+            },
+          })
+          .select()
+          .single();
+
+        if (insertErr) {
+          console.error("[PortalWebhook] Error inserting portal lead:", insertErr.message);
+          return new Response(JSON.stringify({ error: insertErr.message }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        targetLead = inserted;
+
+        await supabase.from("lead_events").insert({
+          client_id: activeTenantId,
+          lead_id: targetLead.lead_id,
+          event_type: "PORTAL_LEAD_INGESTED",
+          payload: {
+            source: normalized.source,
+            name: normalized.name,
+            phone: normalized.phone,
+            project_name: normalized.projectName,
+            has_phone: Boolean(normalized.phone),
+          },
+        });
+      }
+
+      // If phone is missing or masked: Flag for manager triage
+      if (!normalized.phone) {
+        console.log(`[PortalWebhook] Missing/masked phone for portal inquiry. Dispatching alert to Manager.`);
+        await dispatchSalesAlert(
+          activeTenantId,
+          "UNASSIGNED_LEAD",
+          targetLead,
+          {
+            hint: `Portal inquiry from ${normalized.source} received without mobile number. Check portal inbox or call/email client.`,
+            userText: `Portal Inquiry from ${normalized.source}: ${normalized.userComments || normalized.projectName || "No details provided"} (Email: ${normalized.email || "N/A"})`,
+          }
+        );
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            lead_id: targetLead.lead_id,
+            status: "phone_missing_flagged",
+            source: normalized.source,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // If duplicate lead is already in active conversation / booked visit, retain state and avoid double outreach
+      if (
+        existingLead &&
+        ["SITE_VISIT_BOOKED", "VISIT_RESCHEDULED", "SITE_VISIT_DONE", "QUALIFIED"].includes(existingLead.state)
+      ) {
+        console.log(`[PortalWebhook] Duplicate lead ${existingLead.lead_id} is in state ${existingLead.state}. Skipping auto-outreach.`);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            lead_id: targetLead.lead_id,
+            status: "merged_existing_lead",
+            state: existingLead.state,
+            source: normalized.source,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Task 2: Inventory Auto-Matcher & Instant Consultative WhatsApp Outreach
+      const matchedProperty = await matchInventoryForPortalLead(activeTenantId, normalized);
+      console.log(`[PortalWebhook] Matched property for lead:`, matchedProperty?.project_name);
+
+      const outreachResult = await dispatchPortalWhatsAppOutreach(
+        activeTenantId,
+        targetLead,
+        matchedProperty,
+        normalized.source
+      );
+
+      // Transition Lead State to SITE_VISIT_PROPOSED for natural TypeChat FSM handoff
+      await supabase
+        .from("leads")
+        .update({
+          selected_property_id: matchedProperty?.property_id || null,
+          state: "SITE_VISIT_PROPOSED",
+          last_interaction_at: new Date().toISOString(),
+          metadata: {
+            ...(targetLead.metadata || {}),
+            selected_property_name: matchedProperty?.project_name,
+            portal_outreach_sent: true,
+            portal_outreach_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", targetLead.id);
+
+      // Log lead_events
+      await supabase.from("lead_events").insert({
+        client_id: activeTenantId,
+        lead_id: targetLead.lead_id,
+        event_type: "PORTAL_OUTREACH_SENT",
+        payload: {
+          source: normalized.source,
+          property_id: matchedProperty?.property_id,
+          project_name: matchedProperty?.project_name,
+          phone: targetLead.phone,
+          outreach_dispatched: outreachResult.success,
+          outreach_error: outreachResult.error || null,
+        },
+      });
+
+      // Dispatch Sales Alert: NEW_PORTAL_LEAD
+      await dispatchSalesAlert(
+        activeTenantId,
+        "NEW_PORTAL_LEAD",
+        { ...targetLead, state: "SITE_VISIT_PROPOSED" },
+        {
+          property: matchedProperty,
+          hint: "Portal inquiry converted to WhatsApp dialog. Lead is in SITE_VISIT_PROPOSED state. Keep sample keys ready.",
+          userText: `Portal Inquiry from ${normalized.source} for ${matchedProperty?.project_name || normalized.projectName || "Property"}: ${normalized.userComments || "Outreach sent over WhatsApp"}`,
+        }
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          lead_id: targetLead.lead_id,
+          status: "outreach_dispatched",
+          source: normalized.source,
+          matched_property: matchedProperty?.project_name || null,
+          state: "SITE_VISIT_PROPOSED",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
     let senderId = "";
     let senderName = "Customer";
