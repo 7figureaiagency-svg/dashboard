@@ -300,7 +300,10 @@ export function LeadDrawer({
   const isTelegram = lead.source === "telegram" || lead.lead_id?.startsWith("tg_") || lead.lead_id?.startsWith("telegram_");
 
   const handleSavePhone = () => {
-    const cleanDigits = newPhone.replace(/\D/g, "");
+    let cleanDigits = newPhone.replace(/\D/g, "");
+    if (cleanDigits.length === 11 && cleanDigits.startsWith("0")) {
+      cleanDigits = cleanDigits.slice(1);
+    }
     let formatted = "";
     if (cleanDigits.length === 10) {
       formatted = `91${cleanDigits}`;

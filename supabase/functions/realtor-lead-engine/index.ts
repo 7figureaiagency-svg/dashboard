@@ -718,8 +718,12 @@ async function dispatchPortalWhatsAppOutreach(
     keyAmenities = property.amenities.slice(0, 4).join(", ");
   }
 
-  const brochureUrl = property?.brochure_url || "https://yeiygfysijptjdepctnx.supabase.co/storage/v1/object/public/brochures/brochure.pdf";
-  const mapUrl = property?.map_url || "https://maps.google.com";
+  const brochureBlock = property?.brochure_url
+    ? `\n📄 *Project Brochure & Layouts:*\n${property.brochure_url}\n`
+    : "";
+  const mapBlock = property?.map_url
+    ? `\n📍 *Google Maps Location:*\n${property.map_url}\n`
+    : "";
 
   const messageText = `Namaste ${leadName} ji! 🙏
 
@@ -732,13 +736,7 @@ Main ${agencyName} se senior property advisor baat kar raha hu. Aapki requiremen
 📐 Configuration: ${configuration}
 💰 Price: ${price}
 ✨ Highlights: ${keyAmenities}
-
-📄 *Project Brochure & Layouts:*
-${brochureUrl}
-
-📍 *Google Maps Location:*
-${mapUrl}
-
+${brochureBlock}${mapBlock}
 👉 Kya hum kal shaam 5 baje ya Sunday subah 11 baje aapki exclusive *VIP Site Visit 🚗* schedule karein?`;
 
   const sendResult = await sendWhatsAppMessage(phoneNumberId, accessToken, formattedPhone, messageText);
@@ -7244,7 +7242,8 @@ Deno.serve(async (req: Request) => {
         ""
       ).trim();
 
-      if (!activeTenantId) {
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!activeTenantId || !UUID_REGEX.test(activeTenantId)) {
         activeTenantId = defaultTenantId;
       }
 
@@ -7445,12 +7444,24 @@ Deno.serve(async (req: Request) => {
       const matchedProperty = await matchInventoryForPortalLead(activeTenantId, normalized);
       console.log(`[PortalWebhook] Matched property for lead:`, matchedProperty?.project_name);
 
-      const outreachResult = await dispatchPortalWhatsAppOutreach(
-        activeTenantId,
-        targetLead,
-        matchedProperty,
-        normalized.source
-      );
+      // WABA Safety Invariant: Protect account reputation by sending active marketing WhatsApp outreach only between 9:00 AM and 9:00 PM IST
+      const withinHours = isWithinWorkingHours(9, 21);
+      let outreachResult = {
+        success: false,
+        messageText: "",
+        error: "Deferred: Outside working hours (9:00 AM - 9:00 PM IST)",
+      };
+
+      if (withinHours) {
+        outreachResult = await dispatchPortalWhatsAppOutreach(
+          activeTenantId,
+          targetLead,
+          matchedProperty,
+          normalized.source
+        );
+      } else {
+        console.log(`[PortalWebhook] Inquiry received outside business hours (9 AM - 9 PM IST). Outreach deferred to prevent WABA bans.`);
+      }
 
       // Transition Lead State to SITE_VISIT_PROPOSED for natural TypeChat FSM handoff
       await supabase
@@ -7462,8 +7473,9 @@ Deno.serve(async (req: Request) => {
           metadata: {
             ...(targetLead.metadata || {}),
             selected_property_name: matchedProperty?.project_name,
-            portal_outreach_sent: true,
-            portal_outreach_at: new Date().toISOString(),
+            portal_outreach_sent: withinHours && outreachResult.success,
+            portal_outreach_at: withinHours && outreachResult.success ? new Date().toISOString() : null,
+            portal_outreach_deferred: !withinHours,
           },
         })
         .eq("id", targetLead.id);
@@ -7472,14 +7484,15 @@ Deno.serve(async (req: Request) => {
       await supabase.from("lead_events").insert({
         client_id: activeTenantId,
         lead_id: targetLead.lead_id,
-        event_type: "PORTAL_OUTREACH_SENT",
+        event_type: withinHours ? "PORTAL_OUTREACH_SENT" : "PORTAL_OUTREACH_DEFERRED",
         payload: {
           source: normalized.source,
           property_id: matchedProperty?.property_id,
           project_name: matchedProperty?.project_name,
           phone: targetLead.phone,
-          outreach_dispatched: outreachResult.success,
+          outreach_dispatched: withinHours && outreachResult.success,
           outreach_error: outreachResult.error || null,
+          deferred_reason: withinHours ? null : "Outside 9 AM - 9 PM IST window",
         },
       });
 
@@ -7490,8 +7503,10 @@ Deno.serve(async (req: Request) => {
         { ...targetLead, state: "SITE_VISIT_PROPOSED" },
         {
           property: matchedProperty,
-          hint: "Portal inquiry converted to WhatsApp dialog. Lead is in SITE_VISIT_PROPOSED state. Keep sample keys ready.",
-          userText: `Portal Inquiry from ${normalized.source} for ${matchedProperty?.project_name || normalized.projectName || "Property"}: ${normalized.userComments || "Outreach sent over WhatsApp"}`,
+          hint: withinHours
+            ? "Portal inquiry converted to WhatsApp dialog. Lead is in SITE_VISIT_PROPOSED state. Keep sample keys ready."
+            : "Portal inquiry received after hours. Automated WhatsApp outreach deferred to 9:00 AM morning window to protect WABA quality rating.",
+          userText: `Portal Inquiry from ${normalized.source} for ${matchedProperty?.project_name || normalized.projectName || "Property"}: ${normalized.userComments || (withinHours ? "Outreach sent over WhatsApp" : "After-hours receipt (deferred)")}`,
         }
       );
 
@@ -7499,7 +7514,7 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({
           success: true,
           lead_id: targetLead.lead_id,
-          status: "outreach_dispatched",
+          status: withinHours ? "outreach_dispatched" : "outreach_deferred_after_hours",
           source: normalized.source,
           matched_property: matchedProperty?.project_name || null,
           state: "SITE_VISIT_PROPOSED",
