@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlarmClockOff,
+  AlertTriangle,
   Bot,
   Building2,
   CalendarCheck,
@@ -32,8 +33,15 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogFooter as DialogFooter,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -54,7 +62,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DualRoleBadge, PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
+import {
+  DualRoleBadge,
+  NoWhatsAppBadge,
+  PropertyStateBadge,
+  StatusBadge,
+  ToneBadge,
+} from "@/components/crm/badges";
 import { WhatsAppChatView } from "@/components/crm/whatsapp-chat-view";
 import { WorkflowTimeline } from "@/components/crm/workflow-timeline";
 import { HistoryTimeline } from "@/components/crm/history-timeline";
@@ -144,6 +158,8 @@ export function LeadDrawer({
   const [visitDate, setVisitDate] = useState("");
   const [visitTime, setVisitTime] = useState("");
   const [dropOpen, setDropOpen] = useState(false);
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [newPhone, setNewPhone] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [profile, setProfile] = useState<Partial<Lead>>({});
 
@@ -168,6 +184,7 @@ export function LeadDrawer({
   // values from the previous lead don't bleed into the newly opened one.
   useEffect(() => {
     setProfile({});
+    setNewPhone("");
   }, [lead?.lead_id]);
 
   // Filter projects by all live lead-profile fields: location, property_type, budget, requirement
@@ -278,6 +295,36 @@ export function LeadDrawer({
     return true;
   };
 
+  const currentPhone = (profile.phone !== undefined ? profile.phone : lead.phone) as string | null | undefined;
+  const isMissingPhone = !currentPhone || currentPhone.trim() === "" || currentPhone.replace(/\D/g, "").length < 10;
+  const isTelegram = lead.source === "telegram" || lead.lead_id?.startsWith("tg_") || lead.lead_id?.startsWith("telegram_");
+
+  const handleSavePhone = () => {
+    const cleanDigits = newPhone.replace(/\D/g, "");
+    let formatted = "";
+    if (cleanDigits.length === 10) {
+      formatted = `91${cleanDigits}`;
+    } else if (cleanDigits.length === 12 && cleanDigits.startsWith("91")) {
+      formatted = cleanDigits;
+    } else {
+      toast.error("Please enter a valid 10-digit Indian mobile number");
+      return;
+    }
+    run(
+      {
+        phone: formatted,
+        bot_active: true,
+        last_interaction_at: new Date().toISOString(),
+      },
+      `Added verified WhatsApp phone number +${formatted}`,
+      "PHONE_ADDED",
+    );
+    setProfile((prev) => ({ ...prev, phone: formatted }));
+    toast.success("WhatsApp number updated! Call and WhatsApp actions are now active.");
+    setPhoneModalOpen(false);
+    setNewPhone("");
+  };
+
   const notes = String(
     (profile.executive_notes !== undefined ? profile.executive_notes : lead.executive_notes) ?? "",
   ).trim();
@@ -299,12 +346,13 @@ export function LeadDrawer({
           <SheetHeader className="text-left space-y-1.5">
             <SheetTitle className="text-xl font-bold tracking-tight text-foreground">{lead.name || "Unnamed lead"}</SheetTitle>
             <SheetDescription className="text-xs text-muted-foreground">
-              {lead.phone || "No phone"} · Created {formatDate(lead.created_at)}
+              {currentPhone || (isTelegram ? `Telegram ID: ${lead.lead_id}` : "No WhatsApp phone")} · Created {formatDate(lead.created_at)}
             </SheetDescription>
             <div className="flex flex-wrap gap-2 pt-1">
               <StatusBadge value={lead.status} />
               <PropertyStateBadge value={lead.property_state} />
               {isDual && <DualRoleBadge />}
+              {isMissingPhone && !isTelegram && <NoWhatsAppBadge />}
             </div>
           </SheetHeader>
           {closed && (
@@ -336,6 +384,37 @@ export function LeadDrawer({
                       📦 {submissions.length} property listing{submissions.length > 1 ? "s" : ""} on record.
                     </p>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isMissingPhone && !isTelegram && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 shadow-xs backdrop-blur-xs relative overflow-hidden">
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-300">
+                  <AlertTriangle className="size-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-sm text-foreground">
+                      Portal inquiry me WhatsApp number provide nahi kiya gaya
+                    </span>
+                    <NoWhatsAppBadge />
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Ye lead <strong>{lead.source || "Portal"}</strong> inquiry se aayi hai par customer ka mobile number missing ya masked hai. Agar aapne call ya email par verified number acquire kiya hai, to 1-tap me add karein taaki automated WhatsApp site visit bot aur direct messaging active ho sake.
+                  </p>
+                  <div className="pt-1.5">
+                    <Button
+                      size="sm"
+                      className="apple-button h-8 rounded-lg gap-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-2xs"
+                      onClick={() => setPhoneModalOpen(true)}
+                    >
+                      <Phone className="size-3.5" />
+                      <span>Add WhatsApp Number</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -940,7 +1019,7 @@ export function LeadDrawer({
 
         {/* ── 📱 Persistent Sticky Frosted Action Bar (iOS Ergonomics) ── */}
         <div className="sticky bottom-0 z-20 apple-glass border-t border-border/40 p-3 sm:px-5 flex items-center gap-2.5 shrink-0">
-          {lead.phone ? (
+          {!isMissingPhone ? (
             <>
               <Button
                 asChild
@@ -948,7 +1027,7 @@ export function LeadDrawer({
                 variant="default"
                 className="apple-button flex-1 h-11 min-h-[44px] gap-2 rounded-xl text-xs font-semibold shadow-xs"
               >
-                <a href={`tel:${lead.phone}`}>
+                <a href={`tel:${currentPhone}`}>
                   <Phone className="size-4" /> Call Client
                 </a>
               </Button>
@@ -959,7 +1038,7 @@ export function LeadDrawer({
                 className="apple-button flex-1 h-11 min-h-[44px] gap-2 rounded-xl text-xs font-semibold border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-xs"
               >
                 <a
-                  href={toWhatsAppUrl(lead.phone) || "#"}
+                  href={toWhatsAppUrl(currentPhone) || "#"}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -967,6 +1046,15 @@ export function LeadDrawer({
                 </a>
               </Button>
             </>
+          ) : !isTelegram ? (
+            <Button
+              size="sm"
+              variant="default"
+              className="apple-button flex-1 h-11 min-h-[44px] gap-2 rounded-xl text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-xs"
+              onClick={() => setPhoneModalOpen(true)}
+            >
+              <Phone className="size-4" /> Add WhatsApp Number
+            </Button>
           ) : (
             <div className="flex-1 flex items-center justify-center py-2 text-xs text-muted-foreground font-mono">
               Telegram ID: {lead.lead_id} (Direct calling unavailable)
@@ -998,6 +1086,66 @@ export function LeadDrawer({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Dialog open={phoneModalOpen} onOpenChange={setPhoneModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <Phone className="size-4 text-amber-600" /> Add Verified WhatsApp Number
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Enter customer&apos;s 10-digit Indian mobile number. Saving this will activate the automated WhatsApp AI bot and enable 1-tap call &amp; message actions.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <Label htmlFor="phone-input" className="text-xs font-semibold text-foreground">
+                WhatsApp Mobile Number
+              </Label>
+              <div className="flex items-center gap-2">
+                <div className="flex h-10 items-center justify-center rounded-lg border border-border/70 bg-muted/50 px-3 text-xs font-bold font-mono text-muted-foreground select-none">
+                  +91
+                </div>
+                <Input
+                  id="phone-input"
+                  type="tel"
+                  placeholder="98250 12345"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  className="font-mono text-sm tracking-wide h-10"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSavePhone();
+                    }
+                  }}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Enter standard 10-digit Indian phone number without country code.
+              </p>
+            </div>
+            <DialogFooter className="flex gap-2 sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPhoneModalOpen(false)}
+                className="apple-button h-9 rounded-lg text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="apple-button h-9 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={handleSavePhone}
+              >
+                Save &amp; Activate WhatsApp
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SheetContent>
     </Sheet>
   );

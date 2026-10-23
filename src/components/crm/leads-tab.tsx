@@ -36,7 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { DualRoleBadge, PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
+import { DualRoleBadge, NoWhatsAppBadge, PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
 import { LeadDrawer } from "@/components/crm/lead-drawer";
 import { ExecutiveDrawer } from "@/components/crm/executive-drawer";
 import { useActivity, useUpdateLead } from "@/lib/crm-data";
@@ -138,7 +138,7 @@ export function LeadsTab({
     [leads],
   );
 
-  type ActionFilter = "ALL" | "TODAY_VISITS" | "ACTION_NEEDED" | "QUALIFIED" | "FRESH" | "DUAL_ROLE";
+  type ActionFilter = "ALL" | "TODAY_VISITS" | "ACTION_NEEDED" | "QUALIFIED" | "FRESH" | "DUAL_ROLE" | "MISSING_PHONE";
   const [actionFilter, setActionFilter] = useState<ActionFilter>("ALL");
 
   const todayVisitsCount = useMemo(
@@ -189,6 +189,18 @@ export function LeadsTab({
     [leads],
   );
 
+  const missingPhoneCount = useMemo(
+    () =>
+      leads.filter(
+        (l) =>
+          (!l.phone || l.phone.trim() === "" || l.phone.replace(/\D/g, "").length < 10) &&
+          l.source !== "telegram" &&
+          !l.lead_id?.startsWith("tg_") &&
+          !l.lead_id?.startsWith("telegram_"),
+      ).length,
+    [leads],
+  );
+
   const rows = useMemo(
     () =>
       leads.filter((l) => {
@@ -221,6 +233,13 @@ export function LeadsTab({
             return false;
         } else if (actionFilter === "DUAL_ROLE") {
           if (!isDualRoleLead(l)) return false;
+        } else if (actionFilter === "MISSING_PHONE") {
+          const hasPhone = l.phone && l.phone.replace(/\D/g, "").length >= 10;
+          const isTelegram =
+            l.source === "telegram" ||
+            l.lead_id?.startsWith("tg_") ||
+            l.lead_id?.startsWith("telegram_");
+          if (hasPhone || isTelegram) return false;
         }
 
         if (executive !== ALL && l.assigned_executive_name !== executive) return false;
@@ -316,7 +335,7 @@ export function LeadsTab({
   return (
     <div className="space-y-4">
       {/* ── 🚀 Apple HIG Complication Triage Widgets ── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <button
           type="button"
           onClick={() => setActionFilter(actionFilter === "TODAY_VISITS" ? "ALL" : "TODAY_VISITS")}
@@ -436,6 +455,30 @@ export function LeadsTab({
             <p className="text-[11px] text-muted-foreground">Buyer + Seller</p>
           </div>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActionFilter(actionFilter === "MISSING_PHONE" ? "ALL" : "MISSING_PHONE")}
+          className={`apple-button flex flex-col text-left rounded-2xl border p-4 transition-all shadow-xs ${
+            actionFilter === "MISSING_PHONE"
+              ? "border-amber-500/50 bg-amber-500/10 ring-2 ring-amber-500/30"
+              : "bg-card hover:bg-muted/40 border-border/50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex size-9 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="size-4" />
+            </div>
+            <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300 tabular-nums">
+              {missingPhoneCount}
+            </span>
+          </div>
+          <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">{missingPhoneCount}</p>
+          <div className="mt-1">
+            <span className="text-xs font-semibold text-foreground">Missing WhatsApp</span>
+            <p className="text-[11px] text-muted-foreground">Portal inquiries ⚠️</p>
+          </div>
+        </button>
       </div>
 
       {actionFilter !== "ALL" && (
@@ -448,6 +491,7 @@ export function LeadsTab({
               {actionFilter === "QUALIFIED" && "Qualified Prospects"}
               {actionFilter === "FRESH" && "In Qualifying"}
               {actionFilter === "DUAL_ROLE" && "Dual Role Clients (Buyer + Seller 🌟)"}
+              {actionFilter === "MISSING_PHONE" && "Missing WhatsApp Number (Portal Inquiries ⚠️)"}
             </strong>{" "}
             ({rows.length} leads shown)
           </span>
@@ -762,10 +806,16 @@ export function LeadsTab({
                           <DualRoleBadge />
                         </div>
                       )}
-                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5 flex-wrap">
                         <span className="font-medium text-foreground/80">{lead.assigned_executive_name || "Unassigned"}</span>
                         <span>·</span>
-                        <span className="font-mono text-[11px]">{lead.phone || `TG:${lead.lead_id}`}</span>
+                        {lead.phone && lead.phone.replace(/\D/g, "").length >= 10 ? (
+                          <span className="font-mono text-[11px]">{lead.phone}</span>
+                        ) : lead.source === "telegram" || lead.lead_id?.startsWith("tg_") || lead.lead_id?.startsWith("telegram_") ? (
+                          <span className="font-mono text-[11px]">TG:{lead.lead_id}</span>
+                        ) : (
+                          <NoWhatsAppBadge />
+                        )}
                       </p>
                     </div>
                     <div className="shrink-0">
@@ -791,7 +841,7 @@ export function LeadsTab({
 
                   {/* 44pt Touch Targets for iOS/Mobile Ergonomics */}
                   <div className="flex items-center gap-2 pt-1 border-t border-border/40">
-                    {lead.phone ? (
+                    {lead.phone && lead.phone.replace(/\D/g, "").length >= 10 ? (
                       <>
                         <Button
                           asChild
@@ -818,6 +868,16 @@ export function LeadsTab({
                           </a>
                         </Button>
                       </>
+                    ) : lead.source !== "telegram" && !lead.lead_id?.startsWith("tg_") && !lead.lead_id?.startsWith("telegram_") ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="apple-button min-h-[44px] h-11 flex-1 gap-1.5 text-xs font-semibold rounded-xl border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 shadow-2xs"
+                        onClick={() => setSelected(lead)}
+                      >
+                        <Phone className="size-3.5 text-amber-600 dark:text-amber-400" />
+                        <span>Add WhatsApp Number</span>
+                      </Button>
                     ) : null}
                     <Button
                       size="sm"
@@ -920,12 +980,14 @@ export function LeadsTab({
                         )}
                       </TableCell>
                       <TableCell className="text-foreground/90 font-medium py-3.5">
-                        {lead.phone ? (
+                        {lead.phone && lead.phone.replace(/\D/g, "").length >= 10 ? (
                           <span className="font-mono text-xs tabular-nums">{lead.phone}</span>
-                        ) : (
+                        ) : lead.source === "telegram" || lead.lead_id?.startsWith("tg_") || lead.lead_id?.startsWith("telegram_") ? (
                           <span className="inline-flex items-center gap-1 text-[11px] text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2 py-0.5 rounded-md border border-sky-200 dark:border-sky-800 font-mono">
                             TG: {lead.lead_id}
                           </span>
+                        ) : (
+                          <NoWhatsAppBadge />
                         )}
                       </TableCell>
                       <TableCell className="py-3.5">
@@ -974,29 +1036,42 @@ export function LeadsTab({
                       </TableCell>
                       <TableCell className="text-right py-3.5" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end items-center gap-1.5">
-                          <Button asChild size="sm" variant="outline" className="apple-button h-8 rounded-lg gap-1.5 shadow-2xs" disabled={!lead.phone}>
-                            <a href={`tel:${lead.phone ?? ""}`}>
-                              <Phone className="size-3.5 text-primary" />
-                              <span>Call</span>
-                            </a>
-                          </Button>
-                          <Button
-                            asChild
-                            size="sm"
-                            variant="outline"
-                            className="apple-button h-8 rounded-lg gap-1.5 border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-2xs font-medium"
-                            disabled={!lead.phone}
-                          >
-                            <a
-                              href={toWhatsAppUrl(lead.phone) || "#"}
-                              target="_blank"
-                              rel="noreferrer"
-                              title={`Chat with ${lead.name || "client"} on WhatsApp`}
+                          {lead.phone && lead.phone.replace(/\D/g, "").length >= 10 ? (
+                            <>
+                              <Button asChild size="sm" variant="outline" className="apple-button h-8 rounded-lg gap-1.5 shadow-2xs">
+                                <a href={`tel:${lead.phone}`}>
+                                  <Phone className="size-3.5 text-primary" />
+                                  <span>Call</span>
+                                </a>
+                              </Button>
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="apple-button h-8 rounded-lg gap-1.5 border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-2xs font-medium"
+                              >
+                                <a
+                                  href={toWhatsAppUrl(lead.phone) || "#"}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={`Chat with ${lead.name || "client"} on WhatsApp`}
+                                >
+                                  <Send className="size-3 text-emerald-600 dark:text-emerald-400" />
+                                  <span className="hidden xl:inline">WhatsApp</span>
+                                </a>
+                              </Button>
+                            </>
+                          ) : lead.source !== "telegram" && !lead.lead_id?.startsWith("tg_") && !lead.lead_id?.startsWith("telegram_") ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="apple-button h-8 rounded-lg gap-1.5 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 shadow-2xs font-medium text-xs"
+                              onClick={() => setSelected(lead)}
                             >
-                              <Send className="size-3 text-emerald-600 dark:text-emerald-400" />
-                              <span className="hidden xl:inline">WhatsApp</span>
-                            </a>
-                          </Button>
+                              <Phone className="size-3 text-amber-600 dark:text-amber-400" />
+                              <span>Add Number</span>
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
                             variant="default"
