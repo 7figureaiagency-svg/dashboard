@@ -43,8 +43,10 @@ declare global {
   }
 }
 
-const META_APP_ID = import.meta.env["VITE_META_APP_ID"] as string | undefined;
-const META_CONFIG_ID = import.meta.env["VITE_META_CONFIG_ID"] as string | undefined;
+const META_APP_ID =
+  (import.meta.env["VITE_META_APP_ID"] as string | undefined) || "1117232154391535";
+const META_CONFIG_ID =
+  (import.meta.env["VITE_META_CONFIG_ID"] as string | undefined) || "1765212574527975";
 const META_GRAPH_VERSION =
   (import.meta.env["VITE_META_GRAPH_VERSION"] as string | undefined) || "v21.0";
 

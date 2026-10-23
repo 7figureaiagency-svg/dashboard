@@ -9,7 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 
-const FACEBOOK_LOGIN_ENABLED = !!import.meta.env["VITE_META_APP_ID"];
+const FACEBOOK_LOGIN_ENABLED = !!(
+  import.meta.env["VITE_META_APP_ID"] || "1117232154391535"
+);
 
 export const Route = createFileRoute("/auth")({
   head: () => ({

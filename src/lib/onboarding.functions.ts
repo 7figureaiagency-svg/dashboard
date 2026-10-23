@@ -8,7 +8,8 @@ import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const META_APP_ID = process.env["META_APP_ID"];
+const META_APP_ID = process.env["META_APP_ID"] || "1117232154391535";
+const META_CONFIG_ID = process.env["META_CONFIG_ID"] || "1765212574527975";
 const META_APP_SECRET = process.env["META_APP_SECRET"];
 const META_GRAPH_VERSION = process.env["META_GRAPH_VERSION"] || "v21.0";
 const META_WEBHOOK_URL =
