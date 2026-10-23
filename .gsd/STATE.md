@@ -8,18 +8,18 @@ updated: 2026-10-22T19:46:00+05:30
 
 **Milestone:** Apple HIG Modernization & Conversational Architecture  
 **Phase:** 7 - Multi-Portal Lead Webhooks, Auto-Property Presentation & Site Visit Booking  
-**Status:** Plans Authored & Validated, Ready for /execute 7.1  
+**Status:** Plan 7.1 Complete, Ready for /execute 7.2  
 **Plans:**
-- `.gsd/phases/7/7.1-PLAN.md` (Multi-Portal Webhook Normalizer, Property Auto-Matcher & Instant WhatsApp Outreach) — ⏳ Ready to Execute (Wave 1)
-- `.gsd/phases/7/7.2-PLAN.md` (Missing WhatsApp Indicator, CRM Leads Badge/Alert, and 1-Tap Phone Modal) — ⏳ Pending (Wave 2)
+- `.gsd/phases/7/7.1-PLAN.md` (Multi-Portal Webhook Normalizer, Property Auto-Matcher & Instant WhatsApp Outreach) — ✅ Complete (`4a0f6b0`)
+- `.gsd/phases/7/7.2-PLAN.md` (Missing WhatsApp Indicator, CRM Leads Badge/Alert, and 1-Tap Phone Modal) — ⏳ Ready to Execute (Wave 2)
 
 ## Last Action
 
-Completed Phase 7 Discussion:
-- Aligned on Instant Automated WhatsApp Outreach (Option A).
-- Selected Consultative Hinglish tone with property brochure/map links and site visit CTAs.
-- Approved Missing WhatsApp Number badge (`⚠️ No WhatsApp Number`) and 1-tap manual phone entry modal.
-- Documented decisions in `.gsd/DECISIONS.md`.
+Completed Plan 7.1:
+- Implemented multi-portal webhook normalizer in `supabase/functions/realtor-lead-engine/index.ts` supporting 99acres, MagicBricks, Housing.com, CommonFloor, Facebook Lead Ads, OLX, and custom payloads.
+- Added 24-hour lead deduplication across phone and email to prevent CRM clutter.
+- Implemented 4-tier inventory auto-matcher and immediate consultative Hinglish WhatsApp outreach with brochure PDF links, Google Maps pin, and VIP site visit CTA.
+- Handoff into FSM state `SITE_VISIT_PROPOSED` and verified build with `npm.cmd run build` (0 errors).
 
 ## Active Decisions
 
