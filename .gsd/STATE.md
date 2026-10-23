@@ -8,18 +8,20 @@ updated: 2026-10-22T19:46:00+05:30
 
 **Milestone:** Apple HIG Modernization & Conversational Architecture  
 **Phase:** 7 - Multi-Portal Lead Webhooks, Auto-Property Presentation & Site Visit Booking  
-**Status:** Plan 7.1 Complete, Ready for /execute 7.2  
+**Status:** ✅ Phase 7 Complete  
 **Plans:**
 - `.gsd/phases/7/7.1-PLAN.md` (Multi-Portal Webhook Normalizer, Property Auto-Matcher & Instant WhatsApp Outreach) — ✅ Complete (`4a0f6b0`)
-- `.gsd/phases/7/7.2-PLAN.md` (Missing WhatsApp Indicator, CRM Leads Badge/Alert, and 1-Tap Phone Modal) — ⏳ Ready to Execute (Wave 2)
+- `.gsd/phases/7/7.2-PLAN.md` (Missing WhatsApp Indicator, CRM Leads Badge/Alert, and 1-Tap Phone Modal) — ✅ Complete (`5137d7f`)
 
 ## Last Action
 
-Completed Plan 7.1:
-- Implemented multi-portal webhook normalizer in `supabase/functions/realtor-lead-engine/index.ts` supporting 99acres, MagicBricks, Housing.com, CommonFloor, Facebook Lead Ads, OLX, and custom payloads.
-- Added 24-hour lead deduplication across phone and email to prevent CRM clutter.
-- Implemented 4-tier inventory auto-matcher and immediate consultative Hinglish WhatsApp outreach with brochure PDF links, Google Maps pin, and VIP site visit CTA.
-- Handoff into FSM state `SITE_VISIT_PROPOSED` and verified build with `npm.cmd run build` (0 errors).
+Completed Plan 7.2:
+- Added Apple HIG `NoWhatsAppBadge` with amber translucency tokens.
+- Added `MISSING_PHONE` quick triage filter pill and 6th complication widget with real-time counters in `LeadsTab`.
+- Updated desktop table and mobile cards to visually indicate missing WhatsApp numbers and provide 1-tap "Add WhatsApp Number" actions.
+- Added contextual missing-phone alert banner in `LeadDrawer` and integrated 1-Tap Phone Modal Dialog with 10-digit validation.
+- Updating customer phone reactively unlocks 44pt "Call Client" and "WhatsApp" action buttons in the frosted action bar.
+- Verified build with `npm.cmd run build` (0 errors) and committed `5137d7f`.
 
 ## Active Decisions
 
