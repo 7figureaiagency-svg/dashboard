@@ -7,19 +7,19 @@ updated: 2026-10-22T19:46:00+05:30
 ## Current Position
 
 **Milestone:** Apple HIG Modernization & Conversational Architecture  
-**Phase:** 6 - Multi-Persona AI Briefing & FSM State Explainer  
-**Status:** Plan 6.1 Complete  
+**Phase:** 7 - Multi-Portal Lead Webhooks, Auto-Property Presentation & Site Visit Booking  
+**Status:** Discussion Complete, Ready for /plan 7  
 **Plans:**
-- `.gsd/phases/4/4.7-PLAN.md` (Past Site Visit Temporal Greeting Guards & Missed Visit Cron Follow-up) — ✅ Complete (`v66`)
-- `.gsd/phases/5/5.1-PLAN.md` (Role-Based Executive Routing, Admin Listing Approvals, and Manager Unassigned Lead Triage) — 🔄 Active
-- `.gsd/phases/6/6.1-PLAN.md` (Multi-Persona AI Conversation Summary & Comprehensive FSM State Explainer) — ✅ Complete
+- `.gsd/phases/7/7.1-PLAN.md` (Multi-Portal Webhook Normalizer, Property Auto-Matcher & Instant WhatsApp Outreach) — ⏳ Pending
+- `.gsd/phases/7/7.2-PLAN.md` (Missing WhatsApp Indicator, CRM Leads Badge/Alert, and 1-Tap Phone Modal) — ⏳ Pending
 
 ## Last Action
 
-Completed Phase 6 (Plan 6.1):
-- Implemented bifurcated AI briefing for Dual-Role, Owner/Seller, and Buyer leads.
-- Added comprehensive Hinglish explainer matrix covering 25+ FSM states.
-- Connected `submissions` into `lead-drawer.tsx` and tested with `npm run build`.
+Completed Phase 7 Discussion:
+- Aligned on Instant Automated WhatsApp Outreach (Option A).
+- Selected Consultative Hinglish tone with property brochure/map links and site visit CTAs.
+- Approved Missing WhatsApp Number badge (`⚠️ No WhatsApp Number`) and 1-tap manual phone entry modal.
+- Documented decisions in `.gsd/DECISIONS.md`.
 
 ## Active Decisions
 
