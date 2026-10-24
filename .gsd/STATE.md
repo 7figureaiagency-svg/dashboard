@@ -6,11 +6,12 @@ updated: 2026-10-24T13:18:00+05:30
 
 ## Current Position
 
-**Milestone:** Apple HIG Modernization & Conversational Architecture  
-**Phase:** 8 - Gujlish Rental Extraction, Multi-Asset De-multiplexing, and Phantom-Option Guard  
+**Milestone:** Multi-Tenant Onboarding & Access Control  
+**Phase:** 8 - Multi-Tenant Provisioning (Griham Realty & Nextgen Realty), Bot Webhook & Strict Auth Enforcement  
 **Status:** ✅ Phase 8 Complete  
 **Plans:**
-- `.gsd/phases/8/8.1-PLAN.md` (Gujlish Rental Extraction, Unit Conversion, Phantom-Option Guard & Multi-Asset Ingestion) — ✅ Complete (`v68-gujlish-rent-multi-property`, build 105)
+- `.gsd/phases/8/8.1-PLAN.md` (Multi-Tenant Client Setup, Auth Users & Telegram Webhook Connection) — ✅ Complete
+- `.gsd/phases/8/8.2-PLAN.md` (Strict Authentication Enforcement & Dynamic Multi-Tenant Dashboard) — ✅ Complete
 
 ## Last Action
 

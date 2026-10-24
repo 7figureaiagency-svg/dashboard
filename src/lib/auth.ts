@@ -23,48 +23,32 @@ export function useCurrentUser() {
     queryFn: async (): Promise<CurrentUser | null> => {
       const { data: userData } = await supabase.auth.getUser();
       const user = userData.user;
-      const isDemo = typeof window !== "undefined" && localStorage.getItem("demo_mode") === "true";
-      if (!user && !isDemo) return null;
-
-      if (!user && isDemo) {
-        return {
-          id: "demo-admin-id",
-          email: "admin@nextgenrealty.com",
-          fullName: "Nextgen Admin",
-          role: "admin",
-          clientId: "8699dca1-2b97-4367-85b8-8a0db2fd51f5",
-          phone: "+919876543210",
-          phoneVerified: true,
-        };
-      }
+      if (!user) return null;
 
       let profile: any = null;
       try {
         const { data } = await supabase
           .from("profiles" as any)
           .select("email, full_name, role, client_id, phone, phone_verified")
-          .eq("id", user!.id)
+          .eq("id", user.id)
           .maybeSingle();
         profile = data;
       } catch (e) {
         console.warn("Profiles check skipped:", e);
       }
 
-      // Default role to 'admin' and clientId to Nextgen Realty so the user can
-      // immediately access their dashboard and data
       const role: AppRole =
         profile?.role === "sales_executive" ? "sales_executive" : "admin";
-      const clientId =
-        profile?.client_id || "8699dca1-2b97-4367-85b8-8a0db2fd51f5";
+      const clientId = profile?.client_id || null;
 
       return {
-        id: user!.id,
-        email: profile?.email ?? user!.email ?? "",
+        id: user.id,
+        email: profile?.email ?? user.email ?? "",
         fullName:
           profile?.full_name ??
-          (user!.user_metadata?.["full_name"] as string) ??
-          user!.email?.split("@")[0] ??
-          "Nextgen Admin",
+          (user.user_metadata?.["full_name"] as string) ??
+          user.email?.split("@")[0] ??
+          "Admin",
         role,
         clientId,
         phone: profile?.phone ?? null,

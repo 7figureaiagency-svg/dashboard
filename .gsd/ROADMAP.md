@@ -69,6 +69,14 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 7.1: Multi-Portal Webhook Normalizer, Property Auto-Matcher & Instant WhatsApp Outreach ([`7.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/7/7.1-PLAN.md))
 - [x] Plan 7.2: Missing WhatsApp Indicator, CRM Leads Badge/Alert, and 1-Tap Phone Modal ([`7.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/7/7.2-PLAN.md))
 
+### Phase 8: Multi-Tenant Client Onboarding, Bot Webhook & Strict Authentication
+**Status:** ⏳ Planned  
+**Objective:** Provision Griham Realty in the multi-tenant system with dedicated Telegram bot (`@GrihamRealtybot`), create authenticated admin accounts for Griham Realty (`kashyap@gmail.com`) and Nextgen Realty (`admin@nextgenrealty.com`), configure Telegram webhook with dynamic tenant query params, and eliminate demo direct-access bypasses for strict credential-only login.  
+**Depends on:** Phase 7  
+**Plans:**
+- [ ] Plan 8.1: Multi-Tenant Client Setup (Griham Realty & Nextgen Realty), Auth Users & Telegram Webhook Connection ([`8.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/8/8.1-PLAN.md))
+- [ ] Plan 8.2: Strict Authentication Enforcement (Remove Demo/Direct Access) & Dynamic Multi-Tenant Dashboard ([`8.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/8/8.2-PLAN.md))
+
 ---
 
 ## Progress Summary
@@ -80,6 +88,8 @@ updated: 2026-10-19T18:50:30+05:30
 | 3: Schema-Guided Intent Engine | ✅ Complete | 3/3 | 100% |
 | 4: Bi-Directional Dual-Persona Lifecycle | ⏳ Planned | 0/2 | 0% |
 | 7: Multi-Portal Webhooks & Site Visit Engine | ✅ Complete | 2/2 | 100% |
+| 8: Multi-Tenant Onboarding & Strict Auth | ⏳ Planned | 0/2 | 0% |
+
 
 
 

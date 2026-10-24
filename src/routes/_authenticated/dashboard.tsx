@@ -127,7 +127,7 @@ function Dashboard() {
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <h1 className="text-sm sm:text-lg font-bold tracking-tight text-foreground truncate max-w-[160px] xs:max-w-[220px] sm:max-w-none">
-                    {client?.company_name || "Nextgn Realtors"}
+                    {client?.company_name || client?.name || "Real Estate CRM"}
                   </h1>
                   <span className="hidden xs:inline-flex items-center rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent-foreground border border-accent/25 shrink-0">
                     {isAdmin ? "Admin" : "Executive"}

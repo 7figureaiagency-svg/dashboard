@@ -375,7 +375,10 @@ export function useApprovePropertySubmission() {
         ? (submission.attributes as Record<string, unknown>)
         : {};
 
-      const resolvedClientId = submission.client_id || clientId || "8699dca1-2b97-4367-85b8-8a0db2fd51f5";
+      const resolvedClientId = submission.client_id || clientId;
+      if (!resolvedClientId) {
+        throw new Error("Cannot approve property: missing tenant client_id");
+      }
 
       // 3. Insert into inventory (both bhk_num column and inside attributes jsonb)
       const { error: insertError } = await supabase.from("inventory").insert({
@@ -626,13 +629,15 @@ export function useUpdateExecutive() {
 export function useClient(clientId: string | null | undefined) {
   return useQuery({
     queryKey: ["client", clientId],
-    enabled: true,
+    enabled: !!clientId,
     queryFn: async (): Promise<Client | null> => {
-      let query = supabase.from("clients").select("*");
-      if (clientId) {
-        query = query.eq("id", clientId);
-      }
-      const { data, error } = await query.limit(1).maybeSingle();
+      if (!clientId) return null;
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("id", clientId)
+        .limit(1)
+        .maybeSingle();
       if (error) {
         console.warn("useClient warning:", error);
         return null;
@@ -641,7 +646,7 @@ export function useClient(clientId: string | null | undefined) {
       const raw = data as Record<string, unknown>;
       return {
         ...data,
-        company_name: (raw.company_name as string) || (raw.name as string) || "Nextgen Realty",
+        company_name: (raw.company_name as string) || (raw.name as string) || "Real Estate CRM",
       } as Client;
     },
     staleTime: 30_000,
