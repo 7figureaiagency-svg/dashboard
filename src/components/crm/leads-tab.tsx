@@ -69,11 +69,13 @@ export function LeadsTab({
   leads,
   loading,
   lockedExecutive = null,
+  clientId = null,
 }: {
   leads: Lead[];
   loading: boolean;
   /** When set, the executive filter is locked to this person. */
   lockedExecutive?: string | null;
+  clientId?: string | null;
 }) {
   const [executive, setExecutive] = useState(lockedExecutive ?? ALL);
   const [status, setStatus] = useState(ALL);
@@ -121,7 +123,7 @@ export function LeadsTab({
       setSweeping(false);
     }
   };
-  const { data: allActivity = [] } = useActivity();
+  const { data: allActivity = [] } = useActivity(clientId);
 
   const activity = useMemo(() => {
     const ids = new Set(leads.map((l) => l.lead_id));

@@ -65,16 +65,16 @@ const NAV_ITEMS = [
 function Dashboard() {
   const [activeTab, setActiveTab] = useState("leads");
   const [preset, setPreset] = useState<DatePreset>("all");
-  const leadsQuery = useLeads();
-  const inventoryQuery = useInventory();
   const { data: me, isFetching: meFetching } = useCurrentUser();
-  const { data: executives = [] } = useExecutives();
-  const { data: client } = useClient(me?.clientId);
-  const signOut = useSignOut();
-  const navigate = useNavigate();
-
   const isAdmin = me?.role === "admin";
   const clientId = me?.clientId ?? null;
+
+  const leadsQuery = useLeads(clientId);
+  const inventoryQuery = useInventory(clientId);
+  const { data: executives = [] } = useExecutives(clientId);
+  const { data: client } = useClient(clientId);
+  const signOut = useSignOut();
+  const navigate = useNavigate();
 
   // Brand-new sign-ins (no client_id yet, not claimed as an invited
   // executive) need to onboard themselves before they can see a dashboard.
@@ -261,6 +261,7 @@ function Dashboard() {
                   leads={leads}
                   loading={leadsQuery.isLoading}
                   lockedExecutive={isAdmin ? null : me?.fullName || null}
+                  clientId={clientId}
                 />
               </TabsContent>
               {isAdmin && (

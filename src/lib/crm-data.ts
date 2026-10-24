@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentUser } from "@/lib/auth";
 import {
   buildActivityRows,
   hydrateLead,
@@ -27,10 +28,14 @@ const POLL_MS = 30000;
  * itself refuses to return or mutate another tenant's rows.
  */
 
-async function fetchExecutivesMap(): Promise<Map<string, ExecutiveLite>> {
-  const { data, error } = await supabase
+async function fetchExecutivesMap(clientId?: string | null): Promise<Map<string, ExecutiveLite>> {
+  let query = supabase
     .from("executives")
     .select("id,name,phone,telegram_id");
+  if (clientId) {
+    query = query.eq("client_id", clientId);
+  }
+  const { data, error } = await query;
   if (error) {
     console.warn("fetchExecutivesMap warning:", error);
     return new Map();
@@ -49,29 +54,46 @@ async function fetchExecutivesMap(): Promise<Map<string, ExecutiveLite>> {
   );
 }
 
-export function useActivity() {
+export function useActivity(passedClientId?: string | null) {
+  const { data: me } = useCurrentUser();
+  const clientId = passedClientId !== undefined ? passedClientId : me?.clientId;
   return useQuery({
-    queryKey: ["lead_activity"],
+    queryKey: ["lead_activity", clientId],
+    enabled: clientId !== undefined ? !!clientId : true,
     queryFn: async (): Promise<Activity[]> => {
       // First try lead_activity
-      const { data, error } = await supabase
+      let actQuery = supabase
         .from("lead_activity" as any)
         .select("*")
         .order("created_at", { ascending: false })
         .limit(1000);
+      if (clientId) {
+        actQuery = actQuery.eq("client_id", clientId);
+      }
+      const { data, error } = await actQuery;
       if (!error && data && data.length > 0) return data as Activity[];
 
       // Fallback to live database table lead_events
+      let evQuery = supabase
+        .from("lead_events" as any)
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      if (clientId) {
+        evQuery = evQuery.eq("client_id", clientId);
+      }
+
+      let leadsQuery = supabase
+        .from("leads")
+        .select("lead_id, first_name, assigned_executive_id");
+      if (clientId) {
+        leadsQuery = leadsQuery.eq("client_id", clientId);
+      }
+
       const [{ data: events }, { data: leadsData }, execMap] = await Promise.all([
-        supabase
-          .from("lead_events" as any)
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(1000),
-        supabase
-          .from("leads")
-          .select("lead_id, first_name, assigned_executive_id"),
-        fetchExecutivesMap(),
+        evQuery,
+        leadsQuery,
+        fetchExecutivesMap(clientId),
       ]);
 
       if (!events) return [];
@@ -139,12 +161,16 @@ export function useLeadEvents(leadId?: string | null) {
   });
 }
 
-async function fetchInventoryLiteMap(): Promise<
+async function fetchInventoryLiteMap(clientId?: string | null): Promise<
   Map<string, { project_name: string; price: number; map_url?: string }>
 > {
-  const { data, error } = await supabase
+  let query = supabase
     .from("inventory")
     .select("property_id, project_name, price, map_url");
+  if (clientId) {
+    query = query.eq("client_id", clientId);
+  }
+  const { data, error } = await query;
   if (error) {
     console.warn("fetchInventoryLiteMap warning:", error);
     return new Map();
@@ -161,14 +187,21 @@ async function fetchInventoryLiteMap(): Promise<
   );
 }
 
-export function useLeads() {
+export function useLeads(passedClientId?: string | null) {
+  const { data: me } = useCurrentUser();
+  const clientId = passedClientId !== undefined ? passedClientId : me?.clientId;
   return useQuery({
-    queryKey: ["leads"],
+    queryKey: ["leads", clientId],
+    enabled: clientId !== undefined ? !!clientId : true,
     queryFn: async (): Promise<Lead[]> => {
+      let query = supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(1000);
+      if (clientId) {
+        query = query.eq("client_id", clientId);
+      }
       const [{ data, error }, execMap, invMap] = await Promise.all([
-        supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(1000),
-        fetchExecutivesMap(),
-        fetchInventoryLiteMap(),
+        query,
+        fetchExecutivesMap(clientId),
+        fetchInventoryLiteMap(clientId),
       ]);
       if (error) throw error;
       return (data ?? []).map((row) => hydrateLead(row, execMap, invMap));
@@ -179,17 +212,24 @@ export function useLeads() {
   });
 }
 
-export function useInventory() {
+export function useInventory(passedClientId?: string | null) {
+  const { data: me } = useCurrentUser();
+  const clientId = passedClientId !== undefined ? passedClientId : me?.clientId;
   return useQuery({
-    queryKey: ["inventory"],
+    queryKey: ["inventory", clientId],
+    enabled: clientId !== undefined ? !!clientId : true,
     queryFn: async (): Promise<Property[]> => {
+      let query = supabase
+        .from("inventory")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      if (clientId) {
+        query = query.eq("client_id", clientId);
+      }
       const [{ data, error }, execMap] = await Promise.all([
-        supabase
-          .from("inventory")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(1000),
-        fetchExecutivesMap(),
+        query,
+        fetchExecutivesMap(clientId),
       ]);
       if (error) throw error;
       return (data ?? []).map((row) => hydrateProperty(row, execMap));
@@ -264,6 +304,7 @@ export function useUpdateLead() {
 
 export function useSaveProperty() {
   const qc = useQueryClient();
+  const { data: me } = useCurrentUser();
   return useMutation({
     mutationFn: async ({
       values,
@@ -275,10 +316,11 @@ export function useSaveProperty() {
       /** Required when inserting — every new row must be stamped with the tenant it belongs to. */
       clientId?: string | null;
     }) => {
+      const effectiveClientId = clientId || me?.clientId || null;
       if (isNew) {
         const { error } = await supabase
           .from("inventory")
-          .insert({ ...values, client_id: clientId ?? null } as never);
+          .insert({ ...values, client_id: effectiveClientId } as never);
         if (error) throw error;
       } else {
         const { error } = await supabase
@@ -311,14 +353,21 @@ export function useDeleteProperty() {
   });
 }
 
-export function usePropertySubmissions() {
+export function usePropertySubmissions(passedClientId?: string | null) {
+  const { data: me } = useCurrentUser();
+  const clientId = passedClientId !== undefined ? passedClientId : me?.clientId;
   return useQuery({
-    queryKey: ["property_submissions"],
+    queryKey: ["property_submissions", clientId],
+    enabled: clientId !== undefined ? !!clientId : true,
     queryFn: async (): Promise<PropertySubmission[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("property_submissions")
         .select("*")
         .order("created_at", { ascending: false });
+      if (clientId) {
+        query = query.eq("client_id", clientId);
+      }
+      const { data, error } = await query;
       if (error) {
         console.warn("fetch property_submissions warning:", error);
         return [];
@@ -333,6 +382,7 @@ export function usePropertySubmissions() {
 
 export function useApprovePropertySubmission() {
   const qc = useQueryClient();
+  const { data: me } = useCurrentUser();
   return useMutation({
     mutationFn: async ({
       submission,
@@ -375,7 +425,7 @@ export function useApprovePropertySubmission() {
         ? (submission.attributes as Record<string, unknown>)
         : {};
 
-      const resolvedClientId = submission.client_id || clientId;
+      const resolvedClientId = submission.client_id || clientId || me?.clientId;
       if (!resolvedClientId) {
         throw new Error("Cannot approve property: missing tenant client_id");
       }
@@ -511,11 +561,18 @@ export async function uploadClientLogo(file: File, clientId: string): Promise<st
 /* Team (executives)                                                   */
 /* ------------------------------------------------------------------ */
 
-export function useExecutives() {
+export function useExecutives(passedClientId?: string | null) {
+  const { data: me } = useCurrentUser();
+  const clientId = passedClientId !== undefined ? passedClientId : me?.clientId;
   return useQuery({
-    queryKey: ["executives"],
+    queryKey: ["executives", clientId],
+    enabled: clientId !== undefined ? !!clientId : true,
     queryFn: async (): Promise<Executive[]> => {
-      const { data, error } = await supabase.from("executives").select("*").order("name");
+      let query = supabase.from("executives").select("*").order("name");
+      if (clientId) {
+        query = query.eq("client_id", clientId);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
@@ -657,14 +714,21 @@ export function useClient(clientId: string | null | undefined) {
 /* Lead-source webhook integrations (99acres / Housing / MagicBricks…) */
 /* ------------------------------------------------------------------ */
 
-export function useIntegrations() {
+export function useIntegrations(passedClientId?: string | null) {
+  const { data: me } = useCurrentUser();
+  const clientId = passedClientId !== undefined ? passedClientId : me?.clientId;
   return useQuery({
-    queryKey: ["client_integrations"],
+    queryKey: ["client_integrations", clientId],
+    enabled: clientId !== undefined ? !!clientId : true,
     queryFn: async (): Promise<ClientIntegration[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("client_integrations")
         .select("*")
         .order("created_at", { ascending: true });
+      if (clientId) {
+        query = query.eq("client_id", clientId);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },

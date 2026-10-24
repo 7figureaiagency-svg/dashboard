@@ -78,12 +78,12 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 8.2: Strict Authentication Enforcement (Remove Demo/Direct Access) & Dynamic Multi-Tenant Dashboard ([`8.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/8/8.2-PLAN.md))
 
 ### Phase 9: Strict Multi-Tenant Data Isolation (Client-Wise Partitioning across Frontend & Database RLS)
-**Status:** ⏳ Planned  
+**Status:** ✅ Complete  
 **Objective:** Separate all client data across the entire platform so Griham Realty users never see Nextgen Realty leads, inventory, or activity. Harden database Row Level Security (RLS) with `public.current_client_id()` security definer lookup, explicitly scope all frontend React query hooks by `clientId`, and partition TanStack Query cache keys.  
 **Depends on:** Phase 8  
 **Plans:**
-- [ ] Plan 9.1: Database Multi-Tenant RLS Hardening & `current_client_id()` Security Function ([`9.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/9/9.1-PLAN.md))
-- [ ] Plan 9.2: Frontend Explicit Client-Scoped Queries & Cache Partitioning in CRM Hooks & Dashboard ([`9.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/9/9.2-PLAN.md))
+- [x] Plan 9.1: Database Multi-Tenant RLS Hardening & `current_client_id()` Security Function ([`9.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/9/9.1-PLAN.md))
+- [x] Plan 9.2: Frontend Explicit Client-Scoped Queries & Cache Partitioning in CRM Hooks & Dashboard ([`9.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/9/9.2-PLAN.md))
 
 ---
 
@@ -97,7 +97,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 4: Bi-Directional Dual-Persona Lifecycle | ⏳ Planned | 0/2 | 0% |
 | 7: Multi-Portal Webhooks & Site Visit Engine | ✅ Complete | 2/2 | 100% |
 | 8: Multi-Tenant Onboarding & Strict Auth | ✅ Complete | 2/2 | 100% |
-| 9: Strict Multi-Tenant Data Isolation | ⏳ Planned | 0/2 | 0% |
+| 9: Strict Multi-Tenant Data Isolation | ✅ Complete | 2/2 | 100% |
 
 
 
