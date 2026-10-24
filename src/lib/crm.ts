@@ -2,6 +2,7 @@ import { createElement, Fragment, type ReactNode } from "react";
 import type { Database } from "@/integrations/supabase/types";
 
 export type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
+export type PropertyRow = Database["public"]["Tables"]["inventory"]["Row"];
 export type ActivityRow = Database["public"]["Tables"]["lead_activity"]["Row"];
 export type ActorType = "SALES_REP" | "AI_BOT" | "SYSTEM";
 
@@ -500,6 +501,7 @@ export function buildLeadSummary(lead: Lead, submissions?: PropertySubmission[])
 
   const firstName = lead.first_name || lead.name?.trim().split(" ")[0] || "Client";
   const meta = (lead.metadata as Record<string, any> | null) ?? {};
+  const ownerDraft = (meta.owner_draft as Record<string, any> | null) ?? null;
   const matchingSubmissions = submissions && submissions.length > 0
     ? submissions.filter((s) => !lead.client_id || !s.client_id || s.client_id === lead.client_id)
     : [];
