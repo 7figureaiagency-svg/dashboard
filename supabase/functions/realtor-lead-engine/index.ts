@@ -2980,54 +2980,47 @@ async function resolveLeadProjectName(
   tenantId?: string
 ): Promise<{ projectName: string; prop: any }> {
   let prop: any = null;
+  const effectiveTenantId = tenantId || l?.client_id;
   const candidatePropId = l?.selected_property_id;
 
   // 1. Direct selected_property_id from leads table
   if (candidatePropId) {
-    const { data: p } = await supabase
-      .from("inventory")
-      .select("*")
-      .eq("property_id", candidatePropId)
-      .maybeSingle();
+    let q = supabase.from("inventory").select("*").eq("property_id", candidatePropId);
+    if (effectiveTenantId) q = q.eq("client_id", effectiveTenantId);
+    const { data: p } = await q.maybeSingle();
     if (p) prop = p;
   }
 
   // 2. Query site_visits table linked to this lead (for booked/completed/rescheduled visits)
   if (!prop && l?.id) {
-    const { data: visits } = await supabase
-      .from("site_visits")
-      .select("property_id")
-      .eq("lead_id", l.id)
-      .not("status", "eq", "CANCELLED")
+    let vQuery = supabase.from("site_visits").select("property_id").eq("lead_id", l.id).not("status", "eq", "CANCELLED");
+    if (effectiveTenantId) vQuery = vQuery.eq("client_id", effectiveTenantId);
+    const { data: visits } = await vQuery
       .order("scheduled_at", { ascending: false, nullsFirst: false })
       .limit(1);
 
     if (visits && visits.length > 0 && visits[0].property_id) {
-      const { data: p } = await supabase
-        .from("inventory")
-        .select("*")
-        .eq("property_id", visits[0].property_id)
-        .maybeSingle();
+      let q = supabase.from("inventory").select("*").eq("property_id", visits[0].property_id);
+      if (effectiveTenantId) q = q.eq("client_id", effectiveTenantId);
+      const { data: p } = await q.maybeSingle();
       if (p) prop = p;
     }
   }
 
   // 3. Fallback to last_option_ids?.[0]
   if (!prop && Array.isArray(l?.last_option_ids) && l.last_option_ids.length > 0) {
-    const { data: p } = await supabase
-      .from("inventory")
-      .select("*")
-      .eq("property_id", l.last_option_ids[0])
-      .maybeSingle();
+    let q = supabase.from("inventory").select("*").eq("property_id", l.last_option_ids[0]);
+    if (effectiveTenantId) q = q.eq("client_id", effectiveTenantId);
+    const { data: p } = await q.maybeSingle();
     if (p) prop = p;
   }
 
   // 4. Fallback to tenant default available inventory
-  if (!prop && tenantId) {
+  if (!prop && effectiveTenantId) {
     const { data: p } = await supabase
       .from("inventory")
       .select("*")
-      .eq("client_id", tenantId)
+      .eq("client_id", effectiveTenantId)
       .eq("status", "AVAILABLE")
       .limit(1)
       .maybeSingle();
@@ -3541,7 +3534,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 let topProject = "selected property";
                 const topPropId = l.last_option_ids?.[0] || l.selected_property_id;
                 if (topPropId) {
-                  const { data: p } = await supabase.from("inventory").select("project_name").eq("property_id", topPropId).maybeSingle();
+                  const { data: p } = await supabase.from("inventory").select("project_name").eq("client_id", l.client_id).eq("property_id", topPropId).maybeSingle();
                   if (p?.project_name) topProject = p.project_name;
                 }
 
@@ -4070,6 +4063,7 @@ async function handleOwnerFlow({
       const { data: sub } = await supabase
         .from("property_submissions")
         .select("*")
+        .eq("client_id", tenantId)
         .eq("lead_id", lead.lead_id)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -4817,6 +4811,7 @@ export async function dispatchStateAction(
     const { data: subs } = await supabase
       .from("property_submissions")
       .select("*")
+      .eq("client_id", activeTenantId)
       .or(`lead_id.eq.${lead.lead_id},lead_id.eq.${lead.id}`)
       .order("created_at", { ascending: false })
       .limit(1);
@@ -4828,6 +4823,7 @@ export async function dispatchStateAction(
     const { data: visits } = await supabase
       .from("site_visits")
       .select("*, inventory(*)")
+      .eq("client_id", activeTenantId)
       .eq("lead_id", lead.id)
       .order("created_at", { ascending: false })
       .limit(1);
@@ -5166,6 +5162,7 @@ export async function dispatchStateAction(
       const { data: sub } = await supabase
         .from("property_submissions")
         .select("*")
+        .eq("client_id", activeTenantId)
         .eq("lead_id", lead.lead_id)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -5274,6 +5271,7 @@ export async function dispatchStateAction(
       const { data: visits } = await supabase
         .from("site_visits")
         .select("*, inventory(*)")
+        .eq("client_id", activeTenantId)
         .eq("lead_id", lead.id)
         .order("created_at", { ascending: false })
         .limit(1);
@@ -5378,6 +5376,7 @@ export async function dispatchStateAction(
       const { data: sub } = await supabase
         .from("property_submissions")
         .select("*")
+        .eq("client_id", activeTenantId)
         .or(`lead_id.eq.${lead.lead_id},lead_id.eq.${lead.id}`)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -5429,6 +5428,7 @@ export async function dispatchStateAction(
       const { data: sub } = await supabase
         .from("property_submissions")
         .select("*")
+        .eq("client_id", activeTenantId)
         .or(`lead_id.eq.${lead.lead_id},lead_id.eq.${lead.id}`)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -5607,7 +5607,7 @@ export async function dispatchStateAction(
       const pendingPropId = lead.metadata?.pending_new_visit_property_id;
       let newProp: any = null;
       if (pendingPropId) {
-        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", pendingPropId).maybeSingle();
+        const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("property_id", pendingPropId).maybeSingle();
         newProp = p;
       }
       const updatedMeta = { ...(lead.metadata || {}) };
@@ -5803,6 +5803,7 @@ export async function dispatchStateAction(
       const { data: latestVisit } = await supabase
         .from("site_visits")
         .select("*, inventory(*)")
+        .eq("client_id", activeTenantId)
         .eq("lead_id", lead.id)
         .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
         .order("created_at", { ascending: false })
@@ -5814,7 +5815,7 @@ export async function dispatchStateAction(
         propDetails = latestVisit.inventory;
       }
       if (!propDetails && lead.selected_property_id) {
-        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.selected_property_id).maybeSingle();
+        const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("property_id", lead.selected_property_id).maybeSingle();
         propDetails = p;
       }
 
@@ -5974,6 +5975,7 @@ export async function dispatchStateAction(
       const { data: latestVisit } = await supabase
         .from("site_visits")
         .select("*, inventory(*)")
+        .eq("client_id", activeTenantId)
         .eq("lead_id", lead.id)
         .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
         .order("created_at", { ascending: false })
@@ -5985,7 +5987,7 @@ export async function dispatchStateAction(
         propDetails = latestVisit.inventory;
       }
       if (!propDetails && lead.selected_property_id) {
-        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.selected_property_id).maybeSingle();
+        const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("property_id", lead.selected_property_id).maybeSingle();
         propDetails = p;
       }
 
@@ -6435,7 +6437,7 @@ export async function dispatchStateAction(
       let selectedProp: any = null;
 
       if (selectedPropId) {
-        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", selectedPropId).maybeSingle();
+        const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("property_id", selectedPropId).maybeSingle();
         selectedProp = p;
       }
 
@@ -6455,6 +6457,7 @@ export async function dispatchStateAction(
       const { data: activeVisits } = await supabase
         .from("site_visits")
         .select("*, inventory(*)")
+        .eq("client_id", activeTenantId)
         .eq("lead_id", lead.id)
         .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
         .order("created_at", { ascending: false })
@@ -6595,10 +6598,20 @@ export async function dispatchStateAction(
       }
 
       const scheduledAt = slotResult.isoUtc;
-      const finalPropId = targetPropId || "PROP-NXG-001";
+      let finalPropId = targetPropId;
+      if (!finalPropId) {
+        const { data: firstProp } = await supabase
+          .from("inventory")
+          .select("property_id")
+          .eq("client_id", activeTenantId)
+          .eq("status", "AVAILABLE")
+          .limit(1)
+          .maybeSingle();
+        finalPropId = firstProp?.property_id || "PROP-001";
+      }
       let propDetails: any = null;
       if (finalPropId) {
-        const { data: p } = await supabase.from("inventory").select("*").eq("property_id", finalPropId).maybeSingle();
+        const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("property_id", finalPropId).maybeSingle();
         propDetails = p;
       }
 
@@ -6933,11 +6946,11 @@ async function handleBrochureOrMapResponse(
 
   let prop: any = null;
   if (lead?.selected_property_id) {
-    const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.selected_property_id).maybeSingle();
+    const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("property_id", lead.selected_property_id).maybeSingle();
     prop = p;
   }
   if (!prop && Array.isArray(lead?.last_option_ids) && lead.last_option_ids.length > 0) {
-    const { data: p } = await supabase.from("inventory").select("*").eq("property_id", lead.last_option_ids[0]).maybeSingle();
+    const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("property_id", lead.last_option_ids[0]).maybeSingle();
     prop = p;
   }
   if (!prop) {
@@ -7287,7 +7300,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v68.1-gujlish-rent-multi-property",
+        version: "v69-multi-tenant-query-isolation",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,

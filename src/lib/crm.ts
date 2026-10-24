@@ -492,8 +492,10 @@ export function buildLeadSummary(lead: Lead, submissions?: PropertySubmission[])
 
   const firstName = lead.first_name || lead.name?.trim().split(" ")[0] || "Client";
   const meta = (lead.metadata as Record<string, any> | null) ?? {};
-  const ownerDraft = (meta.owner_draft as Record<string, any> | null) ?? null;
-  const primarySub = submissions && submissions.length > 0 ? submissions[0] : null;
+  const matchingSubmissions = submissions && submissions.length > 0
+    ? submissions.filter((s) => !lead.client_id || !s.client_id || s.client_id === lead.client_id)
+    : [];
+  const primarySub = matchingSubmissions.length > 0 ? matchingSubmissions[0] : null;
 
   // Resolve listed property attributes
   const listedPropType = primarySub?.configuration || primarySub?.property_type || ownerDraft?.configuration || ownerDraft?.property_type || null;

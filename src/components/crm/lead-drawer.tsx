@@ -167,6 +167,8 @@ export function LeadDrawer({
     if (!lead?.lead_id) return [];
     const cleanLeadPhone = lead.phone ? lead.phone.replace(/\D/g, "").slice(-10) : "";
     return allSubmissions.filter((s) => {
+      // Strictly enforce multi-tenant isolation: submissions must belong to same client_id
+      if (lead.client_id && s.client_id && s.client_id !== lead.client_id) return false;
       if (s.lead_id === lead.lead_id) return true;
       if (cleanLeadPhone && s.owner_phone) {
         const cleanOwnerPhone = s.owner_phone.replace(/\D/g, "").slice(-10);
@@ -174,7 +176,7 @@ export function LeadDrawer({
       }
       return false;
     });
-  }, [allSubmissions, lead?.lead_id, lead?.phone]);
+  }, [allSubmissions, lead?.lead_id, lead?.phone, lead?.client_id]);
 
   const isDual = useMemo(() => {
     return isDualRoleLead(lead) || submissions.length > 0;

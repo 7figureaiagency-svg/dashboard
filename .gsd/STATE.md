@@ -8,19 +8,22 @@ updated: 2026-10-24T14:10:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Inventory  
 **Phase:** 10 - Multi-Tenant Lead Engine Edge Function Isolation & False Dual-Role Sanitization  
-**Status:** ⏳ Phase 10 Planned  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/10/10.1-PLAN.md` (Multi-Tenant Query Scoping in realtor-lead-engine Edge Function) — ⏳ Planned
-- `.gsd/phases/10/10.2-PLAN.md` (Lead 5117510624 Sanitization & CRM AI Summary Verification) — ⏳ Planned
+- `.gsd/phases/10/10.1-PLAN.md` (Multi-Tenant Query Scoping in realtor-lead-engine Edge Function) — ✅ Complete
+- `.gsd/phases/10/10.2-PLAN.md` (Lead 5117510624 Sanitization & CRM AI Summary Verification) — ✅ Complete
 
 ## Last Action
 
-Completed Phase 9:
-- Implemented `public.current_client_id()` `SECURITY DEFINER` function in PostgreSQL and hardened RLS policies on `leads`, `inventory`, `executives`, `property_submissions`, `lead_events`, `site_visits`, and `clients`.
-- Verified strict tenant isolation: Griham user sees 1 lead and 4 inventory items; Nextgen user sees 104 leads and 29 inventory items; 0 data leakage.
-- Seeded Griham Realty inventory with 4 verified Vadodara properties: Flat (Alkapuri ₹95L), Villa (Ankhol ₹2.25Cr), Office (Alkapuri ₹68L), Plot (Waghodia Road ₹36L).
-- Scoped all CRM hooks (`useLeads`, `useInventory`, `useExecutives`, `usePropertySubmissions`, `useActivity`, `useIntegrations`, `useSaveProperty`) to automatically resolve `me?.clientId` and partition TanStack Query cache.
-- Verified compilation with `npm.cmd run build` (0 errors).
+Completed Phase 10:
+- Audited and scoped all queries (`property_submissions`, `inventory`, `site_visits`) in `supabase/functions/realtor-lead-engine/index.ts` with `.eq("client_id", activeTenantId)`.
+- Replaced hardcoded fallback `"PROP-NXG-001"` with dynamic tenant-scoped inventory lookup.
+- Bumped and deployed Edge Function to `v69-multi-tenant-query-isolation` (build 109).
+- Sanitized `public.leads` for `lead_id = '5117510624'` and `client_id = 'c0000000-0000-0000-0000-000000000001'` back to `lead_type = 'SEEKER'`, `has_seller_profile = false`.
+- Sanitized contaminated `lead_events` entry mentioning Nextgen's "Spring field".
+- Hardened frontend `submissions` matching in `src/components/crm/lead-drawer.tsx` and `src/lib/crm.ts` (`buildLeadSummary`) with explicit tenant check.
+- Empirically verified with live Telegram greeting: zero cross-tenant property leakage, pure Griham Realty greeting at Griham Heights Luxury Residences (Alkapuri), lead remains SEEKER.
+- Verified build: `npm.cmd run build` passed with 0 errors.
 
 ## Active Decisions
 
