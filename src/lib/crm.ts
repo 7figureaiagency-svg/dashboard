@@ -2,8 +2,16 @@ import { createElement, Fragment, type ReactNode } from "react";
 import type { Database } from "@/integrations/supabase/types";
 
 export type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
-export type PropertyRow = Database["public"]["Tables"]["inventory"]["Row"];
-export type Activity = Database["public"]["Tables"]["lead_activity"]["Row"];
+export type ActivityRow = Database["public"]["Tables"]["lead_activity"]["Row"];
+export type ActorType = "SALES_REP" | "AI_BOT" | "SYSTEM";
+
+export type Activity = ActivityRow & {
+  actor_type?: ActorType;
+  actor_label?: string;
+  short_summary?: string;
+  details?: string | null;
+  raw_payload?: Record<string, any> | null;
+};
 export type ActivityInsert = Database["public"]["Tables"]["lead_activity"]["Insert"];
 export type Executive = Database["public"]["Tables"]["executives"]["Row"];
 export type ExecutiveInsert = Database["public"]["Tables"]["executives"]["Insert"];
@@ -1017,6 +1025,192 @@ export const ACTION_LABELS: Record<string, { label: string; tone: Tone }> = {
 export function actionLabel(action: string | null): string {
   if (!action) return "Action";
   return ACTION_LABELS[action]?.label ?? action;
+}
+
+export function cleanSummaryText(text: string | null | undefined, maxLen = 80): string {
+  if (!text) return "";
+  const cleaned = text
+    .replace(/<[^>]+>/g, "") // strip HTML tags
+    .replace(/[\r\n]+/g, " ") // normalize newlines
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length <= maxLen) return cleaned;
+  return cleaned.slice(0, maxLen).trim() + "…";
+}
+
+export function formatRelativeTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return "Just now";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "Recently";
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  if (diffMs < 0) return "Just now";
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return "Just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24 && d.getDate() === now.getDate()) return `${diffHours}h ago`;
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (
+    d.getDate() === yesterday.getDate() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getFullYear() === yesterday.getFullYear()
+  ) {
+    return `Yesterday, ${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).format(d)}`;
+  }
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  }).format(d);
+}
+
+export function summarizeLeadEvent(
+  eventType: string,
+  payload: any = {},
+  executiveName?: string | null
+): {
+  actorType: ActorType;
+  actorLabel: string;
+  shortSummary: string;
+  details: string | null;
+} {
+  const p = payload || {};
+  const isExecSource = p.source === "EXECUTIVE_ACTION";
+  const hasExecName = Boolean(executiveName && executiveName !== "System" && executiveName !== "AI Engine" && executiveName !== "AI Bot");
+  const isExecAction = [
+    "CALL_LOGGED",
+    "CALL_NOT_ANSWERED",
+    "NOTE_ADDED",
+    "TAKEOVER",
+    "ASSIGN_EXECUTIVE",
+    "PHONE_ADDED",
+    "PROFILE_UPDATED",
+    "DEAL_WON",
+    "LEAD_DROPPED",
+    "LEAD_REVERTED",
+    "BOT_TOGGLED",
+    "STATUS_CHANGE",
+    "CONTACTED",
+  ].includes(eventType);
+
+  // 1. Human Sales Representative Action
+  if (isExecSource || isExecAction || (hasExecName && !eventType.startsWith("MESSAGE_"))) {
+    const actorLabel = p.executive_name || executiveName || "Sales Executive";
+    let shortSummary = actionLabel(eventType);
+    const details = p.note || p.executive_notes || null;
+
+    if (eventType === "CALL_LOGGED") {
+      shortSummary = details ? `Logged Call: "${cleanSummaryText(details, 55)}"` : "Logged customer phone call";
+    } else if (eventType === "CALL_NOT_ANSWERED") {
+      shortSummary = "Call Attempted (Did Not Answer)";
+    } else if (eventType === "PHONE_ADDED") {
+      shortSummary = details || "Added verified WhatsApp mobile number";
+    } else if (eventType === "TAKEOVER") {
+      shortSummary = "Executive took over live conversation";
+    } else if (eventType === "NOTE_ADDED") {
+      shortSummary = details ? `Added Note: "${cleanSummaryText(details, 55)}"` : "Added executive note";
+    } else if (eventType === "DEAL_WON") {
+      shortSummary = "Marked deal as WON 🎉";
+    } else if (eventType === "LEAD_DROPPED") {
+      shortSummary = details ? `Dropped lead: "${cleanSummaryText(details, 50)}"` : "Marked lead as Not Interested";
+    } else if (eventType === "LEAD_REVERTED") {
+      shortSummary = "Reopened lead to Active pipeline";
+    } else if (p.field) {
+      shortSummary = `Field Updated: ${p.field} ${p.old_value ? `(${p.old_value} → ${p.new_value})` : `→ ${p.new_value}`}`;
+    }
+
+    return {
+      actorType: "SALES_REP",
+      actorLabel,
+      shortSummary,
+      details,
+    };
+  }
+
+  // 2. AI Bot Interaction
+  const rawReply = p.replySent || p.replyText || "";
+  const userText = p.userText || p.message || "";
+  const cleanedReply = cleanSummaryText(rawReply, 250);
+
+  let shortSummary = "AI conversational interaction";
+  if (
+    eventType === "SITE_VISIT_BOOKED" ||
+    p.state === "SITE_VISIT_BOOKED" ||
+    rawReply.includes("confirm ho gayi hai") ||
+    rawReply.includes("booked hai")
+  ) {
+    shortSummary = "AI confirmed VIP Site Visit";
+  } else if (eventType === "SITE_VISIT_PROPOSED") {
+    shortSummary = "AI proposed site visit timing";
+  } else if (
+    eventType === "OPTIONS_SENT" ||
+    eventType === "OPTIONS_SHARED" ||
+    p.state === "OPTIONS_SENT" ||
+    (p.matched_properties && p.matched_properties.length > 0)
+  ) {
+    const count = p.matched_properties?.length || 3;
+    shortSummary = `AI shared ${count} matching property options`;
+  } else if (eventType === "PORTAL_OUTREACH_SENT") {
+    shortSummary = "Automated WhatsApp portal inquiry greeting sent";
+  } else if (eventType === "PRE_VISIT_REMINDER_SENT") {
+    shortSummary = "Delivered automated 1-hr pre-visit reminder with map";
+  } else if (eventType === "POST_VISIT_FEEDBACK_SENT") {
+    shortSummary = "Delivered automated post-visit feedback survey";
+  } else if (p.state === "QUALIFYING") {
+    shortSummary = userText ? `AI qualifying: "${cleanSummaryText(userText, 45)}"` : "AI collecting requirement preferences";
+  } else if (userText) {
+    shortSummary = `AI processed user inquiry: "${cleanSummaryText(userText, 45)}"`;
+  } else if (eventType === "MESSAGE_PROCESSED") {
+    shortSummary = "AI assistant conversational response";
+  } else {
+    shortSummary = actionLabel(eventType);
+  }
+
+  return {
+    actorType: "AI_BOT",
+    actorLabel: "AI Bot",
+    shortSummary,
+    details: cleanedReply || null,
+  };
+}
+
+export function groupActivityByDate(activities: Activity[]): { label: string; items: Activity[] }[] {
+  const now = new Date();
+  const todayStr = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterdayStr = todayStr - 86400000;
+  const thisWeekStr = todayStr - 6 * 86400000;
+
+  const todayItems: Activity[] = [];
+  const yesterdayItems: Activity[] = [];
+  const thisWeekItems: Activity[] = [];
+  const olderItems: Activity[] = [];
+
+  for (const act of activities) {
+    const actDate = new Date(act.created_at);
+    const actDayTime = new Date(actDate.getFullYear(), actDate.getMonth(), actDate.getDate()).getTime();
+    if (actDayTime >= todayStr) {
+      todayItems.push(act);
+    } else if (actDayTime >= yesterdayStr) {
+      yesterdayItems.push(act);
+    } else if (actDayTime >= thisWeekStr) {
+      thisWeekItems.push(act);
+    } else {
+      olderItems.push(act);
+    }
+  }
+
+  const groups: { label: string; items: Activity[] }[] = [];
+  if (todayItems.length > 0) groups.push({ label: "Today", items: todayItems });
+  if (yesterdayItems.length > 0) groups.push({ label: "Yesterday", items: yesterdayItems });
+  if (thisWeekItems.length > 0) groups.push({ label: "This Week", items: thisWeekItems });
+  if (olderItems.length > 0) groups.push({ label: "Older", items: olderItems });
+  return groups;
 }
 
 /* ------------------------------------------------------------------ */

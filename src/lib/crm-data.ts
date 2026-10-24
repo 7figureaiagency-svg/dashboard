@@ -8,6 +8,7 @@ import {
   hydrateLead,
   hydrateProperty,
   splitLeadUpdate,
+  summarizeLeadEvent,
   type Activity,
   type Client,
   type ClientIntegration,
@@ -61,19 +62,7 @@ export function useActivity(passedClientId?: string | null) {
     queryKey: ["lead_activity", clientId],
     enabled: clientId !== undefined ? !!clientId : true,
     queryFn: async (): Promise<Activity[]> => {
-      // First try lead_activity
-      let actQuery = supabase
-        .from("lead_activity" as any)
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(1000);
-      if (clientId) {
-        actQuery = actQuery.eq("client_id", clientId);
-      }
-      const { data, error } = await actQuery;
-      if (!error && data && data.length > 0) return data as Activity[];
-
-      // Fallback to live database table lead_events
+      // Query live database table lead_events as the single unified source of truth for audit timeline
       let evQuery = supabase
         .from("lead_events" as any)
         .select("*")
@@ -104,13 +93,10 @@ export function useActivity(passedClientId?: string | null) {
         const payload = ev.payload || {};
         const lead = leadMap.get(ev.lead_id);
         const exec = lead?.assigned_executive_id ? execMap.get(lead.assigned_executive_id) : undefined;
-        const noteText =
-          payload.replySent ||
-          payload.replyText ||
-          payload.userText ||
-          (payload.matched_properties ? `Matched: ${payload.matched_properties.join(", ")}` : "") ||
-          payload.pitchHint ||
-          ev.event_type;
+        const execName = payload.executive_name || exec?.name || null;
+
+        const summaryMeta = summarizeLeadEvent(ev.event_type || "ACTIVITY", payload, execName);
+
         return {
           id: ev.id,
           client_id: ev.client_id,
@@ -118,11 +104,16 @@ export function useActivity(passedClientId?: string | null) {
           action: ev.event_type || "ACTIVITY",
           created_at: ev.created_at,
           lead_name: lead?.first_name || (payload.name as string) || (payload.userName as string) || null,
-          executive_name: exec?.name || (payload.executive_name as string) || null,
-          field: payload.state ? `state: ${payload.state}` : null,
-          old_value: null,
-          new_value: payload.state || null,
-          note: noteText,
+          executive_name: summaryMeta.actorLabel,
+          field: payload.field || (payload.state ? `state: ${payload.state}` : null),
+          old_value: payload.old_value || null,
+          new_value: payload.new_value || payload.state || null,
+          note: summaryMeta.details,
+          actor_type: summaryMeta.actorType,
+          actor_label: summaryMeta.actorLabel,
+          short_summary: summaryMeta.shortSummary,
+          details: summaryMeta.details,
+          raw_payload: payload,
         } as Activity;
       });
     },
@@ -242,6 +233,7 @@ export function useInventory(passedClientId?: string | null) {
 
 export function useUpdateLead() {
   const qc = useQueryClient();
+  const { data: me } = useCurrentUser();
   return useMutation({
     mutationFn: async ({
       leadId,
@@ -274,8 +266,23 @@ export function useUpdateLead() {
       if (error) throw error;
       if (lead && action) {
         const rows = buildActivityRows(lead, values, action, note);
-        const { error: logError } = await supabase.from("lead_activity").insert(rows);
-        if (logError) console.error("activity log failed", logError.message);
+        // Persist executive action into lead_events for unified audit trail
+        const eventInserts = rows.map((r) => ({
+          client_id: lead.client_id || me?.clientId || null,
+          lead_id: lead.lead_id,
+          event_type: action,
+          payload: {
+            source: "EXECUTIVE_ACTION",
+            executive_name: r.executive_name,
+            action,
+            field: r.field || null,
+            old_value: r.old_value || null,
+            new_value: r.new_value || null,
+            note: r.note || note || null,
+          },
+        }));
+        const { error: logError } = await supabase.from("lead_events").insert(eventInserts as any);
+        if (logError) console.error("executive action log failed", logError.message);
       }
       return message;
     },
@@ -289,9 +296,13 @@ export function useUpdateLead() {
       );
       return { previous };
     },
-    onSuccess: (message) => {
+    onSuccess: (message, vars) => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["lead_activity"] });
+      qc.invalidateQueries({ queryKey: ["lead_events"] });
+      if (vars?.leadId) {
+        qc.invalidateQueries({ queryKey: ["lead_events", vars.leadId] });
+      }
       toast.success(message ?? "Lead updated");
     },
 
