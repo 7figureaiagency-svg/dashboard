@@ -1152,17 +1152,34 @@ function parseAreaFromText(text: string): ParsedArea {
   if (carpetMatch1) carpet = parseInt(carpetMatch1[1], 10);
   else if (carpetMatch2) carpet = parseInt(carpetMatch2[1], 10);
 
-  // 2. Explicit matches for built-up / super built-up area (e.g., "built up 1250", "1250 built up", "super built 1500", "construction 1250", "sba 1250")
+  // 2. Explicit matches for built-up / super built-up area (e.g., "built up 1250", "1250 built up", "flat 1200sqft", "super built 1500", "construction 1250", "sba 1250")
   const builtMatch1 = lower.match(/(?:built[\s-]*up|buildup|super[\s-]*built|super[\s-]*built[\s-]*up|sba|construction|bua)\s*(?:area)?\s*[:=-]?\s*(\d{2,6})/i);
   const builtMatch2 = lower.match(/(\d{2,6})\s*(?:sq\.?\s*ft|sqft|feet|square\s*feet|foot)?\s*(?:built[\s-]*up|buildup|super[\s-]*built|super[\s-]*built[\s-]*up|sba|construction|bua)/i);
+  const flatAreaMatch = lower.match(/(?:flat|apartment|unit|bhk)\s*[:=-]?\s*(\d{2,6})\s*(?:sq\.?\s*ft|sqft|feet|square\s*feet|foot)/i) ||
+                        lower.match(/(\d{2,6})\s*(?:sq\.?\s*ft|sqft|feet|square\s*feet|foot)\s*(?:flat|apartment|unit|bhk)/i);
   if (builtMatch1) superBuilt = parseInt(builtMatch1[1], 10);
   else if (builtMatch2) superBuilt = parseInt(builtMatch2[1], 10);
+  else if (flatAreaMatch) superBuilt = parseInt(flatAreaMatch[1], 10);
 
-  // 3. Explicit matches for plot / land area (e.g., "plot 1500", "plot area 1200", "zameen 2000", "plot size 1500")
-  const plotMatch1 = lower.match(/(?:plot|land|zameen|jamin)\s*(?:area|size)?\s*[:=-]?\s*(\d{2,6})/i);
-  const plotMatch2 = lower.match(/(\d{2,6})\s*(?:sq\.?\s*ft|sqft|feet|square\s*feet|foot|var|gaj|vigha)?\s*(?:plot|land|zameen|jamin)/i);
-  if (plotMatch1) plot = parseInt(plotMatch1[1], 10);
-  else if (plotMatch2) plot = parseInt(plotMatch2[1], 10);
+  // 3. Explicit matches for plot / land area with Gujarat units (var, gaj, vigha)
+  // In Gujarat: 1 Var (વાર) / Gaj / Sq Yard = 9 sq.ft. 1 Vigha = 17,424 sq.ft.
+  const plotMatch1 = lower.match(/(?:plot|land|zameen|jamin|પ્લોટ|જમીન)\s*(?:area|size)?\s*[:=-]?\s*(\d{1,6}(?:\.\d+)?)\s*(var|vaar|gaj|vigha|bigha|sq\s*yard|yards?|વાર|ગજ|વીઘા|વિઘા|બીઘા|sq\.?\s*ft|sqft|feet|square\s*feet|foot)?/i);
+  const plotMatch2 = lower.match(/(\d{1,6}(?:\.\d+)?)\s*(var|vaar|gaj|vigha|bigha|sq\s*yard|yards?|વાર|ગજ|વીઘા|વિઘા|બીઘા|sq\.?\s*ft|sqft|feet|square\s*feet|foot)?\s*(?:plot|land|zameen|jamin|પ્લોટ|જમીન)/i);
+  const plotUnitMatch = lower.match(/(\d{1,6}(?:\.\d+)?)\s*(var|vaar|gaj|vigha|bigha|sq\s*yards?|yards?)(?:\b|$)/i) ||
+                        lower.match(/(\d{1,6}(?:\.\d+)?)\s*(વાર|ગજ|વીઘા|વિઘા|બીઘા)(?:[^\u0A80-\u0AFF\w]|$)/i);
+
+  const matchedPlot = plotMatch1 || plotMatch2 || plotUnitMatch;
+  if (matchedPlot) {
+    const rawVal = parseFloat(matchedPlot[1]);
+    const unit = (matchedPlot[2] || "").toLowerCase().replace(/[\s.-]+/g, "");
+    if (["var", "vaar", "gaj", "sqyard", "yard", "yards", "વાર", "ગજ"].includes(unit)) {
+      plot = Math.round(rawVal * 9); // 1 Var / Gaj = 9 sq.ft
+    } else if (["vigha", "bigha", "વીઘા", "વિઘા", "બીઘા"].includes(unit)) {
+      plot = Math.round(rawVal * 17424); // 1 Gujarat Vigha = 17,424 sq.ft
+    } else {
+      plot = Math.round(rawVal);
+    }
+  }
 
   // 4. Matches with sqft units without keyword (e.g., "1250 sqft", "1250 sq.ft", "900 feet", "1250 square feet")
   if (!carpet && !superBuilt && !plot) {
@@ -1343,7 +1360,7 @@ function parseRequirementFromText(text: string): string {
   if (lower.includes("lease") || lower.includes("corporate lease") || lower.includes("long term lease") || lower.includes("લીઝ")) {
     return "LEASE";
   }
-  if (lower.includes("rent") || lower.includes("kiraya") || lower.includes("bhadu") || lower.includes("bhaade") || lower.includes("rental") || lower.includes("ભાડે") || lower.includes("ભાડુ") || lower.includes("કિરાયા") || lower.includes("किराया")) {
+  if (lower.includes("rent") || lower.includes("kiraya") || lower.includes("bhadu") || lower.includes("bhaade") || lower.includes("bhade") || lower.includes("bhada") || lower.includes("rental") || lower.includes("reva mate") || lower.includes("ભાડે") || lower.includes("ભાડુ") || lower.includes("કિરાયા") || lower.includes("किરાયા") || lower.includes("किराया")) {
     return "RENT";
   }
   if (lower.includes("sell") || lower.includes("bechna") || lower.includes("vechvu") || lower.includes("bikri") || lower.includes("વેચવું") || lower.includes("વેચવા") || lower.includes("બેચના") || lower.includes("बेचना")) {
@@ -1772,15 +1789,29 @@ export function validateUserAction(raw: any, leadState?: string): UserAction {
         else if (uTx === "BUY" || uTx === "PURCHASE") req = "BUY";
       }
 
+      // Check for rental cues in raw fields and raw query text
+      const rawMsg = String(src.query || raw.messageText || raw.text || raw.userText || "").toLowerCase();
+      const rawCombined = `${src.property_type || ""} ${src.location || ""} ${src.notes || ""} ${rawMsg}`.toLowerCase();
+      if (/(?:bhade|bhadu|bhada|bhaade|kiraya|kiraye|rent\s*par|bhada\s*par|bhade\s*thi|reva\s*mate)/i.test(rawCombined)) {
+        req = "RENT";
+      }
+
       const isFlex = Boolean(
         src.is_flexible_location ||
         (src.location && String(src.location).toUpperCase() === "FLEXIBLE")
       );
 
+      const parsedBudget = parseBudgetVal(src.budget || src.price_or_budget || src.budget_str);
+
+      // SANITY GUARD: If residential/flat with monthly budget < 50,000, it cannot be BUY. In Indian real estate, ₹1,000 - ₹50,000 is strictly RENT!
+      if (parsedBudget && parsedBudget >= 1000 && parsedBudget < 50000 && req !== "LEASE") {
+        req = "RENT";
+      }
+
       return {
         intent: "CHANGE_REQUIREMENT",
         property_type: cleanStr(src.property_type),
-        budget: parseBudgetVal(src.budget || src.price_or_budget || src.budget_str),
+        budget: parsedBudget,
         location: isFlex ? "FLEXIBLE" : cleanStr(src.location),
         requirement: req,
         is_flexible_location: isFlex,
@@ -2097,6 +2128,15 @@ interface IntentResult {
 15. "મને અલ્કાપુરીમાં 3BHK ફ્લેટ જોઈએ છે 75 લાખ સુધી" ->
 {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "3BHK Flat", "location": "Alkapuri", "budget": 7500000, "requirement": "BUY"}, "language": "GUJARATI_SCRIPT", "user_role": "SEEKER"}
 
+15a. "Bhade flat vadodra maa reva mate" / "flat bhade joiye" / "rent par flat chahiye" ->
+{"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "Flat", "location": "Vadodra", "requirement": "RENT"}, "language": "GUJLISH", "user_role": "SEEKER"}
+
+15b. "Mare 2 propert vechvi che 1 3bhk ane 1 plot" ->
+{"action": {"intent": "SUBMIT_LISTING", "transaction_type": "SELL", "property_type": "3BHK Flat, Plot"}, "language": "GUJLISH", "user_role": "OWNER"}
+
+15c. "Plot 500var flat 1200sqft" ->
+{"action": {"intent": "SUBMIT_LISTING", "plot_area_sqft": 4500, "super_built_up_sqft": 1200}, "language": "GUJLISH", "user_role": "OWNER"}
+
 16. "can you connect me with an agent" / "phone pe baat karni hai" ->
 {"action": {"intent": "REQUEST_HUMAN_CALL"}, "language": "ENGLISH", "user_role": "SEEKER"}
 
@@ -2121,6 +2161,13 @@ interface IntentResult {
 ### REAL ESTATE PROPERTY TERMS RULE:
 - Property types and categories (e.g. "Office", "Commercial", "Residential", "Flat", "Villa", "Shop", "Plot", "BHK") are NEVER "OFF_TOPIC".
 - In role selection or qualification, mentioning any property type is strictly CHANGE_REQUIREMENT (or SUBMIT_LISTING if user is listing).
+
+### VERNACULAR RENT VS BUY RULE:
+- Words like "bhade", "bhadu", "bhada par", "reva mate", "kiraya", "kiraye", "rent" STRICTLY indicate requirement: "RENT" (NEVER "BUY").
+- Words like "vechva mate", "vechvu che", "bechna hai" indicate transaction_type: "SELL".
+- Words like "kharidva mate", "kharidvu che", "lena hai", "buy karna hai" indicate requirement: "BUY".
+- Any budget between ₹1,000 and ₹50,000 without "Lakh" or "Cr" is a monthly rental budget, not a purchase budget.
+- Gujarat land unit conversion: 1 Var (વાર) / Gaj = 9 sq.ft (e.g. 500var = 4500 sqft). 1 Vigha = 17,424 sq.ft.
 
 ### OWNER INTAKE EXTRACTION RULES:
 - If In-Progress Owner Intake is YES (state is OWNER_*_PENDING):
@@ -3743,6 +3790,24 @@ async function handleOwnerFlow({
   let draft = existingMeta.owner_draft || {};
   if (!draft.attributes) draft.attributes = {};
 
+  // Unconditional multi-property check on existing draft (e.g. from ROLE_SELECTION_PENDING)
+  if (draft.property_type && (!draft.queued_properties || draft.queued_properties.length === 0)) {
+    const multiMatch = String(draft.property_type).match(/^(.+?)(?:,|\s+(?:and|ane|aur|\+)\s+)(.+)$/i) ||
+                       messageText.match(/(?:(?:1|ek)\s*([0-9a-z\s]+?)\s*(?:ane|aur|and|,)\s*(?:1|ek)\s*([0-9a-z\s]+))/i);
+    if (multiMatch) {
+      const prop1 = multiMatch[1].trim();
+      const prop2 = multiMatch[2].trim();
+      draft.property_type = prop1;
+      draft.configuration = prop1;
+      draft.queued_properties = [{
+        property_type: prop2,
+        configuration: prop2,
+        transaction_type: draft.transaction_type || "SELL",
+        status: "QUEUED",
+      }];
+    }
+  }
+
   const isDualLead = lead.lead_type === "DUAL_ROLE" || Boolean(existingMeta.has_buyer_profile || lead.budget || lead.property_type || lead.site_visit_at || lead.site_visit_booked);
   const effectiveOwnerLeadType = isDualLead ? "DUAL_ROLE" : "PROVIDER";
 
@@ -3781,8 +3846,27 @@ async function handleOwnerFlow({
     // Once established (e.g. Villa), subsequent turns mentioning "plot area" or "built-up" must NOT overwrite property_type!
     const hasPropCorrection = /(?:badalna|change|nhi|nahi|villa\s*nahi|flat\s*nahi)/i.test(messageText);
     if (aiAnalysis.property_type && (!draft.property_type || hasPropCorrection)) {
-      draft.property_type = aiAnalysis.property_type;
-      draft.configuration = aiAnalysis.property_type;
+      let incomingProp = aiAnalysis.property_type;
+
+      // Multi-property detection: e.g. "3BHK Flat, Plot", "1 3bhk ane 1 plot", "Flat and Plot", "Flat, Shop"
+      const multiMatch = incomingProp.match(/^(.+?)(?:,|\s+(?:and|ane|aur|\+)\s+)(.+)$/i) ||
+                         messageText.match(/(?:(?:1|ek)\s*([0-9a-z\s]+?)\s*(?:ane|aur|and|,)\s*(?:1|ek)\s*([0-9a-z\s]+))/i);
+      if (multiMatch) {
+        const prop1 = multiMatch[1].trim();
+        const prop2 = multiMatch[2].trim();
+        incomingProp = prop1;
+        if (!draft.queued_properties || draft.queued_properties.length === 0) {
+          draft.queued_properties = [{
+            property_type: prop2,
+            configuration: prop2,
+            transaction_type: draft.transaction_type,
+            status: "QUEUED"
+          }];
+        }
+      }
+
+      draft.property_type = incomingProp;
+      draft.configuration = incomingProp;
     }
     if (aiAnalysis.property_category && (!draft.property_category || hasPropCorrection)) {
       draft.property_category = aiAnalysis.property_category;
@@ -3814,10 +3898,20 @@ async function handleOwnerFlow({
       draft.attributes.built_up_area = superBuiltVal;
     }
     if (plotVal) {
-      draft.plot_area_sqft = plotVal;
-      draft.attributes.plot_area = plotVal;
-      if (!draft.carpet_area_sqft) {
-        draft.carpet_area_sqft = plotVal;
+      if (draft.queued_properties && draft.queued_properties.some((q: any) => /(?:plot|land|zameen)/i.test(q.property_type))) {
+        const queuedPlot = draft.queued_properties.find((q: any) => /(?:plot|land|zameen)/i.test(q.property_type));
+        if (queuedPlot) {
+          queuedPlot.plot_area_sqft = plotVal;
+        }
+      } else if (/(?:plot|land|zameen)/i.test(draft.property_type || "")) {
+        draft.plot_area_sqft = plotVal;
+        draft.attributes.plot_area = plotVal;
+        if (!draft.carpet_area_sqft) {
+          draft.carpet_area_sqft = plotVal;
+        }
+      } else {
+        draft.plot_area_sqft = plotVal;
+        draft.attributes.plot_area = plotVal;
       }
     }
 
@@ -4077,24 +4171,34 @@ async function handleOwnerFlow({
 
   // Step 2: Project / Society Name (Smart Commercial vs Residential)
   const isComm = draft.property_category === "COMMERCIAL" || /(office|shop|showroom|warehouse)/i.test(String(draft.property_type || ""));
-  if (!draft.society_name && !draft.project_name && !draft.location) {
+  if (lead.state === "OWNER_SOCIETY_PENDING" || (!draft.society_name && !draft.project_name)) {
     if (lead.state === "OWNER_SOCIETY_PENDING" && messageText.trim().length >= 2) {
       const cleaned = messageText.replace(/^(?:ye|meri|mera|maro|mari|in|at)\s+/i, "").trim();
       draft.society_name = cleaned;
       draft.project_name = cleaned;
     } else {
       const propLabel = draft.configuration || draft.property_type || "property";
+      const hasQueued = Array.isArray(draft.queued_properties) && draft.queued_properties.length > 0;
+      const queuedDesc = hasQueued ? ` (${propLabel} ane ${draft.queued_properties[0].property_type})` : "";
+      const prefixMulti = hasQueued
+        ? (lang === "GUJLISH"
+            ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tame banne properties${queuedDesc} list kari shako chho. 🤝✨ Ame banne properties ne ek-ek kari ne register karishu jethi genuine buyers ne saachi details male. Pehla <b>${propLabel}</b> ni details note kariye. 👍\n\n`
+            : lang === "ENGLISH"
+            ? `Great <b>${senderName || "Friend"}</b>! You can list both properties${queuedDesc}. 🤝✨ We will register each property one-by-one so buyers receive accurate details. Let's start with your <b>${propLabel}</b>. 👍\n\n`
+            : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aap dono properties${queuedDesc} list kar sakte hain. 🤝✨ Hum dono properties ko ek-ek karke register karenge taaki genuine buyers ko sahi details milein. Pehle <b>${propLabel}</b> ki details note karte hain. 👍\n\n`)
+        : "";
+
       const replyText = isComm
         ? (lang === "GUJLISH"
-          ? `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n\n👉 <b>Aa property kaya Commercial Complex, Business Hub ke Road par sthit chhe? (e.g. Atlantis K-10, Sayaji Plaza ya Main Road)</b> 🏢`
+          ? `${prefixMulti ? prefixMulti : `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n\n`}👉 <b>Aa property kaya Commercial Complex, Business Hub ke Road par sthit chhe? (e.g. Atlantis K-10, Sayaji Plaza ya Main Road)</b> 🏢`
           : lang === "ENGLISH"
-          ? `Great! Noted <b>${propLabel}</b>. 👍\n\n👉 <b>Which Commercial Complex, Business Hub, or Road is this located on? (e.g. Atlantis K-10, Sayaji Plaza, or Main Road)</b> 🏢`
-          : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n\n👉 <b>Ye property kis Commercial Complex, Business Hub ya Road par sthit hai? (e.g. Atlantis K-10, Sayaji Plaza ya Main Road)</b> 🏢`)
+          ? `${prefixMulti ? prefixMulti : `Great! Noted <b>${propLabel}</b>. 👍\n\n`}👉 <b>Which Commercial Complex, Business Hub, or Road is this located on? (e.g. Atlantis K-10, Sayaji Plaza, or Main Road)</b> 🏢`
+          : `${prefixMulti ? prefixMulti : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n\n`}👉 <b>Ye property kis Commercial Complex, Business Hub ya Road par sthit hai? (e.g. Atlantis K-10, Sayaji Plaza ya Main Road)</b> 🏢`)
         : (lang === "GUJLISH"
-          ? `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n\n👉 <b>Aa property kaya Project ke Society ma sthit chhe? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
+          ? `${prefixMulti ? prefixMulti : `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n\n`}👉 <b>Aa property kaya Project ke Society ma sthit chhe? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
           : lang === "ENGLISH"
-          ? `Great! Noted <b>${propLabel}</b>. 👍\n\n👉 <b>Which Project or Society is your property located in? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
-          : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n\n👉 <b>Ye property kis Project ya Society me sthit hai? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`);
+          ? `${prefixMulti ? prefixMulti : `Great! Noted <b>${propLabel}</b>. 👍\n\n`}👉 <b>Which Project or Society is your property located in? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
+          : `${prefixMulti ? prefixMulti : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n\n`}👉 <b>Ye property kis Project ya Society me sthit hai? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`);
 
       await supabase.from("leads").update({
         lead_type: effectiveOwnerLeadType,
@@ -4254,6 +4358,13 @@ async function handleOwnerFlow({
     }).eq("id", lead.id);
 
     return { replyText, nextState: "OWNER_PRICE_PENDING" };
+  }
+
+  // Open Plot / Land check: vacant plots do not have possession status or furnishing
+  const isPlotType = draft.property_category === "PLOT" || /(plot|land|zameen|jamin)/i.test(String(draft.property_type || ""));
+  if (isPlotType) {
+    if (!draft.possession_status) draft.possession_status = "READY_TO_MOVE";
+    if (!draft.furnishing_status) draft.furnishing_status = "UNFURNISHED";
   }
 
   // Step 6: Possession Status
@@ -4461,6 +4572,58 @@ async function handleOwnerFlow({
       : lang === "ENGLISH"
       ? `Thank you so much <b>${senderName || "Friend"}</b>! 🎉\n\nYour property listing has been successfully registered on the Nextgen Realty desk:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Our senior property acquisition manager will connect with you shortly over a call for document verification, on-site inspection, and professional photography.`
       : `Bahut bahut dhanyawad <b>${senderName ? `${senderName} ji` : "ji"}</b>! 🎉\n\nAapki property listing details Nextgen Realty desk par successfully register ho gayi hain:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Hamare senior property acquisition manager documents verification, physical inspection aur professional photography ke liye jald hi aapse call par connect karenge.`;
+
+  const hasQueued = Array.isArray(draft.queued_properties) && draft.queued_properties.length > 0;
+  if (hasQueued) {
+    const nextProp = draft.queued_properties.shift();
+    const nextType = nextProp.property_type || "";
+    const isPlot = /(plot|land|zameen|jamin)/i.test(nextType);
+    const isComm = /(office|shop|showroom|commercial|warehouse)/i.test(nextType);
+    const newDraft: any = {
+      property_type: nextProp.property_type,
+      configuration: nextProp.configuration || nextProp.property_type,
+      property_category: isPlot ? "PLOT" : isComm ? "COMMERCIAL" : "RESIDENTIAL",
+      possession_status: isPlot ? "READY_TO_MOVE" : null,
+      furnishing_status: isPlot ? "UNFURNISHED" : null,
+      transaction_type: nextProp.transaction_type || draft.transaction_type,
+      location: draft.location || null,
+      city: draft.city || city || null,
+      plot_area_sqft: nextProp.plot_area_sqft || null,
+      super_built_up_sqft: nextProp.super_built_up_sqft || null,
+      attributes: {
+        ...(nextProp.plot_area_sqft ? { plot_area: nextProp.plot_area_sqft } : {}),
+      },
+      queued_properties: draft.queued_properties,
+    };
+
+    const archived = Array.isArray(existingMeta.archived_submissions) ? [...existingMeta.archived_submissions] : [];
+    archived.push({
+      ...draft,
+      submission_id: sub?.id,
+      archived_at: new Date().toISOString(),
+    });
+
+    await supabase.from("leads").update({
+      state: "OWNER_SOCIETY_PENDING",
+      metadata: {
+        ...existingMeta,
+        submission_id: sub?.id || existingMeta.submission_id,
+        owner_draft: newDraft,
+        archived_submissions: archived,
+      },
+    }).eq("id", lead.id);
+
+    lead.state = "OWNER_SOCIETY_PENDING";
+
+    const queuedPrompt =
+      lang === "GUJLISH"
+        ? `\n\n👉 <b>Have chalo tamara ${nextProp.property_type || "biji property"} ni details complete kariye!</b> Aa property kaya Project ke Society ma sthit chhe?`
+        : lang === "ENGLISH"
+        ? `\n\n👉 <b>Now let's proceed with your ${nextProp.property_type || "second property"}!</b> Which Project or Society is this property located in?`
+        : `\n\n👉 <b>Ab chaliye aapki ${nextProp.property_type || "doosri property"} ki details note karte hain!</b> Ye property kis Project ya Society me sthit hai?`;
+
+    return { replyText: `${replyText}${queuedPrompt}`, nextState: "OWNER_SOCIETY_PENDING" };
+  }
 
   return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
 }
@@ -6243,6 +6406,28 @@ export async function dispatchStateAction(
   // 10. OPTIONS SENT, VISIT REQUESTED or SITE VISIT PROPOSED (State: OPTIONS_SENT / VISIT_REQUESTED / SITE_VISIT_PROPOSED)
   // ---------------------------------------------------------------------------
   if (currentState === "OPTIONS_SENT" || currentState === "VISIT_REQUESTED" || currentState === "SITE_VISIT_PROPOSED") {
+    const hasOptions = Array.isArray(lead?.last_option_ids) && lead.last_option_ids.length > 0;
+
+    // CR-02 SAFEGUARD: If no options are available in last_option_ids and no property is selected,
+    // do not allow SELECT_OPTION or slot booking to refer to phantom properties!
+    if (!hasOptions && !lead.selected_property_id) {
+      const hasSlotKeywords = /\b(aaj|kal|kale|kaale|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i.test(lower);
+      if (intent === "SELECT_OPTION" || intent === "BOOK_VISIT" || hasSlotKeywords) {
+        const critSummary = formatLeadCriteriaSummary(lead, lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH", resolvedCity);
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji <b>${nameStr}</b>, tamari requirement (<b>${critSummary}</b>) mujab amari paas hal ma direct verified properties list ma nathi. Amara senior property advisor off-market options verify kari rahya chhe ane call par connect karshe. 📞 Shu tame budget ya location refine karva mango chho? 🏡`
+            : lang === "ENGLISH"
+            ? `Hello <b>${nameStr}</b>, currently we don't have matching verified properties listed for your criteria (<b>${critSummary}</b>). Our senior property advisor is curating off-market options and will connect with you shortly. 📞 Would you like to refine your budget or preferred location? 🏡`
+            : `Ji <b>${nameStr}</b>, aapki requirement (<b>${critSummary}</b>) ke mutabiq filhal hamare paas direct verified properties available nahi hain. Hamare senior property advisor off-market options verify kar rahe hain aur jald call par connect karenge. 📞 Kya aap budget ya location update karna chahte hain? 🏡`;
+
+        return {
+          replyText,
+          nextState: "OPTIONS_SENT",
+        };
+      }
+    }
+
     // ZERO OPTION HIJACKING: Option selection picks property and asks slot!
     if (intent === "SELECT_OPTION") {
       const idx = (action as SelectOptionAction).option_index;
@@ -6252,6 +6437,18 @@ export async function dispatchStateAction(
       if (selectedPropId) {
         const { data: p } = await supabase.from("inventory").select("*").eq("property_id", selectedPropId).maybeSingle();
         selectedProp = p;
+      }
+
+      if (!selectedProp) {
+        const critSummary = formatLeadCriteriaSummary(lead, lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH", resolvedCity);
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji <b>${nameStr}</b>, pasand kareli property ni details confirm nathi thai saki. Shu tame tamari requirement (<b>${critSummary}</b>) refine karva mango chho? 🏡`
+            : lang === "ENGLISH"
+            ? `Hello <b>${nameStr}</b>, we couldn't retrieve details for that property. Would you like to refine your requirement (<b>${critSummary}</b>)? 🏡`
+            : `Ji <b>${nameStr}</b>, chuni gayi property ki details confirm nahi ho saki. Kya aap apni requirement (<b>${critSummary}</b>) update karna chahte hain? 🏡`;
+
+        return { replyText, nextState: "OPTIONS_SENT" };
       }
 
       // Check if lead already has active visit for a different property
@@ -6342,12 +6539,18 @@ export async function dispatchStateAction(
       }
 
       if (!targetPropId) {
-        const replyText =
-          lang === "GUJLISH"
-            ? `Site visit plan karva mate, pehla kripya batavo tame <b>Option 1, 2 ke 3</b> mathi kayo project pehla jova mango chho? 🚗`
-            : lang === "ENGLISH"
-            ? `To schedule your site visit, please select which property you want to visit first - <b>Option 1, 2, or 3</b>? 🚗`
-            : `Site visit schedule karne ke liye, kripya pehle batayein aap <b>Option 1, 2 ya 3</b> me se kis project ko pehle dekhna chahenge? 🚗`;
+        const hasOpts = Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0;
+        const replyText = hasOpts
+          ? (lang === "GUJLISH"
+              ? `Site visit plan karva mate, pehla kripya batavo tame <b>Option 1, 2 ke 3</b> mathi kayo project pehla jova mango chho? 🚗`
+              : lang === "ENGLISH"
+              ? `To schedule your site visit, please select which property you want to visit first - <b>Option 1, 2, or 3</b>? 🚗`
+              : `Site visit schedule karne ke liye, kripya pehle batayein aap <b>Option 1, 2 ya 3</b> me se kis project ko pehle dekhna chahenge? 🚗`)
+          : (lang === "GUJLISH"
+              ? `Ji <b>${nameStr}</b>, hal ma koi property options select nathi thaya. Shu tame tamari requirement refine karva mango chho? 🏡`
+              : lang === "ENGLISH"
+              ? `Hello <b>${nameStr}</b>, no property options are currently selected. Would you like to refine your requirements? 🏡`
+              : `Ji <b>${nameStr}</b>, filhal koi property options select nahi hue hain. Kya aap apni requirement update karna chahte hain? 🏡`);
 
         return { replyText, nextState: "OPTIONS_SENT" };
       }
@@ -6485,11 +6688,17 @@ export async function dispatchStateAction(
             : lang === "ENGLISH"
             ? `Shall we schedule your exclusive <b>VIP Site Visit 🚗</b> for this project - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
             : `Kya hum is project ke liye aapki <b>VIP Site Visit 🚗</b> schedule karein - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`)
-        : (lang === "GUJLISH"
+        : hasOptions
+        ? (lang === "GUJLISH"
             ? `Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho, ane kayo time anukool raheshe (jem ke <b>'Kaale sanje 5 vage'</b>)?`
             : lang === "ENGLISH"
             ? `Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for, and what time works best for you (e.g. <b>'Tomorrow 5 PM'</b>)?`
-            : `Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge, aur kaunsa time aapke liye best rahega (jaise <b>'Kal shaam 5 baje'</b>)?`);
+            : `Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge, aur kaunsa time aapke liye best rahega (jaise <b>'Kal shaam 5 baje'</b>)?`)
+        : (lang === "GUJLISH"
+            ? `Ji <b>${nameStr}</b>! Tamari requirement mujab amari team exclusive options verify kari rahi chhe ane jald thi call par connect karshe. 📞 Shu tame koi criteria update karva mango chho? 🏡`
+            : lang === "ENGLISH"
+            ? `Hello <b>${nameStr}</b>! Our team is curating verified options matching your requirements and will connect with you shortly. 📞 Would you like to refine your criteria in the meantime? 🏡`
+            : `Ji <b>${nameStr}</b>! Aapki requirement ke mutabiq hamari team options arrange kar rahi hai aur jald aapse call par connect karegi. 📞 Kya aap koi criteria update karna chahte hain? 🏡`);
 
     return {
       replyText: reminderReply,
@@ -6776,6 +6985,18 @@ async function handleQualificationCascade(
   let budget = actionResult.price_or_budget || parseBudgetFromText(context.messageText) || (lead?.budget ? Number(lead.budget) : 0);
   let timeline = actionResult.timeline || parseTimelineFromText(context.messageText) || lead?.timeline;
 
+  // Vernacular Rental & Sub-50k Budget Auto-Classification Guard:
+  // e.g. "Bhade flat vadodra maa reva mate", "12000" -> strictly RENT
+  const lowerMsg = (context.messageText || "").toLowerCase();
+  const hasRentalCue = /(?:bhade|bhadu|bhada|bhaade|kiraya|kiraye|rent\s*par|bhada\s*par|bhade\s*thi|reva\s*mate)/i.test(lowerMsg);
+  const isSub50kMonthlyBudget = budget && Number(budget) >= 1000 && Number(budget) < 50000 && !/(?:lakh|lac|cr|crore)/i.test(lowerMsg);
+
+  if (hasRentalCue || isSub50kMonthlyBudget) {
+    if (requirement !== "LEASE") {
+      requirement = "RENT";
+    }
+  }
+
   const { data: allTenantInventory } = await supabase
     .from("inventory")
     .select("location, landmarks, project_name")
@@ -6967,6 +7188,7 @@ async function handleQualificationCascade(
     };
   } else {
     leadUpdates.state = "OPTIONS_SENT";
+    leadUpdates.last_option_ids = [];
     const replyText =
       lang === "GUJLISH"
         ? `Ji ${nameStr}, tamari requirement (<b>${propType}</b> in <b>${location || "tamara shehar"}</b>) mujab amara senior sales executive specialized <b>off-market options</b> arrange kari rahya chhe ane direct <b>call par connect karshe</b>. 📞`
@@ -7065,7 +7287,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v67-role-based-routing",
+        version: "v68.1-gujlish-rent-multi-property",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -7522,11 +7744,14 @@ Deno.serve(async (req: Request) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    const queryClientId = (url.searchParams.get("client_id") || url.searchParams.get("tenant_id") || "").trim();
+    const queryBotToken = (url.searchParams.get("bot_token") || "").trim();
+
     let senderId = "";
     let senderName = "Customer";
     let messageText = "";
     let platform: "TELEGRAM" | "WHATSAPP" | "DIRECT" = "DIRECT";
-    let botToken = defaultBotToken;
+    let botToken = queryBotToken || defaultBotToken;
     let phoneNumberId = "";
 
     // 1. Telegram
@@ -7566,25 +7791,40 @@ Deno.serve(async (req: Request) => {
     const lower = normalizedMessage.toLowerCase().trim();
 
     // Resolve Tenant Scope dynamically
-    let activeTenantId = (body.client_id || body.tenant_id || "").trim();
+    let activeTenantId = queryClientId || (body.client_id || body.tenant_id || "").trim();
     if (!activeTenantId && phoneNumberId) {
       const { data: c } = await supabase
         .from("clients")
-        .select("id")
+        .select("id, bot_token")
         .eq("whatsapp_phone_number_id", phoneNumberId)
         .maybeSingle();
-      if (c?.id) activeTenantId = c.id;
+      if (c?.id) {
+        activeTenantId = c.id;
+        if (!queryBotToken && c.bot_token) botToken = c.bot_token;
+      }
     }
     if (!activeTenantId && botToken && botToken !== defaultBotToken) {
       const { data: c } = await supabase
         .from("clients")
-        .select("id")
+        .select("id, bot_token")
         .eq("bot_token", botToken)
         .maybeSingle();
       if (c?.id) activeTenantId = c.id;
     }
     if (!activeTenantId) {
       activeTenantId = defaultTenantId;
+    }
+
+    // Dynamic botToken resolution for resolved tenant if still on default
+    if (botToken === defaultBotToken && activeTenantId !== defaultTenantId) {
+      const { data: c } = await supabase
+        .from("clients")
+        .select("bot_token")
+        .eq("id", activeTenantId)
+        .maybeSingle();
+      if (c?.bot_token) {
+        botToken = c.bot_token;
+      }
     }
 
     // Resolve Tenant Branding & Operating City

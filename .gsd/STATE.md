@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-22T19:46:00+05:30
+updated: 2026-10-24T13:18:00+05:30
 ---
 
 # Project State
@@ -7,21 +7,21 @@ updated: 2026-10-22T19:46:00+05:30
 ## Current Position
 
 **Milestone:** Apple HIG Modernization & Conversational Architecture  
-**Phase:** 7 - Multi-Portal Lead Webhooks, Auto-Property Presentation & Site Visit Booking  
-**Status:** ✅ Phase 7 Complete  
+**Phase:** 8 - Gujlish Rental Extraction, Multi-Asset De-multiplexing, and Phantom-Option Guard  
+**Status:** ✅ Phase 8 Complete  
 **Plans:**
-- `.gsd/phases/7/7.1-PLAN.md` (Multi-Portal Webhook Normalizer, Property Auto-Matcher & Instant WhatsApp Outreach) — ✅ Complete (`4a0f6b0`)
-- `.gsd/phases/7/7.2-PLAN.md` (Missing WhatsApp Indicator, CRM Leads Badge/Alert, and 1-Tap Phone Modal) — ✅ Complete (`5137d7f`)
+- `.gsd/phases/8/8.1-PLAN.md` (Gujlish Rental Extraction, Unit Conversion, Phantom-Option Guard & Multi-Asset Ingestion) — ✅ Complete (`v68-gujlish-rent-multi-property`, build 105)
 
 ## Last Action
 
-Completed Plan 7.2:
-- Added Apple HIG `NoWhatsAppBadge` with amber translucency tokens.
-- Added `MISSING_PHONE` quick triage filter pill and 6th complication widget with real-time counters in `LeadsTab`.
-- Updated desktop table and mobile cards to visually indicate missing WhatsApp numbers and provide 1-tap "Add WhatsApp Number" actions.
-- Added contextual missing-phone alert banner in `LeadDrawer` and integrated 1-Tap Phone Modal Dialog with 10-digit validation.
-- Updating customer phone reactively unlocks 44pt "Call Client" and "WhatsApp" action buttons in the frosted action bar.
-- Verified build with `npm.cmd run build` (0 errors) and committed `5137d7f`.
+Completed Plan 8.1:
+- Disambiguated Gujlish rental intents ("Bhade flat vadodra maa reva mate", "bhada par", "bhade thi", "reva mate") -> strictly `requirement: "RENT"`.
+- Added sub-50k residential budget sanity guard auto-classifying budgets < ₹50,000 as `RENT` to prevent impossible purchase inventory queries.
+- Added Gujarat regional land unit conversions in `parseAreaFromText` (1 Var/Vaar/Gaj = 9 sq.ft; 1 Vigha = 17,424 sq.ft), parsing "Plot 500var flat 1200sqft" accurately.
+- Guarded `OPTIONS_SENT` from asking phantom site visit questions when 0 properties matched.
+- Implemented multi-property intake de-multiplexing in `handleOwnerFlow`, queuing secondary properties for sequential registration.
+- Verified 10/10 Positive and Negative QA test cases (`scratch/test_qa_phase8_matrix.cjs`).
+- Deployed Edge Function `v68-gujlish-rent-multi-property` (build 105) live to Supabase.
 
 ## Active Decisions
 
