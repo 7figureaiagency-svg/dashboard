@@ -72,7 +72,7 @@ import {
 import { WhatsAppChatView } from "@/components/crm/whatsapp-chat-view";
 import { WorkflowTimeline } from "@/components/crm/workflow-timeline";
 import { HistoryTimeline } from "@/components/crm/history-timeline";
-import { useInventory, useLeadEvents, usePropertySubmissions, useUpdateLead } from "@/lib/crm-data";
+import { useActivity, useInventory, useLeadEvents, usePropertySubmissions, useUpdateLead } from "@/lib/crm-data";
 import {
   LEAD_STATUSES,
   PROPERTY_SUBMISSION_STATUS_MAP,
@@ -151,6 +151,14 @@ export function LeadDrawer({
   const update = useUpdateLead();
   const { data: inventory = [] } = useInventory();
   const { data: allSubmissions = [] } = usePropertySubmissions();
+  const { data: allActivity = [] } = useActivity(lead?.client_id);
+
+  const effectiveActivity = useMemo(() => {
+    if (activity && activity.length > 0) return activity;
+    if (!lead?.lead_id) return [];
+    return allActivity.filter((a) => a.lead_id === lead.lead_id);
+  }, [activity, allActivity, lead?.lead_id]);
+
   const uniq = (vals: (string | null)[]) =>
     Array.from(new Set(vals.filter((v): v is string => !!v))).sort();
   const locations = uniq(inventory.map((p) => p.location));
@@ -462,7 +470,7 @@ export function LeadDrawer({
                 value="exec"
                 className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all rounded-lg truncate"
               >
-                <History className="size-3.5 shrink-0" /> History ({activity.length})
+                <History className="size-3.5 shrink-0" /> History ({effectiveActivity.length})
               </TabsTrigger>
             </TabsList>
 
@@ -624,7 +632,7 @@ export function LeadDrawer({
             )}
 
             <TabsContent value="exec" className="mt-3 space-y-2">
-              <HistoryTimeline activity={activity} />
+              <HistoryTimeline activity={effectiveActivity} />
             </TabsContent>
           </Tabs>
 

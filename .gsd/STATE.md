@@ -8,21 +8,20 @@ updated: 2026-10-24T14:10:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Inventory  
 **Phase:** 11 - High-Density Lead History & Dual-Actor (Sales Rep + AI Bot) Activity Stream  
-**Status:** ⏳ Phase 11 Planned  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/11/11.1-PLAN.md` (Activity Engine & Unified Actor Normalizer - Backend & Data Layer) — ⏳ Planned
-- `.gsd/phases/11/11.2-PLAN.md` (Apple HIG Compact Activity Stream & Segmented Actor Filter - UI Layer) — ⏳ Planned
+- `.gsd/phases/11/11.1-PLAN.md` (Activity Engine & Unified Actor Normalizer - Backend & Data Layer) — ✅ Complete
+- `.gsd/phases/11/11.2-PLAN.md` (Apple HIG Compact Activity Stream & Segmented Actor Filter - UI Layer) — ✅ Complete
 
 ## Last Action
 
-Completed Phase 10:
-- Audited and scoped all queries (`property_submissions`, `inventory`, `site_visits`) in `supabase/functions/realtor-lead-engine/index.ts` with `.eq("client_id", activeTenantId)`.
-- Replaced hardcoded fallback `"PROP-NXG-001"` with dynamic tenant-scoped inventory lookup.
-- Bumped and deployed Edge Function to `v69-multi-tenant-query-isolation` (build 109).
-- Sanitized `public.leads` for `lead_id = '5117510624'` and `client_id = 'c0000000-0000-0000-0000-000000000001'` back to `lead_type = 'SEEKER'`, `has_seller_profile = false`.
-- Sanitized contaminated `lead_events` entry mentioning Nextgen's "Spring field".
-- Hardened frontend `submissions` matching in `src/components/crm/lead-drawer.tsx` and `src/lib/crm.ts` (`buildLeadSummary`) with explicit tenant check.
-- Empirically verified with live Telegram greeting: zero cross-tenant property leakage, pure Griham Realty greeting at Griham Heights Luxury Residences (Alkapuri), lead remains SEEKER.
+Completed Phase 11:
+- Normalised CRM lead activity and event data pipeline: classified events by `actor_type: "SALES_REP" | "AI_BOT" | "SYSTEM"`.
+- Implemented `summarizeLeadEvent` in `src/lib/crm.ts` to transform 15-line raw HTML WhatsApp dumps into crisp 1-line action summaries with date grouping (`Today`, `Yesterday`, `This Week`, `Older`).
+- Persisted human sales executive actions (`CALL_LOGGED`, `NOTE_ADDED`, `PHONE_ADDED`, `TAKEOVER`, `STATUS_CHANGE`) directly into PostgreSQL `public.lead_events`.
+- Redesigned `src/components/crm/history-timeline.tsx` into an Apple HIG high-density operational workstation with a 3-way segmented filter (`All Actions`, `👤 Sales Rep`, `🤖 AI Bot`), top KPI ribbon strip (Calls, Notes, Automations), ultra-compact 40px rows, and progressive disclosure (accordion expansion on click).
+- Updated `src/components/crm/lead-drawer.tsx` with automatic `useActivity(lead?.client_id)` fallback and synchronized live action counter.
+- Empirically validated with unit test suite (`scratch/test_history_timeline.cjs`) and clean frontend build (`npm.cmd run build` passed in 1.24s).
 - Verified build: `npm.cmd run build` passed with 0 errors.
 
 ## Active Decisions

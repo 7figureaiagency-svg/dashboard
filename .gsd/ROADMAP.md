@@ -94,12 +94,12 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 10.2: Lead 5117510624 Sanitization & CRM AI Summary Verification ([`10.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/10/10.2-PLAN.md))
 
 ### Phase 11: High-Density Lead History & Dual-Actor (Sales Rep + AI Bot) Activity Stream
-**Status:** ⏳ Planned  
+**Status:** ✅ Complete  
 **Objective:** Redesign the Lead Profile History tab from verbose, repetitive 100px cards into an Apple-grade, high-density operational workstation. Segregate Sales Executive human actions vs AI Bot automated interactions with an instant 3-way segmented control ("All", "👤 Sales Rep", "🤖 AI Bot"), replace raw 15-line chat transcript dumps with crisp 1-line event summaries, provide on-demand progressive disclosure (accordion note drawer), and reduce scrolling burden by >60%.  
 **Depends on:** Phase 10  
 **Plans:**
-- [ ] Plan 11.1: Activity Engine & Unified Actor Normalizer (Backend & Data Layer) ([`11.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/11/11.1-PLAN.md))
-- [ ] Plan 11.2: Apple HIG Compact Activity Stream Component & Segmented Actor Filter (UI Layer) ([`11.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/11/11.2-PLAN.md))
+- [x] Plan 11.1: Activity Engine & Unified Actor Normalizer (Backend & Data Layer) ([`11.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/11/11.1-PLAN.md))
+- [x] Plan 11.2: Apple HIG Compact Activity Stream Component & Segmented Actor Filter (UI Layer) ([`11.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/11/11.2-PLAN.md))
 
 ---
 
@@ -115,7 +115,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 8: Multi-Tenant Onboarding & Strict Auth | ✅ Complete | 2/2 | 100% |
 | 9: Strict Multi-Tenant Data Isolation | ✅ Complete | 2/2 | 100% |
 | 10: Edge Function Multi-Tenant Isolation & Sanitization | ✅ Complete | 2/2 | 100% |
-| 11: High-Density Lead History & Dual-Actor Stream | ⏳ Planned | 0/2 | 0% |
+| 11: High-Density Lead History & Dual-Actor Stream | ✅ Complete | 2/2 | 100% |
 
 
 
