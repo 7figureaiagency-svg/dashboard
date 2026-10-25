@@ -46,6 +46,8 @@ import {
   inDatePreset,
   isDualRoleLead,
   isLeadVisitScheduled,
+  isPortalLead,
+  isTelegramLead,
   isVisitBookedStatus,
   isVisitDoneStatus,
   STATUS_MAP,
@@ -196,10 +198,9 @@ export function LeadsTab({
     () =>
       leads.filter(
         (l) =>
+          isPortalLead(l) &&
           (!l.phone || l.phone.trim() === "" || l.phone.replace(/\D/g, "").length < 10) &&
-          l.source !== "telegram" &&
-          !l.lead_id?.startsWith("tg_") &&
-          !l.lead_id?.startsWith("telegram_"),
+          !isTelegramLead(l),
       ).length,
     [leads],
   );
@@ -238,11 +239,9 @@ export function LeadsTab({
           if (!isDualRoleLead(l)) return false;
         } else if (actionFilter === "MISSING_PHONE") {
           const hasPhone = l.phone && l.phone.replace(/\D/g, "").length >= 10;
-          const isTelegram =
-            l.source === "telegram" ||
-            l.lead_id?.startsWith("tg_") ||
-            l.lead_id?.startsWith("telegram_");
-          if (hasPhone || isTelegram) return false;
+          const isTelegram = isTelegramLead(l);
+          const isPortal = isPortalLead(l);
+          if (hasPhone || isTelegram || !isPortal) return false;
         }
 
         if (executive !== ALL && l.assigned_executive_name !== executive) return false;
@@ -843,10 +842,12 @@ export function LeadsTab({
                         <span>·</span>
                         {lead.phone && lead.phone.replace(/\D/g, "").length >= 10 ? (
                           <span className="font-mono text-[11px]">{lead.phone}</span>
-                        ) : lead.source === "telegram" || lead.lead_id?.startsWith("tg_") || lead.lead_id?.startsWith("telegram_") ? (
-                          <span className="font-mono text-[11px]">TG:{lead.lead_id}</span>
-                        ) : (
+                        ) : isTelegramLead(lead) ? (
+                          <span className="font-mono text-[11px] text-sky-600 dark:text-sky-400 font-semibold">TG:{lead.lead_id}</span>
+                        ) : isPortalLead(lead) ? (
                           <NoWhatsAppBadge />
+                        ) : (
+                          <span className="text-muted-foreground text-[11px]">No phone</span>
                         )}
                       </p>
                     </div>
@@ -900,7 +901,7 @@ export function LeadsTab({
                           </a>
                         </Button>
                       </>
-                    ) : lead.source !== "telegram" && !lead.lead_id?.startsWith("tg_") && !lead.lead_id?.startsWith("telegram_") ? (
+                    ) : isPortalLead(lead) ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -909,6 +910,16 @@ export function LeadsTab({
                       >
                         <Phone className="size-3.5 text-amber-600 dark:text-amber-400" />
                         <span>Add WhatsApp Number</span>
+                      </Button>
+                    ) : !isTelegramLead(lead) ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="apple-button min-h-[44px] h-11 flex-1 gap-1.5 text-xs font-semibold rounded-xl border-border/60 bg-card hover:bg-muted/60 shadow-2xs"
+                        onClick={() => setSelected(lead)}
+                      >
+                        <Phone className="size-3.5 text-muted-foreground" />
+                        <span>Add Phone</span>
                       </Button>
                     ) : null}
                     <Button
@@ -1014,12 +1025,14 @@ export function LeadsTab({
                       <TableCell className="text-foreground/90 font-medium py-3.5">
                         {lead.phone && lead.phone.replace(/\D/g, "").length >= 10 ? (
                           <span className="font-mono text-xs tabular-nums">{lead.phone}</span>
-                        ) : lead.source === "telegram" || lead.lead_id?.startsWith("tg_") || lead.lead_id?.startsWith("telegram_") ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2 py-0.5 rounded-md border border-sky-200 dark:border-sky-800 font-mono">
+                        ) : isTelegramLead(lead) ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-sky-700 bg-sky-50 dark:text-sky-300 dark:bg-sky-950/60 px-2 py-0.5 rounded-md border border-sky-200 dark:border-sky-800 font-mono font-medium">
                             TG: {lead.lead_id}
                           </span>
-                        ) : (
+                        ) : isPortalLead(lead) ? (
                           <NoWhatsAppBadge />
+                        ) : (
+                          <span className="text-muted-foreground text-xs">No phone</span>
                         )}
                       </TableCell>
                       <TableCell className="py-3.5">
@@ -1105,7 +1118,7 @@ export function LeadsTab({
                                 </a>
                               </Button>
                             </>
-                          ) : lead.source !== "telegram" && !lead.lead_id?.startsWith("tg_") && !lead.lead_id?.startsWith("telegram_") ? (
+                          ) : isPortalLead(lead) ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -1114,6 +1127,16 @@ export function LeadsTab({
                             >
                               <Phone className="size-3 text-amber-600 dark:text-amber-400" />
                               <span className="hidden sm:inline">Add Number</span>
+                            </Button>
+                          ) : !isTelegramLead(lead) ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="apple-button h-8 rounded-lg gap-1.5 border-border/60 bg-card hover:bg-muted/60 shadow-2xs font-medium text-xs px-2.5"
+                              onClick={() => setSelected(lead)}
+                            >
+                              <Phone className="size-3 text-muted-foreground" />
+                              <span className="hidden sm:inline">Add Phone</span>
                             </Button>
                           ) : null}
                           <Button
