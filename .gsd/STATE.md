@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-25T14:55:00+05:30
+updated: 2026-10-25T15:05:00+05:30
 ---
 
 # Project State
@@ -8,24 +8,19 @@ updated: 2026-10-25T14:55:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 14 - Desktop Horizontal Navigation & Full-Width Viewport Optimization  
-**Status:** ⏳ Ready to Execute  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/14/14.1-PLAN.md` (Desktop Horizontal Segmented Tab Ribbon & Full-Width Viewport Expansion) — ⏳ Ready
-- `.gsd/phases/14/14.2-PLAN.md` (Leads CRM Table Wide-Screen Ergonomics & Triage Strip Polish) — ⏳ Ready
+- `.gsd/phases/14/14.1-PLAN.md` (Desktop Horizontal Segmented Tab Ribbon & Full-Width Viewport Expansion) — ✅ Complete
+- `.gsd/phases/14/14.2-PLAN.md` (Leads CRM Table Wide-Screen Ergonomics & Triage Strip Polish) — ✅ Complete
 
 ## Last Action
 
-Completed Phase 13:
-- Extended `public.clients` database schema with `bot_knowledge JSONB DEFAULT '{}'::jsonb`.
-- Seeded multi-tenant knowledge bases for Griham Realty (Alkapuri address, 10 AM - 7:30 PM hours, 0% builder/1% resale brokerage, SBI/HDFC/ICICI banking, booking KYC documentation FAQ) and NextGen Realty (Gotri-Sevasi Road address, 0% builder/1% luxury resale brokerage).
-- Upgraded `realtor-lead-engine` Edge Function to `v71-dynamic-bot-knowledge` (deployed version 114):
-  - Injected `tenantClient.bot_knowledge` into DialogContext.
-  - Added new intent classification topics: `OFFICE_ADDRESS`, `OFFICE_TIMINGS`, `AGENCY_INFO`, `CUSTOM_FAQ`.
-  - Immunized office inquiries against false-positive Commercial Office overrides.
-  - Dynamically grounded all FAQ responses (brokerage, loans, RERA, office address, timings, custom Q&As) in tenant knowledge.
-- Verified live replies on Griham Realty bot via test suite with 100% accuracy.
-- Built Apple HIG "AI Bot Knowledge & FAQ Studio" in `src/components/crm/profile-tab.tsx` with Operations, Commercial Policies, Custom Q&A Studio, and Live Simulated Chat Preview.
-- Verified `npm.cmd run build` passes with zero errors and multi-tenant persistence round-trip passes with 100% data isolation.
+Completed Phase 14:
+- Relocated CRM navigation tabs from the 240px vertical sidebar to an Apple HIG horizontal segmented ribbon in the sticky top header (`src/routes/_authenticated/dashboard.tsx`).
+- Eliminated the vertical sidebar, expanding the desktop viewport to `max-w-[1600px] w-full px-3 sm:px-6 lg:px-8`.
+- Polished Leads CRM table wide-screen ergonomics with dedicated column min-widths, detailed Property Type + Locality sub-labels, and accessible Quick Actions (`src/components/crm/leads-tab.tsx`).
+- Preserved native mobile floating bottom dock for phone screens.
+- Verified build passes cleanly (`npm.cmd run build` in 694ms).
 
 ## Active Decisions
 
