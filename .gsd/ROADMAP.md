@@ -147,6 +147,13 @@ updated: 2026-10-19T18:50:30+05:30
 **Plans:**
 - [x] Plan 17.1: Portal-Exclusive Missing WhatsApp Banner & Telegram Lead Identity Isolation ([`17.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/17/17.1-PLAN.md))
 
+### Phase 18: Post-Visit Lifecycle, Attendance Normalization & Objection Feedback Engine
+**Status:** ⏳ Planned  
+**Objective:** Fix SQL column error (leads.status does not exist) preventing SITE_VISIT_DONE state persistence; add proactive visit attendance detection; and implement intelligent post-visit feedback and objection handling in SITE_VISIT_DONE without restarting property search.  
+**Depends on:** Phase 17  
+**Plans:**
+- [ ] Plan 18.1: Post-Visit Lifecycle, Attendance Normalization & Objection Feedback Engine ([`18.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/18/18.1-PLAN.md))
+
 ---
 
 ## Progress Summary
@@ -168,6 +175,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 15: Precision Inventory Demand Matchmaker | ✅ Complete | 1/1 | 100% |
 | 16: Pipeline Board Exhaustive Stage Mapping | ✅ Complete | 1/1 | 100% |
 | 17: Portal-Exclusive Missing WhatsApp Banner | ✅ Complete | 1/1 | 100% |
+| 18: Post-Visit Lifecycle & Objection Feedback Engine | ⏳ Ready | 0/1 | 0% |
 
 
 
