@@ -847,6 +847,26 @@ export function isVisitBookedStatus(status?: string | null): boolean {
   );
 }
 
+export function isLeadVisitScheduled(lead?: Partial<Lead> | null): boolean {
+  if (!lead) return false;
+  if (
+    lead.status === "VISIT_DONE" ||
+    lead.status === "DEAL_WON" ||
+    lead.status === "VISIT_MISSED" ||
+    lead.status === "DROPPED" ||
+    lead.status === "NOT_INTERESTED" ||
+    lead.status === "VISIT_CANCELLED"
+  ) {
+    return false;
+  }
+  return (
+    isVisitBookedStatus(lead.status) ||
+    Boolean(lead.site_visit_booked) ||
+    Boolean(lead.site_visit_datetime) ||
+    Boolean(lead.site_visit_at)
+  );
+}
+
 export function isVisitDoneStatus(status?: string | null): boolean {
   return (
     status === "VISIT_DONE" ||
@@ -882,6 +902,20 @@ export function hydrateLead(
 
   const siteVisitDate =
     (raw.site_visit_datetime as string) || (raw.site_visit_at as string) || null;
+  const isSiteVisitConfirmed = Boolean(raw.site_visit_booked) || Boolean(siteVisitDate);
+
+  // If a lead has a confirmed site visit and is not in a terminal state, ensure status is SITE_VISIT_BOOKED:
+  if (
+    isSiteVisitConfirmed &&
+    status !== "VISIT_DONE" &&
+    status !== "DEAL_WON" &&
+    status !== "VISIT_MISSED" &&
+    status !== "DROPPED" &&
+    status !== "NOT_INTERESTED" &&
+    status !== "VISIT_CANCELLED"
+  ) {
+    status = "SITE_VISIT_BOOKED";
+  }
 
   return {
     ...row,

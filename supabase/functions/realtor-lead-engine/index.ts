@@ -4928,8 +4928,8 @@ export async function dispatchStateAction(
 
     return {
       replyText,
-      nextState: "ROLE_SELECTION_PENDING",
-      leadUpdates: { state: "ROLE_SELECTION_PENDING" },
+      nextState: currentState || "ROLE_SELECTION_PENDING",
+      ...(currentState ? {} : { leadUpdates: { state: "ROLE_SELECTION_PENDING" } }),
     };
   }
 
@@ -4948,8 +4948,8 @@ export async function dispatchStateAction(
 
     return {
       replyText,
-      nextState: "ROLE_SELECTION_PENDING",
-      leadUpdates: { state: "ROLE_SELECTION_PENDING" },
+      nextState: currentState || "ROLE_SELECTION_PENDING",
+      ...(currentState ? {} : { leadUpdates: { state: "ROLE_SELECTION_PENDING" } }),
     };
   }
 
@@ -4996,10 +4996,8 @@ export async function dispatchStateAction(
 
     return {
       replyText,
-      nextState: "ROLE_SELECTION_PENDING",
-      leadUpdates: {
-        state: "ROLE_SELECTION_PENDING",
-      },
+      nextState: currentState || "ROLE_SELECTION_PENDING",
+      ...(currentState ? {} : { leadUpdates: { state: "ROLE_SELECTION_PENDING" } }),
     };
   }
 

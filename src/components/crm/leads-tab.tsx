@@ -45,6 +45,7 @@ import {
   formatMoney,
   inDatePreset,
   isDualRoleLead,
+  isLeadVisitScheduled,
   isVisitBookedStatus,
   isVisitDoneStatus,
   STATUS_MAP,
@@ -249,7 +250,7 @@ export function LeadsTab({
           if (status === "DUAL_ROLE") {
             if (!isDualRoleLead(l)) return false;
           } else if (status === "SITE_VISIT_BOOKED") {
-            if (!isVisitBookedStatus(l.status)) return false;
+            if (!isLeadVisitScheduled(l)) return false;
           } else if (status === "VISIT_DONE") {
             if (!isVisitDoneStatus(l.status)) return false;
           } else if (l.status !== status) {
@@ -271,65 +272,94 @@ export function LeadsTab({
   );
 
   const pipelineColumns = useMemo(() => {
+    // Stage 1: Dropped / Junk / Cancelled
+    const isDropped = (l: Lead) =>
+      l.status === "NOT_INTERESTED" ||
+      l.status === "DROPPED" ||
+      l.status === "COLD" ||
+      l.status === "COLD_UNQUALIFIED" ||
+      l.status === "VISIT_CANCELLED";
+
+    // Stage 2: Visited / Closing
+    const isClosing = (l: Lead) =>
+      !isDropped(l) &&
+      (l.status === "DEAL_WON" || l.status === "NEGOTIATING" || isVisitDoneStatus(l.status));
+
+    // Stage 3: Action Needed / Alert / Missed / Reschedule
+    const isActionNeeded = (l: Lead) =>
+      !isDropped(l) &&
+      !isClosing(l) &&
+      (l.status === "VISIT_MISSED" ||
+        l.status === "HUMAN_HANDOVER" ||
+        l.property_state === "HUMAN_HANDOVER" ||
+        l.status === "RESCHEDULE_REQUESTED" ||
+        l.status === "VISIT_RESCHEDULED");
+
+    // Stage 4: Visit Scheduled
+    const isScheduled = (l: Lead) =>
+      !isDropped(l) &&
+      !isClosing(l) &&
+      !isActionNeeded(l) &&
+      isLeadVisitScheduled(l);
+
+    // Stage 5: Qualified Prospects
+    const isQualified = (l: Lead) =>
+      !isDropped(l) &&
+      !isClosing(l) &&
+      !isActionNeeded(l) &&
+      !isScheduled(l) &&
+      l.status === "QUALIFIED";
+
+    // Stage 6: In Qualifying (All conversational/intake stages + Fallback so 0 leads are lost)
+    const isQualifying = (l: Lead) =>
+      !isDropped(l) &&
+      !isClosing(l) &&
+      !isActionNeeded(l) &&
+      !isScheduled(l) &&
+      !isQualified(l);
+
     return [
       {
         id: "qualifying",
         title: "In Qualifying",
         headerBg: "border-sky-500/20 bg-sky-500/5 text-sky-700 dark:text-sky-300",
         countBg: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
-        leads: rows.filter(
-          (l) =>
-            l.status === "NEW" ||
-            l.status === "FRESH" ||
-            l.status === "QUALIFYING" ||
-            l.status === "CRITERIA_CONFIRMATION_PENDING" ||
-            l.status === "REQUIREMENT_GATHERED"
-        ),
+        leads: rows.filter(isQualifying),
       },
       {
         id: "qualified",
         title: "Qualified Prospects",
         headerBg: "border-indigo-500/20 bg-indigo-500/5 text-indigo-700 dark:text-indigo-300",
         countBg: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300",
-        leads: rows.filter((l) => l.status === "QUALIFIED"),
+        leads: rows.filter(isQualified),
       },
       {
         id: "scheduled",
         title: "Visit Scheduled",
         headerBg: "border-emerald-500/20 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300",
         countBg: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-        leads: rows.filter((l) => isVisitBookedStatus(l.status)),
+        leads: rows.filter(isScheduled),
       },
       {
         id: "action_needed",
         title: "Action Needed / Alert",
         headerBg: "border-amber-500/20 bg-amber-500/5 text-amber-700 dark:text-amber-300",
         countBg: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-        leads: rows.filter(
-          (l) =>
-            l.status === "VISIT_MISSED" ||
-            l.status === "HUMAN_HANDOVER" ||
-            l.property_state === "HUMAN_HANDOVER" ||
-            l.status === "RESCHEDULE_REQUESTED"
-        ),
+        leads: rows.filter(isActionNeeded),
       },
       {
         id: "decision",
         title: "Visited / Closing",
         headerBg: "border-teal-500/20 bg-teal-500/5 text-teal-700 dark:text-teal-300",
         countBg: "bg-teal-500/15 text-teal-700 dark:text-teal-300",
-        leads: rows.filter(
-          (l) => l.status === "DEAL_WON" || isVisitDoneStatus(l.status)
-        ),
+        leads: rows.filter(isClosing),
       },
       {
         id: "dropped",
         title: "Dropped / Junk",
         headerBg: "border-muted-foreground/20 bg-muted/40 text-muted-foreground",
         countBg: "bg-muted-foreground/15 text-muted-foreground",
-        leads: rows.filter(
-          (l) => l.status === "NOT_INTERESTED" || l.status === "DROPPED"
-        ),
+        leads: rows.filter(isDropped),
       },
     ];
   }, [rows]);
