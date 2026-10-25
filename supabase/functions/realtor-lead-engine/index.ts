@@ -1551,7 +1551,18 @@ export interface ConfirmCriteriaAction {
 
 export interface AskFaqAction {
   intent: "ASK_FAQ";
-  topic: "AMENITIES" | "RERA" | "LOAN" | "POSSESSION" | "BROKERAGE" | "LANDMARKS" | "PRICING_DISCOUNT";
+  topic:
+    | "AMENITIES"
+    | "RERA"
+    | "LOAN"
+    | "POSSESSION"
+    | "BROKERAGE"
+    | "LANDMARKS"
+    | "PRICING_DISCOUNT"
+    | "OFFICE_ADDRESS"
+    | "OFFICE_TIMINGS"
+    | "AGENCY_INFO"
+    | "CUSTOM_FAQ";
   specific_query?: string | null;
 }
 
@@ -1833,7 +1844,11 @@ export function validateUserAction(raw: any, leadState?: string, rawMessageText?
     case "PRICE_NEGOTIATION": {
       let topic: AskFaqAction["topic"] = "AMENITIES";
       const rawTopic = String(src.topic || src.faq_topic || (rawIntent === "PRICE_NEGOTIATION" ? "PRICING_DISCOUNT" : "")).toUpperCase();
-      if (rawTopic.includes("RERA")) topic = "RERA";
+      if (rawTopic.includes("ADDRESS") || rawTopic.includes("LOCATION") || rawTopic.includes("OFFICE_ADDR")) topic = "OFFICE_ADDRESS";
+      else if (rawTopic.includes("TIMING") || rawTopic.includes("HOUR") || rawTopic.includes("OFFICE_TIME")) topic = "OFFICE_TIMINGS";
+      else if (rawTopic.includes("AGENCY") || rawTopic.includes("COMPANY") || rawTopic.includes("WHO")) topic = "AGENCY_INFO";
+      else if (rawTopic.includes("CUSTOM") || rawTopic.includes("DOC") || rawTopic.includes("POLICY")) topic = "CUSTOM_FAQ";
+      else if (rawTopic.includes("RERA")) topic = "RERA";
       else if (rawTopic.includes("LOAN") || rawTopic.includes("BANK")) topic = "LOAN";
       else if (rawTopic.includes("POSSESSION")) topic = "POSSESSION";
       else if (rawTopic.includes("BROKERAGE") || rawTopic.includes("COMMISSION")) topic = "BROKERAGE";
@@ -2049,7 +2064,7 @@ type UserAction =
   | { intent: "SELECT_OPTION"; option_index: number; } // 0 for 1st, 1 for 2nd, 2 for 3rd
   | { intent: "CHANGE_REQUIREMENT"; property_type?: string | null; budget?: number | null; location?: string | null; requirement?: "BUY" | "RENT" | "LEASE" | null; is_flexible_location?: boolean; }
   | { intent: "CONFIRM_CRITERIA"; confirm: boolean; }
-  | { intent: "ASK_FAQ"; topic: "AMENITIES" | "RERA" | "LOAN" | "POSSESSION" | "BROKERAGE" | "LANDMARKS" | "PRICING_DISCOUNT"; specific_query?: string | null; }
+  | { intent: "ASK_FAQ"; topic: "AMENITIES" | "RERA" | "LOAN" | "POSSESSION" | "BROKERAGE" | "LANDMARKS" | "PRICING_DISCOUNT" | "OFFICE_ADDRESS" | "OFFICE_TIMINGS" | "AGENCY_INFO" | "CUSTOM_FAQ"; specific_query?: string | null; }
   | { intent: "SUBMIT_LISTING"; transaction_type?: "SELL" | "RENT_OUT" | null; property_type?: string | null; location?: string | null; project_or_society?: string | null; price_or_rent?: number | null; carpet_sqft?: number | null; super_built_up_sqft?: number | null; plot_area_sqft?: number | null; possession_status?: "READY_TO_MOVE" | "UNDER_CONSTRUCTION" | null; furnishing_status?: "FURNISHED" | "SEMI_FURNISHED" | "UNFURNISHED" | null; contact_phone?: string | null; }
   | { intent: "CANCEL_VISIT"; reason?: string | null; }
   | { intent: "RESCHEDULE_VISIT"; new_slot_raw?: string | null; }
@@ -2112,6 +2127,18 @@ interface IntentResult {
 
 10. "lift aur parking hai kya?" ->
 {"action": {"intent": "ASK_FAQ", "topic": "AMENITIES"}, "language": "HINGLISH", "user_role": "SEEKER"}
+
+10a. "aapka office address kya hai?" / "tamari office kya aavi che?" / "kaha aana hoga?" / "where is your office?" ->
+{"action": {"intent": "ASK_FAQ", "topic": "OFFICE_ADDRESS"}, "language": "HINGLISH", "user_role": "SEEKER"}
+
+10b. "office timing kya hai?" / "tamara office timing shu che?" / "working hours?" ->
+{"action": {"intent": "ASK_FAQ", "topic": "OFFICE_TIMINGS"}, "language": "HINGLISH", "user_role": "SEEKER"}
+
+10c. "aapki agency ka naam kya hai?" / "tamari company nu naam shu che?" / "who are you?" ->
+{"action": {"intent": "ASK_FAQ", "topic": "AGENCY_INFO"}, "language": "HINGLISH", "user_role": "SEEKER"}
+
+10d. "property booking ke liye kya documentation chahiye?" / "booking documents?" ->
+{"action": {"intent": "ASK_FAQ", "topic": "CUSTOM_FAQ", "specific_query": "booking documentation"}, "language": "HINGLISH", "user_role": "SEEKER"}
 
 11. "RERA approved chhe?" ->
 {"action": {"intent": "ASK_FAQ", "topic": "RERA"}, "language": "GUJLISH", "user_role": "SEEKER"}
@@ -4790,6 +4817,7 @@ export interface DialogContext {
   displayCity: string;
   lang: "HINGLISH" | "GUJLISH" | "ENGLISH" | "GUJARATI_SCRIPT";
   availableInventory?: any[];
+  botKnowledge?: Record<string, any>;
 }
 
 export interface DialogTransitionResult {
@@ -4848,13 +4876,26 @@ export async function dispatchStateAction(
   // If user mentioned genuine real estate terms, NEVER reject as OFF_TOPIC!
   const isGibberish = isGibberishOrInvalidInput(context.messageText);
   const detectedPropType = isGibberish ? "" : parsePropertyTypeFromText(context.messageText);
-  const isRealEstateTerm =
-    Boolean(detectedPropType) ||
-    (!isGibberish && /\b(office|shop|dukaan|dukan|showroom|flat|apartment|villa|bungalow|plot|land|commercial|residential|residence|bhk|buy|rent|sell|bechna|vechvu|kharidna|kharidvu)\b/i.test(context.messageText));
+  const isAgencyOfficeQuery =
+    /(?:office\s*(?:address|location|kaha|kidhar|kya\s*hai|kya\s*he|kya\s*chhe|kya\s*che|no\s*address|nu\s*address|par\s*aavu|aavvu|milna|mil\s*sakte|timing|timings|hours|samay|opening|closing)|karyalay|tamari\s*office|aapki\s*office|aapka\s*office|where\s*is\s*(?:your\s*)?office)\b/i.test(context.messageText);
 
-  if (intent === "OFF_TOPIC" && isRealEstateTerm) {
+  const isRealEstateTerm =
+    !isAgencyOfficeQuery &&
+    (Boolean(detectedPropType) ||
+      (!isGibberish &&
+        /\b(shop|dukaan|dukan|showroom|flat|apartment|villa|bungalow|plot|land|commercial|residential|residence|bhk|buy|rent|sell|bechna|vechvu|kharidna|kharidvu)\b/i.test(context.messageText)) ||
+      (!isAgencyOfficeQuery && /\b(?:commercial\s*office|office\s*space|office\s*for\s*(?:sale|rent|lease)|office\s*(?:kharidna|bechna|vechvu|levu))\b/i.test(context.messageText)));
+
+  if (isAgencyOfficeQuery) {
+    const isTiming = /(?:timing|hours|samay|opening|closing|ketla\s*vage|kab\s*khulta)/i.test(context.messageText);
+    action = {
+      intent: "ASK_FAQ",
+      topic: isTiming ? "OFFICE_TIMINGS" : "OFFICE_ADDRESS",
+    } as AskFaqAction;
+    intent = "ASK_FAQ";
+  } else if (intent === "OFF_TOPIC" && isRealEstateTerm) {
     console.log(`[dispatchStateAction] Overriding OFF_TOPIC false positive for message: "${context.messageText}"`);
-    const propType = detectedPropType || (/\b(office|shop|dukaan|dukan|showroom|commercial)\b/i.test(context.messageText) ? "Commercial Office" : (/\b(flat|apartment|villa|bungalow|residential|residence)\b/i.test(context.messageText) ? "Residential" : null));
+    const propType = detectedPropType || (/\b(shop|dukaan|dukan|showroom|commercial)\b/i.test(context.messageText) ? "Commercial Office" : (/\b(flat|apartment|villa|bungalow|residential|residence)\b/i.test(context.messageText) ? "Residential" : null));
     if (propType) {
       intent = "CHANGE_REQUIREMENT";
       action = {
@@ -4866,9 +4907,84 @@ export async function dispatchStateAction(
     }
   }
 
-  // Agency / Company Identity Interceptor:
+  const botKnowledge = context.botKnowledge || {};
+
+  // 1. Office Address / Location Query Interceptor
+  const isOfficeAddressQuery =
+    /(?:office\s*(?:address|location|kaha|kidhar|kya\s*hai|kya\s*he|kya\s*chhe|kya\s*che|no\s*address|nu\s*address|par\s*aavu|aavvu|milna|mil\s*sakte)|karyalay|branch\s*address|where\s*is\s*your\s*office|office\s*pin|address\s*bhejo|address\s*aapo|office\s*par\s*milna)\b/i.test(lower);
+
+  if (isOfficeAddressQuery && !isRealEstateTerm) {
+    const addr = botKnowledge.office_address || `402, Alkapuri Arcade, RC Dutt Road, Alkapuri, ${displayCity}`;
+    const hours = botKnowledge.operating_hours || "10:00 AM - 7:30 PM (Mon-Sat)";
+    const phone = botKnowledge.contact_phone || "";
+    const phoneSnippet = phone ? `\n📞 <b>Direct Support:</b> <code>${phone}</code>` : "";
+
+    const replyText =
+      lang === "GUJLISH"
+        ? `Amari agency <b>${agencyName}</b> nu main office <b>${addr}</b> par sthit chhe! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, tame kaya type ni property mate visit karva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Space</b>?`
+        : lang === "ENGLISH"
+        ? `Our main office for <b>${agencyName}</b> is located at <b>${addr}</b>! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, what type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Space</b>?`
+        : `Hamari agency <b>${agencyName}</b> ka main office <b>${addr}</b> par sthit hai! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, aap kis type ki property search kar rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Space</b>?`;
+
+    return {
+      replyText,
+      nextState: "ROLE_SELECTION_PENDING",
+      leadUpdates: { state: "ROLE_SELECTION_PENDING" },
+    };
+  }
+
+  // 2. Office Timings / Working Hours Interceptor
+  const isOfficeTimingQuery =
+    /(?:timing|timings|visiting\s*hours|kab\s*khula|kab\s*open|khulva\s*no\s*samay|office\s*time|working\s*hours|business\s*hours|opening\s*time|closing\s*time)\b/i.test(lower);
+
+  if (isOfficeTimingQuery && !isRealEstateTerm) {
+    const hours = botKnowledge.operating_hours || "10:00 AM - 7:30 PM (Mon-Sat), Sunday: By Appointment";
+    const replyText =
+      lang === "GUJLISH"
+        ? `Amara office <b>${agencyName}</b> na regular visiting hours <b>${hours}</b> chhe. 🕒\n\nTame anukool samaye amara office aavi shako chho athva direct site par <b>VIP Site Visit 🚗</b> plan kari shako chho!\n\n👉 <b>${nameStr}</b>, tame kaya type ni property joiye chhe — <b>Flat, Villa ke Commercial?</b>`
+        : lang === "ENGLISH"
+        ? `Our office visiting hours for <b>${agencyName}</b> are <b>${hours}</b>. 🕒\n\nYou are welcome to visit our office or we can schedule a convenient <b>VIP Site Visit 🚗</b> directly at the property!\n\n👉 <b>${nameStr}</b>, what type of property are you searching for — <b>Flat, Villa, or Commercial?</b>`
+        : `Hamare office <b>${agencyName}</b> ke visiting hours <b>${hours}</b> hain. 🕒\n\nAap apni suvidha ke mutabiq office visit kar sakte hain ya direct site location par <b>VIP Site Visit 🚗</b> plan kar sakte hain!\n\n👉 <b>${nameStr}</b>, aap kis type ki property search kar rahe hain — <b>Flat, Villa ya Commercial?</b>`;
+
+    return {
+      replyText,
+      nextState: "ROLE_SELECTION_PENDING",
+      leadUpdates: { state: "ROLE_SELECTION_PENDING" },
+    };
+  }
+
+  // 3. Custom Client FAQ Knowledge Interceptor
+  if (Array.isArray(botKnowledge.custom_faqs) && botKnowledge.custom_faqs.length > 0 && !isRealEstateTerm) {
+    for (const faq of botKnowledge.custom_faqs) {
+      const qLower = (faq.question || "").toLowerCase();
+      const qWords = qLower.split(/\s+/).filter((w) => w.length >= 4);
+      const matches = qWords.filter((w) => lower.includes(w));
+      if (matches.length >= 2 || (qWords.length === 1 && matches.length === 1)) {
+        const customAns = faq.answer;
+        const replyText =
+          lang === "GUJLISH"
+            ? `${customAns}\n\n👉 <b>${nameStr}</b>, tame biji kai details janva mango chho athva shu ame tamari <b>VIP Site Visit 🚗</b> plan kariye?`
+            : lang === "ENGLISH"
+            ? `${customAns}\n\n👉 <b>${nameStr}</b>, would you like more details or should we schedule your <b>VIP Site Visit 🚗</b>?`
+            : `${customAns}\n\n👉 <b>${nameStr}</b>, kya aap aur details janna chahte hain ya hum aapki <b>VIP Site Visit 🚗</b> plan karein?`;
+
+        return {
+          replyText,
+          nextState: currentState,
+        };
+      }
+    }
+  }
+
+  // Global FAQ Dispatcher: Answer agency/client FAQs immediately with dynamic bot_knowledge at any stage!
+  if (intent === "ASK_FAQ") {
+    const hasBookedVisit = currentState === "VISIT_BOOKED" || Boolean(lead?.visit_booked_at);
+    return handleFaqResponse(lead, action as AskFaqAction, context, hasBookedVisit);
+  }
+
+    // 4. Agency / Company Identity Interceptor
   const isAgencyIdentityQuery =
-    /(?:agency|company|firm|karyalay|office|tamari\s*company|tamaru\s*nam|aapki\s*agency|aapka\s*naam|aap\s*kaun|who\s*are\s*you|naam\s*kya|nam\s*su\s*che|nam\s*kya\s*he|nam\s*su|tamara\s*vishe|agency\s*name|company\s*name)\b/i.test(lower);
+    /(?:agency|company|firm|karyalay|tamari\s*company|tamaru\s*nam|aapki\s*agency|aapka\s*naam|aap\s*kaun|who\s*are\s*you|naam\s*kya|nam\s*su\s*che|nam\s*kya\s*he|nam\s*su|tamara\s*vishe|agency\s*name|company\s*name)\b/i.test(lower);
 
   if (isAgencyIdentityQuery && !isRealEstateTerm) {
     const replyText =
@@ -7018,7 +7134,68 @@ async function handleFaqResponse(
   const topic = faqAct.topic;
   let replyText = "";
 
-  if (topic === "PRICING_DISCOUNT") {
+  if (topic === "OFFICE_ADDRESS") {
+    const addr = context.botKnowledge?.office_address || "402, Alkapuri Arcade, RC Dutt Road, Alkapuri, Vadodara";
+    const hours = context.botKnowledge?.operating_hours || "10:00 AM - 7:30 PM (Mon-Sat)";
+    const phone = context.botKnowledge?.contact_phone || "";
+    const phoneSnippet = phone ? `\n• 📞 <b>Direct Support:</b> <code>${phone}</code>` : "";
+
+    replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}! <b>${agencyName}</b> nu office address aa mujab chhe: 🏢\n\n• 📍 <b>Address:</b> ${addr}\n• ⏰ <b>Timings:</b> ${hours}${phoneSnippet}\n\nTame office par avi ne pan amara expert real estate advisor sathe consultation kari shako chho!${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `Hello ${nameStr}! Here is the office address of <b>${agencyName}</b>: 🏢\n\n• 📍 <b>Address:</b> ${addr}\n• ⏰ <b>Timings:</b> ${hours}${phoneSnippet}\n\nYou are welcome to visit our office for an in-person consultation with our property advisors!${bridgeCta}`
+        : `Ji ${nameStr}! <b>${agencyName}</b> ka office address yeh hai: 🏢\n\n• 📍 <b>Address:</b> ${addr}\n• ⏰ <b>Timings:</b> ${hours}${phoneSnippet}\n\nAap hamare office aakar bhi hamare property experts ke saath consultation kar sakte hain!${bridgeCta}`;
+  } else if (topic === "OFFICE_TIMINGS") {
+    const hours = context.botKnowledge?.operating_hours || "10:00 AM - 7:30 PM (Mon-Sat)";
+    const addr = context.botKnowledge?.office_address || "Alkapuri, Vadodara";
+
+    replyText =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}! <b>${agencyName}</b> na working hours aa mujab chhe: ⏰\n\n• 🕒 <b>Office Timings:</b> ${hours}\n• 🏢 <b>Location:</b> ${addr}\n\nTame aa samay darmiyan game tyare amara office visit kari shako chho!${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `Hello ${nameStr}! The operating hours for <b>${agencyName}</b> are: ⏰\n\n• 🕒 <b>Office Timings:</b> ${hours}\n• 🏢 <b>Location:</b> ${addr}\n\nFeel free to visit us during these hours!${bridgeCta}`
+        : `Ji ${nameStr}! <b>${agencyName}</b> ke working hours yeh hain: ⏰\n\n• 🕒 <b>Office Timings:</b> ${hours}\n• 🏢 <b>Location:</b> ${addr}\n\nAap is samay ke dauraan hamare office visit kar sakte hain!${bridgeCta}`;
+  } else if (topic === "AGENCY_INFO") {
+    replyText =
+      lang === "GUJLISH"
+        ? `Amari agency nu naam <b>${agencyName}</b> chhe! 🙏 Ame ${context.displayCity || "Vadodara"} ma verified residential (Flats, Villas) ane commercial properties ma deal kariye chhiye. Amari team tamne direct developer pricing ane transparent paperwork sathe best deal aape chhe!${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `We are <b>${agencyName}</b>! 🙏 We specialize in verified residential (Flats, Villas) and commercial properties across ${context.displayCity || "Vadodara"} with direct developer rates and end-to-end guidance!${bridgeCta}`
+        : `Hamari agency ka naam <b>${agencyName}</b> hai! 🙏 Hum ${context.displayCity || "Vadodara"} me verified residential (Flats, Villas) aur commercial properties me deal karte hain. Hamari team aapko direct developer pricing aur 100% verified paperwork provide karti hai!${bridgeCta}`;
+  } else if (topic === "CUSTOM_FAQ") {
+    let customAns = "";
+    const customFaqs = context.botKnowledge?.custom_faqs;
+    if (Array.isArray(customFaqs) && customFaqs.length > 0) {
+      const qText = (faqAct.specific_query || context.messageText || "").toLowerCase();
+      const qWords = qText.split(/\s+/).filter((w) => w.length >= 3);
+      let bestMatch = null;
+      let maxMatches = 0;
+      for (const faq of customFaqs) {
+        const qTarget = (faq.question || "").toLowerCase();
+        const matches = qWords.filter((w) => qTarget.includes(w)).length;
+        if (matches > maxMatches) {
+          maxMatches = matches;
+          bestMatch = faq;
+        }
+      }
+      if (bestMatch) {
+        customAns = bestMatch.answer;
+      } else {
+        customAns = customFaqs[0].answer;
+      }
+    }
+    if (!customAns) {
+      customAns = "Hamare representative aapko required details aur policies jald provide karenge.";
+    }
+
+    replyText =
+      lang === "GUJLISH"
+        ? `${customAns}${bridgeCta}`
+        : lang === "ENGLISH"
+        ? `${customAns}${bridgeCta}`
+        : `${customAns}${bridgeCta}`;
+  } else if (topic === "PRICING_DISCOUNT") {
     replyText =
       lang === "GUJLISH"
         ? `Ji ${nameStr}! <b>${projName}</b> nu pricing direct developer approved pricing chhe. Serious buyers mate developer taraf thi <b>exclusive token booking discount ane flexible payment plan</b> direct face-to-face site meeting ma finalize thai shake chhe. 💰${bridgeCta}`
@@ -7026,21 +7203,23 @@ async function handleFaqResponse(
         ? `Hello ${nameStr}! The pricing for <b>${projName}</b> reflects direct builder rates. For serious buyers, exclusive <b>token spot discounts and customized payment schedules</b> are finalized face-to-face directly with the developer during the site visit. 💰${bridgeCta}`
         : `Ji ${nameStr}! <b>${projName}</b> ki pricing direct developer approved base rate hai. Serious buyers ke liye developer side se <b>exclusive spot token discount aur flexible payment slabs</b> direct face-to-face site visit par finalize ho sakte hain. 💰${bridgeCta}`;
   } else if (topic === "BROKERAGE") {
+    const brokerPolicy = context.botKnowledge?.brokerage_policy || "0% Brokerage (Zero Commission)";
     replyText =
       lang === "GUJLISH"
-        ? `Ji ${nameStr}! ${agencyName} par <b>0% Brokerage (Zero Commission)</b> chhe! 🎉\nTame direct builder pricing ane 100% transparent paperwork access karo chho. Tamara thi koi pan extra brokerage charge levama aavshe nahi.${bridgeCta}`
+        ? `Ji ${nameStr}! ${agencyName} ni brokerage policy: <b>${brokerPolicy}</b>! 🎉\nTame direct builder pricing ane 100% transparent paperwork access karo chho. Tamara thi koi pan extra brokerage charge levama aavshe nahi.${bridgeCta}`
         : lang === "ENGLISH"
-        ? `Hello ${nameStr}! ${agencyName} offers <b>0% Brokerage (Zero Commission)</b> on all direct builder bookings! 🎉\nYou get direct developer pricing and verified paperwork with absolutely zero advisory charges.${bridgeCta}`
-        : `Ji ${nameStr}! ${agencyName} par <b>0% Brokerage (Zero Commission)</b> hai! 🎉\nAapko direct builder pricing aur 100% verified transparent paperwork milta hai bina kisi hidden ya extra brokerage charges ke.${bridgeCta}`;
+        ? `Hello ${nameStr}! ${agencyName}'s brokerage policy: <b>${brokerPolicy}</b>! 🎉\nYou get direct developer pricing and verified paperwork with absolutely zero advisory charges.${bridgeCta}`
+        : `Ji ${nameStr}! ${agencyName} ki brokerage policy: <b>${brokerPolicy}</b>! 🎉\nAapko direct builder pricing aur 100% verified transparent paperwork milta hai bina kisi hidden ya extra brokerage charges ke.${bridgeCta}`;
   } else if (topic === "LOAN") {
+    const banks = context.botKnowledge?.bank_partners || "SBI, HDFC, ICICI, Bank of Baroda";
     replyText =
       lang === "GUJLISH"
-        ? `Ji ${nameStr}! <b>${projName}</b> 100% approved project chhe ane <b>SBI, HDFC, ICICI, Bank of Baroda</b> jevi top nationalized ane private banks thi pre-approved chhe! 🏦\n\n• 💰 <b>Starting Rate:</b> 8.4% p.a.\n• 📑 <b>Eligibility:</b> Up to 80%-90% funding support\n• 🤝 <b>Doorstep Assistance:</b> Amari in-house banking team tamara mate loan documentation manage karshe.${bridgeCta}`
+        ? `Ji ${nameStr}! <b>${projName}</b> 100% approved project chhe ane <b>${banks}</b> jevi top nationalized ane private banks thi pre-approved chhe! 🏦\n\n• 💰 <b>Starting Rate:</b> 8.4% p.a.\n• 📑 <b>Eligibility:</b> Up to 80%-90% funding support\n• 🤝 <b>Doorstep Assistance:</b> Amari in-house banking team tamara mate loan documentation manage karshe.${bridgeCta}`
         : lang === "ENGLISH"
-        ? `Hello ${nameStr}! <b>${projName}</b> is pre-approved by all leading banks including <b>SBI, HDFC, ICICI, and Bank of Baroda</b>! 🏦\n\n• 💰 <b>Starting Interest Rate:</b> 8.4% p.a.\n• 📑 <b>Loan Quantum:</b> Up to 80%-90% funding assistance\n• 🤝 <b>Doorstep Documentation:</b> Our dedicated banking associates coordinate paperwork end-to-end.${bridgeCta}`
-        : `Ji ${nameStr}! <b>${projName}</b> sabhi leading banks (jaise <b>SBI, HDFC, ICICI, Bank of Baroda</b>) se pre-approved project hai! 🏦\n\n• 💰 <b>Starting Interest Rate:</b> 8.4% p.a.\n• 📑 <b>Funding:</b> 80% se 90% tak loan approval assistance\n• 🤝 <b>Doorstep Support:</b> Hamari banking team aapke liye loan process aur documentation coordinate karegi.${bridgeCta}`;
+        ? `Hello ${nameStr}! <b>${projName}</b> is pre-approved by leading banks including <b>${banks}</b>! 🏦\n\n• 💰 <b>Starting Interest Rate:</b> 8.4% p.a.\n• 📑 <b>Loan Quantum:</b> Up to 80%-90% funding assistance\n• 🤝 <b>Doorstep Documentation:</b> Our dedicated banking associates coordinate paperwork end-to-end.${bridgeCta}`
+        : `Ji ${nameStr}! <b>${projName}</b> leading banks (jaise <b>${banks}</b>) se pre-approved project hai! 🏦\n\n• 💰 <b>Starting Interest Rate:</b> 8.4% p.a.\n• 📑 <b>Funding:</b> 80% se 90% tak loan approval assistance\n• 🤝 <b>Doorstep Support:</b> Hamari banking team aapke liye loan process aur documentation coordinate karegi.${bridgeCta}`;
   } else if (topic === "RERA") {
-    const reraNo = prop?.rera_number || "Verified RERA Registered Project";
+    const reraNo = prop?.rera_number || context.botKnowledge?.rera_number || "Verified RERA Registered Project";
     replyText =
       lang === "GUJLISH"
         ? `Ji ${nameStr}! <b>${projName}</b> 100% RERA Registered ane Clear Title project chhe! 📜✅\n\n• 🏛️ <b>RERA Registration:</b> <code>${reraNo}</code>\n• ⚖️ <b>Clear Title:</b> All legal approvals, NA permissions ane sanctioned plans complete chhe.${bridgeCta}`
@@ -7454,7 +7633,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v70-agency-identity-interceptor",
+        version: "v71-dynamic-bot-knowledge",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -7997,10 +8176,11 @@ Deno.serve(async (req: Request) => {
     // Resolve Tenant Branding & Operating City
     const { data: tenantClient } = await supabase
       .from("clients")
-      .select("id, name, city, office_address, notification_channel")
+      .select("id, name, city, office_address, notification_channel, bot_knowledge")
       .eq("id", activeTenantId)
       .maybeSingle();
 
+    const botKnowledge = (tenantClient?.bot_knowledge as Record<string, any>) || {};
     const agencyName = tenantClient?.name?.trim() || "NextGen Realty";
     let resolvedCity = tenantClient?.city?.trim() || null;
     if (!resolvedCity) {
@@ -8180,6 +8360,7 @@ Deno.serve(async (req: Request) => {
       resolvedCity,
       displayCity,
       lang: (lang === "GUJLISH" || lang === "HINGLISH" || lang === "ENGLISH" || lang === "GUJARATI_SCRIPT") ? lang : "HINGLISH",
+      botKnowledge,
     };
 
     // Dispatch turn through Deterministic Finite State Machine (FSM) Router
