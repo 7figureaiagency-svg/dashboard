@@ -133,6 +133,13 @@ updated: 2026-10-19T18:50:30+05:30
 **Plans:**
 - [x] Plan 15.1: Precision Inventory Demand Matchmaker & Explicit Property Locking ([`15.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/15/15.1-PLAN.md))
 
+### Phase 16: Pipeline Board Exhaustive Stage Mapping & Site Visit Preservation
+**Status:** ⏳ In Progress  
+**Objective:** Fix Pipeline Board stage mapping so booked site visits and intermediate conversational states (ROLE_SELECTION_PENDING, OPTIONS_SENT, etc.) map to their proper stages and never disappear. Normalize site visit status in lead hydration, prevent FAQ downgrades in the Edge Function, and ensure Manthan displays under 'Visit Scheduled'.  
+**Depends on:** Phase 15  
+**Plans:**
+- [ ] Plan 16.1: Pipeline Board Exhaustive Stage Mapping & Site Visit Preservation ([`16.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/16/16.1-PLAN.md))
+
 ---
 
 ## Progress Summary
@@ -152,6 +159,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 13: Dynamic Profile FAQ & AI Knowledge Studio | ✅ Complete | 2/2 | 100% |
 | 14: Desktop Horizontal Navigation & Full-Width CRM | ✅ Complete | 2/2 | 100% |
 | 15: Precision Inventory Demand Matchmaker | ✅ Complete | 1/1 | 100% |
+| 16: Pipeline Board Exhaustive Stage Mapping | ⏳ In Progress | 0/1 | 0% |
 
 
 
