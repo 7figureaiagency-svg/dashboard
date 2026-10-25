@@ -249,29 +249,92 @@ export function InventoryTab({
       const pConfig = (p.configuration || "").toLowerCase().trim();
       const pPrice = Number(p.price) || 0;
 
+      const isCommercialProp =
+        pCat.includes("commercial") ||
+        pCat.includes("office") ||
+        pCat.includes("shop") ||
+        pConfig.includes("office") ||
+        pConfig.includes("shop");
+      const isPlotProp =
+        pCat.includes("plot") ||
+        pCat.includes("land") ||
+        pConfig.includes("plot") ||
+        pConfig.includes("land");
+      const isResidentialProp = !isCommercialProp && !isPlotProp;
+
       const matches = allLeads.filter((l) => {
+        // Disqualify dropped or dead leads
         if (l.status === "NOT_INTERESTED" || l.status === "DROPPED") return false;
 
+        // RULE 1: Explicit Property Lock (Highest Priority)
+        // If the lead has selected or booked a visit for a specific property:
+        if (l.selected_property_id) {
+          return l.selected_property_id === p.property_id;
+        }
+
+        // RULE 2: Category Isolation (For generic / unassigned leads)
+        const lType = (l.property_type || "").toLowerCase().trim();
+        const lReq = (l.requirement || "").toLowerCase().trim();
+        const leadText = `${lType} ${lReq}`.trim();
+
+        const isLeadCommercial =
+          leadText.includes("commercial") ||
+          leadText.includes("office") ||
+          leadText.includes("shop") ||
+          leadText.includes("retail") ||
+          leadText.includes("showroom");
+
+        const isLeadPlot =
+          leadText.includes("plot") ||
+          leadText.includes("land") ||
+          leadText.includes("agricultural");
+
+        const isLeadResidential =
+          leadText.includes("bhk") ||
+          leadText.includes("flat") ||
+          leadText.includes("apartment") ||
+          leadText.includes("villa") ||
+          leadText.includes("bungalow") ||
+          leadText.includes("penthouse") ||
+          leadText.includes("residential") ||
+          (!isLeadCommercial && !isLeadPlot && leadText !== "");
+
+        // Strict category cross-match prevention:
+        if (isCommercialProp && !isLeadCommercial) return false;
+        if (!isCommercialProp && isLeadCommercial) return false;
+        if (isPlotProp && !isLeadPlot) return false;
+        if (!isPlotProp && isLeadPlot) return false;
+        if (isResidentialProp && !isLeadResidential) return false;
+
+        // RULE 3: Multi-Factor Scoring (No budget-only matches)
         let score = 0;
+
+        // Factor A: Location Alignment
         const lLoc = (l.location || "").toLowerCase().trim();
         if (lLoc && pLoc && (pLoc.includes(lLoc) || lLoc.includes(pLoc))) {
           score += 3;
         }
 
-        const lType = (l.property_type || "").toLowerCase().trim();
+        // Factor B: Configuration / Type Alignment
         if (lType) {
-          if (pConfig && (lType.includes(pConfig) || pConfig.includes(lType))) score += 2;
-          else if (pCat && (lType.includes(pCat) || pCat.includes(lType))) score += 1;
-        }
-
-        const lBudget = toNumber(l.budget as never);
-        if (lBudget > 0 && pPrice > 0) {
-          if (lBudget >= pPrice * 0.8) {
+          if (pConfig && (lType.includes(pConfig) || pConfig.includes(lType))) {
+            score += 3;
+          } else if (pCat && (lType.includes(pCat) || pCat.includes(lType))) {
             score += 2;
           }
         }
 
-        return score >= 2;
+        // Factor C: Realistic Budget Bracket (Must be within 0.7x to 1.5x of property price)
+        const lBudget = toNumber(l.budget as never);
+        if (lBudget > 0 && pPrice > 0) {
+          if (lBudget >= pPrice * 0.7 && lBudget <= pPrice * 1.5) {
+            score += 2;
+          }
+        }
+
+        // Threshold: Must have at least 4 points (e.g. Location + Config, or Location + Budget, or Config + Budget)
+        // A single factor (like budget alone = 2) can NEVER trigger a match!
+        return score >= 4;
       });
 
       map.set(p.property_id, matches);
@@ -968,11 +1031,11 @@ export function InventoryTab({
                       {matchingBuyers.length > 0 && (
                         <button
                           type="button"
-                          onClick={() => setDemandModalProp(p)}
-                          className="apple-button w-full flex items-center justify-between px-3 py-2 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 text-xs font-semibold shadow-2xs"
+                          onClick={() => setMatchingDialogProperty({ property: p, buyers: matchingBuyers })}
+                          className="apple-button w-full flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 hover:bg-emerald-500/20 text-xs font-semibold shadow-2xs transition-all"
                         >
                           <span className="flex items-center gap-1.5">
-                            <Flame className="size-3.5 fill-orange-500" />
+                            <Flame className="size-3.5 fill-emerald-600 text-emerald-600 dark:fill-emerald-400 dark:text-emerald-400" />
                             <span>{matchingBuyers.length} Matching {matchingBuyers.length === 1 ? "Buyer" : "Buyers"}</span>
                           </span>
                           <span className="text-[11px] underline">View Leads</span>
@@ -1246,6 +1309,15 @@ export function InventoryTab({
                         {buyer.name || "Unnamed Buyer"}
                       </span>
                       <StatusBadge value={buyer.status} />
+                      {buyer.selected_property_id === matchingDialogProperty?.property.property_id || buyer.site_visit_booked ? (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1 shadow-2xs">
+                          🎯 Direct Property Lead / Site Visit Booked
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 flex items-center gap-1 shadow-2xs">
+                          ✨ Criteria Match (Category & Budget)
+                        </span>
+                      )}
                       {buyer.ai_score !== undefined && (
                         <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                           Score: {buyer.ai_score}
@@ -1285,24 +1357,44 @@ export function InventoryTab({
 
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                     {buyer.phone ? (
-                      <Button
-                        asChild
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-8 px-3 gap-1.5 shadow-2xs"
-                        title={`Call ${buyer.name || "Buyer"}`}
-                      >
-                        <a href={`tel:${buyer.phone}`}>
-                          <Phone className="size-3.5" />
-                          <span>Call Lead</span>
-                        </a>
-                      </Button>
+                      <>
+                        <Button
+                          asChild
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-8 px-3 gap-1.5 shadow-2xs"
+                          title={`Call ${buyer.name || "Buyer"}`}
+                        >
+                          <a href={`tel:${buyer.phone}`}>
+                            <Phone className="size-3.5" />
+                            <span>Call</span>
+                          </a>
+                        </Button>
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="outline"
+                          className="apple-button h-8 px-2.5 text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 gap-1 shadow-2xs"
+                          title={`WhatsApp ${buyer.name || "Buyer"}`}
+                        >
+                          <a
+                            href={`https://wa.me/${buyer.phone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+                              `Namaste ${buyer.name || "ji"}, regarding your inquiry for ${matchingDialogProperty?.property.project_name || "the property"}...`,
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <MessageCircle className="size-3.5" />
+                            <span>WhatsApp</span>
+                          </a>
+                        </Button>
+                      </>
                     ) : (
                       <span className="text-xs text-muted-foreground italic">No phone</span>
                     )}
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 text-xs px-2.5"
+                      className="h-8 text-xs px-2.5 shadow-2xs"
                       onClick={() => {
                         setSelectedLead(buyer);
                       }}
@@ -1317,7 +1409,7 @@ export function InventoryTab({
 
           <DialogFooter className="border-t pt-3 flex items-center justify-between sm:justify-between">
             <p className="text-xs text-muted-foreground">
-              {matchingDialogProperty?.buyers.length || 0} potential buyer(s) with matching budget & location.
+              {matchingDialogProperty?.buyers.length || 0} verified buyer(s) matching {matchingDialogProperty?.property.project_name}.
             </p>
             <Button
               size="sm"
