@@ -8,18 +8,18 @@ updated: 2026-10-25T15:48:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 17 - Portal-Exclusive Missing WhatsApp Banner & Telegram Lead Identity Isolation  
-**Status:** ⏳ Ready to Execute  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/17/17.1-PLAN.md` (Portal-Exclusive Missing WhatsApp Banner & Telegram Lead Identity Isolation) — ⏳ Ready to Execute
+- `.gsd/phases/17/17.1-PLAN.md` (Portal-Exclusive Missing WhatsApp Banner & Telegram Lead Identity Isolation) — ✅ Complete
 
 ## Last Action
 
-Completed Phase 16:
-- Enhanced `hydrateLead` in `src/lib/crm.ts` to canonically set `status = "SITE_VISIT_BOOKED"` when `site_visit_booked: true` or `site_visit_datetime` is set.
-- Refactored `pipelineColumns` in `src/components/crm/leads-tab.tsx` into 6 mutually exclusive, exhaustive stages so 100% of leads in `rows` appear on the Pipeline Board with zero lost leads.
-- Updated Edge Function `realtor-lead-engine` FAQ interceptors to preserve `currentState` rather than resetting to `ROLE_SELECTION_PENDING`, and deployed to production.
-- Aligned Manthan's database record to `state = 'SITE_VISIT_BOOKED'`.
-- Verified build passes (`npm.cmd run build` in 875ms). Manthan visibly appears under 'Visit Scheduled (1)'.
+Completed Phase 17:
+- Implemented `isTelegramLead` and `isPortalLead` helpers in `src/lib/crm.ts` and updated `hydrateLead` to classify Telegram leads with `source: "Telegram"`.
+- Guarded amber warning banner and drawer header badge in `src/components/crm/lead-drawer.tsx` strictly with `isMissingPhone && isPortalLead(lead)`.
+- Replaced misleading 'Add WhatsApp Number' bottom CTA on Telegram leads with channel status indicator and non-portal generic 'Add Phone Number'.
+- Updated Kanban cards, desktop table rows, and `MISSING_PHONE` quick filter in `src/components/crm/leads-tab.tsx`.
+- Verified build passes (`npm.cmd run build` in 971ms). Manthan (`5117510624`) has zero amber portal warnings.
 
 ## Active Decisions
 

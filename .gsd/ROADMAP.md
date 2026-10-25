@@ -141,11 +141,11 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 16.1: Pipeline Board Exhaustive Stage Mapping & Site Visit Preservation ([`16.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/16/16.1-PLAN.md))
 
 ### Phase 17: Portal-Exclusive Missing WhatsApp Banner & Telegram Lead Identity Isolation
-**Status:** ⏳ Planned  
+**Status:** ✅ Complete  
 **Objective:** Restrict the amber banner 'Portal inquiry me WhatsApp number provide nahi kiya gaya' and 'Add WhatsApp Number' CTA strictly to genuine portal leads (99acres, MagicBricks, Housing, etc.) with missing/masked phone numbers. Prevent false positives on Telegram leads (like Manthan 5117510624) and direct/manual leads.  
 **Depends on:** Phase 16  
 **Plans:**
-- [ ] Plan 17.1: Portal-Exclusive Missing WhatsApp Banner & Telegram Lead Identity Isolation ([`17.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/17/17.1-PLAN.md))
+- [x] Plan 17.1: Portal-Exclusive Missing WhatsApp Banner & Telegram Lead Identity Isolation ([`17.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/17/17.1-PLAN.md))
 
 ---
 
@@ -167,7 +167,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 14: Desktop Horizontal Navigation & Full-Width CRM | ✅ Complete | 2/2 | 100% |
 | 15: Precision Inventory Demand Matchmaker | ✅ Complete | 1/1 | 100% |
 | 16: Pipeline Board Exhaustive Stage Mapping | ✅ Complete | 1/1 | 100% |
-| 17: Portal-Exclusive Missing WhatsApp Banner | ⏳ Ready | 0/1 | 0% |
+| 17: Portal-Exclusive Missing WhatsApp Banner | ✅ Complete | 1/1 | 100% |
 
 
 
