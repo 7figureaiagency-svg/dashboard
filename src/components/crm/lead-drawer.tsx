@@ -84,6 +84,8 @@ import {
   formatDate,
   formatMoney,
   isDualRoleLead,
+  isPortalLead,
+  isTelegramLead,
   toNumber,
   toWhatsAppUrl,
   type Activity,
@@ -307,7 +309,8 @@ export function LeadDrawer({
 
   const currentPhone = (profile.phone !== undefined ? profile.phone : lead.phone) as string | null | undefined;
   const isMissingPhone = !currentPhone || currentPhone.trim() === "" || currentPhone.replace(/\D/g, "").length < 10;
-  const isTelegram = lead.source === "telegram" || lead.lead_id?.startsWith("tg_") || lead.lead_id?.startsWith("telegram_");
+  const isTelegram = isTelegramLead(lead);
+  const isPortal = isPortalLead(lead);
 
   const handleSavePhone = () => {
     let cleanDigits = newPhone.replace(/\D/g, "");
@@ -359,13 +362,13 @@ export function LeadDrawer({
           <SheetHeader className="text-left space-y-1.5">
             <SheetTitle className="text-xl font-bold tracking-tight text-foreground">{lead.name || "Unnamed lead"}</SheetTitle>
             <SheetDescription className="text-xs text-muted-foreground">
-              {currentPhone || (isTelegram ? `Telegram ID: ${lead.lead_id}` : "No WhatsApp phone")} · Created {formatDate(lead.created_at)}
+              {currentPhone || (isTelegram ? `Telegram ID: ${lead.lead_id}` : isPortal ? "No WhatsApp phone" : "No phone provided")} · Created {formatDate(lead.created_at)}
             </SheetDescription>
             <div className="flex flex-wrap gap-2 pt-1">
               <StatusBadge value={lead.status} />
               <PropertyStateBadge value={lead.property_state} />
               {isDual && <DualRoleBadge />}
-              {isMissingPhone && !isTelegram && <NoWhatsAppBadge />}
+              {isMissingPhone && isPortal && <NoWhatsAppBadge />}
             </div>
           </SheetHeader>
           {closed && (
@@ -402,7 +405,7 @@ export function LeadDrawer({
             </div>
           )}
 
-          {isMissingPhone && !isTelegram && (
+          {isMissingPhone && isPortal && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 shadow-xs backdrop-blur-xs relative overflow-hidden">
               <div className="flex items-start gap-3">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-300">
@@ -1059,7 +1062,11 @@ export function LeadDrawer({
                 </a>
               </Button>
             </>
-          ) : !isTelegram ? (
+          ) : isTelegram ? (
+            <div className="flex-1 flex items-center justify-center py-2 px-3 rounded-xl border border-sky-500/25 bg-sky-500/10 text-xs font-medium text-sky-800 dark:text-sky-300 font-mono">
+              Telegram ID: {lead.lead_id} · Direct calling unavailable
+            </div>
+          ) : isPortal ? (
             <Button
               size="sm"
               variant="default"
@@ -1069,9 +1076,14 @@ export function LeadDrawer({
               <Phone className="size-4" /> Add WhatsApp Number
             </Button>
           ) : (
-            <div className="flex-1 flex items-center justify-center py-2 text-xs text-muted-foreground font-mono">
-              Telegram ID: {lead.lead_id} (Direct calling unavailable)
-            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="apple-button flex-1 h-11 min-h-[44px] gap-2 rounded-xl text-xs font-semibold shadow-xs"
+              onClick={() => setPhoneModalOpen(true)}
+            >
+              <Phone className="size-4" /> Add Phone Number
+            </Button>
           )}
         </div>
 
@@ -1104,15 +1116,17 @@ export function LeadDrawer({
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="text-base font-bold flex items-center gap-2">
-                <Phone className="size-4 text-amber-600" /> Add Verified WhatsApp Number
+                <Phone className="size-4 text-amber-600" /> {isPortal ? "Add Verified WhatsApp Number" : "Add Phone Number"}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Enter customer&apos;s 10-digit Indian mobile number. Saving this will activate the automated WhatsApp AI bot and enable 1-tap call &amp; message actions.
+                {isPortal
+                  ? "Enter customer's 10-digit Indian mobile number. Saving this will activate the automated WhatsApp AI bot and enable 1-tap call & message actions."
+                  : "Enter customer's 10-digit Indian mobile number to enable direct calls and messaging."}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3 py-2">
               <Label htmlFor="phone-input" className="text-xs font-semibold text-foreground">
-                WhatsApp Mobile Number
+                {isPortal ? "WhatsApp Mobile Number" : "Mobile Number"}
               </Label>
               <div className="flex items-center gap-2">
                 <div className="flex h-10 items-center justify-center rounded-lg border border-border/70 bg-muted/50 px-3 text-xs font-bold font-mono text-muted-foreground select-none">
@@ -1154,7 +1168,7 @@ export function LeadDrawer({
                 className="apple-button h-9 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
                 onClick={handleSavePhone}
               >
-                Save &amp; Activate WhatsApp
+                {isPortal ? "Save & Activate WhatsApp" : "Save Phone Number"}
               </Button>
             </DialogFooter>
           </DialogContent>
