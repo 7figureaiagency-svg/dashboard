@@ -900,15 +900,15 @@ export function LeadsTab({
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 border-b border-border/60 hover:bg-muted/50">
-                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Customer</TableHead>
-                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Executive</TableHead>
-                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Phone</TableHead>
-                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Status</TableHead>
-                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">AI Bot</TableHead>
-                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Selected Property</TableHead>
-                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Budget</TableHead>
-                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5">Created</TableHead>
-                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 text-right">Actions</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[170px]">Customer</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[130px]">Executive</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[130px]">Contact</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[140px]">Status</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[130px]">AI Bot</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[210px]">Property / Requirement</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[110px]">Budget</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[100px]">Created</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 text-right min-w-[170px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1031,7 +1031,19 @@ export function LeadsTab({
                           />
                         </div>
                       </TableCell>
-                      <TableCell className="py-3.5 font-medium text-foreground">{lead.selected_property_name || "—"}</TableCell>
+                      <TableCell className="py-3.5 font-medium text-foreground">
+                        <div className="flex flex-col gap-0.5 max-w-[220px]">
+                          <span className="truncate font-semibold text-xs text-foreground">
+                            {lead.selected_property_name || lead.property_type || "Any Property"}
+                          </span>
+                          {lead.location && (
+                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+                              <MapPin className="size-2.5 text-muted-foreground/70 shrink-0" />
+                              <span className="truncate">{lead.location}</span>
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="font-bold text-foreground tabular-nums py-3.5">{formatMoney(lead.budget)}</TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground font-medium text-xs tabular-nums py-3.5">
                         {formatDate(lead.created_at)}
@@ -1040,17 +1052,17 @@ export function LeadsTab({
                         <div className="flex justify-end items-center gap-1.5">
                           {lead.phone && lead.phone.replace(/\D/g, "").length >= 10 ? (
                             <>
-                              <Button asChild size="sm" variant="outline" className="apple-button h-8 rounded-lg gap-1.5 shadow-2xs">
+                              <Button asChild size="sm" variant="outline" className="apple-button h-8 rounded-lg gap-1.5 shadow-2xs px-2.5">
                                 <a href={`tel:${lead.phone}`}>
                                   <Phone className="size-3.5 text-primary" />
-                                  <span>Call</span>
+                                  <span className="hidden xl:inline text-xs">Call</span>
                                 </a>
                               </Button>
                               <Button
                                 asChild
                                 size="sm"
                                 variant="outline"
-                                className="apple-button h-8 rounded-lg gap-1.5 border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-2xs font-medium"
+                                className="apple-button h-8 rounded-lg gap-1.5 border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 shadow-2xs font-medium px-2.5"
                               >
                                 <a
                                   href={toWhatsAppUrl(lead.phone) || "#"}
@@ -1059,7 +1071,7 @@ export function LeadsTab({
                                   title={`Chat with ${lead.name || "client"} on WhatsApp`}
                                 >
                                   <Send className="size-3 text-emerald-600 dark:text-emerald-400" />
-                                  <span className="hidden xl:inline">WhatsApp</span>
+                                  <span className="hidden xl:inline text-xs">WhatsApp</span>
                                 </a>
                               </Button>
                             </>
@@ -1067,17 +1079,17 @@ export function LeadsTab({
                             <Button
                               size="sm"
                               variant="outline"
-                              className="apple-button h-8 rounded-lg gap-1.5 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 shadow-2xs font-medium text-xs"
+                              className="apple-button h-8 rounded-lg gap-1.5 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 shadow-2xs font-medium text-xs px-2.5"
                               onClick={() => setSelected(lead)}
                             >
                               <Phone className="size-3 text-amber-600 dark:text-amber-400" />
-                              <span>Add Number</span>
+                              <span className="hidden sm:inline">Add Number</span>
                             </Button>
                           ) : null}
                           <Button
                             size="sm"
                             variant="default"
-                            className="apple-button h-8 rounded-lg text-xs shadow-2xs font-semibold"
+                            className="apple-button h-8 rounded-lg text-xs shadow-2xs font-semibold px-3"
                             onClick={() => setSelected(lead)}
                           >
                             Open
