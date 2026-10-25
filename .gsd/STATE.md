@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-25T15:41:00+05:30
+updated: 2026-10-25T15:48:00+05:30
 ---
 
 # Project State
@@ -8,18 +8,18 @@ updated: 2026-10-25T15:41:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 16 - Pipeline Board Exhaustive Stage Mapping & Site Visit Preservation  
-**Status:** ⏳ Ready to Execute  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/16/16.1-PLAN.md` (Pipeline Board Exhaustive Stage Mapping & Site Visit Preservation) — ⏳ Ready
+- `.gsd/phases/16/16.1-PLAN.md` (Pipeline Board Exhaustive Stage Mapping & Site Visit Preservation) — ✅ Complete
 
 ## Last Action
 
-Completed Phase 15:
-- Enforced Explicit Property Locking in `src/components/crm/inventory-tab.tsx`: leads with a `selected_property_id` (or site visit booked) match ONLY that exact property and never bleed into unrelated properties.
-- Implemented strict category isolation (Commercial vs Plot vs Residential) and multi-factor scoring (threshold >= 4; budget alone can no longer qualify a match).
-- Fixed undefined `setDemandModalProp` in card view, replacing with `setMatchingDialogProperty` and Apple HIG emerald button styling.
-- Enriched matchmaker dialog with `🎯 Direct Property Lead / Site Visit Booked` vs `✨ Criteria Match` badges and direct Call/WhatsApp action buttons.
-- Verified build passes (`npm.cmd run build` in 990ms). Griham Heights shows 1 Buyer (Manthan), and Griham Business Central & Green Valley show 0 Buyers (None yet).
+Completed Phase 16:
+- Enhanced `hydrateLead` in `src/lib/crm.ts` to canonically set `status = "SITE_VISIT_BOOKED"` when `site_visit_booked: true` or `site_visit_datetime` is set.
+- Refactored `pipelineColumns` in `src/components/crm/leads-tab.tsx` into 6 mutually exclusive, exhaustive stages so 100% of leads in `rows` appear on the Pipeline Board with zero lost leads.
+- Updated Edge Function `realtor-lead-engine` FAQ interceptors to preserve `currentState` rather than resetting to `ROLE_SELECTION_PENDING`, and deployed to production.
+- Aligned Manthan's database record to `state = 'SITE_VISIT_BOOKED'`.
+- Verified build passes (`npm.cmd run build` in 875ms). Manthan visibly appears under 'Visit Scheduled (1)'.
 
 ## Active Decisions
 
