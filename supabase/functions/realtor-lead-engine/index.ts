@@ -2039,7 +2039,7 @@ export function buildClassifiedActionResult(
   };
 }
 
-const INTENT_CLASSIFICATION_SYSTEM_PROMPT = `You are Nextgen Realty's lead intent classifier for WhatsApp/Telegram real estate leads.
+const INTENT_CLASSIFICATION_SYSTEM_PROMPT = `You are an expert real estate lead intent classifier for multi-tenant WhatsApp/Telegram leads.
 Generate ONLY a single JSON object that satisfies TypeScript discriminated union type UserAction along with user_role and language.
 
 ### TYPESCRIPT DEFINITION:
@@ -4242,6 +4242,7 @@ async function handleOwnerFlow({
       return { replyText, nextState: "QUALIFYING" };
     }
 
+    const agency = agencyName || "NextGen Realty";
     const isAcknowledgement = /^(thik|theek|thk|thek|ok|okay|k|sahi|achha|acha|saras|barobar|done|understood|samajh|dhanyawad|thanks|thank you|shukriya|aabhar)/i.test(lower.trim());
     const replyText = isAcknowledgement
       ? (lang === "GUJLISH"
@@ -4250,10 +4251,10 @@ async function handleOwnerFlow({
         ? `Certainly <b>${senderName || "Friend"}</b>! Our acquisition team will connect with you shortly for on-site inspection. Feel free to reach out if you need anything else! 🙏`
         : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamari team inspection & verification ke liye jald aapse call par connect karegi. Koi bhi aur requirement ho to zaroor batayein! 🙏`)
       : (lang === "GUJLISH"
-        ? `Ji bilkul <b>${senderName} bhai</b>! Tamari property details Nextgen Realty listing desk par successfully registered chhe. 📋 Biji koi query hoy to zaroor janavjo! 🙏`
+        ? `Ji bilkul <b>${senderName} bhai</b>! Tamari property details ${agency} listing desk par successfully registered chhe. 📋 Biji koi query hoy to zaroor janavjo! 🙏`
         : lang === "ENGLISH"
-        ? `Sure <b>${senderName}</b>! Your property listing is registered on the Nextgen Realty listing desk. 📋 Feel free to reach out if you have any questions! 🙏`
-        : `Ji bilkul <b>${senderName} ji</b>! Aapki property details Nextgen Realty listing desk par successfully registered hain. 📋 Koi bhi aur requirement ya query ho to zaroor batayein! 🙏`);
+        ? `Sure <b>${senderName}</b>! Your property listing is registered on the ${agency} listing desk. 📋 Feel free to reach out if you have any questions! 🙏`
+        : `Ji bilkul <b>${senderName} ji</b>! Aapki property details ${agency} listing desk par successfully registered hain. 📋 Koi bhi aur requirement ya query ho to zaroor batayein! 🙏`);
     return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
   }
 
@@ -4682,12 +4683,13 @@ async function handleOwnerFlow({
 
   const summary = `• 🏢 <b>Property:</b> ${draft.configuration || draft.property_type} in ${draft.society_name || draft.location}\n• 📏 <b>Area:</b> ${areaSummary}\n• 💰 <b>Expected ${isRent ? "Rent" : "Demand"}:</b> ${priceFormatted}\n• 🔑 <b>Status:</b> ${draft.possession_status?.replace(/_/g, " ")} | ${draft.furnishing_status?.replace(/_/g, " ")}`;
 
+  const agency = agencyName || "NextGen Realty";
   const replyText =
     lang === "GUJLISH"
-      ? `Khub khub aabhar <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 🎉\n\nTamari property listing details Nextgen Realty desk par successfully register thai gai chhe:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Amara senior property acquisition manager documents verification, physical inspection ane professional photography mate jaldi thi tamari sathe call par connect karshe.`
+      ? `Khub khub aabhar <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 🎉\n\nTamari property listing details ${agency} desk par successfully register thai gai chhe:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Amara senior property acquisition manager documents verification, physical inspection ane professional photography mate jaldi thi tamari sathe call par connect karshe.`
       : lang === "ENGLISH"
-      ? `Thank you so much <b>${senderName || "Friend"}</b>! 🎉\n\nYour property listing has been successfully registered on the Nextgen Realty desk:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Our senior property acquisition manager will connect with you shortly over a call for document verification, on-site inspection, and professional photography.`
-      : `Bahut bahut dhanyawad <b>${senderName ? `${senderName} ji` : "ji"}</b>! 🎉\n\nAapki property listing details Nextgen Realty desk par successfully register ho gayi hain:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Hamare senior property acquisition manager documents verification, physical inspection aur professional photography ke liye jald hi aapse call par connect karenge.`;
+      ? `Thank you so much <b>${senderName || "Friend"}</b>! 🎉\n\nYour property listing has been successfully registered on the ${agency} desk:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Our senior property acquisition manager will connect with you shortly over a call for document verification, on-site inspection, and professional photography.`
+      : `Bahut bahut dhanyawad <b>${senderName ? `${senderName} ji` : "ji"}</b>! 🎉\n\nAapki property listing details ${agency} desk par successfully register ho gayi hain:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Hamare senior property acquisition manager documents verification, physical inspection aur professional photography ke liye jald hi aapse call par connect karenge.`;
 
   const hasQueued = Array.isArray(draft.queued_properties) && draft.queued_properties.length > 0;
   if (hasQueued) {
@@ -4864,6 +4866,27 @@ export async function dispatchStateAction(
     }
   }
 
+  // Agency / Company Identity Interceptor:
+  const isAgencyIdentityQuery =
+    /(?:agency|company|firm|karyalay|office|tamari\s*company|tamaru\s*nam|aapki\s*agency|aapka\s*naam|aap\s*kaun|who\s*are\s*you|naam\s*kya|nam\s*su\s*che|nam\s*kya\s*he|nam\s*su|tamara\s*vishe|agency\s*name|company\s*name)\b/i.test(lower);
+
+  if (isAgencyIdentityQuery && !isRealEstateTerm) {
+    const replyText =
+      lang === "GUJLISH"
+        ? `Amari agency nu naam <b>${agencyName}</b> chhe! 🙏 Ame ${displayCity} ma verified residential (Flats, Villas) ane commercial properties ma deal kariye chiye.\n\n👉 <b>${nameStr}</b>, tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Space</b>? 🏢`
+        : lang === "ENGLISH"
+        ? `We are <b>${agencyName}</b>! 🙏 We specialize in verified residential (Flats, Villas) and commercial properties across ${displayCity}.\n\n👉 <b>${nameStr}</b>, what type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Space</b>? 🏢`
+        : `Hamari agency ka naam <b>${agencyName}</b> hai! 🙏 Hum ${displayCity} me verified residential (Flats, Villas) aur commercial properties provide karte hain.\n\n👉 <b>${nameStr}</b>, aap kis type ki property search kar rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Space</b>? 🏢`;
+
+    return {
+      replyText,
+      nextState: "ROLE_SELECTION_PENDING",
+      leadUpdates: {
+        state: "ROLE_SELECTION_PENDING",
+      },
+    };
+  }
+
   if (intent === "OFF_TOPIC" || isGibberish) {
     let replyText = "";
     if (isGibberish) {
@@ -4876,10 +4899,10 @@ export async function dispatchStateAction(
     } else {
       replyText =
         lang === "GUJLISH"
-          ? `Hu Nextgen Realty no AI property assistant chhu ane hu fakt property search, site visits ane real estate sambhandhit details ma j tamne help kari shaku chhu. 😊🏢\n\nKripya janavjo, tame kaya type ni property shodhva mango chho — <b>Residential ke Commercial?</b> 🏡`
+          ? `Hu ${agencyName} no AI property assistant chhu ane hu fakt property search, site visits ane real estate sambhandhit details ma j tamne help kari shaku chhu. 😊🏢\n\nKripya janavjo, tame kaya type ni property shodhva mango chho — <b>Residential ke Commercial?</b> 🏡`
           : lang === "ENGLISH"
-          ? `I am Nextgen Realty's AI property assistant, and I can only assist you with property search, site visits, and real estate details. 😊🏢\n\nPlease let me know what kind of residential or commercial property you are looking for! 🏡`
-          : `Main Nextgen Realty ka AI property assistant hu aur main sirf property search, site visits aur real estate queries me hi aapki help kar sakta hu. 😊🏢\n\nKripya batayein, aap kis type ki property search kar rahe hain — <b>Residential ya Commercial?</b> 🏡`;
+          ? `I am ${agencyName}'s AI property assistant, and I can only assist you with property search, site visits, and real estate details. 😊🏢\n\nPlease let me know what kind of residential or commercial property you are looking for! 🏡`
+          : `Main ${agencyName} ka AI property assistant hu aur main sirf property search, site visits aur real estate queries me hi aapki help kar sakta hu. 😊🏢\n\nKripya batayein, aap kis type ki property search kar rahe hain — <b>Residential ya Commercial?</b> 🏡`;
     }
 
     return {
@@ -5629,10 +5652,10 @@ export async function dispatchStateAction(
 
       const replyText =
         lang === "GUJLISH"
-          ? `Namaste <b>${nameStr}</b>! 🙏 NextGen Realty par tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
+          ? `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
           : lang === "ENGLISH"
-          ? `Thank you <b>${nameStr}</b>! 🙏 We would be delighted to assist you in listing your property with NextGen Realty.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
-          : `Namaste <b>${nameStr}</b>! 🙏 NextGen Realty par apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
+          ? `Thank you <b>${nameStr}</b>! 🙏 We would be delighted to assist you in listing your property with ${agencyName}.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
+          : `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
 
       return {
         replyText,
@@ -7431,7 +7454,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v69-multi-tenant-query-isolation",
+        version: "v70-agency-identity-interceptor",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
