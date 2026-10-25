@@ -6121,7 +6121,9 @@ export async function dispatchStateAction(
     const isVisitAttended =
       (intent === "CONFIRM_VISIT_ATTENDANCE" && (action as ConfirmVisitAttendanceAction).attended !== false) ||
       intent === "CONFIRM_VISIT" ||
-      (Boolean(lead.post_visit_feedback_sent) && /^(?:1|1️⃣|first|1st|option\s*1|ha|haan|yes|attended|gaya|gaye|kiya|kari)\b/i.test(lower.trim()));
+      (Boolean(lead.post_visit_feedback_sent) && /^(?:1|1️⃣|first|1st|option\s*1|ha|haan|yes|attended|gaya|gaye|kiya|kari)\b/i.test(lower.trim())) ||
+      /(?:mene|maine|hu|ame|hum|hamne)?\s*(?:site\s*visit|visit)\s*(?:kr|kar|kari|karyo|complete|done|aavi\s*gayo|attend|gaya|gaye|dekh\s*li|dekh\s*aaya|gaya\s*tha|gaye\s*the|di\s*thi|didhi|li\s*thi)/i.test(lower) ||
+      /(?:visit|site\s*visit|property)\s*(?:dekh\s*li|dekhne\s*gaye\s*the|gaya\s*tha|ho\s*gayi|complete\s*thai|kar\s*li|kari\s*chhe|patavi\s*didhi|kr\s*di\s*thi|kar\s*di\s*thi)/i.test(lower);
 
     const isVisitMissed =
       (intent === "CONFIRM_VISIT_ATTENDANCE" && (action as ConfirmVisitAttendanceAction).attended === false) ||
@@ -6163,8 +6165,8 @@ export async function dispatchStateAction(
         nextState: "SITE_VISIT_DONE",
         leadUpdates: {
           state: "SITE_VISIT_DONE",
-          status: "VISIT_DONE",
           site_visit_booked: false,
+          post_visit_feedback_sent: true,
         },
         salesAlert: { type: "FEEDBACK_RECEIVED", payload: { userText: context.messageText } },
       };
@@ -6189,7 +6191,6 @@ export async function dispatchStateAction(
         nextState: "VISIT_MISSED",
         leadUpdates: {
           state: "VISIT_MISSED",
-          status: "VISIT_MISSED",
           site_visit_booked: false,
           drip_stage: "MISSED_RESCHEDULE_PROMPTED",
         },
@@ -6344,7 +6345,6 @@ export async function dispatchStateAction(
           site_visit_datetime: newSlot,
           site_visit_booked: true,
           state: "VISIT_RESCHEDULED",
-          status: "VISIT_RESCHEDULED",
           pre_visit_reminder_sent: false,
           post_visit_feedback_sent: false,
           metadata: {
@@ -6484,7 +6484,6 @@ export async function dispatchStateAction(
             site_visit_datetime: newSlot,
             site_visit_booked: true,
             state: "SITE_VISIT_BOOKED",
-            status: "SITE_VISIT_BOOKED",
             pre_visit_reminder_sent: false,
             post_visit_feedback_sent: false,
             metadata: {
@@ -6612,7 +6611,6 @@ export async function dispatchStateAction(
             site_visit_datetime: newSlot,
             site_visit_booked: true,
             state: "SITE_VISIT_BOOKED",
-            status: "SITE_VISIT_BOOKED",
             pre_visit_reminder_sent: false,
             post_visit_feedback_sent: false,
             metadata: {
@@ -8369,12 +8367,14 @@ Deno.serve(async (req: Request) => {
       isSilent = true;
     }
 
-    // Persist lead state and updates to Supabase PostgreSQL
+    // Persist lead state and updates to Supabase PostgreSQL (schema-safe: leads has 'state', not 'status')
     if (transitionResult.leadUpdates && Object.keys(transitionResult.leadUpdates).length > 0) {
+      const sanitizedUpdates = { ...transitionResult.leadUpdates };
+      delete (sanitizedUpdates as any).status;
       await supabase
         .from("leads")
         .update({
-          ...transitionResult.leadUpdates,
+          ...sanitizedUpdates,
           state: nextState,
           last_active_at: new Date().toISOString(),
         })
