@@ -118,6 +118,14 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 13.1: Database Schema Expansion & Edge Function Dynamic AI Knowledge Engine ([`13.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/13/13.1-PLAN.md))
 - [x] Plan 13.2: Apple HIG Profile Tab "AI Bot Knowledge & FAQ Studio" UI ([`13.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/13/13.2-PLAN.md))
 
+### Phase 14: Desktop Horizontal Navigation & Full-Width Viewport Optimization
+**Status:** ⏳ In Progress  
+**Objective:** Relocate the CRM navigation tabs (Leads CRM, Live Inventory, Team Performance, Budget & Pipeline, Channels, Profile) from the 240px vertical left sidebar to an Apple HIG horizontal segmented ribbon in the sticky top header. Eliminate the wasted left-side margin, expand the desktop content canvas to full width (`max-w-[1600px]`), and optimize table columns and triage controls so sales executives can review comprehensive lead details without horizontal scrolling.  
+**Depends on:** Phase 13  
+**Plans:**
+- [ ] Plan 14.1: Desktop Horizontal Segmented Tab Ribbon & Full-Width Viewport Expansion ([`14.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/14/14.1-PLAN.md))
+- [ ] Plan 14.2: Leads CRM Table Wide-Screen Ergonomics & Triage Strip Polish ([`14.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/14/14.2-PLAN.md))
+
 ---
 
 ## Progress Summary
@@ -135,6 +143,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 11: High-Density Lead History & Dual-Actor Stream | ✅ Complete | 2/2 | 100% |
 | 12: Telegram Webhook & Tenant Identity | ✅ Complete | 1/1 | 100% |
 | 13: Dynamic Profile FAQ & AI Knowledge Studio | ✅ Complete | 2/2 | 100% |
+| 14: Desktop Horizontal Navigation & Full-Width CRM | ⏳ In Progress | 0/2 | 0% |
 
 
 
