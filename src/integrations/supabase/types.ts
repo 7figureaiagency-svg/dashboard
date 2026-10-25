@@ -38,6 +38,8 @@ export type Database = {
           waba_business_id: string | null;
           created_at: string;
           updated_at: string;
+          bot_knowledge?: Record<string, any> | null;
+          logo_url?: string | null;
         };
         Insert: {
           id?: string;
@@ -61,6 +63,8 @@ export type Database = {
           waba_business_id?: string | null;
           created_at?: string;
           updated_at?: string;
+          bot_knowledge?: Record<string, any> | null;
+          logo_url?: string | null;
         };
         Update: {
           id?: string;
@@ -84,6 +88,8 @@ export type Database = {
           waba_business_id?: string | null;
           created_at?: string;
           updated_at?: string;
+          bot_knowledge?: Record<string, any> | null;
+          logo_url?: string | null;
         };
         Relationships: [];
       };
