@@ -102,11 +102,11 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 11.2: Apple HIG Compact Activity Stream Component & Segmented Actor Filter (UI Layer) ([`11.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/11/11.2-PLAN.md))
 
 ### Phase 12: Telegram Webhook Registration, Tenant Identity & Live Bot Verification
-**Status:** ⏳ In Progress  
+**Status:** ✅ Complete  
 **Objective:** Diagnose and resolve why Griham Realty's Telegram bot is not replying. Register Telegram webhook with tenant-isolated parameters, eliminate hardcoded NextGen branding in Edge Function fallbacks, add dedicated Agency/Company Name intent handling, and verify live message exchange on Telegram.  
 **Depends on:** Phase 11  
 **Plans:**
-- [ ] Plan 12.1: Griham Realty Telegram Webhook Registration, Tenant Identity & Live Bot Verification ([`12.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/12/12.1-PLAN.md))
+- [x] Plan 12.1: Griham Realty Telegram Webhook Registration, Tenant Identity & Live Bot Verification ([`12.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/12/12.1-PLAN.md))
 
 ---
 
@@ -123,7 +123,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 9: Strict Multi-Tenant Data Isolation | ✅ Complete | 2/2 | 100% |
 | 10: Edge Function Multi-Tenant Isolation & Sanitization | ✅ Complete | 2/2 | 100% |
 | 11: High-Density Lead History & Dual-Actor Stream | ✅ Complete | 2/2 | 100% |
-| 12: Telegram Webhook & Tenant Identity | ⏳ In Progress | 0/1 | 0% |
+| 12: Telegram Webhook & Tenant Identity | ✅ Complete | 1/1 | 100% |
 
 
 

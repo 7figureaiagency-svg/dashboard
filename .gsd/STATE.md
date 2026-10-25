@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-25T13:28:00+05:30
+updated: 2026-10-25T13:56:00+05:30
 ---
 
 # Project State
@@ -8,17 +8,20 @@ updated: 2026-10-25T13:28:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Inventory  
 **Phase:** 12 - Telegram Webhook Registration, Tenant Identity & Live Bot Verification for Griham Realty  
-**Status:** ⏳ In Progress  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/12/12.1-PLAN.md` (Griham Realty Telegram Webhook Registration, Tenant Identity & Live Bot Verification) — ⏳ Ready to Execute
+- `.gsd/phases/12/12.1-PLAN.md` (Griham Realty Telegram Webhook Registration, Tenant Identity & Live Bot Verification) — ✅ Complete
 
 ## Last Action
 
-Root-Cause Analysis of Griham Realty Telegram Bot:
-- Queried Telegram Bot API `getWebhookInfo` for bot token `8931392683:AAHgKCxxVOtLQQxyh1SjU1PWJv_fylXCS5s`.
-- Discovered `url: ""` (completely empty) and `pending_update_count: 4` (messages queued on Telegram). Telegram never dispatched webhook requests to Supabase because the webhook URL was not registered.
-- Identified hardcoded branding `"Nextgen Realty"` in `realtor-lead-engine` OFF_TOPIC fallbacks and absence of dedicated Agency/Company Name intent handler.
-- Formulated Phase 12 roadmap and Plan 12.1.
+Completed Phase 12:
+- Registered Telegram Bot webhook via API for Griham Realty (`@GrihamRealtybot` / token `8931392683:...`) to `realtor-lead-engine?client_id=c0000000-0000-0000-0000-000000000001&bot_token=8931392683:...`.
+- Telegram delivered all 4 pending queued updates; verified `pending_update_count: 0`.
+- Standardized client record name in `public.clients` to `"Griham Realty"`.
+- Replaced hardcoded `"Nextgen Realty"` mentions across owner flows and off-topic fallbacks in `realtor-lead-engine/index.ts`.
+- Added Agency / Company Identity Interceptor (`isAgencyIdentityQuery`) to answer company name inquiries with tenant identity and bridge to property qualification.
+- Deployed Edge Function `v70-agency-identity-interceptor` (version 112) to Supabase live runtime.
+- Empirically verified end-to-end messaging with Hindi and Gujarati live queries.
 
 
 ## Active Decisions
