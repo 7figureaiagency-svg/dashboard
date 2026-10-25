@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-25T15:26:00+05:30
+updated: 2026-10-25T15:32:00+05:30
 ---
 
 # Project State
@@ -8,18 +8,18 @@ updated: 2026-10-25T15:26:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 15 - Precision Inventory Demand Matchmaker & Explicit Property Locking  
-**Status:** ⏳ Ready to Execute  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/15/15.1-PLAN.md` (Precision Inventory Demand Matchmaker & Explicit Property Locking) — ⏳ Ready
+- `.gsd/phases/15/15.1-PLAN.md` (Precision Inventory Demand Matchmaker & Explicit Property Locking) — ✅ Complete
 
 ## Last Action
 
-Completed Phase 14:
-- Relocated CRM navigation tabs from the 240px vertical sidebar to an Apple HIG horizontal segmented ribbon in the sticky top header (`src/routes/_authenticated/dashboard.tsx`).
-- Eliminated the vertical sidebar, expanding the desktop viewport to `max-w-[1600px] w-full px-3 sm:px-6 lg:px-8`.
-- Polished Leads CRM table wide-screen ergonomics with dedicated column min-widths, detailed Property Type + Locality sub-labels, and accessible Quick Actions (`src/components/crm/leads-tab.tsx`).
-- Preserved native mobile floating bottom dock for phone screens.
-- Verified build passes cleanly (`npm.cmd run build` in 694ms).
+Completed Phase 15:
+- Enforced Explicit Property Locking in `src/components/crm/inventory-tab.tsx`: leads with a `selected_property_id` (or site visit booked) match ONLY that exact property and never bleed into unrelated properties.
+- Implemented strict category isolation (Commercial vs Plot vs Residential) and multi-factor scoring (threshold >= 4; budget alone can no longer qualify a match).
+- Fixed undefined `setDemandModalProp` in card view, replacing with `setMatchingDialogProperty` and Apple HIG emerald button styling.
+- Enriched matchmaker dialog with `🎯 Direct Property Lead / Site Visit Booked` vs `✨ Criteria Match` badges and direct Call/WhatsApp action buttons.
+- Verified build passes (`npm.cmd run build` in 990ms). Griham Heights shows 1 Buyer (Manthan), and Griham Business Central & Green Valley show 0 Buyers (None yet).
 
 ## Active Decisions
 
