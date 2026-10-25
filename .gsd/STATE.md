@@ -1,34 +1,37 @@
 ---
-updated: 2026-10-25T13:58:00+05:30
+updated: 2026-10-25T14:35:00+05:30
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone:** Multi-Tenant Onboarding, Data Isolation & Inventory  
+**Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 13 - Dynamic Multi-Tenant AI Knowledge Base & Agency Profile FAQ Studio  
-**Status:** ⏳ In Progress  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/13/13.1-PLAN.md` (Database Schema Expansion & Edge Function Dynamic AI Knowledge Engine) — ⏳ Ready to Execute
-- `.gsd/phases/13/13.2-PLAN.md` (Apple HIG Profile Tab "AI Bot Knowledge & FAQ Studio" UI) — ⏳ Ready to Execute
+- `.gsd/phases/13/13.1-PLAN.md` (Database Schema Expansion & Edge Function Dynamic AI Knowledge Engine) — ✅ Complete
+- `.gsd/phases/13/13.2-PLAN.md` (Apple HIG Profile Tab "AI Bot Knowledge & FAQ Studio" UI) — ✅ Complete
 
 ## Last Action
 
-Completed Phase 12:
-- Registered Telegram Bot webhook via API for Griham Realty (`@GrihamRealtybot` / token `8931392683:...`) to `realtor-lead-engine?client_id=c0000000-0000-0000-0000-000000000001&bot_token=8931392683:...`.
-- Telegram delivered all 4 pending queued updates; verified `pending_update_count: 0`.
-- Standardized client record name in `public.clients` to `"Griham Realty"`.
-- Replaced hardcoded `"Nextgen Realty"` mentions across owner flows and off-topic fallbacks in `realtor-lead-engine/index.ts`.
-- Added Agency / Company Identity Interceptor (`isAgencyIdentityQuery`) to answer company name inquiries with tenant identity and bridge to property qualification.
-- Deployed Edge Function `v70-agency-identity-interceptor` (version 112) to Supabase live runtime.
-- Empirically verified end-to-end messaging with Hindi and Gujarati live queries.
-
+Completed Phase 13:
+- Extended `public.clients` database schema with `bot_knowledge JSONB DEFAULT '{}'::jsonb`.
+- Seeded multi-tenant knowledge bases for Griham Realty (Alkapuri address, 10 AM - 7:30 PM hours, 0% builder/1% resale brokerage, SBI/HDFC/ICICI banking, booking KYC documentation FAQ) and NextGen Realty (Gotri-Sevasi Road address, 0% builder/1% luxury resale brokerage).
+- Upgraded `realtor-lead-engine` Edge Function to `v71-dynamic-bot-knowledge` (deployed version 114):
+  - Injected `tenantClient.bot_knowledge` into DialogContext.
+  - Added new intent classification topics: `OFFICE_ADDRESS`, `OFFICE_TIMINGS`, `AGENCY_INFO`, `CUSTOM_FAQ`.
+  - Immunized office inquiries against false-positive Commercial Office overrides.
+  - Dynamically grounded all FAQ responses (brokerage, loans, RERA, office address, timings, custom Q&As) in tenant knowledge.
+- Verified live replies on Griham Realty bot via test suite with 100% accuracy.
+- Built Apple HIG "AI Bot Knowledge & FAQ Studio" in `src/components/crm/profile-tab.tsx` with Operations, Commercial Policies, Custom Q&A Studio, and Live Simulated Chat Preview.
+- Verified `npm.cmd run build` passes with zero errors and multi-tenant persistence round-trip passes with 100% data isolation.
 
 ## Active Decisions
 
 | Decision | Choice | Made | Affects |
 | :--- | :--- | :--- | :--- |
+| Dynamic FAQ Architecture | Pure AI semantic intent understanding + Database JSONB grounded answers (Zero regex cascades) | 2026-10-25 | Edge Function & CRM Profile Tab |
 | Architecture | 100% Non-n8n (Supabase Edge Functions + React CRM) | 2026-10-19 | Entire codebase |
 | Multi-Tenant Isolation | Two-Tier: PostgreSQL RLS via `public.current_client_id()` + TanStack Query Key Partitioning `[key, clientId]` | 2026-10-24 | Database & Frontend |
 | Dual-Persona Model | Option A: Parallel co-existence of Buyer criteria & Seller listings with `DUAL_ROLE` type | 2026-10-21 | Edge Function & CRM |
