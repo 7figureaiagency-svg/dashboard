@@ -126,6 +126,13 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 14.1: Desktop Horizontal Segmented Tab Ribbon & Full-Width Viewport Expansion ([`14.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/14/14.1-PLAN.md))
 - [x] Plan 14.2: Leads CRM Table Wide-Screen Ergonomics & Triage Strip Polish ([`14.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/14/14.2-PLAN.md))
 
+### Phase 15: Precision Inventory Demand Matchmaker & Explicit Property Locking
+**Status:** ⏳ In Progress  
+**Objective:** Fix the flawed Reverse Demand Matchmaker logic in Live Inventory. Ensure leads who booked a site visit or selected an explicit property match ONLY that specific property and never bleed into unrelated properties. Isolate Commercial, Plot, and Residential categories, eliminate loose budget-only matches, and fix the undefined card-view trigger.  
+**Depends on:** Phase 14  
+**Plans:**
+- [ ] Plan 15.1: Precision Inventory Demand Matchmaker & Explicit Property Locking ([`15.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/15/15.1-PLAN.md))
+
 ---
 
 ## Progress Summary
@@ -144,6 +151,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 12: Telegram Webhook & Tenant Identity | ✅ Complete | 1/1 | 100% |
 | 13: Dynamic Profile FAQ & AI Knowledge Studio | ✅ Complete | 2/2 | 100% |
 | 14: Desktop Horizontal Navigation & Full-Width CRM | ✅ Complete | 2/2 | 100% |
+| 15: Precision Inventory Demand Matchmaker | ⏳ In Progress | 0/1 | 0% |
 
 
 
