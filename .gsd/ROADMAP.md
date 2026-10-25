@@ -110,6 +110,16 @@ updated: 2026-10-19T18:50:30+05:30
 
 ---
 
+### Phase 13: Dynamic Multi-Tenant AI Knowledge Base & Agency Profile FAQ Studio
+**Status:** ⏳ In Progress  
+**Objective:** Empower agencies to customize their office address, operating hours, brokerage policies, loan partners, and custom FAQs directly from the CRM Profile tab. Inject client-specific `bot_knowledge` JSONB dynamically into the Edge Function intent engine without regex, ensuring 100% zero-hallucination, authentic responses in Gujlish, Hinglish, and English.  
+**Depends on:** Phase 12  
+**Plans:**
+- [ ] Plan 13.1: Database Schema Expansion & Edge Function Dynamic AI Knowledge Engine ([`13.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/13/13.1-PLAN.md))
+- [ ] Plan 13.2: Apple HIG Profile Tab "AI Bot Knowledge & FAQ Studio" UI ([`13.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/13/13.2-PLAN.md))
+
+---
+
 ## Progress Summary
 
 | Phase | Status | Plans | Complete |
@@ -124,6 +134,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 10: Edge Function Multi-Tenant Isolation & Sanitization | ✅ Complete | 2/2 | 100% |
 | 11: High-Density Lead History & Dual-Actor Stream | ✅ Complete | 2/2 | 100% |
 | 12: Telegram Webhook & Tenant Identity | ✅ Complete | 1/1 | 100% |
+| 13: Dynamic Profile FAQ & AI Knowledge Studio | ⏳ In Progress | 0/2 | 0% |
 
 
 
