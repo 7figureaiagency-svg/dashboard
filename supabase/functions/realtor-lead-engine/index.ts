@@ -1684,9 +1684,9 @@ export type ClassifiedIntent = ClassifiedActionResult;
  * Validates, normalizes, and sanitizes untrusted LLM JSON output into a
  * strictly typed UserAction discriminated union instance.
  */
-export function validateUserAction(raw: any, leadState?: string): UserAction {
+export function validateUserAction(raw: any, leadState?: string, rawMessageText?: string): UserAction {
   if (!raw || typeof raw !== "object") {
-    return { intent: "GENERAL_QUERY", query: "" };
+    return { intent: "GENERAL_QUERY", query: rawMessageText || "" };
   }
 
   const src = (raw.action && typeof raw.action === "object") ? raw.action : raw;
@@ -1959,6 +1959,15 @@ export function validateUserAction(raw: any, leadState?: string): UserAction {
     }
 
     case "OPT_OUT": {
+      const lowerRaw = String(rawMessageText || raw.messageText || raw.text || raw.userText || src.query || "").trim().toLowerCase();
+      const isExplicitOptOut = /(?:stop|unsubscribe|not\s*interested|nathi\s*joiye|message\s*mat\s*karo|band\s*karo|dont\s*message|call\s*mat\s*karo|msg\s*mat\s*karo|don't\s*text)/i.test(lowerRaw);
+      const isBareNegation = /^(?:nahi|no|na|nathi|nhi|nope|naa|naah|not\s*now|abhi\s*nahi|hal\s*ma\s*nathi|pachi)$/i.test(lowerRaw);
+      if (isBareNegation && !isExplicitOptOut) {
+        return {
+          intent: "GENERAL_QUERY",
+          query: lowerRaw,
+        };
+      }
       return {
         intent: "OPT_OUT",
       };
@@ -2146,6 +2155,9 @@ interface IntentResult {
 18. "stop" / "not interested" / "nathi joiye" ->
 {"action": {"intent": "OPT_OUT"}, "language": "HINGLISH", "user_role": "UNKNOWN"}
 
+18b. "nahi" / "no" / "na" / "nathi" (as conversational response to a bot question) ->
+{"action": {"intent": "GENERAL_QUERY", "query": "nahi"}, "language": "HINGLISH", "user_role": "UNKNOWN"}
+
 19. "kem cho" / "hello" / "namaste" ->
 {"action": {"intent": "GREETING"}, "language": "GUJLISH", "user_role": "UNKNOWN"}
 
@@ -2157,6 +2169,10 @@ interface IntentResult {
 
 22. "Commercial" / "Commercial shop" ->
 {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "Commercial"}, "language": "ENGLISH", "user_role": "SEEKER"}
+
+### OPT_OUT VS CONVERSATIONAL NEGATION RULE:
+- "OPT_OUT" is strictly reserved for explicit unsubscription phrases like "stop", "unsubscribe", "not interested", "nathi joiye", "message mat karo", "don't message me", "band karo".
+- Conversational answers like "nahi", "no", "na", "nathi", "nahi karni" in response to a bot question (such as asking if they want to list another property, or want site visit) are NEVER "OPT_OUT"! They are "CONFIRM_CRITERIA" (with confirm: false) or "GENERAL_QUERY".
 
 ### REAL ESTATE PROPERTY TERMS RULE:
 - Property types and categories (e.g. "Office", "Commercial", "Residential", "Flat", "Villa", "Shop", "Plot", "BHK") are NEVER "OFF_TOPIC".
@@ -2308,7 +2324,8 @@ async function classifyLeadIntentWithGemini(
         if (rawText) {
           const parsed = parseJsonSafely(rawText);
           if (parsed && (parsed.action || parsed.intent)) {
-            const action = validateUserAction(parsed, lead?.state);
+            parsed.messageText = messageText;
+            const action = validateUserAction(parsed, lead?.state, messageText);
             const userRole = parsed.user_role || (action.intent === "SUBMIT_LISTING" ? "OWNER" : "SEEKER");
             const lang = parsed.language || "HINGLISH";
             return buildClassifiedActionResult(action, userRole, lang, "GEMINI", 0, parsed);
@@ -2392,7 +2409,8 @@ async function classifyLeadIntentWithGroq(
         if (rawText) {
           const parsed = parseJsonSafely(rawText);
           if (parsed && (parsed.action || parsed.intent)) {
-            const action = validateUserAction(parsed, lead?.state);
+            parsed.messageText = messageText;
+            const action = validateUserAction(parsed, lead?.state, messageText);
             const userRole = parsed.user_role || (action.intent === "SUBMIT_LISTING" ? "OWNER" : "SEEKER");
             const lang = parsed.language || "HINGLISH";
             return buildClassifiedActionResult(action, userRole, lang, "GROQ", 0, parsed);
@@ -2980,7 +2998,7 @@ async function resolveLeadProjectName(
   tenantId?: string
 ): Promise<{ projectName: string; prop: any }> {
   let prop: any = null;
-  const effectiveTenantId = tenantId || l?.client_id;
+  const effectiveTenantId = l?.client_id || tenantId || defaultTenantId;
   const candidatePropId = l?.selected_property_id;
 
   // 1. Direct selected_property_id from leads table
@@ -3015,8 +3033,13 @@ async function resolveLeadProjectName(
     if (p) prop = p;
   }
 
-  // 4. Fallback to tenant default available inventory
-  if (!prop && effectiveTenantId) {
+  // Determine cleanest project name from metadata if already recorded
+  const rawMetaName =
+    l?.metadata?.selected_property_name ||
+    l?.metadata?.owner_draft?.project_name;
+
+  // 4. Fallback to tenant default available inventory ONLY if neither prop nor rawMetaName is known
+  if (!prop && !rawMetaName && effectiveTenantId) {
     const { data: p } = await supabase
       .from("inventory")
       .select("*")
@@ -3026,11 +3049,6 @@ async function resolveLeadProjectName(
       .maybeSingle();
     if (p) prop = p;
   }
-
-  // Determine cleanest project name
-  const rawMetaName =
-    l?.metadata?.selected_property_name ||
-    l?.metadata?.owner_draft?.project_name;
 
   let projectName = prop?.project_name || rawMetaName;
 
@@ -3068,6 +3086,38 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
   const runPostVisitDrip = runAll || options.types.includes("post_visit_drip");
 
   try {
+    // Multi-tenant: Cache client bot tokens & WABA credentials
+    const { data: clientRows } = await supabase
+      .from("clients")
+      .select("id, bot_token, whatsapp_phone_number_id, phone_number_id, access_token")
+      .eq("is_active", true);
+
+    const tenantBotTokens: Record<string, string> = {};
+    const tenantWabaCreds: Record<string, { phoneId: string; accessToken: string }> = {};
+
+    if (clientRows) {
+      for (const c of clientRows) {
+        if (c.id && c.bot_token) tenantBotTokens[c.id] = c.bot_token;
+        const phoneId = c.whatsapp_phone_number_id || c.phone_number_id;
+        if (c.id && phoneId && c.access_token) {
+          tenantWabaCreds[c.id] = { phoneId, accessToken: c.access_token };
+        }
+      }
+    }
+
+    const getTenantBotToken = (tenantId?: string | null): string => {
+      if (tenantId && tenantBotTokens[tenantId]) return tenantBotTokens[tenantId];
+      return defaultBotToken;
+    };
+
+    const getTenantWaba = (tenantId?: string | null): { phoneId: string; accessToken: string } => {
+      if (tenantId && tenantWabaCreds[tenantId]) return tenantWabaCreds[tenantId];
+      return {
+        phoneId: Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "",
+        accessToken: Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "",
+      };
+    };
+
     // =========================================================================
     // 1A. MODULE 1A: MORNING-OF-VISIT BRIEFING (Sent 9:00 AM - 11:30 AM IST for TODAY's visits)
     // =========================================================================
@@ -3103,7 +3153,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const metadata = l.metadata || {};
             if (metadata.morning_briefing_sent && !options.force) continue;
 
-            const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
+            const leadTenantId = l.client_id || defaultTenantId;
+            const botToken = getTenantBotToken(l.client_id);
+            const { projectName, prop } = await resolveLeadProjectName(l, supabase, leadTenantId);
             const propLoc = prop?.location || "the site";
             const mapUrl = prop?.map_url || "https://maps.google.com";
             const formattedTime = visitDate.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
@@ -3124,10 +3176,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const isTelegram = /^[0-9]+$/.test(l.lead_id) || !l.phone || l.phone.startsWith("tg_") || String(l.metadata?.platform).toUpperCase() === "TELEGRAM";
             let dispatchRes: any;
             if (isTelegram) {
-              dispatchRes = await sendTelegramMessage(defaultBotToken, l.lead_id, briefingMsg);
+              dispatchRes = await sendTelegramMessage(botToken, l.lead_id, briefingMsg);
             } else {
-              const waPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
-              const waToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+              const { phoneId: waPhoneId, accessToken: waToken } = getTenantWaba(l.client_id);
               dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, briefingMsg);
             }
 
@@ -3139,7 +3190,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               .eq("id", l.id);
 
             await supabase.from("lead_events").insert({
-              client_id: defaultTenantId,
+              client_id: leadTenantId,
               lead_id: l.lead_id,
               event_type: "MORNING_BRIEFING_SENT",
               payload: { scheduled_at: scheduledIso, projectName, timeFormatted: formattedTime, dispatchRes }
@@ -3186,8 +3237,11 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const inWindow = options.force ? true : (diffMinutes >= 35 && diffMinutes <= 85);
             if (!inWindow) continue;
 
+            const leadTenantId = l.client_id || defaultTenantId;
+            const botToken = getTenantBotToken(l.client_id);
+
             // Property details
-            const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
+            const { projectName, prop } = await resolveLeadProjectName(l, supabase, leadTenantId);
             const propLoc = prop?.location || "the site";
             const mapUrl = prop?.map_url || "https://maps.google.com";
             const formattedTime = new Date(visitTime).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
@@ -3208,17 +3262,16 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const isTelegram = /^[0-9]+$/.test(l.lead_id) || !l.phone || l.phone.startsWith("tg_") || String(l.metadata?.platform).toUpperCase() === "TELEGRAM";
             let dispatchRes: any;
             if (isTelegram) {
-              dispatchRes = await sendTelegramMessage(defaultBotToken, l.lead_id, reminderMsg);
+              dispatchRes = await sendTelegramMessage(botToken, l.lead_id, reminderMsg);
             } else {
-              const waPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
-              const waToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+              const { phoneId: waPhoneId, accessToken: waToken } = getTenantWaba(l.client_id);
               dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, reminderMsg);
             }
 
             await supabase.from("leads").update({ pre_visit_reminder_sent: true }).eq("id", l.id);
             await supabase.from("site_visits").update({ reminder_2h_sent: true }).eq("lead_id", l.id);
             await supabase.from("lead_events").insert({
-              client_id: defaultTenantId,
+              client_id: leadTenantId,
               lead_id: l.lead_id,
               event_type: "PRE_VISIT_REMINDER_SENT",
               payload: { scheduled_at: new Date(visitTime).toISOString(), projectName, timeFormatted: formattedTime, dispatchRes }
@@ -3265,7 +3318,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const inWindow = options.force ? (diffMinutesPast >= 0) : (diffMinutesPast >= 45 && diffMinutesPast <= 1440);
             if (!inWindow) continue;
 
-            const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
+            const leadTenantId = l.client_id || defaultTenantId;
+            const botToken = getTenantBotToken(l.client_id);
+            const { projectName, prop } = await resolveLeadProjectName(l, supabase, leadTenantId);
             const lang = l.user_language || "HINGLISH";
             const name = l.first_name || "Customer";
 
@@ -3283,10 +3338,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const isTelegram = /^[0-9]+$/.test(l.lead_id) || !l.phone || l.phone.startsWith("tg_") || String(l.metadata?.platform).toUpperCase() === "TELEGRAM";
             let dispatchRes: any;
             if (isTelegram) {
-              dispatchRes = await sendTelegramMessage(defaultBotToken, l.lead_id, feedbackMsg);
+              dispatchRes = await sendTelegramMessage(botToken, l.lead_id, feedbackMsg);
             } else {
-              const waPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
-              const waToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+              const { phoneId: waPhoneId, accessToken: waToken } = getTenantWaba(l.client_id);
               dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, feedbackMsg);
             }
 
@@ -3302,7 +3356,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             }).eq("lead_id", l.id).eq("status", "SCHEDULED");
 
             await supabase.from("lead_events").insert({
-              client_id: defaultTenantId,
+              client_id: leadTenantId,
               lead_id: l.lead_id,
               event_type: "POST_VISIT_FEEDBACK_SENT",
               payload: { visitTime: new Date(visitTime).toISOString(), projectName, diffMinutesPast, dispatchRes }
@@ -3348,7 +3402,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               // Send soft nudge between 20 and 48 hours after the post-visit check
               if (!options.force && (hoursSinceCheck < 20 || hoursSinceCheck > 72)) continue;
 
-              const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
+              const leadTenantId = l.client_id || defaultTenantId;
+              const botToken = getTenantBotToken(l.client_id);
+              const { projectName, prop } = await resolveLeadProjectName(l, supabase, leadTenantId);
               const lang = l.user_language || "HINGLISH";
               const name = l.first_name || "Customer";
 
@@ -3365,10 +3421,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
               const isTelegram = /^[0-9]+$/.test(l.lead_id) || !l.phone || l.phone.startsWith("tg_") || String(l.metadata?.platform).toUpperCase() === "TELEGRAM";
               if (isTelegram) {
-                await sendTelegramMessage(defaultBotToken, l.lead_id, nudgeMsg);
+                await sendTelegramMessage(botToken, l.lead_id, nudgeMsg);
               } else {
-                const waPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
-                const waToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+                const { phoneId: waPhoneId, accessToken: waToken } = getTenantWaba(l.client_id);
                 await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, nudgeMsg);
               }
 
@@ -3385,7 +3440,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
               // If hoursSinceCheck >= 36 and alert not sent yet, alert sales team for courtesy call
               if (hoursSinceCheck >= 36 && !meta.unconfirmed_visit_alert_sent) {
-                await dispatchSalesAlert(defaultTenantId, "UNCONFIRMED_VISIT", l, { property: prop });
+                await dispatchSalesAlert(leadTenantId, "UNCONFIRMED_VISIT", l, { property: prop });
                 updatedMeta.unconfirmed_visit_alert_sent = true;
                 await supabase.from("leads").update({ metadata: updatedMeta }).eq("id", l.id);
               }
@@ -3431,7 +3486,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               // Send reschedule invitation between 2 and 48 hours after visit was marked missed
               if (!options.force && (hoursSinceLast < 2 || hoursSinceLast > 48)) continue;
 
-              const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
+              const leadTenantId = l.client_id || defaultTenantId;
+              const botToken = getTenantBotToken(l.client_id);
+              const { projectName, prop } = await resolveLeadProjectName(l, supabase, leadTenantId);
               const lang = l.user_language || "HINGLISH";
               const name = l.first_name || "Customer";
 
@@ -3441,7 +3498,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               } else if (lang === "ENGLISH") {
                 rescheduleMsg = `Hello <b>${name}</b>! 🙏\n\nWe noticed your VIP site visit for <b>${projectName}</b> was missed. Would you like to reschedule for a convenient day this week? 🚗📍\n\n👉 <b>Simply reply with your preferred day and time (e.g., 'Tomorrow 4 PM' or 'Saturday 11 AM')!</b>`;
               } else {
-                rescheduleMsg = `Namaste <b>${name} ji</b>! 🙏\n\nAapki <b>${projectName}</b> ke liye VIP site visit miss ho gayi thi. Kya hum is week aapke liye ek fresh convenient timing par visit schedule karein? 🚗📍\n\n👉 <b>Aap apna convenient din aur samay (jaise: 'Kal 4 baje' ya 'Sunday subah 11 baje') likhkar bhej sakte hain!</b>`;
+                rescheduleMsg = `Namaste <b>${name} ji</b>! 🙏\nAapki <b>${projectName}</b> ke liye VIP site visit miss ho gayi thi. Kya hum is week aapke liye ek fresh convenient timing par visit schedule karein? 🚗📍\n\n👉 <b>Aap apna convenient din aur samay (jaise: 'Kal 4 baje' ya 'Sunday subah 11 baje') likhkar bhej sakte hain!</b>`;
               }
 
               await sleepJitter();
@@ -3449,10 +3506,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               const isTelegram = /^[0-9]+$/.test(l.lead_id) || !l.phone || l.phone.startsWith("tg_") || String(l.metadata?.platform).toUpperCase() === "TELEGRAM";
               let dispatchRes: any;
               if (isTelegram) {
-                dispatchRes = await sendTelegramMessage(defaultBotToken, l.lead_id, rescheduleMsg);
+                dispatchRes = await sendTelegramMessage(botToken, l.lead_id, rescheduleMsg);
               } else {
-                const waPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
-                const waToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+                const { phoneId: waPhoneId, accessToken: waToken } = getTenantWaba(l.client_id);
                 dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, rescheduleMsg);
               }
 
@@ -3468,7 +3524,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               }).eq("id", l.id);
 
               await supabase.from("lead_events").insert({
-                client_id: defaultTenantId,
+                client_id: leadTenantId,
                 lead_id: l.lead_id,
                 event_type: "MISSED_VISIT_RESCHEDULE_NUDGE_SENT",
                 payload: { projectName, hoursSinceLast: Math.round(hoursSinceLast * 10) / 10, dispatchRes },
@@ -3531,12 +3587,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               let nudgeMsg = "";
 
               if (l.state === "OPTIONS_SENT") {
-                let topProject = "selected property";
-                const topPropId = l.last_option_ids?.[0] || l.selected_property_id;
-                if (topPropId) {
-                  const { data: p } = await supabase.from("inventory").select("project_name").eq("client_id", l.client_id).eq("property_id", topPropId).maybeSingle();
-                  if (p?.project_name) topProject = p.project_name;
-                }
+                const leadTenantId = l.client_id || defaultTenantId;
+                const { projectName } = await resolveLeadProjectName(l, supabase, leadTenantId);
+                const topProject = projectName && projectName !== "VIP Property" ? projectName : "selected property";
 
                 if (lang === "GUJLISH") {
                   nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Ame je properties share kari hati (jaise <b>${topProject}</b>), shu tame check kari? Developer taraf thi limited units par <b>exclusive price sheet ane spot token booking benefits</b> chali rahya chhe. Jo tame direct inspection karva mangta ho, to ame <b>kaale sanje 5 vage</b> VIP Site Visit arrange kari shakie chiye. 🚗`;
@@ -3592,13 +3645,14 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
               await sleepJitter();
 
+              const leadTenantId = l.client_id || defaultTenantId;
+              const botToken = getTenantBotToken(l.client_id);
               const isTelegram = /^[0-9]+$/.test(l.lead_id) || !l.phone || l.phone.startsWith("tg_") || String(l.metadata?.platform).toUpperCase() === "TELEGRAM";
               let dispatchRes: any;
               if (isTelegram) {
-                dispatchRes = await sendTelegramMessage(defaultBotToken, l.lead_id, nudgeMsg);
+                dispatchRes = await sendTelegramMessage(botToken, l.lead_id, nudgeMsg);
               } else {
-                const waPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
-                const waToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+                const { phoneId: waPhoneId, accessToken: waToken } = getTenantWaba(l.client_id);
                 dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, nudgeMsg);
               }
 
@@ -3612,7 +3666,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               }).eq("id", l.id);
 
               await supabase.from("lead_events").insert({
-                client_id: defaultTenantId,
+                client_id: leadTenantId,
                 lead_id: l.lead_id,
                 event_type: "DAILY_FOLLOWUP_SENT",
                 payload: { state: l.state, followup_count: newCount, dripStage, message: nudgeMsg.slice(0, 300), dispatchRes }
@@ -3668,7 +3722,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 if (stage === "POST_VISIT_DAY_7" && hoursSinceLast < 90) continue;
               }
 
-              const { projectName, prop } = await resolveLeadProjectName(l, supabase, defaultTenantId);
+              const leadTenantId = l.client_id || defaultTenantId;
+              const botToken = getTenantBotToken(l.client_id);
+              const { projectName, prop } = await resolveLeadProjectName(l, supabase, leadTenantId);
               const lang = l.user_language || "HINGLISH";
               const name = l.first_name || "Customer";
 
@@ -3709,10 +3765,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               const isTelegram = /^[0-9]+$/.test(l.lead_id) || !l.phone || l.phone.startsWith("tg_") || String(l.metadata?.platform).toUpperCase() === "TELEGRAM";
               let dispatchRes: any;
               if (isTelegram) {
-                dispatchRes = await sendTelegramMessage(defaultBotToken, l.lead_id, dripMsg);
+                dispatchRes = await sendTelegramMessage(botToken, l.lead_id, dripMsg);
               } else {
-                const waPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") || "";
-                const waToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+                const { phoneId: waPhoneId, accessToken: waToken } = getTenantWaba(l.client_id);
                 dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, dripMsg);
               }
 
@@ -3722,7 +3777,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               }).eq("id", l.id);
 
               await supabase.from("lead_events").insert({
-                client_id: defaultTenantId,
+                client_id: leadTenantId,
                 lead_id: l.lead_id,
                 event_type: "POST_VISIT_DRIP_SENT",
                 payload: { stage, nextDripStage, projectName, message: dripMsg.slice(0, 300), dispatchRes }
@@ -3970,6 +4025,73 @@ async function handleOwnerFlow({
 
   // If already gathered, check if user is listing a SECOND property, inquiring status, or asking for buyer options
   if (lead.state === "OWNER_DETAILS_GATHERED") {
+    const isDecliningSecondListing = /^(?:nahi|no|na|nathi|nhi|nope|nathi\s*karvi|nahi\s*karni|rehne\s*do|koi\s*nahi|ek\s*j\s*chhe|bas\s*itna\s*hi|kuch\s*nahi|nathi\s*aapvi)\b/i.test(lower.trim());
+
+    if (isDecliningSecondListing) {
+      if (existingMeta.declined_second_listing) {
+        const replyText = lang === "GUJLISH"
+          ? `Bilkul koi vaat nahi <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Amari team tamari property mate verified leads aavta j update karshe. Have a great day! 🙏`
+          : lang === "ENGLISH"
+          ? `Understood <b>${senderName || "Friend"}</b>! We will keep you posted as soon as verified inquiries arrive for your property. Have a great day! 🙏`
+          : `Bilkul koi baat nahi <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamari team aapki property ke verified leads aate hi update karegi. Have a great day! 🙏`;
+        return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
+      }
+
+      await supabase.from("leads").update({
+        metadata: {
+          ...existingMeta,
+          declined_second_listing: true,
+        }
+      }).eq("id", lead.id);
+
+      const { data: sub } = await supabase
+        .from("property_submissions")
+        .select("*")
+        .eq("client_id", tenantId)
+        .or(`lead_id.eq.${lead.lead_id},lead_id.eq.${lead.id}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || "Vadodara"}` : "Aapki property";
+
+      const replyText = lang === "GUJLISH"
+        ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari listed property (<b>${propLabel}</b>) amara desk par active chhe. Verified inquiry aavta j ame tamaro sampark karshe. Shu tame koi property Buy ya Rent na options jova mango chho? 🏡`
+        : lang === "ENGLISH"
+        ? `Certainly <b>${senderName || "Friend"}</b>! Your listed property (<b>${propLabel}</b>) is actively registered with us. We will connect with you as soon as a verified buyer/tenant inquiries. Would you like to explore properties to Buy or Rent? 🏡`
+        : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) hamare desk par actively registered hai. Verified inquiry aate hi hum aapse connect karenge. Kya aap koi property Buy ya Rent karne ke options dekhna chahte hain? 🏡`;
+
+      return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
+    }
+
+    if (existingMeta.declined_second_listing) {
+      const isAffirmativeSeekerInterest =
+        /^(?:haan|ha|ji\s*haan|yes|yep|sure|chalo|dikhao|batavo|batao|options|buy|rent|kharidna|bhade)\b/i.test(lower.trim()) ||
+        /(?:options|dikhao|dikhavo|batavo|batao|properties|shortlist|buy|rent)/i.test(lower);
+
+      if (isAffirmativeSeekerInterest) {
+        await supabase.from("leads").update({
+          lead_type: "DUAL_ROLE",
+          state: "QUALIFYING",
+          metadata: {
+            ...existingMeta,
+            has_seller_profile: true,
+            has_buyer_profile: true,
+            active_persona: "BUYER",
+          },
+        }).eq("id", lead.id);
+        lead.lead_type = "DUAL_ROLE";
+        lead.state = "QUALIFYING";
+
+        const replyText = lang === "GUJLISH"
+          ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 🏡 Tame kaya type ni property shodhva mango chho — Residential (Flat/Villa) ke Commercial (Office/Shop)?`
+          : lang === "ENGLISH"
+          ? `Wonderful <b>${senderName || "Friend"}</b>! 🏡 What type of property are you looking for — Residential (Flat/Villa) or Commercial (Office/Shop)?`
+          : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! 🏡 Aap kis type ki property search karna chahte hain — Residential (Flat/Villa) ya Commercial (Office/Shop)?`;
+        return { replyText, nextState: "QUALIFYING" };
+      }
+    }
+
     const isSecondListing =
       /^(?:haan|ha|ji\s*haan|yes|yep|sure|list\s*another|karni\s*hai|aur\s*bhi|ek\s*aur|bilkul)\b/i.test(lower.trim()) ||
       /(?:dusri|biji|ek\s*aur|nayi|navi|another|second|2nd)\s*(?:property|flat|house|ghar|makan|villa|office|shop|plot)\b/i.test(lower) ||
@@ -4697,18 +4819,27 @@ export async function dispatchStateAction(
   // 1. GLOBAL CRITICAL INTERCEPTORS
   // ---------------------------------------------------------------------------
   if (intent === "OPT_OUT") {
-    const replyText =
-      lang === "GUJLISH"
-        ? `Aabhar <b>${senderName} bhai</b>. Have tamne koi automated messages nahi aave. Bhawishyaman koi jarur hoy to tame amaro sampark kari shako chho. Tamaro divas shubh rahe! 🙏`
-        : lang === "ENGLISH"
-        ? `Thank you <b>${senderName}</b>. You have been opted out from automated messages. Feel free to contact us anytime if you need property assistance! 🙏`
-        : `Dhanyawad <b>${senderName} ji</b>. Aapka number opt-out kar diya gaya hai. Aage se koi automated message nahi aayega. Have a great day! 🙏`;
+    const lowerMsg = (context.messageText || "").trim().toLowerCase();
+    const isExplicitOptOut = /(?:stop|unsubscribe|not\s*interested|nathi\s*joiye|message\s*mat\s*karo|band\s*karo|dont\s*message|call\s*mat\s*karo|msg\s*mat\s*karo|don't\s*text)/i.test(lowerMsg);
+    const isBareNegation = /^(?:nahi|no|na|nathi|nhi|nope|naa|naah|not\s*now|abhi\s*nahi|hal\s*ma\s*nathi|pachi)$/i.test(lowerMsg);
 
-    return {
-      replyText,
-      nextState: "DROPPED",
-      leadUpdates: { state: "DROPPED", bot_active: false, drip_stage: "CANCELLED" },
-    };
+    if (isBareNegation && !isExplicitOptOut) {
+      console.log(`[OPT_OUT GUARD] Intercepted bare conversational negation "${context.messageText}" - reclassifying as GENERAL_QUERY for state ${currentState}`);
+      intent = "GENERAL_QUERY";
+    } else {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Aabhar <b>${senderName} bhai</b>. Have tamne koi automated messages nahi aave. Bhawishyaman koi jarur hoy to tame amaro sampark kari shako chho. Tamaro divas shubh rahe! 🙏`
+          : lang === "ENGLISH"
+          ? `Thank you <b>${senderName}</b>. You have been opted out from automated messages. Feel free to contact us anytime if you need property assistance! 🙏`
+          : `Dhanyawad <b>${senderName} ji</b>. Aapka number opt-out kar diya gaya hai. Aage se koi automated message nahi aayega. Have a great day! 🙏`;
+
+      return {
+        replyText,
+        nextState: "DROPPED",
+        leadUpdates: { state: "DROPPED", bot_active: false, drip_stage: "CANCELLED" },
+      };
+    }
   }
 
   // Anti-OFF_TOPIC Property Keyword Immunity Guard:
@@ -7416,7 +7547,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v68 Ready (Multi-Portal Webhook Normalizer, Property Auto-Matcher & Instant WhatsApp Outreach)", { status: 200 });
+    return new Response("Realtor Lead Engine v69 Ready (Multi-Tenant Cron Isolation & Conversational Anti-Opt-Out)", { status: 200 });
   }
 
   try {
