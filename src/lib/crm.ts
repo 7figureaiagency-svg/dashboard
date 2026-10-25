@@ -875,6 +875,74 @@ export function isVisitDoneStatus(status?: string | null): boolean {
   );
 }
 
+/**
+ * Detects whether a lead originates from Telegram.
+ * Matches:
+ * - source / channel explicitly 'telegram' or containing 'tg'
+ * - metadata.platform === 'TELEGRAM'
+ * - lead_id starting with 'tg_' or 'telegram_'
+ * - numeric chat IDs (7-14 digits, e.g. '5117510624') where phone is absent, matches lead_id, or starts with 'tg_'
+ */
+export function isTelegramLead(lead?: Partial<Lead> | Record<string, unknown> | null): boolean {
+  if (!lead) return false;
+  const raw = lead as Record<string, unknown>;
+  const meta = ((raw.metadata as Record<string, unknown> | null) ?? {}) as Record<string, unknown>;
+
+  const platform = String(raw.platform || meta.platform || "").toUpperCase();
+  if (platform === "TELEGRAM") return true;
+
+  const src = String(raw.source || meta.source || raw.channel || "").toLowerCase().trim();
+  if (src === "telegram" || src === "tg" || src.includes("telegram")) return true;
+
+  const leadId = String(raw.lead_id || "").trim();
+  if (leadId.startsWith("tg_") || leadId.startsWith("telegram_")) return true;
+
+  const phone = String(raw.phone || "").trim();
+  if (phone.startsWith("tg_") || phone.startsWith("telegram_")) return true;
+
+  // Telegram numeric chat IDs (e.g. 5117510624) where phone is empty or mirrors the chat id:
+  if (/^\d{7,14}$/.test(leadId)) {
+    if (!phone || phone === leadId || phone === "undefined" || phone === "null") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Detects whether a lead originates from a real estate portal or advertising campaign.
+ * Matches known portal sources:
+ * - 99acres, MagicBricks, Housing.com, CommonFloor, OLX, Facebook Lead Ads, Instagram Ads, Portal Webhook
+ * - Or presence of portal_source / portal_property_id
+ */
+export function isPortalLead(lead?: Partial<Lead> | Record<string, unknown> | null): boolean {
+  if (!lead) return false;
+  const raw = lead as Record<string, unknown>;
+  const meta = ((raw.metadata as Record<string, unknown> | null) ?? {}) as Record<string, unknown>;
+
+  const src = String(raw.source || meta.source || "").toLowerCase().trim();
+  if (
+    src.includes("99acres") ||
+    src.includes("magicbricks") ||
+    src.includes("housing") ||
+    src.includes("commonfloor") ||
+    src.includes("olx") ||
+    src.includes("facebook") ||
+    src.includes("fb") ||
+    src.includes("instagram") ||
+    src.includes("portal")
+  ) {
+    return true;
+  }
+
+  if (Boolean(raw.portal_property_id) || Boolean(meta.portal_property_id) || Boolean(meta.portal_source)) {
+    return true;
+  }
+
+  return false;
+}
+
 export function hydrateLead(
   row: LeadRow,
   executivesById: Map<string, ExecutiveLite>,
@@ -917,6 +985,12 @@ export function hydrateLead(
     status = "SITE_VISIT_BOOKED";
   }
 
+  const isTg = isTelegramLead(row);
+  const resolvedSource =
+    metaStr(meta, "source") ||
+    (raw.source as string) ||
+    (isTg ? "Telegram" : "WhatsApp");
+
   return {
     ...row,
     name,
@@ -933,7 +1007,7 @@ export function hydrateLead(
       metaStr(meta, "first_human_contact_at") || (raw.first_human_contact_at as string) || null,
     sla_response_minutes:
       metaNum(meta, "sla_response_minutes") ?? (raw.sla_response_minutes as number) ?? null,
-    source: metaStr(meta, "source") || (raw.source as string) || "WhatsApp",
+    source: resolvedSource,
     site_visit_datetime: siteVisitDate,
     site_visit_at: siteVisitDate,
     assigned_executive_name: exec?.name ?? (raw.assigned_executive_name as string) ?? null,
