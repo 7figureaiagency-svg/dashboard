@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-24T14:10:00+05:30
+updated: 2026-10-25T13:28:00+05:30
 ---
 
 # Project State
@@ -7,22 +7,19 @@ updated: 2026-10-24T14:10:00+05:30
 ## Current Position
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Inventory  
-**Phase:** 11 - High-Density Lead History & Dual-Actor (Sales Rep + AI Bot) Activity Stream  
-**Status:** ✅ Complete  
+**Phase:** 12 - Telegram Webhook Registration, Tenant Identity & Live Bot Verification for Griham Realty  
+**Status:** ⏳ In Progress  
 **Plans:**
-- `.gsd/phases/11/11.1-PLAN.md` (Activity Engine & Unified Actor Normalizer - Backend & Data Layer) — ✅ Complete
-- `.gsd/phases/11/11.2-PLAN.md` (Apple HIG Compact Activity Stream & Segmented Actor Filter - UI Layer) — ✅ Complete
+- `.gsd/phases/12/12.1-PLAN.md` (Griham Realty Telegram Webhook Registration, Tenant Identity & Live Bot Verification) — ⏳ Ready to Execute
 
 ## Last Action
 
-Completed Phase 11:
-- Normalised CRM lead activity and event data pipeline: classified events by `actor_type: "SALES_REP" | "AI_BOT" | "SYSTEM"`.
-- Implemented `summarizeLeadEvent` in `src/lib/crm.ts` to transform 15-line raw HTML WhatsApp dumps into crisp 1-line action summaries with date grouping (`Today`, `Yesterday`, `This Week`, `Older`).
-- Persisted human sales executive actions (`CALL_LOGGED`, `NOTE_ADDED`, `PHONE_ADDED`, `TAKEOVER`, `STATUS_CHANGE`) directly into PostgreSQL `public.lead_events`.
-- Redesigned `src/components/crm/history-timeline.tsx` into an Apple HIG high-density operational workstation with a 3-way segmented filter (`All Actions`, `👤 Sales Rep`, `🤖 AI Bot`), top KPI ribbon strip (Calls, Notes, Automations), ultra-compact 40px rows, and progressive disclosure (accordion expansion on click).
-- Updated `src/components/crm/lead-drawer.tsx` with automatic `useActivity(lead?.client_id)` fallback and synchronized live action counter.
-- Empirically validated with unit test suite (`scratch/test_history_timeline.cjs`) and clean frontend build (`npm.cmd run build` passed in 1.24s).
-- Verified build: `npm.cmd run build` passed with 0 errors.
+Root-Cause Analysis of Griham Realty Telegram Bot:
+- Queried Telegram Bot API `getWebhookInfo` for bot token `8931392683:AAHgKCxxVOtLQQxyh1SjU1PWJv_fylXCS5s`.
+- Discovered `url: ""` (completely empty) and `pending_update_count: 4` (messages queued on Telegram). Telegram never dispatched webhook requests to Supabase because the webhook URL was not registered.
+- Identified hardcoded branding `"Nextgen Realty"` in `realtor-lead-engine` OFF_TOPIC fallbacks and absence of dedicated Agency/Company Name intent handler.
+- Formulated Phase 12 roadmap and Plan 12.1.
+
 
 ## Active Decisions
 
