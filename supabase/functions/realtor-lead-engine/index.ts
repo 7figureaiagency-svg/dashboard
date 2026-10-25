@@ -219,6 +219,10 @@ async function dispatchSalesAlert(
         badge = "💬 POST-VISIT FEEDBACK RECEIVED";
         pitchHint = "Customer ne site visit ke baad feedback share kiya hai. Review karke discount, loan ya builder sitting finalize karein.";
         break;
+      case "POST_VISIT_OBJECTION":
+        badge = "⚡ POST-VISIT OBJECTION / CRITICAL FEEDBACK";
+        pitchHint = extra.hint || "Customer ne visit ke baad specific concern share kiya (layout/approach/location). Do NOT restart qualification. Call customer within 10 mins: acknowledge concern with empathy, present alternative inventory matching criteria with better layout and approach road.";
+        break;
       case "VISIT_MISSED":
         badge = "⚠️ SITE VISIT MISSED (HIGH RE-ENGAGEMENT PRIORITY)";
         pitchHint = "Customer site visit attend nahi kar paya. Call with empathy: 'Sir koi problem aa gayi thi kya? Main kal shaam ya weekend ka slot book karwa deta hu.'";
@@ -2160,6 +2164,12 @@ interface IntentResult {
 
 14c. "1" / "haan visit attend ki" / "visit complete thai" (when responding to post-visit attendance survey) ->
 {"action": {"intent": "CONFIRM_VISIT_ATTENDANCE", "attended": true}, "language": "HINGLISH", "user_role": "SEEKER"}
+
+14d. "Mene visit kr di thi" / "visit kar li hai" / "visit ho gayi" / "visit attend kari li" ->
+{"action": {"intent": "CONFIRM_VISIT_ATTENDANCE", "attended": true}, "language": "HINGLISH", "user_role": "SEEKER"}
+
+14e. "Layout accha nai laga. Front gate oe kenal he" / "Property pasand nahi aayi" / "layout accha nahi laga" / "canal/drain pass me hai" ->
+{"action": {"intent": "CONFIRM_VISIT_ATTENDANCE", "attended": true, "feedback": "Layout accha nai laga. Front gate oe kenal he"}, "language": "HINGLISH", "user_role": "SEEKER"}
 
 15. "મને અલ્કાપુરીમાં 3BHK ફ્લેટ જોઈએ છે 75 લાખ સુધી" ->
 {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "3BHK Flat", "location": "Alkapuri", "budget": 7500000, "requirement": "BUY"}, "language": "GUJARATI_SCRIPT", "user_role": "SEEKER"}
@@ -6513,34 +6523,219 @@ export async function dispatchStateAction(
   // 9. SITE VISIT DONE (State: SITE_VISIT_DONE)
   // ---------------------------------------------------------------------------
   if (currentState === "SITE_VISIT_DONE") {
-    if (intent === "CONFIRM_VISIT_ATTENDANCE") {
-      const isNeg = /(discount|negotiat|bhav\s*ochho|rate\s*kam|price|offer|token)/i.test(lower);
-      const isLoan = /(loan|bank|emi|interest|finance)/i.test(lower);
+    // 1. Negotiation / Token Sitting Request
+    const isNeg = /(discount|negotiat|bhav\s*ochho|rate\s*kam|price|offer|token|sitting|baithak|deal)/i.test(lower);
+    const isLoan = /(loan|bank|emi|interest|finance)/i.test(lower);
 
-      const replyText = isNeg
-        ? (lang === "GUJLISH"
-          ? `Tamara feedback mate aabhar <b>${nameStr}</b>! 🙏 Developer sathe special pricing ane exclusive payment plan finalize karva mate amara senior sales director direct tamaro sampark karshe.`
+    // 2. Post-Visit Feedback & Objections (e.g. "Layout accha nai laga. Front gate oe kenal he", "Pasand nahi aaya")
+    const hasDislike = /(?:accha\s*nai|acha\s*nahi|pasand\s*nahi|kharab|bekar|problem|issue|suit\s*nahi|jamyo\s*nahi|nathi\s*gamyu|not\s*good|dislike|negative|complain|concern|khot|kami)/i.test(lower);
+    const hasLayoutIssue = /(layout|planning|design|room\s*size|chota|nano|small|carpet\s*area|floor\s*plan)/i.test(lower);
+    const hasCanalIssue = /(kenal|canal|drain|naala|nadi|gutter|kachra|smell|odor)/i.test(lower);
+    const hasRoadIssue = /(road|gate|approach|entry|traffic|noise|parking|location)/i.test(lower);
+    const hasPriceIssue = /(bhav\s*vadhare|price\s*high|costly|expensive|budget\s*bahar|bohot\s*jyada)/i.test(lower);
+
+    const isObjection = hasDislike || hasLayoutIssue || hasCanalIssue || hasRoadIssue || hasPriceIssue || Boolean((action as ConfirmVisitAttendanceAction)?.feedback);
+
+    // 3. Request for Alternative Properties (e.g. "dusra option dikhao", "other options", "koi aur property")
+    const isAlternativeRequest =
+      /(?:dusra|doosra|bijo|bija|other|aur|nava|navi|new|alternative)\s*(?:option|options|property|project|flat|villa|dikhao|batao|share)/i.test(lower) ||
+      /^(?:options|alternative|bija\s*options|dusre\s*options)\b/i.test(lower.trim());
+
+    // 4. Human Advisor Call Request
+    const isAdvisorCallRequest =
+      intent === "REQUEST_HUMAN_CALL" ||
+      /(?:call|phone|baat|consult|advisor|director|executive|manager)\s*(?:karo|karvao|karein|karvu|karvo|connect)/i.test(lower);
+
+    // Persist feedback notes in site_visits table
+    await supabase
+      .from("site_visits")
+      .update({ status: "COMPLETED", feedback_notes: context.messageText })
+      .eq("lead_id", lead.id)
+      .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED", "COMPLETED"]);
+
+    const currentMeta = (lead.metadata || {}) as Record<string, any>;
+    const updatedMeta = {
+      ...currentMeta,
+      visit_feedback: context.messageText,
+      last_objection: isObjection ? context.messageText : currentMeta.last_objection,
+      visit_objection_at: isObjection ? new Date().toISOString() : currentMeta.visit_objection_at,
+    };
+
+    if (isAdvisorCallRequest) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Bilkul <b>${nameStr}</b>! 🙏 Amara senior property director tamara feedback ane requirements par direct discuss karva mate 10 minutes ma amari side thi tamne call karshe.`
           : lang === "ENGLISH"
-          ? `Thank you for your feedback <b>${nameStr}</b>! 🙏 Our senior property director will personally connect with you to arrange an exclusive developer sitting and discuss the best negotiated price.`
-          : `Aapke feedback ke liye dhanyawad <b>${nameStr}</b>! 🙏 Developer ke sath special pricing aur best payment scheme finalize karne ke liye hamare senior sales director direct aapse call par connect karenge.`)
-        : isLoan
-        ? (lang === "GUJLISH"
-          ? `Tamara feedback mate aabhar <b>${nameStr}</b>! 🏦 Amari banking & loan expert team lowest interest rate ane easy EMI guidance mate tamne turant call karshe.`
-          : lang === "ENGLISH"
-          ? `Thank you for your feedback <b>${nameStr}</b>! 🏦 Our preferred banking partners will reach out shortly to guide you with the lowest home loan interest rates and flexible EMI structures.`
-          : `Aapke feedback ke liye dhanyawad <b>${nameStr}</b>! 🏦 Hamari home loan & banking team lowest interest rate aur easy EMI structure guide karne ke liye aapse turant connect karegi.`)
-        : (lang === "GUJLISH"
-          ? `Khub saras <b>${nameStr}</b>! 🌟 Tamne property ane layout kevo lagyo? Jo project pasand aavyo hoy to shu ame developer sathe <b>special token pricing baithak</b> plan kariye?`
-          : lang === "ENGLISH"
-          ? `Wonderful <b>${nameStr}</b>! 🌟 How did you like the property and floor layout? If you liked it, shall we arrange a <b>developer sitting for exclusive negotiated pricing</b>?`
-          : `Bohot badiya <b>${nameStr}</b>! 🌟 Aapko property aur layout kaisa laga? Agar pasand aaya ho to kya hum developer ke sath <b>best token pricing sitting</b> arrange karein?`);
+          ? `Certainly <b>${nameStr}</b>! 🙏 Our senior property director will personally call you within 10 minutes to discuss your feedback and present suitable alternatives.`
+          : `Bilkul <b>${nameStr}</b>! 🙏 Hamare senior property director aapke feedback aur requirements ko detail me discuss karne ke liye agle 10 minute me aapse direct call par connect karenge.`;
 
       return {
         replyText,
         nextState: "SITE_VISIT_DONE",
+        leadUpdates: {
+          state: "SITE_VISIT_DONE",
+          site_visit_booked: false,
+          metadata: updatedMeta,
+        },
+        salesAlert: {
+          type: "REQUEST_HUMAN_CALL",
+          payload: { userText: context.messageText, hint: "Client requested senior advisor consultation post-visit." },
+        },
+      };
+    }
+
+    if (isAlternativeRequest) {
+      // Find matching alternative available properties in the tenant inventory
+      const { data: altProps } = await supabase
+        .from("inventory")
+        .select("property_id, project_name, configuration, property_type, price, location, carpet_sqft")
+        .eq("client_id", activeTenantId)
+        .eq("status", "AVAILABLE")
+        .neq("property_id", lead.selected_property_id || "")
+        .limit(2);
+
+      let altListText = "";
+      if (altProps && altProps.length > 0) {
+        altListText = altProps
+          .map((p, i) => `\n\n${i + 1}️⃣ <b>${p.project_name}</b> (${p.configuration || p.property_type || "Premium"})\n📍 <b>Location:</b> ${p.location || "Prime Location"}\n💰 <b>Price:</b> ₹${(Number(p.price) / 100000).toFixed(1)} Lakhs\n✨ <b>Highlights:</b> Clean approach road, open floor plan`)
+          .join("");
+      }
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Samji gayo <b>${nameStr}</b>! 👍 Tamari pasand ane criteria mutabiq clean approach road ane better planning vala alternative verified options aa rahya:${altListText}\n\n👉 <b>Aa mathi kaya project ni VIP Site Visit 🚗 plan kariye?</b>`
+          : lang === "ENGLISH"
+          ? `Understood <b>${nameStr}</b>! 👍 Here are curated alternative verified projects with prime approach roads and spacious layouts matching your preferences:${altListText}\n\n👉 <b>Which project would you like to schedule a VIP Site Visit 🚗 for?</b>`
+          : `Samajh gaya <b>${nameStr}</b>! 👍 Aapki pasand aur criteria ke mutabiq clean approach road aur open floor plan wale curated verified options yeh rahe:${altListText}\n\n👉 <b>Inme se kis project ke liye hum VIP Site Visit 🚗 schedule karein?</b>`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_DONE",
+        leadUpdates: {
+          state: "SITE_VISIT_DONE",
+          site_visit_booked: false,
+          metadata: updatedMeta,
+        },
+        salesAlert: {
+          type: "POST_VISIT_OBJECTION",
+          payload: {
+            userText: context.messageText,
+            hint: "Customer requested alternative projects post-visit. Recommended alternatives pitched.",
+          },
+        },
+      };
+    }
+
+    if (isObjection) {
+      let specificReply = "";
+      if (hasLayoutIssue && hasCanalIssue) {
+        specificReply =
+          lang === "GUJLISH"
+            ? `Samji gayo <b>${nameStr}</b>! Layout tamne suitable na lagyo ane front gate pase canal/drain hovano concern bilkul genuine chhe. Tamara honest feedback mate aabhar. 🙏\n\nAme tamara criteria mujab clean approach road ane open floor plan vala bija verified projects shortlist kari rahya chhiye.\n\n👉 <b>Shu ame alternative matching projects share kariye, ke senior property advisor sathe 5-minute call schedule kariye?</b>`
+            : lang === "ENGLISH"
+            ? `Understood completely <b>${nameStr}</b>! We appreciate your honest feedback — the layout not meeting your needs and the canal near the front gate are very valid concerns. 🙏\n\nWe are shortlisting alternative verified projects with clean approach roads and spacious, well-ventilated floor plans matching your criteria.\n\n👉 <b>Would you like us to share alternative matching projects, or schedule a quick 5-minute call with our senior property director?</b>`
+            : `Samajh gaya <b>${nameStr}</b>! Layout aapko suitable nahi laga aur front gate ke paas canal/drain hona bilkul genuine concern hai. Aapke honest feedback ke liye dil se shukriya. 🙏\n\nHum aapke budget aur criteria ke mutabiq doosre verified projects shortlist kar rahe hain jinka approach road clean ho aur spacious open floor plan ho.\n\n👉 <b>Kya hum aapko alternative matching projects share karein, ya hamare senior property director se 5-minute direct call arrange karein?</b>`;
+      } else if (hasLayoutIssue) {
+        specificReply =
+          lang === "GUJLISH"
+            ? `Samji gayo <b>${nameStr}</b>! Property nu layout ane space planning tamari requirement sathe match nathi thai, e bilkul valid point chhe. 🙏\n\nAme larger carpet area ane open layout vala bija premium options arrange kariye chhiye.\n\n👉 <b>Shu ame better layout vala matching options share kariye, ke senior advisor sathe call plan kariye?</b>`
+            : lang === "ENGLISH"
+            ? `Understood <b>${nameStr}</b>! The floor plan and room sizes not suiting your family's needs is a very valid point. 🙏\n\nWe can present alternative verified properties with larger carpet areas and open layouts.\n\n👉 <b>Would you like to see alternative options with better layouts, or consult with our senior advisor?</b>`
+            : `Samajh gaya <b>${nameStr}</b>! Layout aur room sizes aapki requirement par fit nahi baithe, yeh bilkul valid point hai. 🙏\n\nHum open floor plan aur better carpet area wale alternative verified projects suggest kar rahe hain.\n\n👉 <b>Kya hum better layout wale matching options share karein, ya senior advisor se call arrange karein?</b>`;
+      } else if (hasCanalIssue || hasRoadIssue) {
+        specificReply =
+          lang === "GUJLISH"
+            ? `Samji gayo <b>${nameStr}</b>! Surrounding location ane approach road no concern bilkul genuine chhe, dream home mate clean surrounding sauthi jaruri hoy chhe. 🙏\n\nAme prime ane peaceful locality vala bija verified projects suggest kariye chhiye.\n\n👉 <b>Shu ame prime locality na options share kariye, ke senior advisor sathe call kariye?</b>`
+            : lang === "ENGLISH"
+            ? `Understood <b>${nameStr}</b>! Your concern regarding the surrounding location and approach road is completely justified — a clean and peaceful neighborhood is paramount. 🙏\n\nWe can suggest alternative verified projects in prime, well-developed localities.\n\n👉 <b>Would you like us to share options in prime localities, or arrange a consultation with our property advisor?</b>`
+            : `Samajh gaya <b>${nameStr}</b>! Surrounding area aur approach road ka concern bilkul genuine hai, dream home ke liye clean surrounding sabse zaroori hoti hai. 🙏\n\nHum prime aur peaceful locality wale doosre verified projects suggest kar rahe hain.\n\n👉 <b>Kya hum prime locality ke options share karein, ya hamare senior advisor aapse direct call par connect karein?</b>`;
+      } else {
+        specificReply =
+          lang === "GUJLISH"
+            ? `Tamara honest feedback mate shukriya <b>${nameStr}</b>! 🙏 Ame samji shakiye chhiye ke aa property tamara criteria par fit nathi bethi.\n\nAme tamari requirement mujab bija premium verified options shortlist kari rahya chhiye.\n\n👉 <b>Shu ame fresh matching options share kariye, ke senior director sathe direct call arrange kariye?</b>`
+            : lang === "ENGLISH"
+            ? `Thank you for sharing your candid feedback <b>${nameStr}</b>! 🙏 We understand this property did not fully match your expectations.\n\nWe are curating alternative verified projects that align with your exact preferences.\n\n👉 <b>Would you like us to share fresh matching options, or arrange a direct call with our property director?</b>`
+            : `Aapke honest feedback ke liye shukriya <b>${nameStr}</b>! 🙏 Hum samajh sakte hain ki yeh property aapke criteria par puri tarah fit nahi baithi.\n\nHum aapke budget aur pasand ke mutabiq alternative premium verified options shortlist kar rahe hain.\n\n👉 <b>Kya hum aapko fresh options share karein, ya direct property director se call arrange karein?</b>`;
+      }
+
+      return {
+        replyText: specificReply,
+        nextState: "SITE_VISIT_DONE",
+        leadUpdates: {
+          state: "SITE_VISIT_DONE",
+          site_visit_booked: false,
+          metadata: updatedMeta,
+        },
+        salesAlert: {
+          type: "POST_VISIT_OBJECTION",
+          payload: {
+            userText: context.messageText,
+            hint: hasCanalIssue || hasLayoutIssue
+              ? "Client disliked layout/canal. Recommend pitching alternative project with clean approach road and open floor plan."
+              : "Client shared post-visit feedback/concerns. Follow up with alternative inventory.",
+          },
+        },
+      };
+    }
+
+    if (isNeg) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Tamara feedback mate aabhar <b>${nameStr}</b>! 🙏 Developer sathe special pricing ane exclusive payment plan finalize karva mate amara senior sales director direct tamaro sampark karshe.`
+          : lang === "ENGLISH"
+          ? `Thank you for your feedback <b>${nameStr}</b>! 🙏 Our senior property director will personally connect with you to arrange an exclusive developer sitting and discuss the best negotiated price.`
+          : `Aapke feedback ke liye dhanyawad <b>${nameStr}</b>! 🙏 Developer ke sath special pricing aur best payment scheme finalize karne ke liye hamare senior sales director direct aapse call par connect karenge.`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_DONE",
+        leadUpdates: {
+          state: "SITE_VISIT_DONE",
+          site_visit_booked: false,
+          metadata: updatedMeta,
+        },
         salesAlert: { type: "FEEDBACK_RECEIVED", payload: { userText: context.messageText } },
       };
     }
+
+    if (isLoan) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Tamara feedback mate aabhar <b>${nameStr}</b>! 🏦 Amari banking & loan expert team lowest interest rate ane easy EMI guidance mate tamne turant call karshe.`
+          : lang === "ENGLISH"
+          ? `Thank you for your feedback <b>${nameStr}</b>! 🏦 Our preferred banking partners will reach out shortly to guide you with the lowest home loan interest rates and flexible EMI structures.`
+          : `Aapke feedback ke liye dhanyawad <b>${nameStr}</b>! 🏦 Hamari home loan & banking team lowest interest rate aur easy EMI structure guide karne ke liye aapse turant connect karegi.`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_DONE",
+        leadUpdates: {
+          state: "SITE_VISIT_DONE",
+          site_visit_booked: false,
+          metadata: updatedMeta,
+        },
+        salesAlert: { type: "FEEDBACK_RECEIVED", payload: { userText: context.messageText } },
+      };
+    }
+
+    // Default response in SITE_VISIT_DONE — Never fall through to "Flat ya Villa" property inquiry!
+    const replyText =
+      lang === "GUJLISH"
+        ? `Khub saras <b>${nameStr}</b>! 🌟 Tamne property ane layout kevo lagyo? Jo project pasand aavyo hoy to shu ame developer sathe <b>special token pricing baithak</b> plan kariye, ke tamaro koi feedback chhe?`
+        : lang === "ENGLISH"
+        ? `Wonderful <b>${nameStr}</b>! 🌟 How did you like the property and floor layout? If you liked it, shall we arrange a <b>developer sitting for exclusive negotiated pricing</b>, or do you have any feedback?`
+        : `Bohot badiya <b>${nameStr}</b>! 🌟 Aapko property aur layout kaisa laga? Agar pasand aaya ho to kya hum developer ke sath <b>best token pricing sitting</b> arrange karein, ya aapka koi feedback hai?`;
+
+    return {
+      replyText,
+      nextState: "SITE_VISIT_DONE",
+      leadUpdates: {
+        state: "SITE_VISIT_DONE",
+        site_visit_booked: false,
+        metadata: updatedMeta,
+      },
+      salesAlert: { type: "FEEDBACK_RECEIVED", payload: { userText: context.messageText } },
+    };
   }
 
   // ---------------------------------------------------------------------------
