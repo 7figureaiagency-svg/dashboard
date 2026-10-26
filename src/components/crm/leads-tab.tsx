@@ -5,6 +5,7 @@ import {
   CalendarCheck,
   CheckCircle2,
   Columns3,
+  Flame,
   LayoutList,
   MapPin,
   Phone,
@@ -36,7 +37,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { DualRoleBadge, NoWhatsAppBadge, PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
+import { DualRoleBadge, LeadScoreBadge, NoWhatsAppBadge, PropertyStateBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
+import { computeLeadScore } from "@/lib/lead-scoring";
 import { LeadDrawer } from "@/components/crm/lead-drawer";
 import { ExecutiveDrawer } from "@/components/crm/executive-drawer";
 import { useActivity, useUpdateLead } from "@/lib/crm-data";
@@ -143,8 +145,13 @@ export function LeadsTab({
     [leads],
   );
 
-  type ActionFilter = "ALL" | "TODAY_VISITS" | "ACTION_NEEDED" | "QUALIFIED" | "FRESH" | "DUAL_ROLE" | "MISSING_PHONE";
+  type ActionFilter = "ALL" | "HOT_LEADS" | "TODAY_VISITS" | "ACTION_NEEDED" | "QUALIFIED" | "FRESH" | "DUAL_ROLE" | "MISSING_PHONE";
   const [actionFilter, setActionFilter] = useState<ActionFilter>("ALL");
+
+  const hotLeadsCount = useMemo(
+    () => leads.filter((l) => computeLeadScore(l).temperature === "HOT").length,
+    [leads],
+  );
 
   const todayVisitsCount = useMemo(
     () =>
@@ -207,66 +214,74 @@ export function LeadsTab({
 
   const rows = useMemo(
     () =>
-      leads.filter((l) => {
-        if (actionFilter === "TODAY_VISITS") {
-          if (
-            !inDatePreset(l.site_visit_datetime, "today") &&
-            !inDatePreset(l.site_visit_at, "today")
-          )
-            return false;
-        } else if (actionFilter === "ACTION_NEEDED") {
-          if (
-            l.status !== "VISIT_MISSED" &&
-            l.status !== "HUMAN_HANDOVER" &&
-            l.property_state !== "HUMAN_HANDOVER"
-          )
-            return false;
-        } else if (actionFilter === "QUALIFIED") {
-          if (
-            l.status !== "QUALIFIED" &&
-            l.status !== "SITE_VISIT_BOOKED" &&
-            l.status !== "VISIT_BOOKED"
-          )
-            return false;
-        } else if (actionFilter === "FRESH") {
-          if (
-            l.status !== "NEW" &&
-            l.status !== "FRESH" &&
-            l.status !== "QUALIFYING"
-          )
-            return false;
-        } else if (actionFilter === "DUAL_ROLE") {
-          if (!isDualRoleLead(l)) return false;
-        } else if (actionFilter === "MISSING_PHONE") {
-          const hasPhone = l.phone && l.phone.replace(/\D/g, "").length >= 10;
-          const isTelegram = isTelegramLead(l);
-          const isPortal = isPortalLead(l);
-          if (hasPhone || isTelegram || !isPortal) return false;
-        }
-
-        if (executive !== ALL && l.assigned_executive_name !== executive) return false;
-        if (status !== ALL) {
-          if (status === "DUAL_ROLE") {
+      leads
+        .filter((l) => {
+          if (actionFilter === "HOT_LEADS") {
+            if (computeLeadScore(l).temperature !== "HOT") return false;
+          } else if (actionFilter === "TODAY_VISITS") {
+            if (
+              !inDatePreset(l.site_visit_datetime, "today") &&
+              !inDatePreset(l.site_visit_at, "today")
+            )
+              return false;
+          } else if (actionFilter === "ACTION_NEEDED") {
+            if (
+              l.status !== "VISIT_MISSED" &&
+              l.status !== "HUMAN_HANDOVER" &&
+              l.property_state !== "HUMAN_HANDOVER"
+            )
+              return false;
+          } else if (actionFilter === "QUALIFIED") {
+            if (
+              l.status !== "QUALIFIED" &&
+              l.status !== "SITE_VISIT_BOOKED" &&
+              l.status !== "VISIT_BOOKED"
+            )
+              return false;
+          } else if (actionFilter === "FRESH") {
+            if (
+              l.status !== "NEW" &&
+              l.status !== "FRESH" &&
+              l.status !== "QUALIFYING"
+            )
+              return false;
+          } else if (actionFilter === "DUAL_ROLE") {
             if (!isDualRoleLead(l)) return false;
-          } else if (status === "SITE_VISIT_BOOKED") {
-            if (!isLeadVisitScheduled(l)) return false;
-          } else if (status === "VISIT_DONE") {
-            if (!isVisitDoneStatus(l.status)) return false;
-          } else if (l.status !== status) {
-            return false;
+          } else if (actionFilter === "MISSING_PHONE") {
+            const hasPhone = l.phone && l.phone.replace(/\D/g, "").length >= 10;
+            const isTelegram = isTelegramLead(l);
+            const isPortal = isPortalLead(l);
+            if (hasPhone || isTelegram || !isPortal) return false;
           }
-        }
-        if (source !== ALL && l.source !== source) return false;
-        if (from && (!l.created_at || new Date(l.created_at) < new Date(from))) return false;
-        if (to && (!l.created_at || new Date(l.created_at) > new Date(`${to}T23:59:59`)))
-          return false;
-        if (search) {
-          const q = search.toLowerCase();
-          const hay = `${l.name ?? ""} ${l.first_name ?? ""} ${l.phone ?? ""} ${l.selected_property_name ?? ""} ${l.location ?? ""} ${l.lead_id ?? ""}`;
-          if (!hay.toLowerCase().includes(q)) return false;
-        }
-        return true;
-      }),
+
+          if (executive !== ALL && l.assigned_executive_name !== executive) return false;
+          if (status !== ALL) {
+            if (status === "DUAL_ROLE") {
+              if (!isDualRoleLead(l)) return false;
+            } else if (status === "SITE_VISIT_BOOKED") {
+              if (!isLeadVisitScheduled(l)) return false;
+            } else if (status === "VISIT_DONE") {
+              if (!isVisitDoneStatus(l.status)) return false;
+            } else if (l.status !== status) {
+              return false;
+            }
+          }
+          if (source !== ALL && l.source !== source) return false;
+          if (from && (!l.created_at || new Date(l.created_at) < new Date(from))) return false;
+          if (to && (!l.created_at || new Date(l.created_at) > new Date(`${to}T23:59:59`)))
+            return false;
+          if (search) {
+            const q = search.toLowerCase();
+            const hay = `${l.name ?? ""} ${l.first_name ?? ""} ${l.phone ?? ""} ${l.selected_property_name ?? ""} ${l.location ?? ""} ${l.lead_id ?? ""}`;
+            if (!hay.toLowerCase().includes(q)) return false;
+          }
+          return true;
+        })
+        .sort((a, b) => {
+          const scoreDiff = computeLeadScore(b).score - computeLeadScore(a).score;
+          if (scoreDiff !== 0) return scoreDiff;
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        }),
     [leads, executive, status, source, from, to, search, actionFilter],
   );
 
@@ -366,7 +381,31 @@ export function LeadsTab({
   return (
     <div className="space-y-4">
       {/* ── 🚀 Apple HIG Complication Triage Widgets ── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+        <button
+          type="button"
+          onClick={() => setActionFilter(actionFilter === "HOT_LEADS" ? "ALL" : "HOT_LEADS")}
+          className={`apple-button flex flex-col text-left rounded-2xl border p-4 transition-all shadow-xs ${
+            actionFilter === "HOT_LEADS"
+              ? "border-rose-500/50 bg-rose-500/10 ring-2 ring-rose-500/30"
+              : "bg-card hover:bg-muted/40 border-border/50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex size-9 items-center justify-center rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400">
+              <Flame className="size-4" />
+            </div>
+            <span className="rounded-full bg-rose-500/15 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:text-rose-300 tabular-nums">
+              {hotLeadsCount}
+            </span>
+          </div>
+          <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-foreground tabular-nums">{hotLeadsCount}</p>
+          <div className="mt-1">
+            <span className="text-xs font-semibold text-foreground">🔥 Hot Leads</span>
+            <p className="text-[11px] text-muted-foreground">Score 70+ top intent</p>
+          </div>
+        </button>
+
         <button
           type="button"
           onClick={() => setActionFilter(actionFilter === "TODAY_VISITS" ? "ALL" : "TODAY_VISITS")}
@@ -517,6 +556,7 @@ export function LeadsTab({
           <span>
             Active quick filter:{" "}
             <strong className="text-foreground font-bold">
+              {actionFilter === "HOT_LEADS" && "🔥 Hot Leads (Score 70+ High Intent)"}
               {actionFilter === "TODAY_VISITS" && "Today's Site Visits"}
               {actionFilter === "ACTION_NEEDED" && "Action Needed (Missed Visits / Handover)"}
               {actionFilter === "QUALIFIED" && "Qualified Prospects"}
@@ -851,7 +891,8 @@ export function LeadsTab({
                         )}
                       </p>
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 flex items-center gap-1.5">
+                      <LeadScoreBadge lead={lead} />
                       <StatusBadge value={lead.status} />
                     </div>
                   </div>
@@ -942,6 +983,7 @@ export function LeadsTab({
                 <TableHeader>
                   <TableRow className="bg-muted/50 border-b border-border/60 hover:bg-muted/50">
                     <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[170px]">Customer</TableHead>
+                    <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[95px]">Score</TableHead>
                     <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[130px]">Executive</TableHead>
                     <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[130px]">Contact</TableHead>
                     <TableHead className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase py-3.5 min-w-[140px]">Status</TableHead>
@@ -957,6 +999,7 @@ export function LeadsTab({
                     Array.from({ length: 5 }).map((_, i) => (
                       <TableRow key={`skeleton-${i}`} className="animate-pulse border-b border-border/40">
                         <TableCell><div className="h-4 w-28 rounded-lg bg-muted/60" /></TableCell>
+                        <TableCell><div className="h-5 w-16 rounded-full bg-muted/60" /></TableCell>
                         <TableCell><div className="h-4 w-20 rounded-lg bg-muted/50" /></TableCell>
                         <TableCell><div className="h-4 w-24 rounded-lg bg-muted/50" /></TableCell>
                         <TableCell><div className="h-5 w-20 rounded-full bg-muted/60" /></TableCell>
@@ -969,7 +1012,7 @@ export function LeadsTab({
                     ))}
                   {!loading && rows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={9} className="py-14 text-center">
+                      <TableCell colSpan={10} className="py-14 text-center">
                         <div className="mx-auto flex max-w-sm flex-col items-center justify-center text-center">
                           <div className="mb-2.5 flex size-10 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
                             <Search className="size-4" />
@@ -1009,6 +1052,9 @@ export function LeadsTab({
                           <span className="group-hover:text-primary transition-colors">{lead.name || "Unnamed"}</span>
                           {isDualRoleLead(lead) && <DualRoleBadge />}
                         </div>
+                      </TableCell>
+                      <TableCell className="py-3.5">
+                        <LeadScoreBadge lead={lead} />
                       </TableCell>
                       <TableCell className="py-3.5" onClick={(e) => e.stopPropagation()}>
                         {lead.assigned_executive_name ? (

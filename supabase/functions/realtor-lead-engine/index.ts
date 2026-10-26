@@ -2171,6 +2171,12 @@ interface IntentResult {
 14e. "Layout accha nai laga. Front gate oe kenal he" / "Property pasand nahi aayi" / "layout accha nahi laga" / "canal/drain pass me hai" ->
 {"action": {"intent": "CONFIRM_VISIT_ATTENDANCE", "attended": true, "feedback": "Layout accha nai laga. Front gate oe kenal he"}, "language": "HINGLISH", "user_role": "SEEKER"}
 
+14f. "Option share karo" / "Options share karo" / "options dikhao" / "haan option bhejo" / "dusre projects batao" ->
+{"action": {"intent": "GENERAL_QUERY", "query": "request_alternative_options"}, "language": "HINGLISH", "user_role": "SEEKER"}
+
+14g. "Call arrange karo" / "senior advisor se baat karwao" / "director call" / "phone pe baat karni hai" ->
+{"action": {"intent": "REQUEST_HUMAN_CALL"}, "language": "HINGLISH", "user_role": "SEEKER"}
+
 15. "મને અલ્કાપુરીમાં 3BHK ફ્લેટ જોઈએ છે 75 લાખ સુધી" ->
 {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "3BHK Flat", "location": "Alkapuri", "budget": 7500000, "requirement": "BUY"}, "language": "GUJARATI_SCRIPT", "user_role": "SEEKER"}
 
@@ -6536,15 +6542,57 @@ export async function dispatchStateAction(
 
     const isObjection = hasDislike || hasLayoutIssue || hasCanalIssue || hasRoadIssue || hasPriceIssue || Boolean((action as ConfirmVisitAttendanceAction)?.feedback);
 
-    // 3. Request for Alternative Properties (e.g. "dusra option dikhao", "other options", "koi aur property")
-    const isAlternativeRequest =
-      /(?:dusra|doosra|bijo|bija|other|aur|nava|navi|new|alternative)\s*(?:option|options|property|project|flat|villa|dikhao|batao|share)/i.test(lower) ||
-      /^(?:options|alternative|bija\s*options|dusre\s*options)\b/i.test(lower.trim());
+    // Prior feedback checks to prevent amnesiac repetitions
+    const hasPriorFeedback = Boolean(
+      lead.metadata?.visit_objection_at ||
+      lead.metadata?.visit_feedback ||
+      lead.metadata?.last_objection
+    );
 
-    // 4. Human Advisor Call Request
+    const hasOptionsAlreadySent = Boolean(lead.metadata?.alternative_options_sent);
+    const lastOptionIds: string[] = Array.isArray(lead.last_option_ids)
+      ? lead.last_option_ids
+      : (Array.isArray(lead.metadata?.alternative_option_ids) ? lead.metadata.alternative_option_ids : []);
+
+    // Selection of option 1 or 2 AFTER options cards were sent
+    const isSelectingOpt1 =
+      hasOptionsAlreadySent &&
+      lastOptionIds.length > 0 &&
+      /^(?:1|1️⃣|first|1st|option\s*1|pehla|pehli)\b/i.test(lower.trim());
+
+    const isSelectingOpt2 =
+      hasOptionsAlreadySent &&
+      lastOptionIds.length > 1 &&
+      /^(?:2|2️⃣|second|2nd|option\s*2|dusra|doosra|bijo)\b/i.test(lower.trim());
+
+    // Answering choice 1 (alternative options) to post-visit objection question
+    const isChoice1Alternative =
+      hasPriorFeedback &&
+      !hasOptionsAlreadySent &&
+      (/^(?:1|1️⃣|first|1st|option\s*1)\b/i.test(lower.trim()) ||
+       /^(?:haan|ha|yes|share\s*karo|karo|bhejo|sure|ok|chalo)\b/i.test(lower.trim()));
+
+    // General or explicit request for alternative options (e.g. "Option share karo", "options share karo", "option bhejo", etc.)
+    const hasAskedOptions =
+      /(?:options?|alternative|projects?|properties?)\s*(?:share|dikhao|batao|bhejo|send|aapo|chahiye|kar\s*do|karo|moklo)/i.test(lower) ||
+      /(?:share|bhejo|send|dikhao|batao|moklo)\s*(?:options?|alternative|projects?|properties?|list|details)/i.test(lower) ||
+      /^(?:options?|alternative|bija\s*options?|dusre?\s*options?|nava\s*options?)\b/i.test(lower.trim()) ||
+      /(?:option|options)\s*share/i.test(lower) ||
+      /(?:dusra|doosra|bijo|bija|other|aur|nava|navi|new|alternative)\s*(?:option|options|property|project|flat|villa|dikhao|batao|share|bhejo)/i.test(lower) ||
+      (intent === "GENERAL_QUERY" && (action as any)?.query === "request_alternative_options");
+
+    const isAlternativeRequest = (hasAskedOptions || isChoice1Alternative) && !isSelectingOpt1 && !isSelectingOpt2;
+
+    // Choice 2 (call) to post-visit objection question or human call request
+    const isChoice2Call =
+      hasPriorFeedback &&
+      !hasOptionsAlreadySent &&
+      /^(?:2|2️⃣|second|2nd|option\s*2)\b/i.test(lower.trim());
+
     const isAdvisorCallRequest =
       intent === "REQUEST_HUMAN_CALL" ||
-      /(?:call|phone|baat|consult|advisor|director|executive|manager)\s*(?:karo|karvao|karein|karvu|karvo|connect)/i.test(lower);
+      isChoice2Call ||
+      /(?:call|phone|baat|consult|advisor|director|executive|manager)\s*(?:karo|karvao|karein|karvu|karvo|connect|chahiye|schedule|arrange)/i.test(lower);
 
     // Persist feedback notes in site_visits table
     await supabase
@@ -6556,11 +6604,59 @@ export async function dispatchStateAction(
     const currentMeta = (lead.metadata || {}) as Record<string, any>;
     const updatedMeta = {
       ...currentMeta,
-      visit_feedback: context.messageText,
+      visit_feedback: isObjection ? context.messageText : (currentMeta.visit_feedback || context.messageText),
       last_objection: isObjection ? context.messageText : currentMeta.last_objection,
       visit_objection_at: isObjection ? new Date().toISOString() : currentMeta.visit_objection_at,
     };
 
+    // Case A: Customer selects Alternative Option 1 or 2
+    if (isSelectingOpt1 || isSelectingOpt2) {
+      const selectedIndex = isSelectingOpt1 ? 0 : 1;
+      const chosenPropId = lastOptionIds[selectedIndex];
+
+      const { data: chosenProp } = await supabase
+        .from("inventory")
+        .select("property_id, project_name, configuration, property_category, location, price")
+        .eq("client_id", activeTenantId)
+        .eq("property_id", chosenPropId)
+        .maybeSingle();
+
+      const chosenName = chosenProp?.project_name || `Option ${selectedIndex + 1}`;
+      const chosenLoc = chosenProp?.location ? ` in ${chosenProp.location}` : "";
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Khub saras <b>${nameStr}</b>! 🌟 Tame <b>${chosenName}</b>${chosenLoc} pasand karyu chhe.\n\n👉 Shu ame <b>kaale sanje 5:00 vage</b> ke <b>Sunday savare 11:00 vage</b> tamari VIP Site Visit 🚗 schedule kariye?`
+          : lang === "ENGLISH"
+          ? `Excellent choice <b>${nameStr}</b>! 🌟 You have selected <b>${chosenName}</b>${chosenLoc}.\n\n👉 Shall we schedule your VIP Site Visit 🚗 for <b>Tomorrow at 5:00 PM</b> or <b>Sunday at 11:00 AM</b>?`
+          : `Bahut badhiya <b>${nameStr}</b>! 🌟 Aapne <b>${chosenName}</b>${chosenLoc} pasand kiya hai.\n\n👉 Kya hum <b>kal shaam 5:00 baje</b> ya <b>Sunday subah 11:00 baje</b> aapki VIP Site Visit 🚗 plan karein?`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_PROPOSED",
+        leadUpdates: {
+          state: "SITE_VISIT_PROPOSED",
+          selected_property_id: chosenPropId,
+          site_visit_booked: false,
+          metadata: {
+            ...updatedMeta,
+            selected_from_options: true,
+            selected_option_index: selectedIndex + 1,
+            selected_property_id: chosenPropId,
+          },
+        },
+        salesAlert: {
+          type: "SITE_VISIT_PROPOSED",
+          payload: {
+            userText: context.messageText,
+            selected_property: chosenName,
+            hint: "Lead selected alternative property post-visit. Site visit proposal sent.",
+          },
+        },
+      };
+    }
+
+    // Case B: Customer requests Senior Advisor / Director Call
     if (isAdvisorCallRequest) {
       const replyText =
         lang === "GUJLISH"
@@ -6584,78 +6680,127 @@ export async function dispatchStateAction(
       };
     }
 
+    // Case C: Customer requests Alternative Options
     if (isAlternativeRequest) {
-      // Find matching alternative available properties in the tenant inventory
-      const { data: altProps } = await supabase
+      const visitedPropId = lead.selected_property_id || "";
+      let query = supabase
         .from("inventory")
-        .select("property_id, project_name, configuration, property_type, price, location, carpet_sqft")
+        .select("property_id, project_name, configuration, property_category, price, location, carpet_area_sqft")
         .eq("client_id", activeTenantId)
-        .eq("status", "AVAILABLE")
-        .neq("property_id", lead.selected_property_id || "")
-        .limit(2);
+        .eq("status", "AVAILABLE");
 
-      let altListText = "";
-      if (altProps && altProps.length > 0) {
-        altListText = altProps
-          .map((p, i) => `\n\n${i + 1}️⃣ <b>${p.project_name}</b> (${p.configuration || p.property_type || "Premium"})\n📍 <b>Location:</b> ${p.location || "Prime Location"}\n💰 <b>Price:</b> ₹${(Number(p.price) / 100000).toFixed(1)} Lakhs\n✨ <b>Highlights:</b> Clean approach road, open floor plan`)
-          .join("");
+      if (visitedPropId) {
+        query = query.neq("property_id", visitedPropId);
       }
 
-      const replyText =
-        lang === "GUJLISH"
-          ? `Samji gayo <b>${nameStr}</b>! 👍 Tamari pasand ane criteria mutabiq clean approach road ane better planning vala alternative verified options aa rahya:${altListText}\n\n👉 <b>Aa mathi kaya project ni VIP Site Visit 🚗 plan kariye?</b>`
-          : lang === "ENGLISH"
-          ? `Understood <b>${nameStr}</b>! 👍 Here are curated alternative verified projects with prime approach roads and spacious layouts matching your preferences:${altListText}\n\n👉 <b>Which project would you like to schedule a VIP Site Visit 🚗 for?</b>`
-          : `Samajh gaya <b>${nameStr}</b>! 👍 Aapki pasand aur criteria ke mutabiq clean approach road aur open floor plan wale curated verified options yeh rahe:${altListText}\n\n👉 <b>Inme se kis project ke liye hum VIP Site Visit 🚗 schedule karein?</b>`;
+      const { data: altProps } = await query.limit(2);
 
-      return {
-        replyText,
-        nextState: "SITE_VISIT_DONE",
-        leadUpdates: {
-          state: "SITE_VISIT_DONE",
-          site_visit_booked: false,
-          metadata: updatedMeta,
-        },
-        salesAlert: {
-          type: "POST_VISIT_OBJECTION",
-          payload: {
-            userText: context.messageText,
-            hint: "Customer requested alternative projects post-visit. Recommended alternatives pitched.",
+      if (altProps && altProps.length > 0) {
+        const optionIds = altProps.map((p) => p.property_id);
+        const altListText = altProps
+          .map((p, i) => {
+            const numEmoji = i === 0 ? "1️⃣" : "2️⃣";
+            const configText = p.configuration || p.property_category || "Premium";
+            const priceLakhs = (Number(p.price) / 100000).toFixed(1);
+            return `\n\n${numEmoji} <b>${p.project_name}</b> (${configText})\n📍 <b>Location:</b> ${p.location || "Prime Location"}\n💰 <b>Price:</b> ₹${priceLakhs} Lakhs\n✨ <b>Highlights:</b> Clean approach road, open floor plan`;
+          })
+          .join("");
+
+        const replyText =
+          lang === "GUJLISH"
+            ? `Samji gayo <b>${nameStr}</b>! 👍 Tamari pasand ane criteria mutabiq clean approach road ane better planning vala alternative verified options aa rahya:${altListText}\n\n👉 <b>Aa mathi kaya project ni VIP Site Visit 🚗 plan kariye? (Aap 1 ya 2 lakhi ne batavi shako chho)</b>`
+            : lang === "ENGLISH"
+            ? `Understood <b>${nameStr}</b>! 👍 Here are curated alternative verified projects with prime approach roads and spacious layouts matching your preferences:${altListText}\n\n👉 <b>Which of these projects would you like to schedule a VIP Site Visit 🚗 for? (You can reply 1 or 2)</b>`
+            : `Samajh gaya <b>${nameStr}</b>! 👍 Aapki pasand aur criteria ke mutabiq clean approach road aur open floor plan wale curated verified options yeh rahe:${altListText}\n\n👉 <b>Inme se kis project ke liye hum VIP Site Visit 🚗 plan karein? (Aap 1 ya 2 likhkar bata sakte hain)</b>`;
+
+        return {
+          replyText,
+          nextState: "SITE_VISIT_DONE",
+          leadUpdates: {
+            state: "SITE_VISIT_DONE",
+            site_visit_booked: false,
+            last_option_ids: optionIds,
+            metadata: {
+              ...updatedMeta,
+              alternative_options_sent: true,
+              alternative_options_at: new Date().toISOString(),
+              alternative_option_ids: optionIds,
+            },
           },
-        },
-      };
+          salesAlert: {
+            type: "POST_VISIT_OBJECTION",
+            payload: {
+              userText: context.messageText,
+              hint: "Customer requested alternative projects post-visit. Recommended alternatives pitched.",
+              offered_properties: altProps.map((p) => p.project_name),
+            },
+          },
+        };
+      } else {
+        // Empty catalog fallback: Tenant has no other available properties
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji <b>${nameStr}</b>! Tamari specific requirement ane criteria mujab amari portfolio team additional verified <b>off-market projects</b> shortlist kari rahi chhe. Amara senior property director ne alert mali gayo chhe ane teo direct aapse <b>call par connect karshe</b>! 👍`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! Our portfolio team is curating exclusive <b>off-market verified projects</b> matching your specific requirements. Our senior property director has been notified and will <b>connect with you directly</b> to share tailored options! 👍`
+            : `Ji <b>${nameStr}</b>! Aapke specific criteria ke mutabiq hamari portfolio team additional verified <b>off-market projects</b> shortlist kar rahi hai. Humne senior property director ko alert bhej diya hai — wo direct aapse <b>call par connect karke</b> exclusive options share karenge! 👍`;
+
+        return {
+          replyText,
+          nextState: "SITE_VISIT_DONE",
+          leadUpdates: {
+            state: "SITE_VISIT_DONE",
+            site_visit_booked: false,
+            metadata: {
+              ...updatedMeta,
+              no_direct_inventory_match: true,
+              empty_catalog_handled_at: new Date().toISOString(),
+            },
+          },
+          salesAlert: {
+            type: "NO_PROPERTY_MATCH",
+            payload: {
+              userText: context.messageText,
+              lead_id: lead.id,
+              client_id: activeTenantId,
+              hint: "Tenant catalog has no additional alternative inventory post-visit. Senior director intervention required.",
+            },
+          },
+        };
+      }
     }
 
+    // Case D: Customer shares an Objection or Dislike
     if (isObjection) {
       let specificReply = "";
       if (hasLayoutIssue && hasCanalIssue) {
         specificReply =
           lang === "GUJLISH"
-            ? `Samji gayo <b>${nameStr}</b>! Layout tamne suitable na lagyo ane front gate pase canal/drain hovano concern bilkul genuine chhe. Tamara honest feedback mate aabhar. 🙏\n\nAme tamara criteria mujab clean approach road ane open floor plan vala bija verified projects shortlist kari rahya chhiye.\n\n👉 <b>Shu ame alternative matching projects share kariye, ke senior property advisor sathe 5-minute call schedule kariye?</b>`
+            ? `Samji gayo <b>${nameStr}</b>! Layout tamne suitable na lagyo ane front gate pase canal/drain hovano concern bilkul genuine chhe. Tamara honest feedback mate aabhar. 🙏\n\nAme tamara criteria mujab clean approach road ane open floor plan vala bija verified projects shortlist kari rahya chhiye.\n\n👉 <b>Shu ame alternative matching projects share kariye (1), ke senior property advisor sathe 5-minute call schedule kariye (2)?</b>`
             : lang === "ENGLISH"
-            ? `Understood completely <b>${nameStr}</b>! We appreciate your honest feedback — the layout not meeting your needs and the canal near the front gate are very valid concerns. 🙏\n\nWe are shortlisting alternative verified projects with clean approach roads and spacious, well-ventilated floor plans matching your criteria.\n\n👉 <b>Would you like us to share alternative matching projects, or schedule a quick 5-minute call with our senior property director?</b>`
-            : `Samajh gaya <b>${nameStr}</b>! Layout aapko suitable nahi laga aur front gate ke paas canal/drain hona bilkul genuine concern hai. Aapke honest feedback ke liye dil se shukriya. 🙏\n\nHum aapke budget aur criteria ke mutabiq doosre verified projects shortlist kar rahe hain jinka approach road clean ho aur spacious open floor plan ho.\n\n👉 <b>Kya hum aapko alternative matching projects share karein, ya hamare senior property director se 5-minute direct call arrange karein?</b>`;
+            ? `Understood completely <b>${nameStr}</b>! We appreciate your honest feedback — the layout not meeting your needs and the canal near the front gate are very valid concerns. 🙏\n\nWe are shortlisting alternative verified projects with clean approach roads and spacious, well-ventilated floor plans matching your criteria.\n\n👉 <b>Would you like us to share alternative matching projects (1), or schedule a quick 5-minute call with our senior property director (2)?</b>`
+            : `Samajh gaya <b>${nameStr}</b>! Layout aapko suitable nahi laga aur front gate ke paas canal/drain hona bilkul genuine concern hai. Aapke honest feedback ke liye dil se shukriya. 🙏\n\nHum aapke budget aur criteria ke mutabiq doosre verified projects shortlist kar rahe hain jinka approach road clean ho aur spacious open floor plan ho.\n\n👉 <b>Kya hum aapko alternative matching projects share karein (1), ya hamare senior property director se 5-minute direct call arrange karein (2)?</b>`;
       } else if (hasLayoutIssue) {
         specificReply =
           lang === "GUJLISH"
-            ? `Samji gayo <b>${nameStr}</b>! Property nu layout ane space planning tamari requirement sathe match nathi thai, e bilkul valid point chhe. 🙏\n\nAme larger carpet area ane open layout vala bija premium options arrange kariye chhiye.\n\n👉 <b>Shu ame better layout vala matching options share kariye, ke senior advisor sathe call plan kariye?</b>`
+            ? `Samji gayo <b>${nameStr}</b>! Property nu layout ane space planning tamari requirement sathe match nathi thai, e bilkul valid point chhe. 🙏\n\nAme larger carpet area ane open layout vala bija premium options arrange kariye chhiye.\n\n👉 <b>Shu ame better layout vala matching options share kariye (1), ke senior advisor sathe call plan kariye (2)?</b>`
             : lang === "ENGLISH"
-            ? `Understood <b>${nameStr}</b>! The floor plan and room sizes not suiting your family's needs is a very valid point. 🙏\n\nWe can present alternative verified properties with larger carpet areas and open layouts.\n\n👉 <b>Would you like to see alternative options with better layouts, or consult with our senior advisor?</b>`
-            : `Samajh gaya <b>${nameStr}</b>! Layout aur room sizes aapki requirement par fit nahi baithe, yeh bilkul valid point hai. 🙏\n\nHum open floor plan aur better carpet area wale alternative verified projects suggest kar rahe hain.\n\n👉 <b>Kya hum better layout wale matching options share karein, ya senior advisor se call arrange karein?</b>`;
+            ? `Understood <b>${nameStr}</b>! The floor plan and room sizes not suiting your family's needs is a very valid point. 🙏\n\nWe can present alternative verified properties with larger carpet areas and open layouts.\n\n👉 <b>Would you like to see alternative options with better layouts (1), or consult with our senior advisor (2)?</b>`
+            : `Samajh gaya <b>${nameStr}</b>! Layout aur room sizes aapki requirement par fit nahi baithe, yeh bilkul valid point hai. 🙏\n\nHum open floor plan aur better carpet area wale alternative verified projects suggest kar rahe hain.\n\n👉 <b>Kya hum better layout wale matching options share karein (1), ya senior advisor se call arrange karein (2)?</b>`;
       } else if (hasCanalIssue || hasRoadIssue) {
         specificReply =
           lang === "GUJLISH"
-            ? `Samji gayo <b>${nameStr}</b>! Surrounding location ane approach road no concern bilkul genuine chhe, dream home mate clean surrounding sauthi jaruri hoy chhe. 🙏\n\nAme prime ane peaceful locality vala bija verified projects suggest kariye chhiye.\n\n👉 <b>Shu ame prime locality na options share kariye, ke senior advisor sathe call kariye?</b>`
+            ? `Samji gayo <b>${nameStr}</b>! Surrounding location ane approach road no concern bilkul genuine chhe, dream home mate clean surrounding sauthi jaruri hoy chhe. 🙏\n\nAme prime ane peaceful locality vala bija verified projects suggest kariye chhiye.\n\n👉 <b>Shu ame prime locality na options share kariye (1), ke senior advisor sathe call kariye (2)?</b>`
             : lang === "ENGLISH"
-            ? `Understood <b>${nameStr}</b>! Your concern regarding the surrounding location and approach road is completely justified — a clean and peaceful neighborhood is paramount. 🙏\n\nWe can suggest alternative verified projects in prime, well-developed localities.\n\n👉 <b>Would you like us to share options in prime localities, or arrange a consultation with our property advisor?</b>`
-            : `Samajh gaya <b>${nameStr}</b>! Surrounding area aur approach road ka concern bilkul genuine hai, dream home ke liye clean surrounding sabse zaroori hoti hai. 🙏\n\nHum prime aur peaceful locality wale doosre verified projects suggest kar rahe hain.\n\n👉 <b>Kya hum prime locality ke options share karein, ya hamare senior advisor aapse direct call par connect karein?</b>`;
+            ? `Understood <b>${nameStr}</b>! Your concern regarding the surrounding location and approach road is completely justified — a clean and peaceful neighborhood is paramount. 🙏\n\nWe can suggest alternative verified projects in prime, well-developed localities.\n\n👉 <b>Would you like us to share options in prime localities (1), or arrange a consultation with our property advisor (2)?</b>`
+            : `Samajh gaya <b>${nameStr}</b>! Surrounding area aur approach road ka concern bilkul genuine hai, dream home ke liye clean surrounding sabse zaroori hoti hai. 🙏\n\nHum prime aur peaceful locality wale doosre verified projects suggest kar rahe hain.\n\n👉 <b>Kya hum prime locality ke options share karein (1), ya hamare senior advisor aapse direct call par connect karein (2)?</b>`;
       } else {
         specificReply =
           lang === "GUJLISH"
-            ? `Tamara honest feedback mate shukriya <b>${nameStr}</b>! 🙏 Ame samji shakiye chhiye ke aa property tamara criteria par fit nathi bethi.\n\nAme tamari requirement mujab bija premium verified options shortlist kari rahya chhiye.\n\n👉 <b>Shu ame fresh matching options share kariye, ke senior director sathe direct call arrange kariye?</b>`
+            ? `Tamara honest feedback mate shukriya <b>${nameStr}</b>! 🙏 Ame samji shakiye chhiye ke aa property tamara criteria par fit nathi bethi.\n\nAme tamari requirement mujab bija premium verified options shortlist kari rahya chhiye.\n\n👉 <b>Shu ame fresh matching options share kariye (1), ke senior director sathe direct call arrange kariye (2)?</b>`
             : lang === "ENGLISH"
-            ? `Thank you for sharing your candid feedback <b>${nameStr}</b>! 🙏 We understand this property did not fully match your expectations.\n\nWe are curating alternative verified projects that align with your exact preferences.\n\n👉 <b>Would you like us to share fresh matching options, or arrange a direct call with our property director?</b>`
-            : `Aapke honest feedback ke liye shukriya <b>${nameStr}</b>! 🙏 Hum samajh sakte hain ki yeh property aapke criteria par puri tarah fit nahi baithi.\n\nHum aapke budget aur pasand ke mutabiq alternative premium verified options shortlist kar rahe hain.\n\n👉 <b>Kya hum aapko fresh options share karein, ya direct property director se call arrange karein?</b>`;
+            ? `Thank you for sharing your candid feedback <b>${nameStr}</b>! 🙏 We understand this property did not fully match your expectations.\n\nWe are curating alternative verified projects that align with your exact preferences.\n\n👉 <b>Would you like us to share fresh matching options (1), or arrange a direct call with our property director (2)?</b>`
+            : `Aapke honest feedback ke liye shukriya <b>${nameStr}</b>! 🙏 Hum samajh sakte hain ki yeh property aapke criteria par puri tarah fit nahi baithi.\n\nHum aapke budget aur pasand ke mutabiq alternative premium verified options shortlist kar rahe hain.\n\n👉 <b>Kya hum aapko fresh options share karein (1), ya direct property director se call arrange karein (2)?</b>`;
       }
 
       return {
@@ -6678,6 +6823,7 @@ export async function dispatchStateAction(
       };
     }
 
+    // Case E: Price Negotiation / Token Sitting Request
     if (isNeg) {
       const replyText =
         lang === "GUJLISH"
@@ -6698,6 +6844,7 @@ export async function dispatchStateAction(
       };
     }
 
+    // Case F: Home Loan Assistance Request
     if (isLoan) {
       const replyText =
         lang === "GUJLISH"
@@ -6718,7 +6865,29 @@ export async function dispatchStateAction(
       };
     }
 
-    // Default response in SITE_VISIT_DONE — Never fall through to "Flat ya Villa" property inquiry!
+    // Case G: Default Fallback in SITE_VISIT_DONE — Amnesiac Loop Guard
+    // If visit feedback or objection is ALREADY present, NEVER repeat "Aapko property aur layout kaisa laga...?"
+    if (hasPriorFeedback) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Ji <b>${nameStr}</b>! Ame tamara feedback ane criteria mutabiq best options assist kari rahya chhiye.\n\n👉 <b>Shu ame matching alternative projects share kariye (1), ke senior property advisor sathe direct call arrange kariye (2)?</b>`
+          : lang === "ENGLISH"
+          ? `Yes <b>${nameStr}</b>! We are assisting you with the best options matching your criteria.\n\n👉 <b>Would you like us to share alternative matching projects (1), or arrange a direct call with our senior property advisor (2)?</b>`
+          : `Ji <b>${nameStr}</b>! Hum aapke criteria ke mutabiq best options assist kar rahe hain.\n\n👉 <b>Kya hum matching alternative projects share karein (1), ya senior property advisor se direct call arrange karein (2)?</b>`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_DONE",
+        leadUpdates: {
+          state: "SITE_VISIT_DONE",
+          site_visit_booked: false,
+          metadata: updatedMeta,
+        },
+        salesAlert: { type: "FEEDBACK_RECEIVED", payload: { userText: context.messageText } },
+      };
+    }
+
+    // Default response for fresh SITE_VISIT_DONE without prior feedback
     const replyText =
       lang === "GUJLISH"
         ? `Khub saras <b>${nameStr}</b>! 🌟 Tamne property ane layout kevo lagyo? Jo project pasand aavyo hoy to shu ame developer sathe <b>special token pricing baithak</b> plan kariye, ke tamaro koi feedback chhe?`
@@ -8537,6 +8706,178 @@ Deno.serve(async (req: Request) => {
     }
 
     // -------------------------------------------------------------------------
+    // LEAD SCORING ENGINE (Deterministic 0-100 Score & Temperature Classification)
+    // -------------------------------------------------------------------------
+    function computeEngineLeadScore(
+      leadData: any,
+      targetState?: string,
+      updates?: any
+    ) {
+      const mergedMeta = {
+        ...(leadData?.metadata || {}),
+        ...(updates?.metadata || {}),
+      };
+
+      const effectiveState = String(targetState || updates?.state || leadData?.state || "").toUpperCase();
+
+      // Inactive / Terminal Visit States Guard: Never award active visit points if visit was cancelled, missed, or dropped
+      const isVisitExplicitlyInactive =
+        effectiveState === "VISIT_CANCELLED" ||
+        effectiveState === "VISIT_MISSED" ||
+        effectiveState === "DROPPED" ||
+        effectiveState === "NOT_INTERESTED" ||
+        effectiveState === "OPT_OUT" ||
+        effectiveState === "COLD_UNQUALIFIED" ||
+        effectiveState === "COLD";
+
+      const isConfirmedBooked = updates?.site_visit_booked !== undefined
+        ? Boolean(updates.site_visit_booked)
+        : Boolean(leadData?.site_visit_booked);
+
+      const hasVisitDate = Boolean(
+        updates?.site_visit_datetime ||
+        leadData?.site_visit_datetime ||
+        updates?.site_visit_at ||
+        leadData?.site_visit_at
+      );
+
+      const hasActiveSiteVisit =
+        !isVisitExplicitlyInactive &&
+        (isConfirmedBooked || (hasVisitDate && updates?.site_visit_booked !== false && leadData?.site_visit_booked !== false));
+
+      let stageScore = 0;
+      let budgetScore = 0;
+      let engagementScore = 0;
+      let penalties = 0;
+      const reasons: string[] = [];
+
+      // 1. Stage & Commitment Signals (Max 45 Pts)
+      if (effectiveState === "SITE_VISIT_DONE" || effectiveState === "VISIT_DONE" || mergedMeta.visit_feedback) {
+        stageScore += 45;
+        reasons.push("Site visit completed (+45)");
+      } else if (effectiveState === "SITE_VISIT_BOOKED" || hasActiveSiteVisit) {
+        stageScore += 35;
+        reasons.push("Site visit locked & scheduled (+35)");
+      } else if (effectiveState === "SITE_VISIT_PROPOSED") {
+        stageScore += 25;
+        reasons.push("Visit slot actively selected (+25)");
+      } else if (
+        effectiveState === "OPTIONS_SENT" ||
+        mergedMeta.alternative_options_sent ||
+        (Array.isArray(leadData?.last_option_ids) && leadData.last_option_ids.length > 0)
+      ) {
+        stageScore += 18;
+        reasons.push("Alternative options requested (+18)");
+      } else if (
+        effectiveState === "QUALIFIED" ||
+        ((updates?.budget || leadData?.budget) && (updates?.location || leadData?.location))
+      ) {
+        stageScore += 12;
+        reasons.push("Requirements qualified (+12)");
+      } else {
+        stageScore += 5;
+        reasons.push("Initial inquiry (+5)");
+      }
+
+      // Dual-role bonus (High Lifetime Value)
+      if (mergedMeta.has_buyer_profile && mergedMeta.has_seller_profile) {
+        stageScore += 10;
+        reasons.push("Dual-role buyer & seller (+10)");
+      }
+
+      // 2. Financial Viability & Ticket Size (Max 25 Pts)
+      const budgetNum = Number(updates?.budget ?? leadData?.budget ?? 0);
+      if (budgetNum >= 15000000) {
+        budgetScore += 25;
+        reasons.push("Ultra-luxury budget >= ₹1.5 Cr (+25)");
+      } else if (budgetNum >= 7500000) {
+        budgetScore += 20;
+        reasons.push("Premium budget ₹75L - ₹1.5 Cr (+20)");
+      } else if (budgetNum >= 4000000) {
+        budgetScore += 15;
+        reasons.push("Mid-segment budget ₹40L - ₹75L (+15)");
+      } else if (budgetNum > 0) {
+        budgetScore += 10;
+        reasons.push("Starter budget < ₹40L (+10)");
+      }
+
+      // 3. Conversational Velocity & Engagement (Max 20 Pts)
+      if (mergedMeta.last_objection || mergedMeta.visit_feedback) {
+        engagementScore += 10;
+        reasons.push("Detailed property feedback provided (+10)");
+      }
+
+      const followupCount = Number(updates?.followup_count ?? leadData?.followup_count ?? 0);
+      if (followupCount >= 3) {
+        engagementScore += 10;
+        reasons.push("High interaction volume (+10)");
+      } else if (followupCount >= 1) {
+        engagementScore += 5;
+      }
+
+      const slaMinutes = Number(leadData?.sla_response_minutes || 0);
+      if (slaMinutes > 0 && slaMinutes <= 10) {
+        engagementScore += 10;
+        reasons.push("Immediate responder (< 10 min) (+10)");
+      }
+
+      // 4. Negative & Churn Penalties (-10 to -35 Pts)
+      if (
+        effectiveState === "DROPPED" ||
+        effectiveState === "NOT_INTERESTED" ||
+        effectiveState === "OPT_OUT" ||
+        updates?.rejection_reason ||
+        leadData?.rejection_reason
+      ) {
+        penalties += 35;
+        reasons.push("Marked dropped or rejected (-35)");
+      }
+
+      if (effectiveState === "VISIT_CANCELLED") {
+        penalties += 20;
+        reasons.push("Cancelled visit (-20)");
+      }
+
+      if (effectiveState === "VISIT_MISSED") {
+        penalties += 20;
+        reasons.push("Missed scheduled site visit (-20)");
+      }
+
+      // Missing phone penalty (must be a valid 10-digit number)
+      const effectivePhone = updates?.phone ?? leadData?.phone;
+      const cleanPhone = String(effectivePhone || "").replace(/\D/g, "");
+      if (cleanPhone.length < 10) {
+        penalties += 10;
+        reasons.push("Missing 10-digit mobile number (-10)");
+      }
+
+      // Clamped Total (0 - 100)
+      const rawTotal = stageScore + budgetScore + engagementScore - penalties;
+      const score = Math.max(0, Math.min(100, Math.round(rawTotal)));
+
+      let temperature: "HOT" | "WARM" | "COLD" = "COLD";
+      if (score >= 70) {
+        temperature = "HOT";
+      } else if (score >= 40) {
+        temperature = "WARM";
+      } else {
+        temperature = "COLD";
+      }
+
+      return {
+        score,
+        temperature,
+        breakdown: {
+          stage: Math.min(45, stageScore),
+          budget: Math.min(25, budgetScore),
+          engagement: Math.min(20, engagementScore),
+          penalties,
+        },
+        reasons,
+      };
+    }
+
+    // -------------------------------------------------------------------------
     // DETERMINISTIC FSM STATE ROUTING (Zero Regex Cascades)
     // -------------------------------------------------------------------------
     const dialogCtx: DialogContext = {
@@ -8562,6 +8903,20 @@ Deno.serve(async (req: Request) => {
       isSilent = true;
     }
 
+    // Compute updated AI lead score and persist in metadata
+    const leadScoreResult = computeEngineLeadScore(lead, nextState, transitionResult.leadUpdates);
+    const existingLeadMeta = (lead?.metadata || {}) as Record<string, any>;
+    const updateLeadMeta = (transitionResult.leadUpdates?.metadata || {}) as Record<string, any>;
+    const enrichedLeadMetadata = {
+      ...existingLeadMeta,
+      ...updateLeadMeta,
+      lead_score: leadScoreResult.score,
+      lead_temperature: leadScoreResult.temperature,
+      score_breakdown: leadScoreResult.breakdown,
+      score_reasons: leadScoreResult.reasons,
+      score_updated_at: new Date().toISOString(),
+    };
+
     // Persist lead state and updates to Supabase PostgreSQL (schema-safe: leads has 'state', not 'status')
     if (transitionResult.leadUpdates && Object.keys(transitionResult.leadUpdates).length > 0) {
       const sanitizedUpdates = { ...transitionResult.leadUpdates };
@@ -8572,6 +8927,7 @@ Deno.serve(async (req: Request) => {
           ...sanitizedUpdates,
           state: nextState,
           last_active_at: new Date().toISOString(),
+          metadata: enrichedLeadMetadata,
         })
         .eq("id", lead.id);
     } else {
@@ -8580,6 +8936,7 @@ Deno.serve(async (req: Request) => {
         .update({
           state: nextState,
           last_active_at: new Date().toISOString(),
+          metadata: enrichedLeadMetadata,
         })
         .eq("id", lead.id);
     }

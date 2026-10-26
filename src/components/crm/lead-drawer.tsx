@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   CalendarX,
   CheckCircle2,
+  Flame,
   History,
   MapPin,
   MessageCircle,
@@ -16,11 +17,13 @@ import {
   RotateCcw,
   Save,
   Send,
+  Snowflake,
   Sparkles,
   Star,
   Trash2,
   Trophy,
   UserCheck,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,11 +67,13 @@ import {
 } from "@/components/ui/select";
 import {
   DualRoleBadge,
+  LeadScoreBadge,
   NoWhatsAppBadge,
   PropertyStateBadge,
   StatusBadge,
   ToneBadge,
 } from "@/components/crm/badges";
+import { computeLeadScore } from "@/lib/lead-scoring";
 import { WhatsAppChatView } from "@/components/crm/whatsapp-chat-view";
 import { WorkflowTimeline } from "@/components/crm/workflow-timeline";
 import { HistoryTimeline } from "@/components/crm/history-timeline";
@@ -351,6 +356,8 @@ export function LeadDrawer({
   const run = (values: Partial<Lead>, message: string, action: string) =>
     update.mutate({ leadId: lead.lead_id, values, message, lead, action, note: notes || null });
 
+  const scoreResult = useMemo(() => computeLeadScore(lead), [lead]);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col h-full w-full p-0 sm:max-w-2xl lg:max-w-3xl overflow-hidden">
@@ -367,6 +374,7 @@ export function LeadDrawer({
             <div className="flex flex-wrap gap-2 pt-1">
               <StatusBadge value={lead.status} />
               <PropertyStateBadge value={lead.property_state} />
+              <LeadScoreBadge lead={lead} />
               {isDual && <DualRoleBadge />}
               {isMissingPhone && isPortal && <NoWhatsAppBadge />}
             </div>
@@ -378,6 +386,104 @@ export function LeadDrawer({
                 : "This lead is dropped. Most actions are disabled — use Revert Lead below to reactivate."}
             </p>
           )}
+
+          {/* ── 🎯 AI Lead Intent & Conversion Scoring Card ── */}
+          <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs backdrop-blur-xs relative overflow-hidden space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${
+                    scoreResult.temperature === "HOT"
+                      ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                      : scoreResult.temperature === "WARM"
+                      ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                      : "bg-sky-500/15 text-sky-600 dark:text-sky-400"
+                  }`}
+                >
+                  {scoreResult.temperature === "HOT" ? (
+                    <Flame className="size-5" />
+                  ) : scoreResult.temperature === "WARM" ? (
+                    <Zap className="size-5" />
+                  ) : (
+                    <Snowflake className="size-5" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-foreground">AI Lead Intent & Conversion Score</span>
+                    <LeadScoreBadge lead={lead} />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{scoreResult.label}</p>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-2xl font-black font-mono tracking-tight text-foreground">
+                  {scoreResult.score}<span className="text-xs font-normal text-muted-foreground">/100</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Apple HIG Progress Bar */}
+            <div className="w-full bg-muted/60 h-2 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-500 rounded-full ${
+                  scoreResult.temperature === "HOT"
+                    ? "bg-gradient-to-r from-amber-500 to-rose-500"
+                    : scoreResult.temperature === "WARM"
+                    ? "bg-gradient-to-r from-yellow-500 to-amber-500"
+                    : "bg-gradient-to-r from-slate-400 to-sky-500"
+                }`}
+                style={{ width: `${scoreResult.score}%` }}
+              />
+            </div>
+
+            {/* Rubric Breakdown Grid */}
+            <div className="grid grid-cols-4 gap-2 pt-1 text-center">
+              <div className="rounded-xl bg-muted/40 p-2 border border-border/40">
+                <p className="text-[10px] text-muted-foreground uppercase font-semibold">Stage</p>
+                <p className="text-xs font-bold text-foreground font-mono">+{scoreResult.breakdown.stage}<span className="text-[9px] text-muted-foreground font-normal">/45</span></p>
+              </div>
+              <div className="rounded-xl bg-muted/40 p-2 border border-border/40">
+                <p className="text-[10px] text-muted-foreground uppercase font-semibold">Budget</p>
+                <p className="text-xs font-bold text-foreground font-mono">+{scoreResult.breakdown.budget}<span className="text-[9px] text-muted-foreground font-normal">/25</span></p>
+              </div>
+              <div className="rounded-xl bg-muted/40 p-2 border border-border/40">
+                <p className="text-[10px] text-muted-foreground uppercase font-semibold">Velocity</p>
+                <p className="text-xs font-bold text-foreground font-mono">+{scoreResult.breakdown.engagement}<span className="text-[9px] text-muted-foreground font-normal">/20</span></p>
+              </div>
+              <div className="rounded-xl bg-muted/40 p-2 border border-border/40">
+                <p className="text-[10px] text-muted-foreground uppercase font-semibold">Penalties</p>
+                <p className={`text-xs font-bold font-mono ${scoreResult.breakdown.penalties > 0 ? "text-rose-500" : "text-muted-foreground"}`}>
+                  {scoreResult.breakdown.penalties > 0 ? `-${scoreResult.breakdown.penalties}` : "0"}
+                </p>
+              </div>
+            </div>
+
+            {/* Reasons Tags */}
+            {scoreResult.reasons.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {scoreResult.reasons.map((reason, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center text-[10.5px] px-2 py-0.5 rounded-lg bg-muted/60 text-foreground/80 border border-border/50 font-medium"
+                  >
+                    {reason}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Sales Rep Closing Hint */}
+            <div className="rounded-xl bg-primary/5 border border-primary/15 p-2.5 text-xs text-foreground/90 leading-relaxed">
+              <strong className="text-primary font-semibold">AI Closing Strategy: </strong>
+              {scoreResult.temperature === "HOT"
+                ? "High Closing Probability! Priority callback recommended. Confirm site tour expectations, lock token advance, or address final objections."
+                : scoreResult.temperature === "WARM"
+                ? "Active Consideration. Share floor plan options, verified developer brochures, and propose a weekend VIP site visit slot."
+                : "Nurturing Phase. Automated multi-channel follow-up is active. Re-qualify budget & preferences when lead engages."}
+            </div>
+          </div>
 
           {isDual && (
             <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 p-4 shadow-xs backdrop-blur-xs relative overflow-hidden">

@@ -1,5 +1,6 @@
 import { AlertTriangle, Star } from "lucide-react";
-import { PROPERTY_STATE_MAP, STATUS_MAP, type Tone } from "@/lib/crm";
+import { PROPERTY_STATE_MAP, STATUS_MAP, type Tone, type Lead } from "@/lib/crm";
+import { computeLeadScore } from "@/lib/lead-scoring";
 
 export function ToneBadge({
   label,
@@ -53,5 +54,26 @@ export function NoWhatsAppBadge({ className }: { className?: string }) {
     </span>
   );
 }
+
+export function LeadScoreBadge({
+  lead,
+  className,
+}: {
+  lead: Partial<Lead>;
+  className?: string;
+}) {
+  const result = computeLeadScore(lead);
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-semibold tracking-tight border backdrop-blur-xs select-none transition-all ${result.badgeClass} ${className ?? ""}`}
+      title={`Score: ${result.score}/100 (${result.label})\n${result.reasons.join(" • ")}`}
+    >
+      <span className={`size-1.5 rounded-full shrink-0 ${result.dotClass}`} />
+      <span className="font-mono font-bold">{result.score}</span>
+      <span className="opacity-80 text-[9.5px] uppercase font-bold">{result.temperature}</span>
+    </span>
+  );
+}
+
 
 

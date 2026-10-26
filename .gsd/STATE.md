@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-26T00:04:00+05:30
+updated: 2026-10-26T15:15:00+05:30
 ---
 
 # Project State
@@ -7,24 +7,31 @@ updated: 2026-10-26T00:04:00+05:30
 ## Current Position
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
-**Phase:** 18 - Post-Visit Lifecycle, Attendance Normalization & Objection Feedback Engine  
-**Status:** ✅ Complete  
+**Phase:** 20 - AI Lead Scoring Engine, Conversion Heatmap & Hot-Lead Prioritization  
+**Status:** ✅ Completed  
 **Plans:**
-- `.gsd/phases/18/18.1-PLAN.md` (Post-Visit Lifecycle, Attendance Normalization & Objection Feedback Engine) — ✅ Complete
+- `.gsd/phases/20/20.1-PLAN.md` (AI Lead Intent & Conversion Scoring Engine) — ✅ Complete (`.gsd/phases/20/20.1-SUMMARY.md`)
 
 ## Last Action
 
-Completed Phase 18:
-- Fixed PostgreSQL column error: Removed `status` property from `leadUpdates` in 5 locations and added payload sanitization in `realtor-lead-engine` so updates to `leads` table are never rejected.
-- Added proactive natural language visit attendance detection: Messages like "Mene visit kr di thi", "visit ho gayi", "visit complete thai" immediately mark `site_visits.status = 'COMPLETED'`, `leads.state = 'SITE_VISIT_DONE'`, and `leads.site_visit_booked = false`.
-- Implemented intelligent post-visit feedback and objection handling in `SITE_VISIT_DONE`: When user shares objections (e.g. layout disliked, canal near front gate, narrow road, pricing), the engine empathetically acknowledges specifically, saves to `site_visits.feedback_notes` and `leads.metadata`, dispatches `POST_VISIT_OBJECTION` sales alert with pitch hints, and presents alternative verified inventory or senior advisor calls — never resetting to `ROLE_SELECTION_PENDING`.
-- Deployed `realtor-lead-engine` to Supabase production (`yeiygfysijptjdepctnx`).
-- Aligned Manthan lead in Griham Realty (`2b1b74fb-3ab9-4557-b0ac-e5c6f5746985`): `state = 'SITE_VISIT_DONE'`, `site_visit_booked = false`, `metadata.visit_feedback = 'Layout accha nai laga. Front gate oe kenal he'`, and `site_visits.status = 'COMPLETED'`.
+Completed Phase 20:
+- Built and integrated the full Lead Scoring Engine (Option 1) across the CRM and Edge Function:
+  - Skill created: `.agents/skills/lead-scoring-engine/SKILL.md` with complete mathematical rubrics across stage commitment, financial viability, velocity, and penalties.
+  - Client library created: `src/lib/lead-scoring.ts` exporting deterministic `computeLeadScore(lead)`.
+  - Badges updated: Added squircle Apple HIG `LeadScoreBadge` in `src/components/crm/badges.tsx`.
+  - CRM Leads table updated: Added dedicated Score column, default descending sort by score, 1-tap "🔥 Hot Leads" Triage widget card, and mobile card badge.
+  - Lead Inspector Drawer updated: Added interactive AI Lead Intent & Conversion Score card with progress bar, component breakdown metrics, signal tags, and sales closing strategy hint.
+  - Edge Function updated: Added `computeEngineLeadScore` in `supabase/functions/realtor-lead-engine/index.ts` automatically computing and persisting `lead_score`, `lead_temperature`, `score_breakdown`, and `score_reasons` into `leads.metadata` on every state transition.
+  - Deployed to Supabase production (`yeiygfysijptjdepctnx`) and live verified with real-time score persistence (Score 65 WARM on Manthan lead).
+  - Verified with `npm.cmd run build` (0 compilation errors, 1.05s).
 
 ## Active Decisions
 
 | Decision | Choice | Made | Affects |
 | :--- | :--- | :--- | :--- |
+| Lead Scoring Rubric | Deterministic 0-100 scale: Stage (45 max), Budget (25 max), Velocity (20 max), Penalties (35 max) | 2026-10-26 | CRM & Edge Function |
+| Lead Temperature Tiers | HOT (🔥 >= 70), WARM (⚡ 40-69), COLD (❄️ < 40) | 2026-10-26 | CRM Triage & Badges |
+| Post-Visit Alternative Option Matching | Comprehensive singular/plural + 1/2 numeric choice parsing + Empty catalog fallback | 2026-10-26 | Edge Function FSM |
 | Post-Visit Objection Handling | Empathetic specific acknowledgment + Save feedback + Sales Alert + Alternative Inventory Pitch (Never reset to qualification) | 2026-10-25 | Edge Function & CRM |
 | Schema Safety | Strict isolation of database column names: `leads.state` vs `leads.status` | 2026-10-25 | Edge Function updates |
 | Dynamic FAQ Architecture | Pure AI semantic intent understanding + Database JSONB grounded answers (Zero regex cascades) | 2026-10-25 | Edge Function & CRM Profile Tab |
@@ -40,4 +47,4 @@ None.
 
 ## Concerns
 
-None.
+None. Verified working Supabase Personal Access Token active in configuration.

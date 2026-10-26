@@ -154,6 +154,13 @@ updated: 2026-10-19T18:50:30+05:30
 **Plans:**
 - [x] Plan 18.1: Post-Visit Lifecycle, Attendance Normalization & Objection Feedback Engine ([`18.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/18/18.1-PLAN.md))
 
+### Phase 19: Post-Visit Alternative Recommendation, Option Selection & Feedback Loop Resolution
+**Status:** ⏳ Ready to Execute  
+**Objective:** Eliminate the amnesiac feedback loop where replying 'Option share karo' (or choice numbers 1/2) in SITE_VISIT_DONE repeats the feedback prompt; implement comprehensive option request matching, numbered alternative cards, empty-catalog safety, and seamless VIP site visit booking.  
+**Depends on:** Phase 18  
+**Plans:**
+- [x] Plan 19.1: Post-Visit Alternative Recommendation, Option Selection & Feedback Loop Resolution ([`19.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/19/19.1-PLAN.md))
+
 ---
 
 ## Progress Summary
@@ -176,6 +183,18 @@ updated: 2026-10-19T18:50:30+05:30
 | 16: Pipeline Board Exhaustive Stage Mapping | ✅ Complete | 1/1 | 100% |
 | 17: Portal-Exclusive Missing WhatsApp Banner | ✅ Complete | 1/1 | 100% |
 | 18: Post-Visit Lifecycle & Objection Feedback Engine | ✅ Complete | 1/1 | 100% |
+| 19: Post-Visit Alternative Recommendation & Options | ✅ Complete | 1/1 | 100% |
+| 20: AI Lead Scoring Engine & Conversion Heatmap | ✅ Complete | 1/1 | 100% |
+
+---
+
+### Phase 20: AI Lead Scoring Engine, Conversion Heatmap & Hot-Lead Prioritization
+**Status:** ✅ Complete  
+**Objective:** Implement real-time AI Lead Scoring (0-100) and Temperature classification (HOT 🔥, WARM ⚡, COLD ❄️) across both client and edge function, with Apple HIG LeadScoreBadge, dedicated CRM table column, 1-tap Triage hot-lead filter, and detailed inspector drawer score breakdown.  
+**Depends on:** Phase 19  
+**Plans:**
+- [x] Plan 20.1: AI Lead Scoring Engine, Conversion Heatmap & Hot-Lead Prioritization ([`20.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/20/20.1-PLAN.md))
+
 
 
 
