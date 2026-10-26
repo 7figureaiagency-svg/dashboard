@@ -395,7 +395,8 @@ export function craftPropertyPitch(
     if (language === "GUJLISH") {
       headline = `🏷️ *Bhadu (Rent) Aapvanu Bandh Karo — Potanu Ghar Own Karo!*`;
       body =
-        `Namaste *${clientNameStr} bhai*! Have dar mahine bhadu bhari ne paise barbad na karo, jyare tame aasaani thi potanu ghar kharidi shako chho:\n\n` +
+        `Namaste *${clientNameStr} bhai*! Have dar mahine bhadu bhari ne paise barbad na karo, jyare tame aasaani thi *${specs.projectName}* ma potanu ghar kharidi shako chho:\n\n` +
+        `🏢 *Project:* *${specs.projectName}*, ${specs.location}\n` +
         `💰 *All-Inclusive Price:* ${priceFormatted}\n` +
         `💳 *Estimated Monthly EMI:* Fakt ~${emiStr || "aasan EMI"} (Govt PMAY Subsidy labh sathe)\n` +
         `📍 *Location:* ${specs.location} — Transportation ane markets pagathiya par\n` +
@@ -404,7 +405,8 @@ export function craftPropertyPitch(
     } else if (language === "ENGLISH") {
       headline = `🏷️ *Stop Paying Rent — Step Into Homeownership in ${specs.location}!*`;
       body =
-        `Hello *${clientNameStr}*! Why continue paying escalating rents when you can own your dream *${specs.configuration}* for similar monthly outflow:\n\n` +
+        `Hello *${clientNameStr}*! Why continue paying escalating rents when you can own your dream *${specs.configuration}* at *${specs.projectName}* for similar monthly outflow:\n\n` +
+        `🏢 *Project:* *${specs.projectName}*, ${specs.location}\n` +
         `💰 *All-Inclusive Value:* ${priceFormatted}\n` +
         `💳 *Estimated Monthly EMI:* Just ~${emiStr || "affordable EMI"} (80% loan eligibility)\n` +
         `📍 *Location Advantage:* ${specs.location} — seamlessly connected to major business transit\n` +
@@ -414,7 +416,8 @@ export function craftPropertyPitch(
       // HINGLISH
       headline = `🏷️ *Stop Paying Rent — Own Your ${specs.configuration} in ${specs.location}!*`;
       body =
-        `Namaste *${clientNameStr} ji*! Kyu har mahine rent me paise barbad karein jab aap utne hi outflow me apna ghar own kar sakte hain:\n\n` +
+        `Namaste *${clientNameStr} ji*! Kyu har mahine rent me paise barbad karein jab aap utne hi outflow me *${specs.projectName}* me apna ghar own kar sakte hain:\n\n` +
+        `🏢 *Project:* *${specs.projectName}*, ${specs.location}\n` +
         `💰 *All-Inclusive Price:* ${priceFormatted}\n` +
         `💳 *Estimated Monthly EMI:* Just ~${emiStr || "aasan EMI"} (PMAY Subsidy aur leading bank offers available)\n` +
         `📍 *Location:* ${specs.location} — prime connectivity, schools aur transport bilkul paas\n` +
