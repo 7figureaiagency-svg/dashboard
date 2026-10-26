@@ -8277,7 +8277,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v71-dynamic-bot-knowledge",
+        version: "v70-state-conditioned-intent-engine",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -8393,7 +8393,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v69 Ready (Multi-Tenant Cron Isolation & Conversational Anti-Opt-Out)", { status: 200 });
+    return new Response("Realtor Lead Engine v70 Ready (State-Conditioned Intent Engine)", { status: 200 });
   }
 
   try {
