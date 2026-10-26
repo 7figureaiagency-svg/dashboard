@@ -20,6 +20,7 @@ import {
   Trash2,
   Upload,
   User,
+  Users,
   X,
   XCircle,
 } from "lucide-react";
@@ -37,6 +38,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -46,6 +48,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -64,7 +73,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { StatusBadge, ToneBadge } from "@/components/crm/badges";
+import { LeadScoreBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
 import { LeadDrawer } from "@/components/crm/lead-drawer";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -97,6 +106,7 @@ import {
   PROPERTY_SUBMISSION_STATUS_MAP,
   STOCK_TYPES,
   toNumber,
+  toWhatsAppUrl,
   TRANSACTION_TYPES,
   type Lead,
   type Property,
@@ -1441,13 +1451,67 @@ function OwnerSubmissionsView({
   const [search, setSearch] = useState<string>("");
   const [detailsSubmission, setDetailsSubmission] = useState<PropertySubmission | null>(null);
   const [editSubmission, setEditSubmission] = useState<PropertySubmission | null>(null);
+  const [selectedMatchSubmission, setSelectedMatchSubmission] = useState<PropertySubmission | null>(null);
 
   const { data: me } = useCurrentUser();
   const isAdmin = me?.role === "admin";
 
   const { data: submissions = [], isLoading } = usePropertySubmissions();
+  const { data: leads = [] } = useLeads(clientId);
   const approveMutation = useApprovePropertySubmission();
   const updateMutation = useUpdatePropertySubmission();
+
+  const getMatchingBuyers = useMemo(() => {
+    return (s: PropertySubmission) => {
+      if (!s) return [];
+      const subLoc = (s.location || "").toLowerCase().trim();
+      const subConfig = (s.configuration || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const subPrice = Number(s.expected_price || s.expected_rent || 0);
+      const cleanSubPhone = s.owner_phone ? s.owner_phone.replace(/\D/g, "").slice(-10) : "";
+
+      return leads.filter((b) => {
+        // Multi-tenant isolation: strictly same client_id
+        if (s.client_id && b.client_id && b.client_id !== s.client_id) return false;
+        // Do not match owner to their own listing
+        if (s.lead_id && b.lead_id === s.lead_id) return false;
+        if (cleanSubPhone && b.phone) {
+          const cleanBuyerPhone = b.phone.replace(/\D/g, "").slice(-10);
+          if (cleanBuyerPhone && cleanBuyerPhone === cleanSubPhone) return false;
+        }
+
+        // Active buyer leads only
+        if (b.status === "NOT_INTERESTED" || b.status === "DROPPED" || b.status === "DEAL_WON") return false;
+        if (b.lead_type === "PROVIDER") return false;
+
+        // Locality
+        const bLoc = (b.location || "").toLowerCase().trim();
+        let locMatch = false;
+        if (!subLoc || !bLoc) {
+          locMatch = true;
+        } else if (bLoc.includes(subLoc) || subLoc.includes(bLoc)) {
+          locMatch = true;
+        }
+
+        // Configuration
+        const bConfig = (b.property_type || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        let configMatch = false;
+        if (!subConfig || !bConfig) {
+          configMatch = true;
+        } else if (bConfig.includes(subConfig) || subConfig.includes(bConfig)) {
+          configMatch = true;
+        }
+
+        // Budget viability: buyer budget >= 80% of asking price
+        const bBudget = Number(b.budget || 0);
+        let budgetMatch = true;
+        if (subPrice > 0 && bBudget > 0) {
+          budgetMatch = bBudget >= subPrice * 0.8;
+        }
+
+        return locMatch && configMatch && budgetMatch;
+      });
+    };
+  }, [leads]);
 
   const pendingCount = submissions.filter(
     (s) => !s.status || s.status === "PENDING_VERIFICATION",
@@ -1615,6 +1679,29 @@ function OwnerSubmissionsView({
                     </p>
                   </div>
 
+                  {/* 🤝 In-House Buyer Cross-Match Badge */}
+                  {(() => {
+                    const matchingBuyers = getMatchingBuyers(s);
+                    return (
+                      <div className="flex items-center justify-between pt-0.5">
+                        {matchingBuyers.length > 0 ? (
+                          <Badge
+                            variant="outline"
+                            onClick={() => setSelectedMatchSubmission(s)}
+                            className="cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 py-1 px-2.5 rounded-lg text-xs font-semibold transition-all shadow-2xs"
+                          >
+                            <Users className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span>{matchingBuyers.length} In-House {matchingBuyers.length === 1 ? "Buyer" : "Buyers"} Matching</span>
+                          </Badge>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground/70 inline-flex items-center gap-1">
+                            <Users className="size-3 text-muted-foreground/50" /> 0 matching buyers
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   <div className="flex items-center gap-2 pt-1 border-t border-border/40">
                     {s.owner_phone && (
                       <Button asChild size="sm" variant="outline" className="apple-button min-h-[40px] flex-1 rounded-xl text-xs font-semibold">
@@ -1749,6 +1836,28 @@ function OwnerSubmissionsView({
                           "{s.notes}"
                         </p>
                       )}
+
+                      {/* 🤝 In-House Buyer Cross-Match Badge */}
+                      <div className="mt-2">
+                        {(() => {
+                          const matchingBuyers = getMatchingBuyers(s);
+                          return matchingBuyers.length > 0 ? (
+                            <Badge
+                              variant="outline"
+                              onClick={() => setSelectedMatchSubmission(s)}
+                              className="cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1.5 py-0.5 px-2 rounded-lg text-[11px] font-semibold transition-all inline-flex items-center shadow-2xs"
+                              title="Click to view matching buyers and pitch property"
+                            >
+                              <Users className="size-3 text-emerald-600 dark:text-emerald-400" />
+                              <span>{matchingBuyers.length} In-House {matchingBuyers.length === 1 ? "Buyer" : "Buyers"} Matching</span>
+                            </Badge>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground/60 inline-flex items-center gap-1">
+                              <Users className="size-3 text-muted-foreground/40" /> 0 matching buyers
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </TableCell>
 
                     <TableCell className="align-top">
@@ -1847,6 +1956,15 @@ function OwnerSubmissionsView({
                             Reopen
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                          onClick={() => setSelectedMatchSubmission(s)}
+                          title="Open In-House Buyer Cross-Matchmaker"
+                        >
+                          <Users className="size-3.5" />
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -1987,6 +2105,20 @@ function OwnerSubmissionsView({
                 <Button
                   size="sm"
                   variant="outline"
+                  className="text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                  onClick={() => {
+                    const toMatch = detailsSubmission;
+                    setDetailsSubmission(null);
+                    setSelectedMatchSubmission(toMatch);
+                  }}
+                  title="View matching in-house buyers"
+                >
+                  <Users className="size-3.5 mr-1.5" />
+                  Matching Buyers
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={() => {
                     const toEdit = detailsSubmission;
                     setDetailsSubmission(null);
@@ -2028,6 +2160,139 @@ function OwnerSubmissionsView({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* 🤝 In-House Buyer Cross-Matchmaker Sheet */}
+      <Sheet open={!!selectedMatchSubmission} onOpenChange={(open) => !open && setSelectedMatchSubmission(null)}>
+        <SheetContent className="sm:max-w-xl w-full flex flex-col p-0 overflow-hidden bg-background">
+          {selectedMatchSubmission && (
+            <>
+              <SheetHeader className="p-5 border-b border-border/50 bg-muted/20">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                    <Sparkles className="size-5" />
+                  </div>
+                  <div>
+                    <SheetTitle className="text-base font-bold text-foreground">
+                      In-House Buyer Cross-Matchmaker
+                    </SheetTitle>
+                    <SheetDescription className="text-xs text-muted-foreground mt-0.5">
+                      Double-ended brokerage opportunities for verified owner resale
+                    </SheetDescription>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-3 text-xs space-y-1">
+                  <div className="flex items-center justify-between font-semibold text-foreground">
+                    <span>{selectedMatchSubmission.project_name || selectedMatchSubmission.society_name || "Owner Listing"}</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                      {selectedMatchSubmission.expected_price
+                        ? formatMoney(Number(selectedMatchSubmission.expected_price))
+                        : selectedMatchSubmission.expected_rent
+                        ? `${formatMoney(Number(selectedMatchSubmission.expected_rent))}/mo`
+                        : "Price on request"}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground text-[11px]">
+                    {selectedMatchSubmission.property_category || "RESIDENTIAL"} · {selectedMatchSubmission.configuration?.replaceAll("_", " ") || "—"} · 📍 {selectedMatchSubmission.location || "Vadodara"}
+                    {selectedMatchSubmission.carpet_area_sqft ? ` · ${selectedMatchSubmission.carpet_area_sqft} sq.ft` : ""}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Owner: <b>{selectedMatchSubmission.owner_name || "Direct Owner"}</b> {selectedMatchSubmission.owner_phone ? `(${selectedMatchSubmission.owner_phone})` : ""}
+                  </p>
+                </div>
+              </SheetHeader>
+
+              <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                {(() => {
+                  const buyers = getMatchingBuyers(selectedMatchSubmission);
+                  if (buyers.length === 0) {
+                    return (
+                      <div className="rounded-2xl border border-dashed border-border/70 p-8 text-center space-y-2">
+                        <Users className="mx-auto size-8 text-muted-foreground/50" />
+                        <h4 className="font-semibold text-sm">No active buyer matches right now</h4>
+                        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                          There are currently no active buyer leads in your CRM looking for {selectedMatchSubmission.configuration || "this configuration"} in {selectedMatchSubmission.location || "this area"}. As new buyer leads arrive, they will automatically appear here.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground pb-1">
+                        <span className="font-semibold text-foreground">
+                          {buyers.length} Matching In-House {buyers.length === 1 ? "Buyer" : "Buyers"}
+                        </span>
+                        <span>1-Tap WhatsApp Resale Pitch</span>
+                      </div>
+
+                      {buyers.map((b) => {
+                        const pitchMessage = `Hello ${b.name || "Client"}! We have an exclusive verified owner resale listing at ${selectedMatchSubmission.society_name || selectedMatchSubmission.project_name || "prime location"} (${selectedMatchSubmission.configuration || "property"} in ${selectedMatchSubmission.location || "city"}) matching your budget of ${formatMoney(b.budget)}. Would you like to review the layout photos or schedule a private site visit? 🏡`;
+                        const waUrl = toWhatsAppUrl(b.phone, pitchMessage);
+
+                        return (
+                          <div
+                            key={b.lead_id}
+                            className="rounded-2xl border border-border/50 bg-card p-4 shadow-xs space-y-3 hover:border-emerald-500/30 transition-all"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h4 className="font-bold text-sm text-foreground">{b.name || "Prospective Buyer"}</h4>
+                                <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                  {b.phone && <span className="font-mono">{b.phone}</span>}
+                                  <span>·</span>
+                                  <span>📍 {b.location || "Any location"}</span>
+                                </div>
+                              </div>
+                              <LeadScoreBadge lead={b} />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs bg-muted/30 p-2.5 rounded-xl border border-border/30">
+                              <div>
+                                <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Buyer Budget</span>
+                                <span className="font-bold text-foreground">{formatMoney(b.budget)}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Requirement</span>
+                                <span className="font-semibold text-foreground truncate block">
+                                  {b.property_type || b.requirement || "Residential"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                              {b.phone && (
+                                <Button asChild size="sm" variant="outline" className="apple-button h-9 flex-1 rounded-xl text-xs font-semibold">
+                                  <a href={`tel:${b.phone}`}>
+                                    <Phone className="size-3.5 mr-1 text-primary" /> Call
+                                  </a>
+                                </Button>
+                              )}
+                              <Button
+                                asChild
+                                size="sm"
+                                className="apple-button h-9 flex-1 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
+                              >
+                                <a
+                                  href={waUrl || "#"}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <MessageSquare className="size-3.5 mr-1" /> Pitch Resale
+                                </a>
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* Edit Submission Dialog */}
       <EditOwnerSubmissionDialog
