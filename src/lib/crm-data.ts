@@ -16,8 +16,9 @@ import {
   type ExecutiveLite,
   type Lead,
   type Property,
-  type PropertyRow,
+  formatMoney,
   type PropertySubmission,
+  type PropertySubmissionInsert,
 } from "@/lib/crm";
 
 const POLL_MS = 30000;
@@ -527,6 +528,117 @@ export function useUpdatePropertySubmission() {
       toast.success("Submission updated");
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useCreatePropertySubmission() {
+  const qc = useQueryClient();
+  const { data: me } = useCurrentUser();
+  return useMutation({
+    mutationFn: async ({
+      submission,
+      lead,
+    }: {
+      submission: Partial<PropertySubmissionInsert>;
+      lead?: Lead | null;
+    }) => {
+      const clientId = submission.client_id || lead?.client_id || me?.clientId;
+      const leadId = submission.lead_id || lead?.lead_id;
+
+      // 1. Insert into property_submissions
+      const insertPayload: PropertySubmissionInsert = {
+        client_id: clientId || null,
+        lead_id: leadId || null,
+        owner_name: submission.owner_name || lead?.name || null,
+        owner_phone: submission.owner_phone || lead?.phone || null,
+        society_name: submission.society_name || null,
+        project_name: submission.project_name || submission.society_name || null,
+        location: submission.location || lead?.location || null,
+        property_category: submission.property_category || "FLAT",
+        property_type: submission.property_type || submission.configuration || "FLAT",
+        configuration: submission.configuration || "3BHK",
+        transaction_type: submission.transaction_type || "SALE",
+        carpet_area_sqft: submission.carpet_area_sqft ? Number(submission.carpet_area_sqft) : null,
+        super_built_up_sqft: submission.super_built_up_sqft ? Number(submission.super_built_up_sqft) : null,
+        expected_price: submission.expected_price ? Number(submission.expected_price) : null,
+        expected_rent: submission.expected_rent ? Number(submission.expected_rent) : null,
+        furnishing_status: submission.furnishing_status || "UNFURNISHED",
+        possession_status: submission.possession_status || "READY_TO_MOVE",
+        status: submission.status || "PENDING_VERIFICATION",
+        notes: submission.notes || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: created, error: subError } = await supabase
+        .from("property_submissions")
+        .insert(insertPayload as never)
+        .select()
+        .single();
+      if (subError) throw subError;
+
+      // 2. If tied to a lead, upgrade lead_type to DUAL_ROLE and set has_seller_profile
+      if (leadId) {
+        const currentMeta = (lead?.metadata as Record<string, unknown> | null) ?? {};
+        const isCurrentlySeeker =
+          lead?.lead_type === "SEEKER" ||
+          Boolean(lead?.budget || lead?.selected_property_id || currentMeta.has_buyer_profile);
+        const nextLeadType = isCurrentlySeeker ? "DUAL_ROLE" : "PROVIDER";
+
+        const updatedMetadata = {
+          ...currentMeta,
+          has_seller_profile: true,
+          active_persona: "SELLER",
+          last_submission_id: created?.id,
+          last_submission_at: new Date().toISOString(),
+        };
+
+        await supabase
+          .from("leads")
+          .update({
+            lead_type: nextLeadType,
+            metadata: updatedMetadata,
+          } as never)
+          .eq("lead_id", leadId);
+
+        // 3. Log audit event in lead_activity
+        const societyStr = submission.society_name || submission.project_name || "Property";
+        await supabase.from("lead_activity").insert({
+          lead_id: leadId,
+          client_id: clientId,
+          actor_type: "SALES_REP",
+          actor_label: me?.name || "Executive",
+          action_type: "SELLER_LISTING_ADDED",
+          message: `Added new seller property listing at ${societyStr} (${submission.configuration || "Unit"})`,
+          short_summary: `Listed ${submission.configuration || "Property"} at ${societyStr}`,
+          details: `Listed for ${submission.transaction_type || "SALE"} at expected value ${
+            submission.expected_price
+              ? formatMoney(Number(submission.expected_price))
+              : submission.expected_rent
+              ? `₹${Number(submission.expected_rent).toLocaleString("en-IN")}/mo`
+              : "TBD"
+          }`,
+          created_at: new Date().toISOString(),
+        } as never);
+      }
+
+      return created;
+    },
+    onSuccess: (_, { lead }) => {
+      const clientId = lead?.client_id || me?.clientId;
+      qc.invalidateQueries({ queryKey: ["property_submissions"] });
+      if (clientId) {
+        qc.invalidateQueries({ queryKey: ["property_submissions", clientId] });
+        qc.invalidateQueries({ queryKey: ["leads", clientId] });
+        qc.invalidateQueries({ queryKey: ["activity", clientId] });
+      }
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
+      toast.success("Seller property listing added successfully! Client updated 🌟");
+    },
+    onError: (e: Error) => {
+      toast.error(`Failed to add property listing: ${e.message}`);
+    },
   });
 }
 
