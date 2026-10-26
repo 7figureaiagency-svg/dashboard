@@ -8,12 +8,19 @@ updated: 2026-10-26T15:15:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 4 - Bi-Directional Dual-Persona Lifecycle Architecture (Buyer ↔ Seller Multi-Role Engine)  
-**Status:** 🚀 Plan 4.8 Completed, Plan 4.9 Ready for Execution  
+**Status:** ✅ Phase 4 Fully Complete (All 9 Plans 4.1 to 4.9 Executed & Verified)  
 **Plans:**
 - `.gsd/phases/4/4.8-PLAN.md` (In-Drawer Role Switcher, 1-Tap Manual Owner Listing Studio & Dual-Source Property Matchmaker) — ✅ Complete
-- `.gsd/phases/4/4.9-PLAN.md` (In-House Buyer ↔ Seller Cross-Matchmaker & Natural "Buyer Inquiry" Bot Intent Engine) — ⏳ Ready
+- `.gsd/phases/4/4.9-PLAN.md` (In-House Buyer ↔ Seller Cross-Matchmaker & Natural "Buyer Inquiry" Bot Intent Engine) — ✅ Complete
 
 ## Last Action
+
+Completed Plan 4.9:
+- Implemented In-House Cross-Matchmaker Studio in `src/components/crm/inventory-tab.tsx` matching owner resale submissions against active CRM buyer leads by location, configuration, and budget viability (80%).
+- Added Apple HIG `{count} In-House Buyers Matching` badges on submission cards/table rows with slide-over drawer showing matched buyers with `LeadScoreBadge` and 1-tap "Pitch Resale via WhatsApp" CTA.
+- Implemented natural "Buyer Mila Kya?" intent handler in `supabase/functions/realtor-lead-engine/index.ts` returning grounded, authentic matching metrics and budget brackets without hallucinations.
+- Deployed Edge Function to Supabase production (`yeiygfysijptjdepctnx`).
+- Verified empirically with `scratch/test_dual_persona_matchmaker.cjs` (100% assertions passed) and `npm.cmd run build` (0 compilation errors, 914ms).
 
 Completed Phase 20:
 - Built and integrated the full Lead Scoring Engine (Option 1) across the CRM and Edge Function:
