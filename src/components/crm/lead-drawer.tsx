@@ -14,6 +14,7 @@ import {
   MessageSquare,
   MessageSquareText,
   Phone,
+  Plus,
   RotateCcw,
   Save,
   Send,
@@ -73,6 +74,7 @@ import {
   StatusBadge,
   ToneBadge,
 } from "@/components/crm/badges";
+import { AddPropertyListingModal } from "@/components/crm/add-property-listing-modal";
 import { computeLeadScore } from "@/lib/lead-scoring";
 import { WhatsAppChatView } from "@/components/crm/whatsapp-chat-view";
 import { WorkflowTimeline } from "@/components/crm/workflow-timeline";
@@ -175,6 +177,7 @@ export function LeadDrawer({
   const [dropOpen, setDropOpen] = useState(false);
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const [newPhone, setNewPhone] = useState("");
+  const [addListingOpen, setAddListingOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [profile, setProfile] = useState<Partial<Lead>>({});
 
@@ -277,12 +280,13 @@ export function LeadDrawer({
   }, [rawEvents, lead]);
 
   const matchingProperties = useMemo(() => {
-    if (!inventory || inventory.length === 0 || !lead) return [];
+    if (!lead) return [];
     const loc = ((profile.location !== undefined ? profile.location : lead.location) || "").toLowerCase().trim();
     const budget = toNumber((profile.budget !== undefined ? profile.budget : lead.budget) as never);
     const cat = ((profile.property_type !== undefined ? profile.property_type : lead.property_type) || "").toLowerCase().trim();
 
-    return inventory
+    // 1. Matches from Developer Live Inventory
+    const invMatches = (inventory || [])
       .filter((p) => {
         let score = 0;
         if (loc && (p.location?.toLowerCase().includes(loc) || loc.includes(p.location?.toLowerCase() || ""))) score += 3;
@@ -293,8 +297,57 @@ export function LeadDrawer({
         }
         return score > 0;
       })
-      .slice(0, 4);
-  }, [inventory, profile.location, profile.budget, profile.property_type, lead]);
+      .map((p) => ({
+        property_id: p.property_id,
+        project_name: p.project_name,
+        price: p.price,
+        property_category: p.property_category,
+        configuration: p.configuration,
+        location: p.location,
+        isOwnerResale: false,
+        ownerPhone: null as string | null,
+        ownerName: null as string | null,
+      }));
+
+    // 2. Matches from Verified Owner Resale Submissions (excluding lead's own submissions)
+    const cleanLeadPhone = lead.phone ? lead.phone.replace(/\D/g, "").slice(-10) : "";
+    const ownerMatches = (allSubmissions || [])
+      .filter((s) => {
+        if (lead.client_id && s.client_id && s.client_id !== lead.client_id) return false;
+        if (s.lead_id && s.lead_id === lead.lead_id) return false;
+        if (cleanLeadPhone && s.owner_phone) {
+          const sPhone = s.owner_phone.replace(/\D/g, "").slice(-10);
+          if (sPhone && sPhone === cleanLeadPhone) return false;
+        }
+        if (s.status === "REJECTED") return false;
+
+        let score = 0;
+        const sLoc = (s.location || "").toLowerCase().trim();
+        const sCat = (s.configuration || s.property_category || "").toLowerCase().trim();
+        const sPrice = Number(s.expected_price || s.expected_rent || 0);
+
+        if (loc && (sLoc.includes(loc) || loc.includes(sLoc))) score += 3;
+        if (cat && (sCat.includes(cat) || cat.includes(sCat))) score += 2;
+        if (budget > 0 && sPrice > 0) {
+          const diff = Math.abs(sPrice - budget);
+          if (diff / budget <= 0.35) score += 2;
+        }
+        return score > 0;
+      })
+      .map((s) => ({
+        property_id: s.id,
+        project_name: s.society_name || s.project_name || "Owner Resale Property",
+        price: Number(s.expected_price || s.expected_rent || 0),
+        property_category: s.property_category || "FLAT",
+        configuration: s.configuration || "Resale Unit",
+        location: s.location || "Vadodara",
+        isOwnerResale: true,
+        ownerPhone: s.owner_phone || null,
+        ownerName: s.owner_name || "Verified Owner",
+      }));
+
+    return [...ownerMatches, ...invMatches].slice(0, 6);
+  }, [inventory, allSubmissions, profile.location, profile.budget, profile.property_type, lead]);
 
   const scoreResult = useMemo(() => computeLeadScore(lead), [lead]);
 
@@ -358,6 +411,23 @@ export function LeadDrawer({
   const run = (values: Partial<Lead>, message: string, action: string) =>
     update.mutate({ leadId: lead.lead_id, values, message, lead, action, note: notes || null });
 
+  const handlePersonaChange = (newRole: "SEEKER" | "PROVIDER" | "DUAL_ROLE") => {
+    const currentMeta = (lead.metadata as Record<string, unknown> | null) ?? {};
+    const updatedMetadata = {
+      ...currentMeta,
+      has_buyer_profile: newRole === "SEEKER" || newRole === "DUAL_ROLE" || currentMeta.has_buyer_profile,
+      has_seller_profile: newRole === "PROVIDER" || newRole === "DUAL_ROLE" || currentMeta.has_seller_profile,
+      active_persona: newRole === "PROVIDER" ? "SELLER" : "BUYER",
+    };
+    run(
+      { lead_type: newRole, metadata: updatedMetadata },
+      `Changed lead role to ${newRole === "DUAL_ROLE" ? "Dual Role (Buyer + Seller)" : newRole === "PROVIDER" ? "Seller (Provider)" : "Buyer (Seeker)"}`,
+      "PERSONA_UPDATED"
+    );
+    set("lead_type", newRole);
+    toast.success(`Role updated to ${newRole === "DUAL_ROLE" ? "Dual Role 🌟" : newRole}!`);
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col h-full w-full p-0 sm:max-w-2xl lg:max-w-3xl overflow-hidden">
@@ -379,6 +449,47 @@ export function LeadDrawer({
               {isMissingPhone && isPortal && <NoWhatsAppBadge />}
             </div>
           </SheetHeader>
+
+          {/* ── 🎭 Persona Switcher Segmented Control ── */}
+          <div className="flex items-center justify-between p-1.5 rounded-xl bg-muted/40 border border-border/50 text-xs gap-2">
+            <span className="text-[11px] font-semibold text-muted-foreground pl-1.5 shrink-0 hidden sm:inline">Lead Role:</span>
+            <div className="flex items-center gap-1 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => handlePersonaChange("SEEKER")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-initial text-center ${
+                  !isDual && (field("lead_type") === "SEEKER" || (!field("lead_type") && !submissions.length))
+                    ? "bg-background text-foreground shadow-xs font-bold border border-border/60"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                }`}
+              >
+                👤 Buyer
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePersonaChange("PROVIDER")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-initial text-center ${
+                  !isDual && field("lead_type") === "PROVIDER"
+                    ? "bg-background text-foreground shadow-xs font-bold border border-border/60"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                }`}
+              >
+                🏷️ Seller
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePersonaChange("DUAL_ROLE")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 sm:flex-initial text-center flex items-center justify-center gap-1 ${
+                  isDual
+                    ? "bg-purple-600 text-white shadow-xs font-bold"
+                    : "text-purple-600 dark:text-purple-300 hover:bg-purple-500/10"
+                }`}
+              >
+                <Star className="size-3 fill-amber-300 text-amber-300" />
+                <span>Dual Role 🌟</span>
+              </button>
+            </div>
+          </div>
           {closed && (
             <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
               {dealWon
@@ -506,6 +617,17 @@ export function LeadDrawer({
                       📦 {submissions.length} property listing{submissions.length > 1 ? "s" : ""} on record.
                     </p>
                   )}
+                  <div className="pt-2 flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      type="button"
+                      onClick={() => setAddListingOpen(true)}
+                      className="apple-button h-8 rounded-lg gap-1.5 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-2xs"
+                    >
+                      <Plus className="size-3.5" />
+                      <span>+ Add Seller Property Listing</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -554,7 +676,7 @@ export function LeadDrawer({
           <Separator />
 
           <Tabs defaultValue="chat" className="w-full">
-            <TabsList className={`w-full grid ${submissions.length > 0 ? "grid-cols-4" : "grid-cols-3"} h-10 p-1 bg-muted/60 rounded-xl`}>
+            <TabsList className={`w-full grid ${(submissions.length > 0 || isDual || field("lead_type") === "PROVIDER") ? "grid-cols-4" : "grid-cols-3"} h-10 p-1 bg-muted/60 rounded-xl`}>
               <TabsTrigger
                 value="chat"
                 className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-[#008069] data-[state=active]:text-white transition-all rounded-lg truncate"
@@ -567,7 +689,7 @@ export function LeadDrawer({
               >
                 <Sparkles className="size-3.5 shrink-0" /> Workflow
               </TabsTrigger>
-              {submissions.length > 0 && (
+              {(submissions.length > 0 || isDual || field("lead_type") === "PROVIDER") && (
                 <TabsTrigger
                   value="seller"
                   className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-purple-600 data-[state=active]:text-white transition-all rounded-lg truncate"
@@ -604,19 +726,52 @@ export function LeadDrawer({
               />
             </TabsContent>
 
-            {submissions.length > 0 && (
+            {(submissions.length > 0 || isDual || field("lead_type") === "PROVIDER") && (
               <TabsContent value="seller" className="mt-3 space-y-3">
                 <div className="flex items-center justify-between pb-1">
                   <div className="flex items-center gap-2">
                     <Building2 className="size-4 text-purple-600 dark:text-purple-400" />
                     <h4 className="text-sm font-semibold text-foreground">Seller Property Submissions</h4>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {submissions.length} listed {submissions.length === 1 ? "unit" : "units"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {submissions.length} listed {submissions.length === 1 ? "unit" : "units"}
+                    </span>
+                    <Button
+                      size="sm"
+                      type="button"
+                      onClick={() => setAddListingOpen(true)}
+                      className="apple-button h-7 rounded-lg gap-1 text-[11px] font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-2xs"
+                    >
+                      <Plus className="size-3" />
+                      <span>Add Listing</span>
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="space-y-3">
+                {submissions.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-purple-500/40 p-6 text-center space-y-3 bg-purple-500/[0.03]">
+                    <div className="flex size-10 mx-auto items-center justify-center rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400">
+                      <Building2 className="size-5" />
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-sm text-foreground">No property listings submitted yet</h5>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                        This client is marked as a Seller or Dual-Role client. Add their property listing directly to trigger automated buyer matchmaking.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      type="button"
+                      onClick={() => setAddListingOpen(true)}
+                      className="apple-button h-8 rounded-lg gap-1.5 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-2xs mx-auto"
+                    >
+                      <Plus className="size-3.5" />
+                      <span>+ Add Seller Property Listing</span>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
                   {submissions.map((sub) => {
                     const statusMeta = (sub.status && PROPERTY_SUBMISSION_STATUS_MAP[sub.status]) || {
                       label: sub.status ?? "Pending Verification",
@@ -737,8 +892,9 @@ export function LeadDrawer({
                     );
                   })}
                 </div>
-              </TabsContent>
-            )}
+              )}
+            </TabsContent>
+          )}
 
             <TabsContent value="exec" className="mt-3 space-y-2">
               <HistoryTimeline activity={effectiveActivity} />
@@ -1063,24 +1219,31 @@ export function LeadDrawer({
             </Button>
           </section>
 
-          {/* ── ⚡ Realtor Matchmaker: Top Matching Inventory ── */}
+          {/* ── ⚡ Realtor Matchmaker: Top Matching Inventory & Resale ── */}
           {matchingProperties.length > 0 && (
             <section className="space-y-3 rounded-xl border border-primary/20 bg-primary/[0.02] p-4">
               <div className="flex items-center justify-between">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Sparkles className="size-4 text-primary" /> Top Matching Inventory ({matchingProperties.length})
+                  <Sparkles className="size-4 text-primary" /> Top Matching Properties & Resale ({matchingProperties.length})
                 </h3>
-                <span className="text-[11px] text-muted-foreground">Auto-matched from live units</span>
+                <span className="text-[11px] text-muted-foreground">Auto-matched from live inventory & owner resale</span>
               </div>
               <div className="grid gap-2.5 sm:grid-cols-2">
                 {matchingProperties.map((prop) => (
                   <div
                     key={prop.property_id}
-                    className="flex flex-col justify-between rounded-lg border bg-card p-3 shadow-2xs"
+                    className="flex flex-col justify-between rounded-lg border bg-card p-3 shadow-2xs hover:border-purple-500/30 transition-all"
                   >
                     <div>
                       <div className="flex items-start justify-between gap-1">
-                        <p className="font-semibold text-sm leading-tight text-foreground">{prop.project_name}</p>
+                        <div>
+                          <p className="font-semibold text-sm leading-tight text-foreground">{prop.project_name}</p>
+                          {prop.isOwnerResale && (
+                            <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/25">
+                              Verified Resale 🔑
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xs font-bold text-primary">{formatMoney(prop.price)}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
@@ -1099,6 +1262,20 @@ export function LeadDrawer({
                       >
                         Select Unit
                       </Button>
+                      {prop.isOwnerResale && prop.ownerPhone && (
+                        <a
+                          href={toWhatsAppUrl(
+                            prop.ownerPhone,
+                            `Hello ${prop.ownerName || "Sir"}! We have an interested buyer (${lead.name || "Client"}) in our CRM for your listed property at ${prop.project_name}.`
+                          ) || "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center size-7 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 transition-colors shrink-0"
+                          title="WhatsApp Owner"
+                        >
+                          <MessageCircle className="size-3.5" />
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1279,6 +1456,14 @@ export function LeadDrawer({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {lead && (
+          <AddPropertyListingModal
+            lead={lead}
+            open={addListingOpen}
+            onOpenChange={setAddListingOpen}
+          />
+        )}
       </SheetContent>
     </Sheet>
   );
