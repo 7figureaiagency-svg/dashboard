@@ -4080,13 +4080,17 @@ async function handleOwnerFlow({
       cleanPhone ? `owner_phone.ilike.%${cleanPhone}%` : null,
     ].filter(Boolean).join(",");
 
-    const { data: subs } = await supabase
-      .from("property_submissions")
-      .select("*")
-      .eq("client_id", tenantId)
-      .or(orFilters)
-      .order("created_at", { ascending: false })
-      .limit(1);
+    let subs = null;
+    if (orFilters.length > 0) {
+      const { data } = await supabase
+        .from("property_submissions")
+        .select("*")
+        .eq("client_id", tenantId)
+        .or(orFilters)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      subs = data;
+    }
 
     if (subs && subs.length > 0) {
       sub = subs[0];
@@ -4169,7 +4173,8 @@ async function handleOwnerFlow({
         : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) hamare active portal par successfully live hai. 📋 Filhaal matching inquiries par hamari team targeted outreach chala rahi hai. Naya matching buyer aate hi hum aapse turant connect karenge! 🙏`);
 
     await supabase.from("lead_events").insert({
-      lead_id: lead.id,
+      client_id: tenantId,
+      lead_id: lead.lead_id || lead.id,
       event_type: "OWNER_BUYER_DEMAND_INQUIRY",
       payload: {
         matching_buyers_count: matchCount,

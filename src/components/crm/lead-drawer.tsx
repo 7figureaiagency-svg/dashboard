@@ -159,7 +159,7 @@ export function LeadDrawer({
 }) {
   const update = useUpdateLead();
   const { data: inventory = [] } = useInventory();
-  const { data: allSubmissions = [] } = usePropertySubmissions();
+  const { data: allSubmissions = [] } = usePropertySubmissions(lead?.client_id);
   const { data: allActivity = [] } = useActivity(lead?.client_id);
 
   const effectiveActivity = useMemo(() => {
@@ -415,8 +415,8 @@ export function LeadDrawer({
     const currentMeta = (lead.metadata as Record<string, unknown> | null) ?? {};
     const updatedMetadata = {
       ...currentMeta,
-      has_buyer_profile: newRole === "SEEKER" || newRole === "DUAL_ROLE" || currentMeta.has_buyer_profile,
-      has_seller_profile: newRole === "PROVIDER" || newRole === "DUAL_ROLE" || currentMeta.has_seller_profile,
+      has_buyer_profile: newRole === "SEEKER" || newRole === "DUAL_ROLE",
+      has_seller_profile: newRole === "PROVIDER" || newRole === "DUAL_ROLE",
       active_persona: newRole === "PROVIDER" ? "SELLER" : "BUYER",
     };
     run(

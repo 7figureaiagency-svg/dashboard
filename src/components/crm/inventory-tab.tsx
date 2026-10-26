@@ -1493,7 +1493,7 @@ function OwnerSubmissionsView({
         }
 
         // Configuration
-        const bConfig = (b.property_type || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const bConfig = (b.property_type || b.requirement || "").toLowerCase().replace(/[^a-z0-9]/g, "");
         let configMatch = false;
         if (!subConfig || !bConfig) {
           configMatch = true;

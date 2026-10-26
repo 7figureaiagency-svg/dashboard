@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Building2, Check, IndianRupee, MapPin, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -69,6 +69,12 @@ export function AddPropertyListingModal({
   const [furnishing, setFurnishing] = useState("SEMI_FURNISHED");
   const [possession, setPossession] = useState("READY_TO_MOVE");
   const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setLocation(lead?.location || "");
+    }
+  }, [open, lead?.location]);
 
   const calculatedPriceNumber =
     transactionType === "SALE"
