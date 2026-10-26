@@ -6,7 +6,7 @@
  * 4 buyer archetypes, 3 regional dialects, and 3 formats with 1-tap WhatsApp Web URLs.
  */
 
-import { formatMoney, toWhatsAppUrl, type Lead, type Property, type PropertySubmission } from "@/lib/crm";
+import { formatMoney, toNumber, toWhatsAppUrl, type Lead, type Property, type PropertySubmission } from "@/lib/crm";
 
 export type PitchPersona =
   | "FAMILY_END_USER"
@@ -121,7 +121,10 @@ export function inferBestPersona(
   lead?: Partial<Lead> | null,
   propertyPrice?: number
 ): PitchPersona {
-  const price = propertyPrice || Number(lead?.budget || 0);
+  const price =
+    propertyPrice !== undefined && propertyPrice !== null && !isNaN(propertyPrice)
+      ? propertyPrice
+      : toNumber(lead?.budget) ?? 0;
 
   if (price >= 12500000) {
     return "LUXURY_HNW";
@@ -156,13 +159,13 @@ function normalizePropertySpecs(property: Property | PropertySubmission | Record
   const projectName = p.project_name || p.society_name || p.title || "Prime Residence";
   const configuration = p.configuration || p.property_type || "3BHK Flat";
   const location = p.location || "Vadodara";
-  const price = Number(p.price || p.expected_price || p.expected_rent || 0);
+  const price = toNumber(p.price || p.expected_price || p.expected_rent) ?? 0;
   const isRent =
     p.transaction_type === "RENT" ||
     p.transaction_type === "RENT_OUT" ||
     p.listing_type === "RENT" ||
     p.listing_type === "for rent";
-  const carpetArea = Number(p.carpet_area_sqft || p.area_sqft || p.built_up_area || 0);
+  const carpetArea = toNumber(p.carpet_area_sqft || p.area_sqft || p.built_up_area) ?? 0;
   const furnishing = p.furnishing_status || p.furnishing || "Semi-Furnished";
   const possession = p.possession_status || (p.status === "CONVERTED_TO_INVENTORY" ? "Ready to Move" : "Immediate");
   const ownerName = p.owner_name || null;

@@ -136,19 +136,11 @@ export function PropertyPitchModal({
       // 1. Insert into lead_activity
       await supabase.from("lead_activity" as any).insert({
         lead_id: lead.lead_id,
+        lead_name: lead.name || lead.first_name || "Client",
         client_id: clientId,
-        actor_type: "SALES_REP",
-        actor_label: me?.name || "Executive",
-        action_type: "PITCH_SHARED",
-        description: `${action === "WHATSAPP_SENT" ? "Sent WhatsApp" : "Copied"} ${PERSONA_LABELS[persona].label} pitch for ${projectName}`,
-        payload: {
-          property_id: propId,
-          project_name: projectName,
-          persona,
-          language,
-          format,
-          action,
-        },
+        executive_name: me?.name || "Executive",
+        action: "PITCH_SHARED",
+        note: `${action === "WHATSAPP_SENT" ? "Sent WhatsApp" : "Copied"} ${PERSONA_LABELS[persona].label} pitch for ${projectName}`,
       });
 
       // 2. Also insert unified lead_events audit trail
