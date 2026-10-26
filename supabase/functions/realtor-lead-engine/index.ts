@@ -1699,10 +1699,14 @@ export type ClassifiedIntent = ClassifiedActionResult;
  * Validates, normalizes, and sanitizes untrusted LLM JSON output into a
  * strictly typed UserAction discriminated union instance.
  */
-export function validateUserAction(raw: any, leadState?: string, rawMessageText?: string): UserAction {
+export function validateUserAction(raw: any, leadOrState?: any, rawMessageText?: string): UserAction {
   if (!raw || typeof raw !== "object") {
     return { intent: "GENERAL_QUERY", query: rawMessageText || "" };
   }
+
+  const leadState = typeof leadOrState === "string" ? leadOrState : leadOrState?.state;
+  const lastPrompt = typeof leadOrState === "object" ? leadOrState?.metadata?.last_bot_prompt : null;
+  const isPostVisitSurvey = leadState === "SITE_VISIT_DONE" || leadState === "SITE_VISIT_BOOKED" || lastPrompt?.question_type === "VISIT_ATTENDANCE" || Boolean(typeof leadOrState === "object" && leadOrState?.post_visit_feedback_sent);
 
   const src = (raw.action && typeof raw.action === "object") ? raw.action : raw;
   const rawIntent = String(src.intent || raw.intent || "").trim().toUpperCase();
@@ -1980,11 +1984,18 @@ export function validateUserAction(raw: any, leadState?: string, rawMessageText?
     case "OPT_OUT": {
       const lowerRaw = String(rawMessageText || raw.messageText || raw.text || raw.userText || src.query || "").trim().toLowerCase();
       const isExplicitOptOut = /(?:stop|unsubscribe|not\s*interested|nathi\s*joiye|message\s*mat\s*karo|band\s*karo|dont\s*message|call\s*mat\s*karo|msg\s*mat\s*karo|don't\s*text)/i.test(lowerRaw);
-      const isBareNegation = /^(?:nahi|no|na|nathi|nhi|nope|naa|naah|not\s*now|abhi\s*nahi|hal\s*ma\s*nathi|pachi)$/i.test(lowerRaw);
-      if (isBareNegation && !isExplicitOptOut) {
+
+      // INVERTED ANTI-OPT_OUT GUARD: OPT_OUT is mathematically impossible unless isExplicitOptOut === true
+      if (!isExplicitOptOut) {
+        if (leadState === "CRITERIA_CONFIRMATION_PENDING" || lastPrompt?.question_type === "CRITERIA_CONFIRM") {
+          return { intent: "CONFIRM_CRITERIA", confirm: false };
+        }
+        if (isPostVisitSurvey) {
+          return { intent: "CANNOT_ATTEND_VISIT", reason: lowerRaw };
+        }
         return {
           intent: "GENERAL_QUERY",
-          query: lowerRaw,
+          query: lowerRaw || "nahi",
         };
       }
       return {
@@ -2094,6 +2105,21 @@ interface IntentResult {
 - "OWNER": User wants to sell, rent out, lease out, or list their own property, OR is in the owner intake flow.
 - "SEEKER": User wants to buy, rent, or lease a property, or search properties.
 - "UNKNOWN": Greetings, off-topic, or queries without role context.
+
+### INTENT PRECEDENCE HIERARCHY (CRITICAL RULE):
+- Tier 1 (Autonomous Global Intents):
+  These ALWAYS take precedence over any pending bot question or active intake:
+  - OPT_OUT: Explicit unsubscription phrases ONLY ("stop", "unsubscribe", "not interested", "message mat karo", "band karo").
+  - REQUEST_HUMAN_CALL: User asks to talk to human/agent ("call me", "agent se baat", "phone pe baat karni hai", "director call").
+  - BROCHURE_REQUEST: User asks for brochure/catalog/details ("brochure bhej do", "catalog bhejo", "details bhej do").
+  - MAP_REQUEST: User asks for map/location ("location bhej do", "map link", "kahan aana hoga").
+  - ASK_FAQ: User asks company/office/RERA/brokerage/loan questions ("office kahan hai", "rera number", "brokerage kitni hai", "office timings").
+  -> IF USER UTTERS AN INDEPENDENT INQUIRY OR AUTONOMOUS REQUEST, CLASSIFY THAT INTENT DIRECTLY EVEN IF A BOT QUESTION IS PENDING!
+
+- Tier 2 (Contextual Answers):
+  Only if user utterance is NOT an autonomous global intent, apply state-conditioning:
+  - Conversational answers like "nahi", "no", "na", "nathi", "nahi karni" in response to a bot question are CONTEXTUAL ANSWERS (e.g. CONFIRM_CRITERIA with confirm: false, or CANNOT_ATTEND_VISIT, or GENERAL_QUERY). They are NEVER OPT_OUT!
+  - Numeric choices ("1", "2") map to the options asked in the bot's question.
 
 ### MULTILINGUAL FEW-SHOT EXEMPLARS:
 1. "aaj 6 baje" ->
@@ -2213,6 +2239,21 @@ interface IntentResult {
 22. "Commercial" / "Commercial shop" ->
 {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "Commercial"}, "language": "ENGLISH", "user_role": "SEEKER"}
 
+23. "Brochure bhej do" (even during owner intake or while answering questions) ->
+{"action": {"intent": "BROCHURE_REQUEST"}, "language": "HINGLISH", "user_role": "UNKNOWN"}
+
+24. "Agent se call karvao" / "Call me" (even during owner intake or while answering questions) ->
+{"action": {"intent": "REQUEST_HUMAN_CALL"}, "language": "HINGLISH", "user_role": "UNKNOWN"}
+
+25. "Aapka office kahan hai?" / "Where is your office?" (even during owner intake) ->
+{"action": {"intent": "ASK_FAQ", "topic": "OFFICE_ADDRESS"}, "language": "HINGLISH", "user_role": "UNKNOWN"}
+
+26. "nahi karni" / "nathi karvi" / "dusri nahi hai" (when bot asked to list second property in OWNER_DETAILS_GATHERED) ->
+{"action": {"intent": "GENERAL_QUERY", "query": "nahi karni"}, "language": "HINGLISH", "user_role": "OWNER"}
+
+27. "2" / "nahi badalna" (when bot asked to confirm criteria in CRITERIA_CONFIRMATION_PENDING) ->
+{"action": {"intent": "CONFIRM_CRITERIA", "confirm": false}, "language": "HINGLISH", "user_role": "SEEKER"}
+
 ### OPT_OUT VS CONVERSATIONAL NEGATION RULE:
 - "OPT_OUT" is strictly reserved for explicit unsubscription phrases like "stop", "unsubscribe", "not interested", "nathi joiye", "message mat karo", "don't message me", "band karo".
 - Conversational answers like "nahi", "no", "na", "nathi", "nahi karni" in response to a bot question (such as asking if they want to list another property, or want site visit) are NEVER "OPT_OUT"! They are "CONFIRM_CRITERIA" (with confirm: false) or "GENERAL_QUERY".
@@ -2230,13 +2271,15 @@ interface IntentResult {
 
 ### OWNER INTAKE EXTRACTION RULES:
 - If In-Progress Owner Intake is YES (state is OWNER_*_PENDING):
-  user_role MUST BE "OWNER" and intent MUST BE "SUBMIT_LISTING".
-  - If state is OWNER_POSSESSION_PENDING: "1" -> possession_status: "READY_TO_MOVE", "2" -> possession_status: "UNDER_CONSTRUCTION".
-  - If state is OWNER_FURNISHING_PENDING: "1" -> furnishing_status: "UNFURNISHED", "2" -> furnishing_status: "SEMI_FURNISHED", "3" -> furnishing_status: "FURNISHED".
-  - If state is OWNER_PHONE_PENDING: extract 10-digit phone into contact_phone. NEVER extract phone number as price/budget!
-  - If user mentions built-up area (e.g. "2000 built up"): super_built_up_sqft: 2000.
-  - If user mentions plot area (e.g. "900 plot area"): plot_area_sqft: 900.
-  - If user mentions carpet area: carpet_sqft: <int>.
+  - If user message is an autonomous query (e.g. "brochure bhej do", "agent se baat", "office address"), follow Tier 1 Precedence and classify that intent directly!
+  - Otherwise, when the user is providing property details or answers:
+    user_role is "OWNER" and intent is "SUBMIT_LISTING":
+    - If state is OWNER_POSSESSION_PENDING: "1" -> possession_status: "READY_TO_MOVE", "2" -> possession_status: "UNDER_CONSTRUCTION".
+    - If state is OWNER_FURNISHING_PENDING: "1" -> furnishing_status: "UNFURNISHED", "2" -> furnishing_status: "SEMI_FURNISHED", "3" -> furnishing_status: "FURNISHED".
+    - If state is OWNER_PHONE_PENDING: extract 10-digit phone into contact_phone. NEVER extract phone number as price/budget!
+    - If user mentions built-up area (e.g. "2000 built up"): super_built_up_sqft: 2000.
+    - If user mentions plot area (e.g. "900 plot area"): plot_area_sqft: 900.
+    - If user mentions carpet area: carpet_sqft: <int>.
 
 ### LANGUAGE DISCRIMINATION:
 - "GUJARATI_SCRIPT": if written in Gujarati script (e.g. અ, બ, ક).
@@ -2413,7 +2456,7 @@ async function classifyLeadIntentWithGemini(
           const parsed = parseJsonSafely(rawText);
           if (parsed && (parsed.action || parsed.intent)) {
             parsed.messageText = messageText;
-            const action = validateUserAction(parsed, lead?.state, messageText);
+            const action = validateUserAction(parsed, lead, messageText);
             const userRole = parsed.user_role || (action.intent === "SUBMIT_LISTING" ? "OWNER" : "SEEKER");
             const lang = parsed.language || "HINGLISH";
             return buildClassifiedActionResult(action, userRole, lang, "GEMINI", 0, parsed);
@@ -2498,7 +2541,7 @@ async function classifyLeadIntentWithGroq(
           const parsed = parseJsonSafely(rawText);
           if (parsed && (parsed.action || parsed.intent)) {
             parsed.messageText = messageText;
-            const action = validateUserAction(parsed, lead?.state, messageText);
+            const action = validateUserAction(parsed, lead, messageText);
             const userRole = parsed.user_role || (action.intent === "SUBMIT_LISTING" ? "OWNER" : "SEEKER");
             const lang = parsed.language || "HINGLISH";
             return buildClassifiedActionResult(action, userRole, lang, "GROQ", 0, parsed);
@@ -2659,13 +2702,13 @@ async function classifyLeadIntent(
       /(?:^|\b)(?:1|1️⃣|one|option\s*1)\b/i.test(lower) ||
       /(?:ha|haan|ji\s*haan|yes|yep|yeah|attended|gaya|gaye|kari|kiya|karyo|thayo)/i.test(lower)
     ) {
-      fallbackIntent = "CONFIRM_VISIT";
+      fallbackIntent = "CONFIRM_VISIT_ATTENDANCE";
     }
   } else if (lead?.state === "CRITERIA_CONFIRMATION_PENDING") {
     if (/^(1|1️⃣|first|1st|ha|haan|ha ji|yes|same|isi me|yahi|yahi criteria|dikhao|sure|chalo|done|ok|okay|sahi hai|barobar|saras)$/i.test(lower) || lower.includes("isi criteria") || lower.includes("same criteria") || lower.includes("yahi")) {
-      fallbackIntent = "CONFIRM_SAME_CRITERIA";
+      fallbackIntent = "CONFIRM_CRITERIA";
     } else if (/^(2|2️⃣|second|2nd|nahi|no|change|badalna|dusra|naya|different|modify)$/i.test(lower) || lower.includes("change") || lower.includes("badal") || lower.includes("dusra")) {
-      fallbackIntent = "CHANGE_CRITERIA";
+      fallbackIntent = "CHANGE_REQUIREMENT";
     }
   } else if (
     /(?:^|\b)(?:ha\s+|haan\s+|ji\s+)?(?:me\s+|hum\s+|mai\s+|hu\s+|ame\s+)?(?:nai|nahi|nhi|na|nathi)\s*(?:aa\s*sakta|aa\s*sakti|aa\s*paunga|aa\s*paungi|aa\s*payenge|aa\s*paenge|aa\s*raha|aa\s*rahe|aana|aunga|aungi|ja\s*sakta|ja\s*paunga|pahunch\s*sakta|pahunch\s*paunga|ho\s*payega|hoga\s*aaj|possible\s*nahi|aavi\s*saku|aavi\s*shaku|aavi\s*sakyo|aavi\s*shakay|aavay|aavish|aa\s*saku)/i.test(lower) ||
@@ -2804,7 +2847,7 @@ async function classifyLeadIntent(
     preferred_date_raw: fallbackIntent === "BOOK_VISIT" ? messageText : null,
   };
 
-  const action = validateUserAction(fallbackPayload, lead?.state);
+  const action = validateUserAction(fallbackPayload, lead, messageText);
   return buildClassifiedActionResult(
     action,
     userRole,
@@ -5090,11 +5133,23 @@ export async function dispatchStateAction(
   if (intent === "OPT_OUT") {
     const lowerMsg = (context.messageText || "").trim().toLowerCase();
     const isExplicitOptOut = /(?:stop|unsubscribe|not\s*interested|nathi\s*joiye|message\s*mat\s*karo|band\s*karo|dont\s*message|call\s*mat\s*karo|msg\s*mat\s*karo|don't\s*text)/i.test(lowerMsg);
-    const isBareNegation = /^(?:nahi|no|na|nathi|nhi|nope|naa|naah|not\s*now|abhi\s*nahi|hal\s*ma\s*nathi|pachi)$/i.test(lowerMsg);
 
-    if (isBareNegation && !isExplicitOptOut) {
-      console.log(`[OPT_OUT GUARD] Intercepted bare conversational negation "${context.messageText}" - reclassifying as GENERAL_QUERY for state ${currentState}`);
-      intent = "GENERAL_QUERY";
+    // INVERTED ANTI-OPT_OUT GUARD: OPT_OUT is mathematically impossible unless isExplicitOptOut === true
+    if (!isExplicitOptOut) {
+      console.log(`[OPT_OUT GUARD] Intercepted non-explicit conversational negation "${context.messageText}" - reclassifying for state ${currentState}`);
+      const lastPromptQ = lead?.metadata?.last_bot_prompt?.question_type;
+      const isPostVisit = currentState === "SITE_VISIT_DONE" || currentState === "SITE_VISIT_BOOKED" || lastPromptQ === "VISIT_ATTENDANCE" || Boolean(lead?.post_visit_feedback_sent);
+
+      if (currentState === "CRITERIA_CONFIRMATION_PENDING" || lastPromptQ === "CRITERIA_CONFIRM") {
+        intent = "CONFIRM_CRITERIA";
+        actionResult.action = { intent: "CONFIRM_CRITERIA", confirm: false };
+      } else if (isPostVisit) {
+        intent = "CANNOT_ATTEND_VISIT";
+        actionResult.action = { intent: "CANNOT_ATTEND_VISIT", reason: context.messageText };
+      } else {
+        intent = "GENERAL_QUERY";
+        actionResult.action = { intent: "GENERAL_QUERY", query: context.messageText };
+      }
     } else {
       const replyText =
         lang === "GUJLISH"
