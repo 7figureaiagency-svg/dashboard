@@ -52,12 +52,19 @@ updated: 2026-10-19T18:50:30+05:30
 ---
 
 ### Phase 4: Bi-Directional Dual-Persona Lifecycle Architecture (Buyer ↔ Seller Multi-Role Engine)
-**Status:** ⏳ Planned  
-**Objective:** Support a seamless bi-directional customer lifecycle where a single lead can concurrently qualify as a Property Seeker (Buyer/Tenant) and a Property Provider (Seller/Landlord). Ensure zero criteria wipes, contextual Dual-Reminder disambiguation menus on return greetings, parallel persistence across `leads` and `property_submissions`, and full visual clarity in the React CRM Dashboard.  
-**Depends on:** Phase 3  
+**Status:** 🚧 In Progress (Plans 4.8 & 4.9 Ready to Execute)  
+**Objective:** Support a seamless bi-directional customer lifecycle where a single lead can concurrently qualify as a Property Seeker (Buyer/Tenant) and a Property Provider (Seller/Landlord). Ensure zero criteria wipes, contextual Dual-Reminder disambiguation menus, parallel persistence across `leads` and `property_submissions`, in-drawer persona switching & manual listing creation, and in-house Buyer ↔ Seller deal matchmaking.  
+**Depends on:** Phase 3, Phase 20  
 **Plans:**
-- [ ] Plan 4.1: Dual-Persona Data Model, FSM Transitions, and Dual-Reminder Disambiguation Menu ([`4.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.1-PLAN.md))
-- [ ] Plan 4.2: CRM Dashboard Dual-Role Badges, Drawer Sub-Tabs & High-Value Sales Alerts ([`4.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.2-PLAN.md))
+- [x] Plan 4.1: Dual-Persona Data Model, FSM Transitions, and Dual-Reminder Disambiguation Menu ([`4.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.1-PLAN.md))
+- [x] Plan 4.2: CRM Dashboard Dual-Role Badges, Drawer Sub-Tabs & High-Value Sales Alerts ([`4.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.2-PLAN.md))
+- [x] Plan 4.3: Robust Natural Slot Booking & FSM Anti-Reset Safeguard in OPTIONS_SENT ([`4.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.3-PLAN.md))
+- [x] Plan 4.4: Gap Closure & Intent Guard for Telegram Lead 5117510624 ([`4.4-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.4-PLAN.md))
+- [x] Plan 4.5: Property Listing Status Templates for Approved/Converted Inventory ([`4.5-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.5-PLAN.md))
+- [x] Plan 4.6: CANNOT_ATTEND_VISIT / RESCHEDULE Guard in OWNER_DETAILS_GATHERED ([`4.6-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.6-PLAN.md))
+- [x] Plan 4.7: Past Site Visit Temporal Greeting Guards & Missed Visit Cron Sweep ([`4.7-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.7-PLAN.md))
+- [ ] Plan 4.8: In-Drawer Role Switcher, 1-Tap Manual Owner Listing Studio & Dual-Source Property Matchmaker ([`4.8-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.8-PLAN.md))
+- [ ] Plan 4.9: In-House Buyer ↔ Seller Cross-Matchmaker & Natural "Buyer Inquiry" Bot Intent Engine ([`4.9-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.9-PLAN.md))
 
 ---
 
@@ -170,7 +177,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 1: Core Dashboard & Leads CRM | ✅ Complete | 1/1 | 100% |
 | 2: Secondary Tabs & Workflows | ✅ Complete | 3/3 | 100% |
 | 3: Schema-Guided Intent Engine | ✅ Complete | 3/3 | 100% |
-| 4: Bi-Directional Dual-Persona Lifecycle | ⏳ Planned | 0/2 | 0% |
+| 4: Bi-Directional Dual-Persona Lifecycle | 🚧 In Progress | 7/9 | 78% |
 | 7: Multi-Portal Webhooks & Site Visit Engine | ✅ Complete | 2/2 | 100% |
 | 8: Multi-Tenant Onboarding & Strict Auth | ✅ Complete | 2/2 | 100% |
 | 9: Strict Multi-Tenant Data Isolation | ✅ Complete | 2/2 | 100% |
