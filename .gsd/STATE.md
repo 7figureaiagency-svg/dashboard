@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-26T15:15:00+05:30
+updated: 2026-10-26T21:40:00+05:30
 ---
 
 # Project State
@@ -7,13 +7,19 @@ updated: 2026-10-26T15:15:00+05:30
 ## Current Position
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
-**Phase:** 21 - Autonomous Real Estate Property Pitch Crafter & Consultative Sales Engine (`property-pitch-crafter`)  
-**Status:** ✅ Plans 21.1 and 21.2 Completed & Production Verified (Build 0 errors)  
+**Phase:** 22 - State-Conditioned Multilingual Intent Classification Engine (TypeChat + Active Question Context Injection)  
+**Status:** ✅ Phase 22 Plan 22.1 Complete  
 **Plans:**
-- `.gsd/phases/21/21.1-PLAN.md` (Core Pitch Engineering Library, Copywriting Frameworks & Skill Specification) — ✅ Complete
-- `.gsd/phases/21/21.2-PLAN.md` (Apple HIG In-Dashboard "Property Pitch Studio" Modal & Multi-Surface Integration) — ✅ Complete
+- `.gsd/phases/22/22.1-PLAN.md` (State-Conditioned Multilingual Intent Engine) — ✅ Completed
 
 ## Last Action
+
+Completed Phase 22 (Plan 22.1):
+- Implemented state-conditioned multilingual intent classification engine in `supabase/functions/realtor-lead-engine/index.ts`.
+- Persisted `lead.metadata.last_bot_prompt` across all interactive dialog turns and cron sweep modules (1A, 1, 2, 2B, 2C, 3, 4).
+- Inverted `OPT_OUT` guard so that `OPT_OUT` is strictly impossible without explicit unsubscription phrases (`isExplicitOptOut === true`), preventing conversational negations ("nahi karni", "dusri nahi hai", "visit nahi ho paayi", "nathi karvi") from dropping active leads.
+- Added 2-tier Intent Precedence Hierarchy (Tier 1 Autonomous Global vs. Tier 2 Contextual Answers) to prevent bot question bias from suppressing user intent.
+- Verified 100% pass rate (27/27 assertions) on `scratch/test_phase22_state_conditioned_intent.cjs` and confirmed live Edge Function status ONLINE.
 
 Completed Phase 21:
 - Implemented full `property-pitch-crafter` skill and copywriting frameworks (`.agents/skills/property-pitch-crafter/SKILL.md` and `pitch-frameworks.md`).

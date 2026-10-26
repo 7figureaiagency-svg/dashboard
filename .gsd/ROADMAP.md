@@ -192,7 +192,8 @@ updated: 2026-10-19T18:50:30+05:30
 | 18: Post-Visit Lifecycle & Objection Feedback Engine | ✅ Complete | 1/1 | 100% |
 | 19: Post-Visit Alternative Recommendation & Options | ✅ Complete | 1/1 | 100% |
 | 20: AI Lead Scoring Engine & Conversion Heatmap | ✅ Complete | 1/1 | 100% |
-| 21: Autonomous Property Pitch Crafter Engine | ⏳ Ready to Execute | 0/2 | 0% |
+| 21: Autonomous Property Pitch Crafter Engine | ✅ Complete | 2/2 | 100% |
+| 22: State-Conditioned Multilingual Intent Engine | ✅ Complete | 1/1 | 100% |
 
 ---
 
@@ -206,9 +207,19 @@ updated: 2026-10-19T18:50:30+05:30
 ---
 
 ### Phase 21: Autonomous Real Estate Property Pitch Crafter & Consultative Sales Engine (`property-pitch-crafter`)
-**Status:** ⏳ Ready to Execute (Plans 21.1 & 21.2 Created)  
+**Status:** ✅ Complete  
 **Objective:** Equip brokers with an autonomous copywriting and pitch engineering system that translates raw property inventory and buyer requirements into high-converting, psychology-grounded WhatsApp pitches across 4 buyer archetypes (End-User Family, Investor ROI, Luxury HNW, Starter/Budget), 3 regional linguistic dialects (Hinglish, Gujlish, English), and 3 formats with instant 1-tap copying, WhatsApp Web sharing, and CRM audit history logging.  
 **Depends on:** Phase 4, Phase 20  
 **Plans:**
-- [ ] Plan 21.1: Core Pitch Engineering Library, Copywriting Frameworks & Skill Specification ([`21.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/21/21.1-PLAN.md))
-- [ ] Plan 21.2: Apple HIG In-Dashboard "Property Pitch Studio" Modal & Multi-Surface Integration ([`21.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/21/21.2-PLAN.md))
+- [x] Plan 21.1: Core Pitch Engineering Library, Copywriting Frameworks & Skill Specification ([`21.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/21/21.1-PLAN.md))
+- [x] Plan 21.2: Apple HIG In-Dashboard "Property Pitch Studio" Modal & Multi-Surface Integration ([`21.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/21/21.2-PLAN.md))
+
+---
+
+### Phase 22: State-Conditioned Multilingual Intent Classification Engine (TypeChat + Active Question Context Injection)
+**Status:** ✅ Complete  
+**Objective:** Upgrade the Realtor Lead Engine (`realtor-lead-engine`) with State-Conditioned Intent Classification incorporating Intent Precedence Hierarchy (Autonomous Global Intents vs Contextual Answers) and Inverted Anti-OPT_OUT Guard, centralized outbound prompt tracking with 72h decay hygiene, and comprehensive coverage across all dialog states to guarantee 100% deterministic intent classification across all vernacular dialects (Hindi, Gujlish, Gujarati script, English).  
+**Depends on:** Phase 3, Phase 8, Phase 20  
+**Plans:**
+- [x] Plan 22.1: State-Conditioned Multilingual Intent Engine (TypeChat + Active Question Context Injection) ([`22.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/22/22.1-PLAN.md))
+
