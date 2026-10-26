@@ -4066,6 +4066,121 @@ async function handleOwnerFlow({
     }
   }
 
+  // 1c. In-House Buyer Matching / Demand Status Inquiry ("Koi buyer mila?", "Inquiry aayi?")
+  const isBuyerDemandInquiry =
+    /(?:buyer|khareedne\s*wala|kharidne\s*wala|graahak|grahak|customer|inquiry|inquiries|koi\s*aaya|koi\s*aayi|koi\s*mila|ketla\s*malya|any\s*buyers|interested\s*buyers)/i.test(lower) &&
+    !/(?:chahiye|joiye|kharidna\s*hai|buy\s*karna|looking\s*to\s*buy)/i.test(lower);
+
+  if (isBuyerDemandInquiry) {
+    const cleanPhone = (lead.phone || senderId || "").replace(/\D/g, "").slice(-10);
+    let sub = null;
+    const orFilters = [
+      lead.id ? `lead_id.eq.${lead.id}` : null,
+      lead.lead_id ? `lead_id.eq.${lead.lead_id}` : null,
+      cleanPhone ? `owner_phone.ilike.%${cleanPhone}%` : null,
+    ].filter(Boolean).join(",");
+
+    const { data: subs } = await supabase
+      .from("property_submissions")
+      .select("*")
+      .eq("client_id", tenantId)
+      .or(orFilters)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (subs && subs.length > 0) {
+      sub = subs[0];
+    } else if (draft && (draft.society_name || draft.configuration)) {
+      sub = draft;
+    }
+
+    if (!sub) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari property haji amara portal par listed nathi. Kripya tamari property details (area, type, expected price) share karo jethi ame verified buyers connect kari shakiye! 🏡`
+          : lang === "ENGLISH"
+          ? `Hello <b>${senderName || "Friend"}</b>! We don't have an active property listing recorded for you yet. Please share your property details so we can match you with verified buyers! 🏡`
+          : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki property abhi hamare portal par listed nahi hai. Kripya apni property details (area, type, expected price) share karein taaki hum verified buyers connect kar sakein! 🏡`;
+      return { replyText, nextState: "OWNER_CONFIG_PENDING" };
+    }
+
+    const subLoc = (sub.location || "").toLowerCase().trim();
+    const subConfig = (sub.configuration || sub.property_type || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const subPrice = Number(sub.expected_price || sub.expected_rent || 0);
+
+    // Query active buyer leads in same tenant
+    const { data: buyerLeads } = await supabase
+      .from("leads")
+      .select("id, first_name, phone, location, property_type, requirement, budget, state, lead_type")
+      .eq("client_id", tenantId)
+      .neq("state", "DROPPED")
+      .neq("state", "VISIT_CANCELLED")
+      .neq("id", lead.id);
+
+    const matchingBuyers = (buyerLeads || []).filter((b: any) => {
+      if (b.lead_type === "PROVIDER") return false;
+      if (cleanPhone && b.phone) {
+        const bClean = b.phone.replace(/\D/g, "").slice(-10);
+        if (bClean && bClean === cleanPhone) return false;
+      }
+
+      const bLoc = (b.location || "").toLowerCase().trim();
+      let locMatch = false;
+      if (!subLoc || !bLoc) locMatch = true;
+      else if (bLoc.includes(subLoc) || subLoc.includes(bLoc)) locMatch = true;
+
+      const bConfig = (b.property_type || b.requirement || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      let configMatch = false;
+      if (!subConfig || !bConfig) configMatch = true;
+      else if (bConfig.includes(subConfig) || subConfig.includes(bConfig)) configMatch = true;
+
+      const bBudget = Number(b.budget || 0);
+      let budgetMatch = true;
+      if (subPrice > 0 && bBudget > 0) {
+        budgetMatch = bBudget >= subPrice * 0.8;
+      }
+
+      return locMatch && configMatch && budgetMatch;
+    });
+
+    const matchCount = matchingBuyers.length;
+    const propLabel = `${sub.configuration || "Property"} at ${sub.society_name || sub.project_name || sub.location || "prime location"}`;
+    const budgets = matchingBuyers.map((b: any) => Number(b.budget || 0)).filter((b: number) => b > 0);
+    let budgetRangeStr = "";
+    if (budgets.length > 0) {
+      const minB = Math.min(...budgets);
+      const maxB = Math.max(...budgets);
+      budgetRangeStr = minB === maxB ? `₹${(minB / 100000).toFixed(1)}L` : `₹${(minB / 100000).toFixed(1)}L - ₹${(maxB / 100000).toFixed(1)}L`;
+    } else if (subPrice > 0) {
+      budgetRangeStr = `₹${(subPrice / 100000).toFixed(1)}L`;
+    }
+    const budgetPhrase = budgetRangeStr ? ` (Budget: ${budgetRangeStr})` : "";
+
+    const replyText = matchCount > 0
+      ? (lang === "GUJLISH"
+        ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari listed property (<b>${propLabel}</b>) mate amara system ma <b>${matchCount} verified buyers</b> actively search kari rahya chhe${budgetPhrase}. 🤝\n\nAmari sales team temne tamari property actively pitch kari rahi chhe. Koi pan visit confirm thay etle ame tarat j tamne update karshe! 🙏`
+        : lang === "ENGLISH"
+        ? `Hello <b>${senderName || "Friend"}</b>! For your listed property (<b>${propLabel}</b>), we have <b>${matchCount} verified prospective buyers</b> actively looking in this range${budgetPhrase}. 🤝\n\nOur team is currently pitching your property to them. We will notify you immediately once a site visit is scheduled! 🙏`
+        : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) ke liye hamare system me <b>${matchCount} verified buyers</b> actively search kar rahe hain${budgetPhrase}. 🤝\n\nHamari sales team unhe aapka listing card aur brochure share kar rahi hai. Jaise hi koi buyer visit book karta hai, hum turant aapse connect karenge! 🙏`)
+      : (lang === "GUJLISH"
+        ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari listed property (<b>${propLabel}</b>) amara active portal par live chhe. 📋 Amari marketing team actively prospective buyers sathe follow-up kari rahi chhe. Navi inquiry malta j ame tamne sampark karshe! 🙏`
+        : lang === "ENGLISH"
+        ? `Hello <b>${senderName || "Friend"}</b>! Your property (<b>${propLabel}</b>) is actively listed in our database. 📋 Our marketing team is running targeted campaigns for this locality. As soon as a matching buyer expresses interest, we will notify you right away! 🙏`
+        : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) hamare active portal par successfully live hai. 📋 Filhaal matching inquiries par hamari team targeted outreach chala rahi hai. Naya matching buyer aate hi hum aapse turant connect karenge! 🙏`);
+
+    await supabase.from("lead_events").insert({
+      lead_id: lead.id,
+      event_type: "OWNER_BUYER_DEMAND_INQUIRY",
+      payload: {
+        matching_buyers_count: matchCount,
+        property_label: propLabel,
+        user_message: messageText,
+      },
+    });
+
+    return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
+  }
+
   // If already gathered, check if user is listing a SECOND property, inquiring status, or asking for buyer options
   if (lead.state === "OWNER_DETAILS_GATHERED") {
     const isDecliningSecondListing = /^(?:nahi|no|na|nathi|nhi|nope|nathi\s*karvi|nahi\s*karni|rehne\s*do|koi\s*nahi|ek\s*j\s*chhe|bas\s*itna\s*hi|kuch\s*nahi|nathi\s*aapvi)\b/i.test(lower.trim());
@@ -4143,6 +4258,10 @@ async function handleOwnerFlow({
        (/\b(flat|house|ghar|makan|villa|office|shop|plot|godown|showroom|commercial)\b/i.test(lower))) ||
       aiAnalysis?.action?.intent === "SUBMIT_LISTING" ||
       (aiAnalysis?.action?.intent === "CONFIRM_CRITERIA" && (aiAnalysis?.action as any)?.confirm);
+
+    const isBuyerDemandInquiry =
+      /(?:buyer|khareedne\s*wala|kharidne\s*wala|graahak|grahak|customer|inquiry|inquiries|koi\s*aaya|koi\s*aayi|koi\s*mila|ketla\s*malya|any\s*buyers|interested\s*buyers)/i.test(lower) &&
+      !/(?:chahiye|joiye|kharidna\s*hai|buy\s*karna|looking\s*to\s*buy)/i.test(lower);
 
     const isStatusInquiry = /(?:status|update|kya\s*hua|ketle\s*pahonchyu|check\s*status|listing\s*status|verification|approved)/i.test(lower);
 
@@ -5251,7 +5370,13 @@ export async function dispatchStateAction(
   // 2. OWNER IN-PROGRESS STATES -> DIRECT TO handleOwnerFlow
   // ---------------------------------------------------------------------------
 
-  if (isInOwnerIntake || currentState === "OWNER_DETAILS_GATHERED") {
+  const isBuyerDemandInquiryRouter =
+    /(?:buyer|khareedne\s*wala|kharidne\s*wala|graahak|grahak|customer|inquiry|inquiries|koi\s*aaya|koi\s*aayi|koi\s*mila|ketla\s*malya|any\s*buyers|interested\s*buyers)/i.test(lower) &&
+    !/(?:chahiye|joiye|kharidna\s*hai|buy\s*karna|looking\s*to\s*buy)/i.test(lower);
+
+  const hasOwnerProfileRouter = lead.lead_type === "PROVIDER" || lead.lead_type === "DUAL_ROLE" || Boolean(lead.metadata?.has_seller_profile);
+
+  if (isInOwnerIntake || currentState === "OWNER_DETAILS_GATHERED" || (hasOwnerProfileRouter && isBuyerDemandInquiryRouter)) {
     // ── Site-visit intent guard: DUAL_ROLE leads can be in OWNER_DETAILS_GATHERED
     //    while still having an active site visit. Catch visit intents here so they
     //    are never swallowed by the owner-flow handlers. ───────────────────────────
