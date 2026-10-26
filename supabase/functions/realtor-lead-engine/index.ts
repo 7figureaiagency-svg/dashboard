@@ -2247,7 +2247,22 @@ interface IntentResult {
 Respond ONLY with valid JSON satisfying IntentResult:
 {"action": {...}, "user_role": "OWNER"|"SEEKER"|"UNKNOWN", "language": "HINGLISH"|"GUJLISH"|"ENGLISH"|"GUJARATI_SCRIPT"}`;
 
-function buildLeadContextForClassifier(lead: any, messageText: string): string {
+export function deriveBotQuestionType(nextState: string, replyText: string, metadata?: any): string | null {
+  if (!replyText || !replyText.trim()) return null;
+  if (metadata?.last_bot_prompt?.question_type) return metadata.last_bot_prompt.question_type;
+  if (nextState === "OWNER_DETAILS_GATHERED") return "SECOND_PROPERTY_LISTING";
+  if (nextState === "SITE_VISIT_DONE" || (nextState === "SITE_VISIT_BOOKED" && /1️⃣|2️⃣|visit attend|attended/i.test(replyText))) return "VISIT_ATTENDANCE";
+  if (nextState === "CRITERIA_CONFIRMATION_PENDING") return "CRITERIA_CONFIRM";
+  if (nextState === "DUAL_ROLE_MENU_PENDING") return "DUAL_ROLE_SELECTION";
+  if (nextState === "OPTIONS_SENT" || nextState === "VISIT_REQUESTED") return "VISIT_SLOT";
+  if (typeof nextState === "string" && nextState.startsWith("OWNER_") && nextState.endsWith("_PENDING")) return "OWNER_FIELD";
+  if (nextState === "QUALIFYING") return "QUALIFYING_FIELD";
+  if (nextState === "VISIT_MISSED") return "RESCHEDULE_SLOT";
+  if (replyText.includes("?") || /1️⃣|2️⃣|3️⃣/.test(replyText)) return "GENERAL_QUESTION";
+  return null;
+}
+
+export function buildLeadContextForClassifier(lead: any, messageText: string): string {
   const isInProgressOwner = [
     "OWNER_CONFIG_PENDING",
     "OWNER_SOCIETY_PENDING",
@@ -2263,33 +2278,62 @@ function buildLeadContextForClassifier(lead: any, messageText: string): string {
   const lockedTx = lead?.metadata?.owner_draft?.transaction_type || lead?.requirement || null;
   const knownPhone = lead?.phone || lead?.metadata?.owner_draft?.contact_phone || null;
 
+  // Stale Prompt Decay (> 72 hours)
+  const lastPrompt = lead?.metadata?.last_bot_prompt;
+  let lastBotPromptText = "None";
+  let isPromptStale = false;
+  if (lastPrompt && lastPrompt.asked_at) {
+    const promptAgeHours = (Date.now() - new Date(lastPrompt.asked_at).getTime()) / (1000 * 60 * 60);
+    if (promptAgeHours > 72) {
+      isPromptStale = true;
+      lastBotPromptText = `${lastPrompt.question_type || "GENERAL"} - "${lastPrompt.text_preview || ""}" (STALE / > 72h ago)`;
+    } else {
+      lastBotPromptText = `${lastPrompt.question_type || "GENERAL"} - "${lastPrompt.text_preview || ""}"`;
+    }
+  }
+
   let currentPendingQuestion = "NONE";
-  if (lead?.state === "ROLE_SELECTION_PENDING") {
+  const state = lead?.state;
+
+  if (state === "OWNER_DETAILS_GATHERED") {
+    currentPendingQuestion = "SECOND_PROPERTY_LISTING_OR_BUYER_SEARCH (Bot asked if they want to list another property, or search Buy/Rent options. 'Nahi', 'nahi karni', or 'nathi karvi' means DECLINE_SECOND_LISTING, NEVER OPT_OUT!)";
+  } else if (state === "SITE_VISIT_DONE" || (state === "SITE_VISIT_BOOKED" && (lead?.post_visit_feedback_sent || lastPrompt?.question_type === "VISIT_ATTENDANCE"))) {
+    currentPendingQuestion = "POST_VISIT_ATTENDANCE (Bot asked: 1 Attended, 2 Not Attended. 'Nahi' / '2' / 'visit nahi ho paayi' is strictly CANNOT_ATTEND_VISIT, NEVER OPT_OUT!)";
+  } else if (state === "CRITERIA_CONFIRMATION_PENDING" || lastPrompt?.question_type === "CRITERIA_CONFIRM") {
+    currentPendingQuestion = "CONFIRM_CRITERIA (Bot asked to confirm requirement. 'Nahi' / '2' / 'badalna hai' is CONFIRM_CRITERIA with confirm: false)";
+  } else if (state === "DUAL_ROLE_MENU_PENDING" || lastPrompt?.question_type === "DUAL_ROLE_SELECTION") {
+    currentPendingQuestion = "DUAL_ROLE_SELECTION (1 Reschedule/Search, 2 Status, 3 Call)";
+  } else if (state === "VISIT_MISSED" || lastPrompt?.question_type === "RESCHEDULE_SLOT") {
+    currentPendingQuestion = "RESCHEDULE_SLOT (Bot asked for convenient day/time to reschedule missed visit)";
+  } else if (state === "OPTIONS_SENT" || state === "VISIT_REQUESTED" || state === "SITE_VISIT_PROPOSED" || lastPrompt?.question_type === "VISIT_SLOT") {
+    currentPendingQuestion = "VISIT_SLOT_OR_OPTION_SELECTION (Bot sent property cards or proposed a site visit. Any date, time, day, slot, or affirmative response is strictly BOOK_VISIT or SELECT_OPTION!)";
+  } else if (state === "ROLE_SELECTION_PENDING") {
     currentPendingQuestion = "ROLE_SELECTION (Bot asked user: 1 or 'Leni hai' to Buy/Rent properties, 2 or 'Deni hai' to Sell/Rent Out their property. Replies indicating property types like 'Office', 'Residential', 'Commercial', 'Shop', 'Flat' are SEEKER requests, NEVER OFF_TOPIC!)";
-  } else if (lead?.state === "OWNER_CONFIG_PENDING") {
+  } else if (state === "OWNER_CONFIG_PENDING") {
     currentPendingQuestion = "PROPERTY_CONFIG (Bot asked for property type / configuration: Flat, Villa, Commercial Office, Shop, Plot)";
-  } else if (lead?.state === "OWNER_SOCIETY_PENDING") {
+  } else if (state === "OWNER_SOCIETY_PENDING") {
     currentPendingQuestion = "SOCIETY_OR_ROAD (Bot asked for Commercial Complex, Business Hub, Society, or Road name)";
-  } else if (lead?.state === "OWNER_LOCATION_PENDING") {
+  } else if (state === "OWNER_LOCATION_PENDING") {
     currentPendingQuestion = "LOCATION_AREA (Bot asked for exact area / locality in the city)";
-  } else if (lead?.state === "OWNER_AREA_PENDING" || lead?.state === "OWNER_SIZE_PENDING") {
+  } else if (state === "OWNER_AREA_PENDING" || state === "OWNER_SIZE_PENDING") {
     currentPendingQuestion = "CARPET_AREA_SQFT (Bot asked for Carpet / Plot / Built-up Area. Extract numbers into carpet_sqft, super_built_up_sqft, or plot_area_sqft)";
-  } else if (lead?.state === "OWNER_PRICE_PENDING") {
+  } else if (state === "OWNER_PRICE_PENDING") {
     currentPendingQuestion = "PRICE_OR_RENT (Bot asked for expected selling price or monthly rent. If user specifies built-up or plot area, extract super_built_up_sqft / plot_area_sqft!)";
-  } else if (lead?.state === "OWNER_POSSESSION_PENDING") {
+  } else if (state === "OWNER_POSSESSION_PENDING") {
     currentPendingQuestion = "POSSESSION_STATUS (Bot asked: 1 Ready to Move, 2 Under Construction. Single digit reply is strictly possession_status!)";
-  } else if (lead?.state === "OWNER_FURNISHING_PENDING") {
+  } else if (state === "OWNER_FURNISHING_PENDING") {
     currentPendingQuestion = "FURNISHING_STATUS (Bot asked: 1 Unfurnished, 2 Semi-Furnished, 3 Fully Furnished. Single digit reply is strictly furnishing_status, DO NOT hallucinate transaction_type or price!)";
-  } else if (lead?.state === "OWNER_PHONE_PENDING") {
+  } else if (state === "OWNER_PHONE_PENDING") {
     currentPendingQuestion = "CONTACT_PHONE (Bot asked for direct calling/WhatsApp number. Extract 10-digit number into contact_phone)";
-  } else if (lead?.state === "QUALIFYING") {
+  } else if (state === "QUALIFYING") {
     if (!lead?.property_type) currentPendingQuestion = "SEEKER_PROPERTY_TYPE (Bot asked what type of property: Residential, Commercial, Flat, Office, Villa, Shop. Replies with property types are strictly CHANGE_REQUIREMENT, NEVER OFF_TOPIC!)";
     else if (!lead?.requirement) currentPendingQuestion = "SEEKER_REQUIREMENT (Buy or Rent)";
     else if (!lead?.location) currentPendingQuestion = "SEEKER_LOCATION";
     else if (!lead?.budget) currentPendingQuestion = "SEEKER_BUDGET (A numeric reply is price_or_budget)";
     else if (!lead?.timeline) currentPendingQuestion = "SEEKER_TIMELINE";
-  } else if (lead?.state === "OPTIONS_SENT" || lead?.state === "VISIT_REQUESTED" || lead?.state === "SITE_VISIT_PROPOSED") {
-    currentPendingQuestion = "VISIT_SLOT_OR_OPTION_SELECTION (Bot sent property cards or proposed a site visit. Any date, time, day, slot, or affirmative response is strictly BOOK_VISIT or SELECT_OPTION!)";
+    else currentPendingQuestion = "SEEKER_QUALIFYING_FIELD";
+  } else if (state && state.startsWith("OWNER_") && state.endsWith("_PENDING")) {
+    currentPendingQuestion = "OWNER_INTAKE_FIELD";
   }
 
   return `LEAD STATUS:
@@ -2299,6 +2343,7 @@ function buildLeadContextForClassifier(lead: any, messageText: string): string {
 - Known Locked Transaction: ${lockedTx || "None"}
 - Known User Phone: ${knownPhone || "None"}
 - Bot Question Waiting For: ${currentPendingQuestion}
+- LAST BOT PROMPT: "${lastBotPromptText}"${isPromptStale ? " (Note: This prompt is stale >72h and should not constrain unprompted queries)" : ""}
 - Known Property Type: ${lead?.property_type || lead?.metadata?.owner_draft?.property_type || "None"}
 - Known Location: ${lead?.location || lead?.metadata?.owner_draft?.location || "None"}
 - Known Budget/Price: ${lead?.budget || lead?.metadata?.owner_draft?.expected_price || lead?.metadata?.owner_draft?.expected_rent || "None"}
@@ -3228,7 +3273,16 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             await supabase
               .from("leads")
               .update({
-                metadata: { ...metadata, morning_briefing_sent: true, morning_briefing_at: new Date().toISOString() },
+                metadata: {
+                  ...metadata,
+                  morning_briefing_sent: true,
+                  morning_briefing_at: new Date().toISOString(),
+                  last_bot_prompt: {
+                    question_type: "VISIT_REMINDER",
+                    text_preview: briefingMsg.slice(0, 150),
+                    asked_at: new Date().toISOString(),
+                  },
+                },
               })
               .eq("id", l.id);
 
@@ -3311,7 +3365,17 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, reminderMsg);
             }
 
-            await supabase.from("leads").update({ pre_visit_reminder_sent: true }).eq("id", l.id);
+            await supabase.from("leads").update({
+              pre_visit_reminder_sent: true,
+              metadata: {
+                ...(l.metadata || {}),
+                last_bot_prompt: {
+                  question_type: "VISIT_TIMING_CHECK",
+                  text_preview: reminderMsg.slice(0, 150),
+                  asked_at: new Date().toISOString(),
+                },
+              },
+            }).eq("id", l.id);
             await supabase.from("site_visits").update({ reminder_2h_sent: true }).eq("lead_id", l.id);
             await supabase.from("lead_events").insert({
               client_id: leadTenantId,
@@ -3391,6 +3455,14 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               post_visit_feedback_sent: true,
               last_followup_at: new Date().toISOString(),
               last_active_at: new Date().toISOString(),
+              metadata: {
+                ...(l.metadata || {}),
+                last_bot_prompt: {
+                  question_type: "VISIT_ATTENDANCE",
+                  text_preview: feedbackMsg.slice(0, 150),
+                  asked_at: new Date().toISOString(),
+                },
+              },
             }).eq("id", l.id);
 
             // Note: Keep site_visits status as SCHEDULED until user confirms attendance!
@@ -3474,6 +3546,11 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 ...meta,
                 post_visit_nudge_sent: true,
                 post_visit_nudge_at: new Date().toISOString(),
+                last_bot_prompt: {
+                  question_type: "VISIT_ATTENDANCE",
+                  text_preview: nudgeMsg.slice(0, 150),
+                  asked_at: new Date().toISOString(),
+                },
               };
 
               await supabase.from("leads").update({
@@ -3559,6 +3636,11 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 ...meta,
                 missed_visit_reschedule_nudge_sent: true,
                 missed_visit_reschedule_nudge_at: new Date().toISOString(),
+                last_bot_prompt: {
+                  question_type: "RESCHEDULE_SLOT",
+                  text_preview: rescheduleMsg.slice(0, 150),
+                  asked_at: new Date().toISOString(),
+                },
               };
 
               await supabase.from("leads").update({
@@ -3701,11 +3783,20 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
               const newCount = (l.followup_count || 0) + 1;
               const dripStage = l.state === "OPTIONS_SENT" ? "OPTIONS_NUDGE" : "QUALIFYING_NUDGE";
+              const dailyQType = l.state === "OPTIONS_SENT" ? "VISIT_SLOT" : (l.state === "QUALIFYING" ? "QUALIFYING_FIELD" : "GENERAL_QUESTION");
 
               await supabase.from("leads").update({
                 last_followup_at: new Date().toISOString(),
                 followup_count: newCount,
                 drip_stage: dripStage,
+                metadata: {
+                  ...(l.metadata || {}),
+                  last_bot_prompt: {
+                    question_type: dailyQType,
+                    text_preview: nudgeMsg.slice(0, 150),
+                    asked_at: new Date().toISOString(),
+                  },
+                },
               }).eq("id", l.id);
 
               await supabase.from("lead_events").insert({
@@ -3817,6 +3908,14 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               await supabase.from("leads").update({
                 last_followup_at: new Date().toISOString(),
                 drip_stage: nextDripStage,
+                metadata: {
+                  ...(l.metadata || {}),
+                  last_bot_prompt: {
+                    question_type: "POST_VISIT_DRIP",
+                    text_preview: dripMsg.slice(0, 150),
+                    asked_at: new Date().toISOString(),
+                  },
+                },
               }).eq("id", l.id);
 
               await supabase.from("lead_events").insert({
@@ -9046,6 +9145,18 @@ Deno.serve(async (req: Request) => {
       score_reasons: leadScoreResult.reasons,
       score_updated_at: new Date().toISOString(),
     };
+
+    // Centralized last_bot_prompt tracking across interactive turns
+    if (!isSilent && replyText && replyText.trim()) {
+      const derivedQType = deriveBotQuestionType(nextState, replyText, updateLeadMeta);
+      if (derivedQType) {
+        enrichedLeadMetadata.last_bot_prompt = {
+          question_type: derivedQType,
+          text_preview: replyText.slice(0, 150),
+          asked_at: new Date().toISOString(),
+        };
+      }
+    }
 
     // Persist lead state and updates to Supabase PostgreSQL (schema-safe: leads has 'state', not 'status')
     if (transitionResult.leadUpdates && Object.keys(transitionResult.leadUpdates).length > 0) {
