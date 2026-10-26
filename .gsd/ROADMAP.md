@@ -63,7 +63,7 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 4.5: Property Listing Status Templates for Approved/Converted Inventory ([`4.5-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.5-PLAN.md))
 - [x] Plan 4.6: CANNOT_ATTEND_VISIT / RESCHEDULE Guard in OWNER_DETAILS_GATHERED ([`4.6-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.6-PLAN.md))
 - [x] Plan 4.7: Past Site Visit Temporal Greeting Guards & Missed Visit Cron Sweep ([`4.7-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.7-PLAN.md))
-- [ ] Plan 4.8: In-Drawer Role Switcher, 1-Tap Manual Owner Listing Studio & Dual-Source Property Matchmaker ([`4.8-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.8-PLAN.md))
+- [x] Plan 4.8: In-Drawer Role Switcher, 1-Tap Manual Owner Listing Studio & Dual-Source Property Matchmaker ([`4.8-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.8-PLAN.md))
 - [ ] Plan 4.9: In-House Buyer ↔ Seller Cross-Matchmaker & Natural "Buyer Inquiry" Bot Intent Engine ([`4.9-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/4/4.9-PLAN.md))
 
 ---
