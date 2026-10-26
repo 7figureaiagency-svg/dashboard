@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-26T21:40:00+05:30
+updated: 2026-10-26T22:45:00+05:30
 ---
 
 # Project State
@@ -8,18 +8,19 @@ updated: 2026-10-26T21:40:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 22 - State-Conditioned Multilingual Intent Classification Engine (TypeChat + Active Question Context Injection)  
-**Status:** ✅ Phase 22 Plan 22.1 Complete  
+**Status:** ✅ Phase 22 Complete (Plan 22.1 & Gap Plan 22.2)  
 **Plans:**
 - `.gsd/phases/22/22.1-PLAN.md` (State-Conditioned Multilingual Intent Engine) — ✅ Completed
+- `.gsd/phases/22/22.2-GAP-PLAN.md` (Edge Function Production Deployment & Strict Version Assertion) — ✅ Completed
 
 ## Last Action
 
-Completed Phase 22 (Plan 22.1):
-- Implemented state-conditioned multilingual intent classification engine in `supabase/functions/realtor-lead-engine/index.ts`.
-- Persisted `lead.metadata.last_bot_prompt` across all interactive dialog turns and cron sweep modules (1A, 1, 2, 2B, 2C, 3, 4).
-- Inverted `OPT_OUT` guard so that `OPT_OUT` is strictly impossible without explicit unsubscription phrases (`isExplicitOptOut === true`), preventing conversational negations ("nahi karni", "dusri nahi hai", "visit nahi ho paayi", "nathi karvi") from dropping active leads.
-- Added 2-tier Intent Precedence Hierarchy (Tier 1 Autonomous Global vs. Tier 2 Contextual Answers) to prevent bot question bias from suppressing user intent.
-- Verified 100% pass rate (27/27 assertions) on `scratch/test_phase22_state_conditioned_intent.cjs` and confirmed live Edge Function status ONLINE.
+Completed Phase 22 (Plan 22.2 Gap Closure):
+- Aligned Edge Function version string to `v72-state-conditioned-intent-engine` across `/health` and root greeting endpoints in `supabase/functions/realtor-lead-engine/index.ts`.
+- Deployed `realtor-lead-engine` v72 to Supabase production (`yeiygfysijptjdepctnx`) via MCP session.
+- Updated `scratch/test_phase22_state_conditioned_intent.cjs` to strictly enforce live version matching (`v72-state-conditioned-intent-engine` and root greeting `v72`).
+- Live health check verified: returns HTTP 200, `status: "ONLINE"`, `version: "v72-state-conditioned-intent-engine"`.
+- Verified 100% pass rate (27/27 assertions) on `scratch/test_phase22_state_conditioned_intent.cjs`.
 
 Completed Phase 21:
 - Implemented full `property-pitch-crafter` skill and copywriting frameworks (`.agents/skills/property-pitch-crafter/SKILL.md` and `pitch-frameworks.md`).
