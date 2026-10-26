@@ -75,6 +75,7 @@ import {
 } from "@/components/ui/table";
 import { LeadScoreBadge, StatusBadge, ToneBadge } from "@/components/crm/badges";
 import { LeadDrawer } from "@/components/crm/lead-drawer";
+import { PropertyPitchModal } from "@/components/crm/property-pitch-modal";
 import { Textarea } from "@/components/ui/textarea";
 import {
   uploadBrochure,
@@ -243,6 +244,9 @@ export function InventoryTab({
     buyers: Lead[];
   } | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [pitchProperty, setPitchProperty] = useState<Property | PropertySubmission | null>(null);
+  const [pitchTargetLead, setPitchTargetLead] = useState<Lead | null>(null);
+  const [pitchModalOpen, setPitchModalOpen] = useState(false);
 
   // ── Filters & Sorting state ──
   const [search, setSearch] = useState("");
@@ -560,7 +564,14 @@ export function InventoryTab({
       </div>
 
       {activeTab === "submissions" ? (
-        <OwnerSubmissionsView clientId={clientId} />
+        <OwnerSubmissionsView
+          clientId={clientId}
+          onOpenPitch={(s) => {
+            setPitchProperty(s);
+            setPitchTargetLead(null);
+            setPitchModalOpen(true);
+          }}
+        />
       ) : (
         <>
           {/* ── Top Portfolio Overview Strip (Apple Complication Widgets) ── */}
@@ -950,6 +961,19 @@ export function InventoryTab({
                             </a>
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="apple-button min-h-[38px] sm:min-h-[32px] rounded-xl text-xs shadow-2xs border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold"
+                          onClick={() => {
+                            setPitchProperty(p);
+                            setPitchTargetLead(null);
+                            setPitchModalOpen(true);
+                          }}
+                          title="Craft tailored WhatsApp pitch"
+                        >
+                          <Sparkles className="size-3.5 mr-1 text-emerald-500" /> Pitch
+                        </Button>
                         <Button size="sm" variant="secondary" className="apple-button min-h-[38px] sm:min-h-[32px] rounded-xl text-xs shadow-2xs font-semibold" onClick={() => openEdit(p)}>
                           <Pencil className="size-3.5 mr-1" /> Edit
                         </Button>
@@ -1067,6 +1091,20 @@ export function InventoryTab({
                             </a>
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="apple-button min-h-[40px] px-3 rounded-xl text-xs font-semibold shadow-2xs border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 gap-1"
+                          onClick={() => {
+                            setPitchProperty(p);
+                            setPitchTargetLead(null);
+                            setPitchModalOpen(true);
+                          }}
+                          title="Craft tailored WhatsApp pitch"
+                        >
+                          <Sparkles className="size-3.5 text-emerald-500" />
+                          <span>Pitch</span>
+                        </Button>
                         <Button
                           size="sm"
                           variant="secondary"
@@ -1222,6 +1260,19 @@ export function InventoryTab({
                                   </a>
                                 </Button>
                               )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="apple-button size-8 p-0 rounded-lg shadow-2xs border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
+                                onClick={() => {
+                                  setPitchProperty(p);
+                                  setPitchTargetLead(null);
+                                  setPitchModalOpen(true);
+                                }}
+                                title="Craft tailored WhatsApp pitch"
+                              >
+                                <Sparkles className="size-3.5 text-emerald-500" />
+                              </Button>
                               <Button size="sm" variant="secondary" className="apple-button size-8 p-0 rounded-lg shadow-2xs" onClick={() => openEdit(p)} title="Edit property">
                                 <Pencil className="size-3.5" />
                               </Button>
@@ -1397,6 +1448,22 @@ export function InventoryTab({
                             <span>WhatsApp</span>
                           </a>
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="apple-button h-8 px-2.5 text-xs text-primary border-primary/30 hover:bg-primary/10 gap-1 shadow-2xs font-semibold"
+                          onClick={() => {
+                            if (matchingDialogProperty) {
+                              setPitchProperty(matchingDialogProperty.property);
+                              setPitchTargetLead(buyer);
+                              setPitchModalOpen(true);
+                            }
+                          }}
+                          title="Craft tailored psychological pitch for this buyer"
+                        >
+                          <Sparkles className="size-3.5 text-primary" />
+                          <span>Pitch</span>
+                        </Button>
                       </>
                     ) : (
                       <span className="text-xs text-muted-foreground italic">No phone</span>
@@ -1438,14 +1505,24 @@ export function InventoryTab({
         open={!!selectedLead}
         onOpenChange={(open) => !open && setSelectedLead(null)}
       />
+
+      {/* Property Pitch Studio Modal */}
+      <PropertyPitchModal
+        property={pitchProperty}
+        lead={pitchTargetLead}
+        open={pitchModalOpen}
+        onOpenChange={setPitchModalOpen}
+      />
     </div>
   );
 }
 
 function OwnerSubmissionsView({
   clientId,
+  onOpenPitch,
 }: {
   clientId: string | null;
+  onOpenPitch?: (submission: PropertySubmission) => void;
 }) {
   const [filter, setFilter] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
@@ -1757,6 +1834,16 @@ function OwnerSubmissionsView({
                     )}
                     <Button
                       size="sm"
+                      variant="outline"
+                      className="apple-button min-h-[40px] px-3 rounded-xl text-xs gap-1 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold"
+                      onClick={() => onOpenPitch?.(s)}
+                      title="Craft tailored WhatsApp pitch"
+                    >
+                      <Sparkles className="size-3.5" />
+                      <span>Pitch</span>
+                    </Button>
+                    <Button
+                      size="sm"
                       variant="ghost"
                       className="apple-button min-h-[40px] px-2.5 rounded-xl text-xs text-muted-foreground hover:text-foreground"
                       onClick={() => setDetailsSubmission(s)}
@@ -1968,6 +2055,15 @@ function OwnerSubmissionsView({
                         <Button
                           size="sm"
                           variant="ghost"
+                          className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                          onClick={() => onOpenPitch?.(s)}
+                          title="Craft tailored WhatsApp pitch"
+                        >
+                          <Sparkles className="size-3.5 text-emerald-500" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           className="h-7 w-7 p-0"
                           onClick={() => setDetailsSubmission(s)}
                           title="View complete details"
@@ -2102,6 +2198,20 @@ function OwnerSubmissionsView({
                 Lead Ref: {detailsSubmission.lead_id || "—"}
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="apple-button h-8 rounded-xl text-xs gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold"
+                  onClick={() => {
+                    const toPitch = detailsSubmission;
+                    setDetailsSubmission(null);
+                    onOpenPitch?.(toPitch);
+                  }}
+                  title="Craft tailored WhatsApp pitch"
+                >
+                  <Sparkles className="size-3.5" />
+                  <span>Pitch Studio</span>
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"

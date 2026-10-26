@@ -75,6 +75,7 @@ import {
   ToneBadge,
 } from "@/components/crm/badges";
 import { AddPropertyListingModal } from "@/components/crm/add-property-listing-modal";
+import { PropertyPitchModal } from "@/components/crm/property-pitch-modal";
 import { computeLeadScore } from "@/lib/lead-scoring";
 import { WhatsAppChatView } from "@/components/crm/whatsapp-chat-view";
 import { WorkflowTimeline } from "@/components/crm/workflow-timeline";
@@ -178,6 +179,8 @@ export function LeadDrawer({
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const [newPhone, setNewPhone] = useState("");
   const [addListingOpen, setAddListingOpen] = useState(false);
+  const [pitchTargetProperty, setPitchTargetProperty] = useState<any | null>(null);
+  const [pitchModalOpen, setPitchModalOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [profile, setProfile] = useState<Partial<Lead>>({});
 
@@ -1262,6 +1265,19 @@ export function LeadDrawer({
                       >
                         Select Unit
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10 shadow-2xs font-semibold"
+                        onClick={() => {
+                          setPitchTargetProperty(prop);
+                          setPitchModalOpen(true);
+                        }}
+                        title="Craft tailored WhatsApp pitch for this lead"
+                      >
+                        <Sparkles className="size-3" />
+                        <span>Pitch</span>
+                      </Button>
                       {prop.isOwnerResale && prop.ownerPhone && (
                         <a
                           href={toWhatsAppUrl(
@@ -1464,6 +1480,13 @@ export function LeadDrawer({
             onOpenChange={setAddListingOpen}
           />
         )}
+
+        <PropertyPitchModal
+          property={pitchTargetProperty}
+          lead={lead}
+          open={pitchModalOpen}
+          onOpenChange={setPitchModalOpen}
+        />
       </SheetContent>
     </Sheet>
   );
