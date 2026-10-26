@@ -296,6 +296,8 @@ export function LeadDrawer({
       .slice(0, 4);
   }, [inventory, profile.location, profile.budget, profile.property_type, lead]);
 
+  const scoreResult = useMemo(() => computeLeadScore(lead), [lead]);
+
   if (!lead) return null;
   const dropped = lead.status === "NOT_INTERESTED";
   const dealWon = lead.status === "DEAL_WON";
@@ -355,8 +357,6 @@ export function LeadDrawer({
 
   const run = (values: Partial<Lead>, message: string, action: string) =>
     update.mutate({ leadId: lead.lead_id, values, message, lead, action, note: notes || null });
-
-  const scoreResult = useMemo(() => computeLeadScore(lead), [lead]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
