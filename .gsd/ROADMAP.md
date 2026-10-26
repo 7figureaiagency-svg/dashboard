@@ -192,6 +192,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 18: Post-Visit Lifecycle & Objection Feedback Engine | ✅ Complete | 1/1 | 100% |
 | 19: Post-Visit Alternative Recommendation & Options | ✅ Complete | 1/1 | 100% |
 | 20: AI Lead Scoring Engine & Conversion Heatmap | ✅ Complete | 1/1 | 100% |
+| 21: Autonomous Property Pitch Crafter Engine | ⏳ Ready to Execute | 0/2 | 0% |
 
 ---
 
@@ -202,11 +203,12 @@ updated: 2026-10-19T18:50:30+05:30
 **Plans:**
 - [x] Plan 20.1: AI Lead Scoring Engine, Conversion Heatmap & Hot-Lead Prioritization ([`20.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/20/20.1-PLAN.md))
 
+---
 
-
-
-
-
-
-
-
+### Phase 21: Autonomous Real Estate Property Pitch Crafter & Consultative Sales Engine (`property-pitch-crafter`)
+**Status:** ⏳ Ready to Execute (Plans 21.1 & 21.2 Created)  
+**Objective:** Equip brokers with an autonomous copywriting and pitch engineering system that translates raw property inventory and buyer requirements into high-converting, psychology-grounded WhatsApp pitches across 4 buyer archetypes (End-User Family, Investor ROI, Luxury HNW, Starter/Budget), 3 regional linguistic dialects (Hinglish, Gujlish, English), and 3 formats with instant 1-tap copying, WhatsApp Web sharing, and CRM audit history logging.  
+**Depends on:** Phase 4, Phase 20  
+**Plans:**
+- [ ] Plan 21.1: Core Pitch Engineering Library, Copywriting Frameworks & Skill Specification ([`21.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/21/21.1-PLAN.md))
+- [ ] Plan 21.2: Apple HIG In-Dashboard "Property Pitch Studio" Modal & Multi-Surface Integration ([`21.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/21/21.2-PLAN.md))
