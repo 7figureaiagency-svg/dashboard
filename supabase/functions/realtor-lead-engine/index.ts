@@ -5706,6 +5706,76 @@ export async function dispatchStateAction(
         },
       };
     }
+
+    // Returning lead with Active Site Visit (Buyer context)
+    const hasActiveVisit = Boolean(
+      isUpcomingVisit ||
+      lead.site_visit_booked ||
+      (latestVisit && ["SCHEDULED", "CONFIRMED", "RESCHEDULED"].includes(latestVisit.status))
+    );
+    if (hasActiveVisit) {
+      const formattedVisitTime = scheduledTime
+        ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
+        : "Scheduled Time";
+      const visitProjectName = latestVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? (lead.location ? `${lead.property_type} (${lead.location})` : lead.property_type) : "VIP Property");
+      const mapUrl = latestVisit?.inventory?.map_url || lead.metadata?.selected_property_map_url || null;
+      const mapSnippet = mapUrl ? `\n📍 ${formatMapHyperlink(mapUrl, "View on Google Maps")}` : "";
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Namaste <b>${nameStr}</b>! 🙏\n🚗 <b>Scheduled Visit:</b> ${visitProjectName} (${formattedVisitTime})${mapSnippet}\n\n👉 1️⃣ Visit Details  2️⃣ Reschedule / Cancel  3️⃣ Biji Property Search  4️⃣ Property List`
+          : lang === "ENGLISH"
+          ? `Hello <b>${nameStr}</b>! 🙏\n🚗 <b>Scheduled Visit:</b> ${visitProjectName} (${formattedVisitTime})${mapSnippet}\n\n👉 1️⃣ Visit Details  2️⃣ Reschedule / Cancel  3️⃣ Search Other Properties  4️⃣ List Property`
+          : `Namaste <b>${nameStr}</b>! 🙏\n🚗 <b>Scheduled Visit:</b> ${visitProjectName} (${formattedVisitTime})${mapSnippet}\n\n👉 1️⃣ Visit Details  2️⃣ Reschedule / Cancel  3️⃣ Dusri Property Search  4️⃣ Property List`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_BOOKED",
+      };
+    }
+
+    // Returning lead with Submitted Property (Seller context)
+    if (hasSellerListing || currentState === "OWNER_DETAILS_GATHERED") {
+      const listingSocietyName = latestSub?.project_name || latestSub?.society_name || lead.metadata?.owner_draft?.project_name || lead.metadata?.owner_draft?.society_name || "Listed Property";
+      const listingStatusRaw = latestSub?.status || "PENDING_VERIFICATION";
+      const isSubApproved =
+        latestSub?.status === "CONVERTED_TO_INVENTORY" ||
+        latestSub?.status === "APPROVED" ||
+        latestSub?.status === "LISTED";
+      const listingStatus = isSubApproved
+        ? "Approved & Listed in Inventory 🏡✨"
+        : listingStatusRaw === "PENDING_VERIFICATION"
+        ? "Pending Verification / Under Review"
+        : listingStatusRaw;
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Namaste <b>${nameStr}</b>! 🙏\n📋 <b>Listed Property:</b> ${listingSocietyName} (${listingStatus})\n\n👉 1️⃣ Status Check  2️⃣ Ek aur property list karvi chhe ➕  3️⃣ Nayi property jovi chhe 🏡  4️⃣ Senior Manager Call 📞`
+          : lang === "ENGLISH"
+          ? `Hello <b>${nameStr}</b>! 🙏\n📋 <b>Listed Property:</b> ${listingSocietyName} (${listingStatus})\n\n👉 1️⃣ Status Check  2️⃣ List another property ➕  3️⃣ View new properties 🏡  4️⃣ Senior Manager Call 📞`
+          : `Namaste <b>${nameStr}</b>! 🙏\n📋 <b>Listed Property:</b> ${listingSocietyName} (${listingStatus})\n\n👉 1️⃣ Status Check  2️⃣ Ek aur property list karni hai ➕  3️⃣ Nayi property dekhni hai 🏡  4️⃣ Senior Manager Call 📞`;
+
+      return {
+        replyText,
+        nextState: "OWNER_DETAILS_GATHERED",
+      };
+    }
+
+    // Returning lead with Completed Buyer Qualification
+    if (lead.property_type && (lead.budget || lead.location)) {
+      const locSuffix = lead.location ? ` in ${lead.location}` : "";
+      const replyText =
+        lang === "GUJLISH"
+          ? `Namaste <b>${nameStr}</b>! 🙏\n🏡 <b>Active Search:</b> ${lead.property_type}${locSuffix}\n\n👉 1️⃣ Matching Options  2️⃣ Criteria Change  3️⃣ Property List`
+          : lang === "ENGLISH"
+          ? `Hello <b>${nameStr}</b>! 🙏\n🏡 <b>Active Search:</b> ${lead.property_type}${locSuffix}\n\n👉 1️⃣ Matching Options  2️⃣ Change Criteria  3️⃣ List Property`
+          : `Namaste <b>${nameStr}</b>! 🙏\n🏡 <b>Active Search:</b> ${lead.property_type}${locSuffix}\n\n👉 1️⃣ Matching Options  2️⃣ Criteria Change  3️⃣ Property List`;
+
+      return {
+        replyText,
+        nextState: "OPTIONS_SENT",
+      };
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -6001,6 +6071,135 @@ export async function dispatchStateAction(
   // 3b. DUAL-ROLE MENU PENDING (State: DUAL_ROLE_MENU_PENDING)
   // ---------------------------------------------------------------------------
   if (currentState === "DUAL_ROLE_MENU_PENDING") {
+    // -------------------------------------------------------------------------
+    // F-01 FIX: Disambiguate Initial Onboarding (Both/Dual selected) vs Returning Client
+    // -------------------------------------------------------------------------
+    const isInitialDualOnboarding = Boolean(
+      lead.metadata?.is_initial_dual_onboarding ||
+      (!lead.metadata?.has_seller_profile && !lead.metadata?.submission_id && !lead.site_visit_booked)
+    );
+
+    if (isInitialDualOnboarding) {
+      const isInitialListChoice =
+        (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+        /^(1|1️⃣|first|1st|option\s*1|list|listing|pehle\s*property\s*list|pehle\s*list|bechna|vechvu|apni)\b/i.test(lower.trim());
+
+      const isInitialSearchChoice =
+        (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
+        /^(2|2️⃣|second|2nd|option\s*2|search|buy|naye|kharidna|kharidvu|naye\s*options|pehle\s*naye)\b/i.test(lower.trim());
+
+      const isDirectOwnerUtterance =
+        actionResult.user_role === "OWNER" ||
+        intent === "SUBMIT_LISTING" ||
+        /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower) ||
+        /(?:bechna|bechni|vechvu|vechva|sell\s*(?:karna|karni|karvu|karva|kar))/i.test(lower);
+
+      const detectedTypeInMenu = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+      const hasBuyerCriteriaInMenu = Boolean(
+        detectedTypeInMenu ||
+        actionResult.location ||
+        actionResult.price_or_budget ||
+        intent === "CHANGE_REQUIREMENT" ||
+        intent === "SEEKER_QUALIFICATION"
+      );
+
+      const updatedMeta = { ...(lead.metadata || {}) };
+      delete updatedMeta.is_initial_dual_onboarding;
+
+      // Fresh Option 1: List first (SELLER)
+      if (isInitialListChoice || isDirectOwnerUtterance) {
+        if (isDirectOwnerUtterance) {
+          return handleOwnerFlow({
+            lead: {
+              ...lead,
+              lead_type: "DUAL_ROLE",
+              metadata: {
+                ...updatedMeta,
+                has_seller_profile: true,
+                has_buyer_profile: true,
+                active_persona: "SELLER",
+              },
+            },
+            messageText: context.messageText,
+            lower,
+            lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+            senderName,
+            senderId: context.senderId,
+            platform: context.platform,
+            tenantId: activeTenantId,
+            supabase,
+            aiAnalysis: actionResult,
+            city: resolvedCity,
+            agencyName,
+          });
+        }
+
+        const replyText =
+          lang === "GUJLISH"
+            ? `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
+            : lang === "ENGLISH"
+            ? `Thank you <b>${nameStr}</b>! 🙏 We would be delighted to assist you in listing your property with ${agencyName}.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
+            : `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
+
+        return {
+          replyText,
+          nextState: "OWNER_CONFIG_PENDING",
+          leadUpdates: {
+            lead_type: "DUAL_ROLE",
+            state: "OWNER_CONFIG_PENDING",
+            metadata: {
+              ...updatedMeta,
+              has_seller_profile: true,
+              has_buyer_profile: true,
+              active_persona: "SELLER",
+              owner_draft: { started_at: new Date().toISOString() },
+            },
+          },
+        };
+      }
+
+      // Fresh Option 2: Search first (BUYER)
+      if (isInitialSearchChoice || hasBuyerCriteriaInMenu) {
+        if (hasBuyerCriteriaInMenu) {
+          return handleQualificationCascade(lead, actionResult, context);
+        }
+
+        const replyText =
+          lang === "GUJLISH"
+            ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
+            : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
+
+        return {
+          replyText,
+          nextState: "QUALIFYING",
+          leadUpdates: {
+            lead_type: "DUAL_ROLE",
+            state: "QUALIFYING",
+            metadata: {
+              ...updatedMeta,
+              has_seller_profile: true,
+              has_buyer_profile: true,
+              active_persona: "BUYER",
+            },
+          },
+        };
+      }
+
+      // Fallback in initial onboarding: Re-prompt
+      const replyText =
+        lang === "GUJLISH"
+          ? `Tame pehla potani property list karva mango chho, ke pehla nava property options jova mango chho <b>${nameStr}</b>?\n👉 1️⃣ <b>Pehle property list karein 📋</b>  2️⃣ <b>Pehle naye options dekhein 🏡</b>`
+          : lang === "ENGLISH"
+          ? `Would you prefer to list your existing property first, or explore new property options first <b>${nameStr}</b>?\n👉 1️⃣ <b>List property first 📋</b>  2️⃣ <b>Search options first 🏡</b>`
+          : `Aap pehle apni existing property list karna chahenge, ya pehle naye property options dekhna chahenge <b>${nameStr}</b>?\n👉 1️⃣ <b>Pehle property list karein 📋</b>  2️⃣ <b>Pehle naye options dekhein 🏡</b>`;
+
+      return {
+        replyText,
+        nextState: "DUAL_ROLE_MENU_PENDING",
+      };
+    }
     const isOpt1 =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
       /^(1|1️⃣|first|1st|option\s*1|site\s*visit|visit|search|buy|property\s*search)\b/i.test(lower);
@@ -6854,6 +7053,35 @@ export async function dispatchStateAction(
       return {
         replyText,
         nextState: "SITE_VISIT_BOOKED",
+      };
+    }
+
+    const isPropertyListChoice =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 3) ||
+      /^(?:4|4️⃣|fourth|4th|option\s*4|property\s*list|list\s*property|vechvu|bechna)\b/i.test(lower);
+
+    if (isPropertyListChoice) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
+          : lang === "ENGLISH"
+          ? `Thank you <b>${nameStr}</b>! 🙏 We would be delighted to assist you in listing your property with ${agencyName}.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
+          : `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
+
+      return {
+        replyText,
+        nextState: "OWNER_CONFIG_PENDING",
+        leadUpdates: {
+          lead_type: "DUAL_ROLE",
+          state: "OWNER_CONFIG_PENDING",
+          metadata: {
+            ...(lead.metadata || {}),
+            has_seller_profile: true,
+            has_buyer_profile: true,
+            active_persona: "SELLER",
+            owner_draft: { started_at: new Date().toISOString() },
+          },
+        },
       };
     }
 
