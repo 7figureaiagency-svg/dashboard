@@ -8,20 +8,21 @@ updated: 2026-10-27T09:24:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 26 - Universal Conversational Intake, Multi-Persona Triage & City-Agnostic Lead Engine  
-**Status:** ⏳ In Progress  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/26/26.1-PLAN.md` (Universal City-Agnostic Greeting, Intent Triage & Auto-Bypass) — ⏳ Planned
+- `.gsd/phases/26/26.1-PLAN.md` (Universal City-Agnostic Greeting, Intent Triage & Auto-Bypass) — ✅ Completed
 - `.gsd/phases/26/26.2-PLAN.md` (Smart 6-Turn Compound Owner Intake & Commercial Lease Engine) — ✅ Completed
 - `.gsd/phases/26/26.3-PLAN.md` (Smart 3-Turn Compound Buyer Qualification & Multi-Search Lifecycle) — ✅ Completed
-
+- `.gsd/phases/26/VERIFICATION.md` (Independent Empirical Verification) — ✅ Passed (44/44 truths verified)
 
 ## Last Action
 
-Completed Phase 26.3 (Smart 3-Turn Compound Buyer Qualification & Multi-Search Lifecycle):
-- Task 1: Restructured `handleQualificationCascade` into 3 compound turns (Type+Transaction, Locality+Budget, Timeline+Purpose). Implemented F-04 dynamic single-field prompt handling (acknowledging single fields without amnesiac re-prompting). Enhanced timeline and purpose parsers.
-- Task 2: Commercial Lease Seeker Disambiguation (F-05 fix: protected commercial sub-50k budget from collapsing to residential rent; enabled `matchesListingType` to match LEASE, RENT, and RENTAL commercial units). Formatted hyperlinked property cards (`View on Google Maps`, `Download Brochure`) with ultra-short VIP Visit CTA trailer. Triggered F-12 AI lead scoring handshake (elevating fully qualified buyers to 82+ HOT 🔥).
-- Task 3: Secondary Search Visit Preservation (F-09 fix: secondary property searches by leads with active booked site visits strictly preserve `site_visit_booked: true` and active `site_visits` records). Pervasive Gujlish polish (purged all occurrences of 'shodhva mango chho', 'Kharidva mango chho', 'Tamara budget mujab', and hardcoded 'Vadodara').
-- Verification: Validated all 10 core truths in `scratch/test_phase26_3_all.cjs`.
+Completed Phase 26 (Universal Conversational Intake, Multi-Persona Triage & City-Agnostic Lead Engine):
+- Plan 26.1: Ultra-short (<= 3 lines) universal greeting with 3-choice intent triage (1️⃣ Buy/Rent, 2️⃣ Sell/Lease, 3️⃣ Both/Upgrade). Resolved F-02 (ROLE_SELECTION_PENDING greeting guard) and F-01 (DUAL_ROLE_MENU_PENDING fresh vs returning disambiguation). Direct-intent auto-bypass for specific initial queries.
+- Plan 26.2: Smart 6-Turn Compound Owner Intake capturing Area+Floor, Demand+Furnishing, Parking+Possession. Resolved F-03 (Primary vs Secondary graceful defaults on single-field inputs), F-07 (nested attributes JSONB), F-08 (transaction type normalization to SELL, RENT, LEASE), F-11 (dynamic city fallback, 0 hardcoded "Vadodara"), and F-06 (eradicated all "Mitra", "sthit chhe", "shodhva mango chho", "dhyan rakhjo", "chiye").
+- Plan 26.3: Smart 3-Turn Compound Buyer Qualification (Turn 1 Type+Tx, Turn 2 Locality+Budget, Turn 3 Timeline+Purpose). Resolved F-04 (dynamic single-field prompt handling), F-05 (commercial lease sub-50k budget protection and matching), F-09 (secondary search active visit preservation), and F-12 (AI lead scoring handshake +35 pts elevating to 82+ HOT 🔥).
+- Live Production Deployment: Bumped Edge Function to `v75-universal-conversational-intake`. Successfully deployed and verified live health status: ONLINE.
+- Verification: 44/44 assertions passed across all unit, FSM, and live curl suites. Frontend compiled in 706ms.
 
 
 Completed Phase 25 (Owner Intake Stop-Word Guard & Entity Extraction Disambiguation):
