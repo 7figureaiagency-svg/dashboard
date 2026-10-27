@@ -2434,6 +2434,7 @@ export function buildLeadContextForClassifier(lead: any, messageText: string): s
     "OWNER_AREA_PENDING",
     "OWNER_SIZE_PENDING",
     "OWNER_PRICE_PENDING",
+    "OWNER_AMENITIES_PENDING",
     "OWNER_POSSESSION_PENDING",
     "OWNER_FURNISHING_PENDING",
     "OWNER_PHONE_PENDING",
@@ -2483,6 +2484,8 @@ export function buildLeadContextForClassifier(lead: any, messageText: string): s
     currentPendingQuestion = "CARPET_AREA_SQFT (Bot asked for Carpet / Plot / Built-up Area. Extract numbers into carpet_sqft, super_built_up_sqft, or plot_area_sqft)";
   } else if (state === "OWNER_PRICE_PENDING") {
     currentPendingQuestion = "PRICE_OR_RENT (Bot asked for expected selling price or monthly rent. If user specifies built-up or plot area, extract super_built_up_sqft / plot_area_sqft!)";
+  } else if (state === "OWNER_AMENITIES_PENDING") {
+    currentPendingQuestion = "PARKING_POSSESSION_PHONE (Bot asked for car parking availability, possession status, and direct contact phone)";
   } else if (state === "OWNER_POSSESSION_PENDING") {
     currentPendingQuestion = "POSSESSION_STATUS (Bot asked: 1 Ready to Move, 2 Under Construction. Single digit reply is strictly possession_status!)";
   } else if (state === "OWNER_FURNISHING_PENDING") {
@@ -4112,7 +4115,124 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 // 9b. OWNER & PROVIDER ENGINE (Selling / Renting Out / Leasing Out)
 // =========================================================================
 // 8. OWNER INTAKE ENGINE (100% Zero-Regex AI Extraction)
-// =========================================================================
+function parseFloorFromText(text: string): { floor_number: number | string | null; total_floors: number | null } {
+  if (!text) return { floor_number: null, total_floors: null };
+  const lower = text.toLowerCase().trim();
+
+  let floorNum: number | string | null = null;
+  let totalFloors: number | null = null;
+
+  // 1. "Xth floor of Y" or "X/Y floor" or "X out of Y"
+  const comboMatch = lower.match(/(?:(\d+)(?:st|nd|rd|th)?\s*(?:floor)?\s*(?:out\s*of|\/|of)\s*(\d+)(?:\s*floors?)?)/i) ||
+                     lower.match(/(\d+)\s*\/\s*(\d+)\s*(?:floor)?/i);
+  if (comboMatch) {
+    floorNum = parseInt(comboMatch[1], 10);
+    totalFloors = parseInt(comboMatch[2], 10);
+    return { floor_number: floorNum, total_floors: totalFloors };
+  }
+
+  // 2. Ground floor / Basement / Top floor
+  if (/\b(?:ground\s*floor|ground|gf)\b/i.test(lower)) {
+    floorNum = 0;
+  } else if (/\b(?:basement|lower\s*ground|lg)\b/i.test(lower)) {
+    floorNum = -1;
+  } else if (/\b(?:top\s*floor|highest\s*floor)\b/i.test(lower)) {
+    floorNum = "Top";
+  }
+
+  // 3. Single floor: "4th floor", "floor 4", "4 floor", "4th", "3rd floor", "1st floor", "2nd floor", "5th floor"
+  if (floorNum === null) {
+    const singleMatch = lower.match(/(?:floor\s*[:=-]?\s*(\d+)|(\d+)(?:st|nd|rd|th)\s*floor|(\d+)\s*floor)/i);
+    if (singleMatch) {
+      const val = parseInt(singleMatch[1] || singleMatch[2] || singleMatch[3], 10);
+      if (val >= 0 && val <= 150) {
+        floorNum = val;
+      }
+    }
+  }
+
+  // Total floors: "total 10 floors", "10 floors building"
+  const totalMatch = lower.match(/(?:total\s*(\d+)\s*floors?|(\d+)\s*floors?\s*(?:building|tower|society|complex))/i);
+  if (totalMatch) {
+    totalFloors = parseInt(totalMatch[1] || totalMatch[2], 10);
+  }
+
+  return { floor_number: floorNum, total_floors: totalFloors };
+}
+
+function parseParkingFromText(text: string): string | null {
+  if (!text) return null;
+  const lower = text.toLowerCase().trim();
+
+  // Negative parking: "no parking", "none", "nahi", "nathi", "no", "0"
+  if (/\b(?:no\s*parking|none|nathi|nahi|na|no|zero|0\s*parking)\b/i.test(lower)) {
+    return "None";
+  }
+
+  // Explicit counts with covered / open: "1 covered", "2 covered", "1 open", "2 cars", "car parking 1"
+  const countMatch = lower.match(/(\d+)\s*(?:covered|car|cars|open|parking|slot|slots|gadi)/i) ||
+                     lower.match(/(?:covered|open)\s*(\d+)/i);
+  if (countMatch) {
+    const isCovered = lower.includes("covered") || !lower.includes("open");
+    const count = countMatch[1] || "1";
+    return `${count} ${isCovered ? "Covered" : "Open"}`;
+  }
+
+  if (lower.includes("covered")) return "1 Covered";
+  if (lower.includes("open")) return "Open";
+  if (/\b(?:parking|car\s*parking|gadi|yes|ha|haan|available|chhe|hai)\b/i.test(lower)) {
+    return "Available";
+  }
+
+  return null;
+}
+
+function parseFurnishingFromText(text: string): "UNFURNISHED" | "SEMI_FURNISHED" | "FURNISHED" | null {
+  if (!text) return null;
+  const lower = text.toLowerCase().trim();
+
+  // Commercial bare / warm shell, or unfurnished
+  if (/\b(?:bare\s*shell|warm\s*shell|raw|unfurnished|un-furnished|un\s*furnished)\b/i.test(lower) || lower === "1" || lower === "1️⃣") {
+    return "UNFURNISHED";
+  }
+
+  // Semi-furnished
+  if (/\b(?:semi\s*furnished|semi-furnished|semi)\b/i.test(lower) || lower === "2" || lower === "2️⃣") {
+    return "SEMI_FURNISHED";
+  }
+
+  // Fully furnished / plug and play
+  if (/\b(?:plug\s*(?:and|&)\s*play|fully\s*furnished|full\s*furnished|furnished|full)\b/i.test(lower) || lower === "3" || lower === "3️⃣") {
+    return "FURNISHED";
+  }
+
+  return null;
+}
+
+function parsePossessionFromText(text: string): "READY_TO_MOVE" | "UNDER_CONSTRUCTION" | null {
+  if (!text) return null;
+  const lower = text.toLowerCase().trim();
+
+  if (/\b(?:ready\s*to\s*move|rtm|ready|tayyar|possession\s*ready)\b/i.test(lower) || lower === "1" || lower === "1️⃣") {
+    return "READY_TO_MOVE";
+  }
+
+  if (/\b(?:under\s*construction|construction|uc|progress|chalu|in\s*progress)\b/i.test(lower) || lower === "2" || lower === "2️⃣") {
+    return "UNDER_CONSTRUCTION";
+  }
+
+  return null;
+}
+
+function parsePhoneFromText(text: string): string | null {
+  if (!text) return null;
+  const match = text.match(/(?:(?:\+?91[\s-]?)?[6-9]\d{9})\b/);
+  if (match) {
+    const digits = match[0].replace(/\D/g, "");
+    return digits.slice(-10);
+  }
+  return null;
+}
 
 async function handleOwnerFlow({
   lead,
@@ -4197,17 +4317,26 @@ async function handleOwnerFlow({
 
   // 1b. Direct accumulative AI entities merge (100% Zero-Regex Architecture):
   if (aiAnalysis) {
-    // A. Transaction Type Immutability:
-    // Once locked (SELL or RENT_OUT), single digits ("1", "2", "3") or furnishing/possession replies
-    // must NEVER overwrite transaction_type! Only explicit reversal keywords may update it.
-    const hasExplicitRoleReversal = /(?:bechna|bechni|sell|bikri|rent\s*out|bhadu|kiraye|rent\s*par|lease)/i.test(messageText);
+    // A. Transaction Type Immutability & Commercial Lease:
+    // Once locked (SELL, RENT_OUT, LEASE_OUT), single digits or detail replies must NEVER overwrite it!
+    const hasExplicitRoleReversal = /(?:bechna|bechni|sell|bikri|rent\s*out|bhadu|kiraye|rent\s*par|lease|pattay)/i.test(messageText);
+    const hasLeaseKeyword = /(?:lease|pattay|long\s*term\s*lease|corporate\s*lease)/i.test(messageText);
     if (!draft.transaction_type || hasExplicitRoleReversal) {
-      if (aiAnalysis.transaction_type) {
-        draft.transaction_type = (aiAnalysis.transaction_type === "RENT" || aiAnalysis.transaction_type === "LEASE") ? "RENT_OUT" : "SELL";
+      if (hasLeaseKeyword || aiAnalysis.transaction_type === "LEASE") {
+        draft.transaction_type = "LEASE_OUT";
+        if (!draft.property_category) draft.property_category = "COMMERCIAL";
+      } else if (aiAnalysis.transaction_type === "RENT") {
+        draft.transaction_type = "RENT_OUT";
+      } else if (aiAnalysis.transaction_type === "SELL" || aiAnalysis.transaction_type === "SALE") {
+        draft.transaction_type = "SELL";
+      } else if (/(?:rent|bhade|bhadu|kiraya|kiraye)/i.test(messageText)) {
+        draft.transaction_type = "RENT_OUT";
+      } else if (/(?:bechna|bechni|sell|vechvu|vechva)/i.test(messageText)) {
+        draft.transaction_type = "SELL";
       }
     }
     if (!draft.transaction_type) {
-      draft.transaction_type = "SELL";
+      draft.transaction_type = hasLeaseKeyword ? "LEASE_OUT" : "SELL";
     }
 
     // B. Property Category & Type:
@@ -4283,6 +4412,15 @@ async function handleOwnerFlow({
       }
     }
 
+    // E2. Floor extraction (F-07 / Turn 4):
+    const floorFallback = parseFloorFromText(messageText);
+    if (floorFallback.floor_number !== null) {
+      draft.attributes.floor_number = floorFallback.floor_number;
+    }
+    if (floorFallback.total_floors !== null) {
+      draft.attributes.total_floors = floorFallback.total_floors;
+    }
+
     // F. Expected Price / Demand / Monthly Rent:
     const isAnsweringPhone = lead.state === "OWNER_PHONE_PENDING" || !!aiAnalysis.contact_phone;
     const resolvedPrice = aiAnalysis.price_or_budget || (!isAnsweringPhone ? parseBudgetFromText(messageText) : null);
@@ -4306,9 +4444,12 @@ async function handleOwnerFlow({
     }
 
     // G. Possession Status:
-    if (aiAnalysis?.possession_status) {
+    const parsedPoss = parsePossessionFromText(messageText);
+    if (parsedPoss) {
+      draft.possession_status = parsedPoss;
+    } else if (aiAnalysis?.possession_status) {
       draft.possession_status = aiAnalysis.possession_status;
-    } else if (lead.state === "OWNER_POSSESSION_PENDING") {
+    } else if (lead.state === "OWNER_POSSESSION_PENDING" || lead.state === "OWNER_AMENITIES_PENDING") {
       if (lower === "1" || lower === "1️⃣" || lower.includes("ready") || lower.includes("rtm")) {
         draft.possession_status = "READY_TO_MOVE";
       } else if (lower === "2" || lower === "2️⃣" || lower.includes("under construction") || lower.includes("uc")) {
@@ -4317,9 +4458,12 @@ async function handleOwnerFlow({
     }
 
     // H. Furnishing Status:
-    if (aiAnalysis?.furnishing_status) {
+    const parsedFurn = parseFurnishingFromText(messageText);
+    if (parsedFurn) {
+      draft.furnishing_status = parsedFurn;
+    } else if (aiAnalysis?.furnishing_status) {
       draft.furnishing_status = aiAnalysis.furnishing_status;
-    } else if (lead.state === "OWNER_FURNISHING_PENDING") {
+    } else if (lead.state === "OWNER_FURNISHING_PENDING" || lead.state === "OWNER_PRICE_PENDING") {
       if (lower === "1" || lower === "1️⃣" || lower.includes("unfurnished")) {
         draft.furnishing_status = "UNFURNISHED";
       } else if (lower === "2" || lower === "2️⃣" || lower.includes("semi")) {
@@ -4329,13 +4473,22 @@ async function handleOwnerFlow({
       }
     }
 
+    // H2. Parking:
+    const parsedPark = parseParkingFromText(messageText);
+    if (parsedPark) {
+      draft.attributes.parking = parsedPark;
+    }
+
     // I. Direct Calling / WhatsApp Phone (if provided):
-    if (aiAnalysis?.contact_phone) {
+    const parsedPh = parsePhoneFromText(messageText);
+    if (parsedPh) {
+      draft.contact_phone = parsedPh;
+    } else if (aiAnalysis?.contact_phone) {
       const cleanPhone = aiAnalysis.contact_phone.replace(/\D/g, "");
       if (cleanPhone.length >= 10 && cleanPhone.length <= 13) {
         draft.contact_phone = cleanPhone.slice(-10);
       }
-    } else if (lead.state === "OWNER_PHONE_PENDING") {
+    } else if (lead.state === "OWNER_PHONE_PENDING" || lead.state === "OWNER_AMENITIES_PENDING") {
       const cleanPhone = messageText.replace(/\D/g, "");
       if (cleanPhone.length >= 10 && cleanPhone.length <= 13) {
         draft.contact_phone = cleanPhone.slice(-10);
@@ -4724,18 +4877,23 @@ async function handleOwnerFlow({
   }
 
   // ---------------------------------------------------------------------------
-  // Strict Single-Question Cascade (At a time EK HI detail pucho)
+  // ---------------------------------------------------------------------------
+  // 6-Turn Compound Owner Intake Cascade (F-03, F-07, F-08, F-11)
   // ---------------------------------------------------------------------------
 
-  // Step 1: Configuration & Category
+  const agency = agencyName || "NextGen Realty";
+  const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : lang === "ENGLISH" ? senderName : `${senderName} ji`) : (lang === "GUJLISH" ? "bhai" : lang === "ENGLISH" ? "Friend" : "ji");
+  const isComm = draft.property_category === "COMMERCIAL" || /(office|shop|showroom|warehouse|commercial)/i.test(String(draft.property_type || ""));
+  const isPlotType = draft.property_category === "PLOT" || /(plot|land|zameen|jamin)/i.test(String(draft.property_type || ""));
+
+  // Turn 1: Configuration & Transaction Type
   if (!draft.configuration && !draft.property_type) {
-    const agency = agencyName || "NextGen Realty";
     const replyText =
       lang === "GUJLISH"
-        ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! ${agency} par ame verified buyers ane tenants sathe deal kariye chiye. 🏡✨\n\n👉 <b>Tamari property kaya type ni chhe — 2BHK / 3BHK Flat, Villa, ke Commercial Shop/Office?</b> 🏢`
+        ? `Ji bilkul <b>${nameStr}</b>! ${agency} par verified buyers ane tenants sathe deal kariye chhiye. 🏢✨\nProperty kaya type ni chhe — Flat, Villa ke Shop/Office? Ane Sell karvi chhe ke Rent/Lease par aapvi chhe?`
         : lang === "ENGLISH"
-        ? `Certainly <b>${senderName || "Friend"}</b>! ${agency} connects property owners directly with verified buyers and tenants. 🏡✨\n\n👉 <b>What type of property is this — 2BHK / 3BHK Flat, Villa, or Commercial Shop/Office?</b> 🏢`
-        : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! ${agency} par hum verified buyers aur tenants ke sath deal karte hain. 🏡✨\n\n👉 <b>Aapki property kis type ki hai — 2BHK / 3BHK Flat, Villa, ya Commercial Shop/Office?</b> 🏢`;
+        ? `Certainly <b>${nameStr}</b>! ${agency} connects property owners directly with verified buyers & tenants. 🏢✨\nWhat type of property is this — Flat, Villa, or Shop/Office? And are you looking to Sell or Rent/Lease it out?`
+        : `Ji bilkul <b>${nameStr}</b>! ${agency} par hum verified buyers aur tenants ke sath deal karte hain. 🏢✨\nProperty kis type ki hai — Flat, Villa ya Shop/Office? Aur Sell karni hai ya Rent/Lease par deni hai? 🏢`;
 
     await supabase.from("leads").update({
       lead_type: effectiveOwnerLeadType,
@@ -4751,8 +4909,7 @@ async function handleOwnerFlow({
     return { replyText, nextState: "OWNER_CONFIG_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_CONFIG_PENDING", draft) };
   }
 
-  // Step 2: Project / Society Name (Smart Commercial vs Residential)
-  const isComm = draft.property_category === "COMMERCIAL" || /(office|shop|showroom|warehouse)/i.test(String(draft.property_type || ""));
+  // Turn 2: Project / Complex Name
   if (lead.state === "OWNER_SOCIETY_PENDING" || (!draft.society_name && !draft.project_name)) {
     if (lead.state === "OWNER_SOCIETY_PENDING" && messageText.trim().length >= 2) {
       const extractedProj = extractProjectOrSocietyFromText(messageText, draft.property_type);
@@ -4765,23 +4922,35 @@ async function handleOwnerFlow({
       const queuedDesc = hasQueued ? ` (${propLabel} ane ${draft.queued_properties[0].property_type})` : "";
       const prefixMulti = hasQueued
         ? (lang === "GUJLISH"
-            ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tame banne properties${queuedDesc} list kari shako chho. 🤝✨ Ame banne properties ne ek-ek kari ne register karishu jethi genuine buyers ne saachi details male. Pehla <b>${propLabel}</b> ni details note kariye. 👍\n\n`
+            ? `Bahuj saras <b>${nameStr}</b>! Tame banne properties${queuedDesc} list kari shako chho. 🤝✨ Pehla <b>${propLabel}</b> ni details note kariye. 👍\n`
             : lang === "ENGLISH"
-            ? `Great <b>${senderName || "Friend"}</b>! You can list both properties${queuedDesc}. 🤝✨ We will register each property one-by-one so buyers receive accurate details. Let's start with your <b>${propLabel}</b>. 👍\n\n`
-            : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aap dono properties${queuedDesc} list kar sakte hain. 🤝✨ Hum dono properties ko ek-ek karke register karenge taaki genuine buyers ko sahi details milein. Pehle <b>${propLabel}</b> ki details note karte hain. 👍\n\n`)
+            ? `Great <b>${nameStr}</b>! You can list both properties${queuedDesc}. 🤝✨ Let's start with your <b>${propLabel}</b>. 👍\n`
+            : `Bahut badhiya <b>${nameStr}</b>! Aap dono properties${queuedDesc} list kar sakte hain. 🤝✨ Pehle <b>${propLabel}</b> ki details note karte hain. 👍\n`)
         : "";
 
-      const replyText = isComm
-        ? (lang === "GUJLISH"
-          ? `${prefixMulti ? prefixMulti : `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n\n`}👉 <b>Aa property kaya Commercial Complex, Business Hub ke Road par sthit chhe? (e.g. Atlantis K-10, Sayaji Plaza ya Main Road)</b> 🏢`
-          : lang === "ENGLISH"
-          ? `${prefixMulti ? prefixMulti : `Great! Noted <b>${propLabel}</b>. 👍\n\n`}👉 <b>Which Commercial Complex, Business Hub, or Road is this located on? (e.g. Atlantis K-10, Sayaji Plaza, or Main Road)</b> 🏢`
-          : `${prefixMulti ? prefixMulti : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n\n`}👉 <b>Ye property kis Commercial Complex, Business Hub ya Road par sthit hai? (e.g. Atlantis K-10, Sayaji Plaza ya Main Road)</b> 🏢`)
-        : (lang === "GUJLISH"
-          ? `${prefixMulti ? prefixMulti : `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n\n`}👉 <b>Aa property kaya Project ke Society ma sthit chhe? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
-          : lang === "ENGLISH"
-          ? `${prefixMulti ? prefixMulti : `Great! Noted <b>${propLabel}</b>. 👍\n\n`}👉 <b>Which Project or Society is your property located in? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
-          : `${prefixMulti ? prefixMulti : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n\n`}👉 <b>Ye property kis Project ya Society me sthit hai? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`);
+      let replyText = "";
+      if (isPlotType) {
+        replyText =
+          lang === "GUJLISH"
+            ? `${prefixMulti ? prefixMulti : `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n`}Scheme / Township nu naam ke Survey number shu chhe? 📍`
+            : lang === "ENGLISH"
+            ? `${prefixMulti ? prefixMulti : `Great! Noted <b>${propLabel}</b>. 👍\n`}What is the Scheme / Township name or Survey number? 📍`
+            : `${prefixMulti ? prefixMulti : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n`}Scheme / Township ka naam ya Survey number kya hai? 📍`;
+      } else if (isComm) {
+        replyText =
+          lang === "GUJLISH"
+            ? `${prefixMulti ? prefixMulti : `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n`}Aa property kaya Commercial Complex, Business Hub ke Road par aaveli chhe? (e.g. Atlantis K-10, Sayaji Plaza) 🏢`
+            : lang === "ENGLISH"
+            ? `${prefixMulti ? prefixMulti : `Great! Noted <b>${propLabel}</b>. 👍\n`}Which Commercial Complex, Business Hub, or Road is this located on? (e.g. Atlantis K-10, Sayaji Plaza) 🏢`
+            : `${prefixMulti ? prefixMulti : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n`}Commercial Complex, Business Hub ya Road ka kya naam hai? (e.g. Atlantis K-10, Sayaji Plaza) 🏢`;
+      } else {
+        replyText =
+          lang === "GUJLISH"
+            ? `${prefixMulti ? prefixMulti : `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n`}Aa property kaya Project ke Society ma aaveli chhe? (e.g. Nilamber Bellissimo, Sun Crest) 🏢`
+            : lang === "ENGLISH"
+            ? `${prefixMulti ? prefixMulti : `Great! Noted <b>${propLabel}</b>. 👍\n`}Which Project or Society is this property located in? (e.g. Nilamber Bellissimo, Sun Crest) 🏢`
+            : `${prefixMulti ? prefixMulti : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n`}Project ya Society ka kya naam hai? (e.g. Nilamber Bellissimo, Sun Crest) 🏢`;
+      }
 
       await supabase.from("leads").update({
         lead_type: effectiveOwnerLeadType,
@@ -4798,7 +4967,7 @@ async function handleOwnerFlow({
     }
   }
 
-  // Step 3: Exact Locality / Area
+  // Turn 3: Exact Locality / Landmark
   if (!draft.location) {
     if (lead.state === "OWNER_LOCATION_PENDING" && messageText.trim().length >= 2) {
       draft.location = messageText.trim();
@@ -4806,10 +4975,10 @@ async function handleOwnerFlow({
       const socLabel = draft.society_name || draft.project_name || "Society";
       const replyText =
         lang === "GUJLISH"
-          ? `Noted <b>${socLabel}</b>${draft.property_type ? ` (${draft.property_type})` : ""}! 🏢\n\n👉 <b>Aa property ${city ? `${city} na ` : ""}kaya exact Area ke Landmark pase sthit chhe?</b> 📍`
+          ? `Noted <b>${socLabel}</b>! 🏢\n👉 <b>Aa property kaya exact Area ke Landmark pase aave chhe?</b> 📍`
           : lang === "ENGLISH"
-          ? `Noted <b>${socLabel}</b>${draft.property_type ? ` (${draft.property_type})` : ""}! 🏢\n\n👉 <b>In which exact Area or near which Landmark${city ? ` in ${city}` : ""} is this located?</b> 📍`
-          : `Noted <b>${socLabel}</b>${draft.property_type ? ` (${draft.property_type})` : ""}! 🏢\n\n👉 <b>Ye property ${city ? `${city} ke ` : ""}kaunse exact Area ya Landmark ke paas sthit hai?</b> 📍`;
+          ? `Noted <b>${socLabel}</b>! 🏢\n👉 <b>In which exact Area or near which Landmark is this located?</b> 📍`
+          : `Noted <b>${socLabel}</b>! 🏢\n👉 <b>Ye kaunse exact Area ya Landmark ke paas hai?</b> 📍`;
 
       await supabase.from("leads").update({
         lead_type: effectiveOwnerLeadType,
@@ -4826,50 +4995,68 @@ async function handleOwnerFlow({
     }
   }
 
-  // Step 4: Carpet Area / Plot Area / Built-up Area
-  if (!draft.carpet_area_sqft && !draft.super_built_up_sqft && !draft.plot_area_sqft) {
-    if (lead.state === "OWNER_AREA_PENDING") {
-      const parsed = parseAreaFromText(messageText);
-      if (parsed.carpet_sqft || parsed.super_built_up_sqft || parsed.plot_area_sqft) {
-        if (parsed.carpet_sqft) draft.carpet_area_sqft = parsed.carpet_sqft;
-        if (parsed.super_built_up_sqft) {
-          draft.super_built_up_sqft = parsed.super_built_up_sqft;
-          draft.attributes.built_up_area = parsed.super_built_up_sqft;
-        }
-        if (parsed.plot_area_sqft) {
-          draft.plot_area_sqft = parsed.plot_area_sqft;
-          draft.attributes.plot_area = parsed.plot_area_sqft;
-          if (!draft.carpet_area_sqft) draft.carpet_area_sqft = parsed.plot_area_sqft;
-        }
-      } else {
-        const rawNum = messageText.match(/\b(\d{2,5})\b/);
-        if (rawNum) {
-          const val = parseInt(rawNum[1], 10);
-          if (val >= 50 && val <= 50000) {
-            if (lower.includes("built") || lower.includes("super")) {
-              draft.super_built_up_sqft = val;
-              draft.attributes.built_up_area = val;
-            } else if (lower.includes("plot") || lower.includes("land") || lower.includes("zameen")) {
-              draft.plot_area_sqft = val;
-              draft.attributes.plot_area = val;
-            } else {
-              draft.carpet_area_sqft = val;
-            }
+  // Turn 4: Carpet Area + Floor Compound Question (F-03 Fix)
+  if (lead.state === "OWNER_AREA_PENDING") {
+    const parsedArea = parseAreaFromText(messageText);
+    if (parsedArea.carpet_sqft || parsedArea.super_built_up_sqft || parsedArea.plot_area_sqft) {
+      if (parsedArea.carpet_sqft) draft.carpet_area_sqft = parsedArea.carpet_sqft;
+      if (parsedArea.super_built_up_sqft) {
+        draft.super_built_up_sqft = parsedArea.super_built_up_sqft;
+        draft.attributes.built_up_area = parsedArea.super_built_up_sqft;
+      }
+      if (parsedArea.plot_area_sqft) {
+        draft.plot_area_sqft = parsedArea.plot_area_sqft;
+        draft.attributes.plot_area = parsedArea.plot_area_sqft;
+        if (!draft.carpet_area_sqft) draft.carpet_area_sqft = parsedArea.plot_area_sqft;
+      }
+    } else {
+      const rawNum = messageText.match(/\b(\d{2,5})\b/);
+      if (rawNum) {
+        const val = parseInt(rawNum[1], 10);
+        if (val >= 50 && val <= 50000) {
+          if (lower.includes("built") || lower.includes("super")) {
+            draft.super_built_up_sqft = val;
+            draft.attributes.built_up_area = val;
+          } else if (lower.includes("plot") || lower.includes("land") || lower.includes("zameen")) {
+            draft.plot_area_sqft = val;
+            draft.attributes.plot_area = val;
+          } else {
+            draft.carpet_area_sqft = val;
           }
         }
       }
     }
+
+    // Secondary Floor extraction
+    const floorInfo = parseFloorFromText(messageText);
+    if (floorInfo.floor_number !== null) {
+      draft.attributes.floor_number = floorInfo.floor_number;
+    }
+    if (floorInfo.total_floors !== null) {
+      draft.attributes.total_floors = floorInfo.total_floors;
+    }
   }
 
-  // If STILL missing after direct extraction check, prompt the question:
-  if (!draft.carpet_area_sqft && !draft.super_built_up_sqft && !draft.plot_area_sqft) {
-    const locLabel = formatSocietyAndLocationLabel(draft.society_name, draft.location, city);
-    const replyText =
-      lang === "GUJLISH"
-        ? `Noted <b>${locLabel}</b>. 👍\n\n👉 <b>Property no approximate Carpet ya Built-up Area ketlo sq.ft chhe?</b> 📐`
-        : lang === "ENGLISH"
-        ? `Noted <b>${locLabel}</b>. 👍\n\n👉 <b>What is the approximate Carpet or Built-up Area of the property in sq.ft?</b> 📐`
-        : `Noted <b>${locLabel}</b>. 👍\n\n👉 <b>Property ka approximate Carpet ya Built-up Area kitna sq.ft hai?</b> 📐`;
+  // F-03 Deadlock Prevention: Area is Mandatory Primary Field. Floor is Secondary.
+  const hasArea = Boolean(draft.carpet_area_sqft || draft.super_built_up_sqft || draft.plot_area_sqft);
+  if (!hasArea) {
+    const isFlatOrOffice = /(flat|apartment|office|shop|commercial)/i.test(String(draft.property_type || ""));
+    let replyText = "";
+    if (isFlatOrOffice) {
+      replyText =
+        lang === "GUJLISH"
+          ? `Approximate Carpet Area ketlo chhe ane kaya Floor par chhe? (e.g. 1450 sq.ft, 4th floor) 📐`
+          : lang === "ENGLISH"
+          ? `What is the approximate Carpet Area and which Floor is it on? (e.g. 1450 sq.ft, 4th floor) 📐`
+          : `Approximate Carpet Area kitna hai aur kaunse Floor par hai? (e.g. 1450 sq.ft, 4th floor) 📐`;
+    } else {
+      replyText =
+        lang === "GUJLISH"
+          ? `Approximate Plot ke Built-up Area ketlo sq.ft chhe? 📐`
+          : lang === "ENGLISH"
+          ? `What is the approximate Plot or Built-up Area in sq.ft? 📐`
+          : `Approximate Plot ya Built-up Area kitna sq.ft hai? 📐`;
+    }
 
     await supabase.from("leads").update({
       lead_type: effectiveOwnerLeadType,
@@ -4885,49 +5072,67 @@ async function handleOwnerFlow({
     return { replyText, nextState: "OWNER_AREA_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_AREA_PENDING", draft) };
   }
 
-  // Step 5: Expected Price / Demand / Monthly Rent
+  // Turn 5: Price/Rent + Furnishing Compound Question (F-03 Fix)
   const isRent = draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT";
-  if ((isRent && (!draft.expected_rent || draft.expected_rent < 3000)) || (!isRent && (!draft.expected_price || draft.expected_price < 100000))) {
-    if (lead.state === "OWNER_PRICE_PENDING") {
-      const directPrice = parseBudgetFromText(messageText);
-      if (directPrice > 0) {
-        if (isRent) {
-          if (directPrice < 1500000) draft.expected_rent = directPrice;
-          else {
-            draft.expected_price = directPrice;
-            draft.transaction_type = "SELL";
-          }
+
+  if (lead.state === "OWNER_PRICE_PENDING") {
+    const directPrice = parseBudgetFromText(messageText);
+    if (directPrice > 0) {
+      if (isRent) {
+        if (directPrice < 1500000) {
+          draft.expected_rent = directPrice;
         } else {
           draft.expected_price = directPrice;
+          draft.transaction_type = "SELL";
         }
       } else {
-        const numMatch = lower.match(/^(\d+(?:\.\d+)?)\s*$/);
-        if (numMatch) {
-          const val = parseFloat(numMatch[1]);
-          if (val >= 0.25 && val <= 50) {
-            draft.expected_price = Math.round(val * 10000000);
-          } else if (val > 50 && val <= 500) {
-            draft.expected_price = Math.round(val * 100000);
-          }
+        draft.expected_price = directPrice;
+      }
+    } else {
+      const numMatch = lower.match(/^(\d+(?:\.\d+)?)\s*$/);
+      if (numMatch) {
+        const val = parseFloat(numMatch[1]);
+        if (val >= 0.25 && val <= 50) {
+          draft.expected_price = Math.round(val * 10000000);
+        } else if (val > 50 && val <= 500) {
+          draft.expected_price = Math.round(val * 100000);
         }
       }
     }
+
+    // Secondary Furnishing extraction
+    const parsedFurn = parseFurnishingFromText(messageText);
+    if (parsedFurn) {
+      draft.furnishing_status = parsedFurn;
+    }
   }
 
-  // If STILL missing after direct extraction check, prompt the question:
-  if ((isRent && (!draft.expected_rent || draft.expected_rent < 3000)) || (!isRent && (!draft.expected_price || draft.expected_price < 100000))) {
-    const areaDesc = draft.super_built_up_sqft
-      ? `${draft.super_built_up_sqft} sq.ft Built-up`
-      : draft.carpet_area_sqft
-      ? `${draft.carpet_area_sqft} sq.ft`
-      : "";
-    const targetProp = `${draft.configuration || draft.property_type || "Property"}${areaDesc ? ` (${areaDesc})` : ""}`;
-    const replyText =
-      lang === "GUJLISH"
-        ? `Noted — <b>${targetProp}</b>! 📐\n\n👉 <b>Aa property mate tamaro expected ${isRent ? "Monthly Rent 💰 (e.g. ₹25,000/month)" : "Selling Price / Demand 💰 (e.g. 75 Lakhs, 1.25 Cr)"} ketlo raheshe?</b>`
-        : lang === "ENGLISH"
-        ? `Noted — <b>${targetProp}</b>! 📐\n\n👉 <b>What is your expected ${isRent ? "monthly rent 💰 (e.g. ₹25,000/month)" : "asking price / demand 💰 (e.g. 75 Lakhs, 1.25 Cr)"} for this property?</b>`
-        : `Noted — <b>${targetProp}</b>! 📐\n\n👉 <b>Is property ke liye aapka expected ${isRent ? "Monthly Rent 💰 (e.g. ₹25,000/month)" : "Selling Price / Demand 💰 (e.g. 75 Lakhs, 1.25 Cr)"} kitna rahega?</b>`;
+  // F-03 Deadlock Prevention: Price/Rent is Mandatory Primary Field. Furnishing is Secondary.
+  const hasValidPrice = (isRent && (draft.expected_rent || 0) >= 3000) || (!isRent && (draft.expected_price || 0) >= 100000);
+  if (!hasValidPrice) {
+    let replyText = "";
+    if (draft.transaction_type === "LEASE_OUT" || draft.transaction_type === "LEASE") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Expected Monthly Lease ketlu chhe, ane Furnishing status shu chhe (Bare Shell ke Plug & Play)? 💰`
+          : lang === "ENGLISH"
+          ? `What is your expected Monthly Lease, and what is the Furnishing status (Bare Shell or Plug & Play)? 💰`
+          : `Expected Monthly Lease kitna hai, aur Furnishing status kya hai (Bare Shell ya Plug & Play)? 💰`;
+    } else if (isRent) {
+      replyText =
+        lang === "GUJLISH"
+          ? `Expected Monthly Rent ketlu chhe, ane Furnishing status shu chhe? 💰`
+          : lang === "ENGLISH"
+          ? `What is your expected Monthly Rent, and what is the Furnishing status? 💰`
+          : `Expected Monthly Rent kitna hai, aur Furnishing status kya hai? 💰`;
+    } else {
+      replyText =
+        lang === "GUJLISH"
+          ? `Expected Selling Price ketli chhe, ane property Furnished, Semi ke Unfurnished chhe? 💰`
+          : lang === "ENGLISH"
+          ? `What is your expected Selling Price, and is the property Furnished, Semi-Furnished, or Unfurnished? 💰`
+          : `Expected Selling Price kitna hai, aur property Furnished, Semi ya Unfurnished hai? 💰`;
+    }
 
     await supabase.from("leads").update({
       lead_type: effectiveOwnerLeadType,
@@ -4943,52 +5148,30 @@ async function handleOwnerFlow({
     return { replyText, nextState: "OWNER_PRICE_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_PRICE_PENDING", draft) };
   }
 
-  // Open Plot / Land check: vacant plots do not have possession status or furnishing
-  const isPlotType = draft.property_category === "PLOT" || /(plot|land|zameen|jamin)/i.test(String(draft.property_type || ""));
-  if (isPlotType) {
-    if (!draft.possession_status) draft.possession_status = "READY_TO_MOVE";
-    if (!draft.furnishing_status) draft.furnishing_status = "UNFURNISHED";
-  }
-
-  // Step 6: Possession Status
-  if (!draft.possession_status) {
-    const priceStr = isRent
-      ? `₹${Number(draft.expected_rent || 0).toLocaleString("en-IN")}/month`
-      : `₹${Number(draft.expected_price || 0).toLocaleString("en-IN")}`;
-    const replyText =
-      lang === "GUJLISH"
-        ? `Noted — <b>${priceStr} Demand</b>. 💰\n\n👉 <b>Property no Possession status shu chhe — Ready to Move chhe ke Under Construction? (1 ya 2)</b> 🔑\n\n1️⃣ <b>Ready to Move</b>\n2️⃣ <b>Under Construction</b>`
-        : lang === "ENGLISH"
-        ? `Noted — <b>${priceStr} Demand</b>. 💰\n\n👉 <b>What is the possession status — Ready to Move or Under Construction? (Reply 1 or 2)</b> 🔑\n\n1️⃣ <b>Ready to Move</b>\n2️⃣ <b>Under Construction</b>`
-        : `Noted — <b>${priceStr} Demand</b>. 💰\n\n👉 <b>Property ka Possession status kya hai — Ready to Move hai ya Under Construction? (Aap 1 ya 2 likh sakte hain)</b> 🔑\n\n1️⃣ <b>Ready to Move</b>\n2️⃣ <b>Under Construction</b>`;
-
-    await supabase.from("leads").update({
-      lead_type: effectiveOwnerLeadType,
-      state: "OWNER_POSSESSION_PENDING",
-      metadata: {
-        ...existingMeta,
-        has_seller_profile: true,
-        ...(isDualLead ? { has_buyer_profile: true } : {}),
-        owner_draft: draft,
-      },
-    }).eq("id", lead.id);
-
-    return { replyText, nextState: "OWNER_POSSESSION_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_POSSESSION_PENDING", draft) };
-  }
-
-  // Step 7: Furnishing Status
+  // Gracefully default secondary furnishing if not mentioned
   if (!draft.furnishing_status) {
-    const possLabel = draft.possession_status === "READY_TO_MOVE" ? "Ready to Move" : "Under Construction";
+    draft.furnishing_status = isPlotType ? "UNFURNISHED" : "SEMI_FURNISHED";
+  }
+
+  // Turn 6: Parking + Possession + Direct Calling Number
+  const isTurn6State = [
+    "OWNER_AMENITIES_PENDING",
+    "OWNER_POSSESSION_PENDING",
+    "OWNER_FURNISHING_PENDING",
+    "OWNER_PHONE_PENDING",
+  ].includes(lead.state);
+
+  if (!isTurn6State && (!draft.attributes?.parking || !draft.possession_status)) {
     const replyText =
       lang === "GUJLISH"
-        ? `Noted — <b>${possLabel}</b>! 🔑\n\n👉 <b>Property nu Furnishing status shu chhe — Unfurnished, Semi-Furnished ke Fully Furnished? (1, 2 ya 3)</b> 🛋️\n\n1️⃣ <b>Unfurnished</b>\n2️⃣ <b>Semi-Furnished</b>\n3️⃣ <b>Fully Furnished</b>`
+        ? `Car parking available chhe? Ane property Ready to Move chhe ke Under Construction? (Sathe direct calling number confirm karjo) 🚗🔑`
         : lang === "ENGLISH"
-        ? `Noted — <b>${possLabel}</b>! 🔑\n\n👉 <b>What is the furnishing status — Unfurnished, Semi-Furnished, or Fully Furnished? (Reply 1, 2 or 3)</b> 🛋️\n\n1️⃣ <b>Unfurnished</b>\n2️⃣ <b>Semi-Furnished</b>\n3️⃣ <b>Fully Furnished</b>`
-        : `Noted — <b>${possLabel}</b>! 🔑\n\n👉 <b>Property ka Furnishing status kya hai — Unfurnished, Semi-Furnished ya Fully Furnished? (Aap 1, 2 ya 3 likh sakte hain)</b> 🛋️\n\n1️⃣ <b>Unfurnished</b>\n2️⃣ <b>Semi-Furnished</b>\n3️⃣ <b>Fully Furnished</b>`;
+        ? `Is car parking available? And is the property Ready to Move or Under Construction? (Please also confirm your direct calling number) 🚗🔑`
+        : `Car parking available hai? Aur property Ready to Move hai ya Under Construction? (Sath me direct calling number confirm karein) 🚗🔑`;
 
     await supabase.from("leads").update({
       lead_type: effectiveOwnerLeadType,
-      state: "OWNER_FURNISHING_PENDING",
+      state: "OWNER_AMENITIES_PENDING",
       metadata: {
         ...existingMeta,
         has_seller_profile: true,
@@ -4997,59 +5180,62 @@ async function handleOwnerFlow({
       },
     }).eq("id", lead.id);
 
-    return { replyText, nextState: "OWNER_FURNISHING_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_FURNISHING_PENDING", draft) };
+    return { replyText, nextState: "OWNER_AMENITIES_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_AMENITIES_PENDING", draft) };
   }
 
-  // Step 7b: Telegram / Web Direct Calling Number Capture (if phone is missing)
-  let effectivePhone = draft.contact_phone || (lead.phone && !lead.phone.startsWith("tg_") ? lead.phone : null);
-  if (!effectivePhone && (lead.state === "OWNER_PHONE_PENDING" || aiAnalysis?.contact_phone)) {
-    const rawDigits = (aiAnalysis?.contact_phone || messageText).replace(/\D/g, "");
-    if (rawDigits.length >= 10 && rawDigits.length <= 13) {
-      draft.contact_phone = rawDigits.slice(-10);
-      effectivePhone = draft.contact_phone;
+  // Turn 6 input parsing
+  if (isTurn6State) {
+    const parsedPark = parseParkingFromText(messageText);
+    if (parsedPark) {
+      draft.attributes.parking = parsedPark;
+    } else if (/(ha|haan|yes|available|chhe|hai|covered)/i.test(lower)) {
+      draft.attributes.parking = "Covered";
+    }
+
+    const parsedPoss = parsePossessionFromText(messageText);
+    if (parsedPoss) {
+      draft.possession_status = parsedPoss;
+    }
+
+    const parsedPh = parsePhoneFromText(messageText);
+    if (parsedPh) {
+      draft.contact_phone = parsedPh;
     }
   }
 
-  if (!effectivePhone && platform.toUpperCase() === "TELEGRAM") {
-    const replyText =
-      lang === "GUJLISH"
-        ? `Bahuj saras! Listing submit karva ane physical inspection mate, kripya tamaro **direct calling / WhatsApp number** share karo 📞`
-        : lang === "ENGLISH"
-        ? `Thank you! To schedule document verification and on-site inspection, please share your **direct calling or WhatsApp number** 📞`
-        : `Bahut badhiya! Document verification aur physical inspection schedule karne ke liye kripya aapka **direct calling ya WhatsApp number** share kar dijiye 📞`;
-
-    await supabase.from("leads").update({
-      lead_type: effectiveOwnerLeadType,
-      state: "OWNER_PHONE_PENDING",
-      metadata: {
-        ...existingMeta,
-        has_seller_profile: true,
-        ...(isDualLead ? { has_buyer_profile: true } : {}),
-        owner_draft: draft,
-      },
-    }).eq("id", lead.id);
-
-    return { replyText, nextState: "OWNER_PHONE_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_PHONE_PENDING", draft) };
+  // Apply default possession if missing
+  if (!draft.possession_status) {
+    draft.possession_status = "READY_TO_MOVE";
   }
 
   // ---------------------------------------------------------------------------
-  // Step 8: ALL DETAILS GATHERED! Persist to property_submissions
+  // Step 8: ALL DETAILS GATHERED! Persist to property_submissions (F-07, F-08, F-11)
   // ---------------------------------------------------------------------------
-  draft.possession_status = draft.possession_status || "READY_TO_MOVE";
-  draft.furnishing_status = draft.furnishing_status || "SEMI_FURNISHED";
+  let effectivePhone = draft.contact_phone || (lead.phone && !lead.phone.startsWith("tg_") ? lead.phone : null);
+  if (!effectivePhone && (senderId.length >= 10 && !senderId.startsWith("-") && platform !== "TELEGRAM")) {
+    effectivePhone = senderId;
+  }
+
+  const normalizedTxType =
+    (draft.transaction_type === "SALE" || draft.transaction_type === "SELL") ? "SELL"
+    : (draft.transaction_type === "LEASE_OUT" || draft.transaction_type === "LEASE") ? "LEASE"
+    : (draft.transaction_type === "RENT_OUT" || draft.transaction_type === "RENT") ? "RENT"
+    : "SELL";
+
+  const resolvedCityVal = city || null;
 
   const submissionPayload = {
     client_id: tenantId,
     lead_id: lead.lead_id,
     owner_name: senderName || lead.first_name || "Property Owner",
-    owner_phone: effectivePhone || (senderId.length >= 10 && !senderId.startsWith("-") && platform !== "TELEGRAM" ? senderId : null),
+    owner_phone: effectivePhone || null,
     property_category: draft.property_category || "RESIDENTIAL",
     property_type: draft.property_type || "Flat",
-    transaction_type: draft.transaction_type === "SELL" ? "SALE" : (draft.transaction_type || "SALE"),
+    transaction_type: normalizedTxType,
     project_name: draft.project_name || draft.society_name || "Private Property",
     society_name: draft.society_name || draft.project_name || "Society",
-    location: draft.location || city || "Prime Location",
-    city: city || "Vadodara",
+    location: draft.location || resolvedCityVal || "Prime Location",
+    city: resolvedCityVal,
     configuration: draft.configuration || (draft.property_type === "Flat" ? "2 BHK" : draft.property_type),
     carpet_area_sqft: draft.carpet_area_sqft || null,
     super_built_up_sqft: draft.super_built_up_sqft || null,
@@ -5060,11 +5246,14 @@ async function handleOwnerFlow({
     status: "PENDING_VERIFICATION",
     attributes: {
       ...(draft.attributes || {}),
+      floor_number: draft.attributes?.floor_number || null,
+      total_floors: draft.attributes?.total_floors || null,
+      parking: draft.attributes?.parking || null,
       built_up_area: draft.super_built_up_sqft || null,
       plot_area: draft.plot_area_sqft || null,
       contact_phone: effectivePhone || null,
     },
-    notes: `Intake complete via ${platform}: ${draft.configuration || draft.property_type || "Property"} in ${draft.project_name || draft.society_name || draft.location || "Vadodara"} (${draft.transaction_type || "SALE"}, ${draft.expected_price ? formatPriceShort(Number(draft.expected_price)) : draft.expected_rent ? `₹${draft.expected_rent}/mo` : "Price on Request"})`
+    notes: `Intake complete via ${platform}: ${draft.configuration || draft.property_type || "Property"} in ${draft.project_name || draft.society_name || draft.location || resolvedCityVal || "Prime Location"} (${normalizedTxType}, ${draft.expected_price ? formatPriceShort(Number(draft.expected_price)) : draft.expected_rent ? `₹${draft.expected_rent}/mo` : "Price on Request"})`
   };
 
   const { data: sub, error: subError } = await supabase
@@ -5545,6 +5734,7 @@ export async function dispatchStateAction(
     "OWNER_LOCATION_PENDING",
     "OWNER_AREA_PENDING",
     "OWNER_PRICE_PENDING",
+    "OWNER_AMENITIES_PENDING",
     "OWNER_POSSESSION_PENDING",
     "OWNER_FURNISHING_PENDING",
     "OWNER_PHONE_PENDING",
