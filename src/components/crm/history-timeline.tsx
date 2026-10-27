@@ -62,11 +62,15 @@ export function HistoryTimeline({ activity = [] }: HistoryTimelineProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  // 1. Sort descending by created_at
+  // 1. Sort descending by created_at with secondary id tiebreaker
   const sorted = useMemo(() => {
     return activity
       .slice()
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort((a, b) => {
+        const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return String(b.id).localeCompare(String(a.id));
+      });
   }, [activity]);
 
   // 2. Metrics calculation

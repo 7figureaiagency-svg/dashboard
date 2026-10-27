@@ -89,6 +89,13 @@ function Dashboard() {
     }
   }, [me, meFetching, navigate]);
 
+  // Non-admin guard: non-admin roles cannot view the inventory tab; reset to leads
+  useEffect(() => {
+    if (!isAdmin && activeTab === "inventory") {
+      setActiveTab("leads");
+    }
+  }, [isAdmin, activeTab]);
+
   const myExecutiveId = useMemo(
     () => executives.find((e) => e.user_id === me?.id)?.id ?? null,
     [executives, me?.id],

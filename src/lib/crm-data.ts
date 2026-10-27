@@ -116,6 +116,10 @@ export function useActivity(passedClientId?: string | null) {
           details: summaryMeta.details,
           raw_payload: payload,
         } as Activity;
+      }).sort((a, b) => {
+        const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return String(b.id).localeCompare(String(a.id));
       });
     },
     refetchInterval: POLL_MS,
@@ -493,6 +497,21 @@ export function useApprovePropertySubmission() {
         .eq("id", submission.id);
 
       if (updateError) throw updateError;
+
+      // 5. Internal-only CRM audit log entry (Zero outbound WhatsApp/Telegram messages)
+      if (submission.lead_id) {
+        await supabase.from("lead_events").insert({
+          lead_id: submission.lead_id,
+          client_id: resolvedClientId,
+          event_type: "PROPERTY_APPROVED_TO_INVENTORY",
+          payload: {
+            description: `Property listing approved and moved to live inventory. Inventory ID: ${propertyId}`,
+            submission_id: submission.id,
+            property_id: propertyId,
+          },
+          created_at: new Date().toISOString(),
+        } as never);
+      }
 
       return { propertyId };
     },

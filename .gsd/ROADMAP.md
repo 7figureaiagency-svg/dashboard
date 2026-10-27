@@ -235,5 +235,16 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 23.1: Vernacular Slot Time Precision & Hyperlinked Location Engine ([`23.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/23/23.1-PLAN.md))
 - [x] Plan 23.2: Multi-Entity Owner Intake, Duplex Precision & FSM Metadata Persistence ([`23.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/23/23.2-PLAN.md))
 
+---
+
+### Phase 24: E2E QA Audit Bug Remediation & Role Governance Hardening
+**Status:** ✅ Complete  
+**Objective:** Remediate defects discovered during the multi-role E2E QA audit: (1) Enforce PostgreSQL Row-Level Security on `leads` so non-admin Sales Executives can only access their assigned leads, (2) Enforce strict Admin-only RLS and UI gating on `property_submissions` and Live Inventory, (3) Add an Assigned Executive reassignment dropdown to Lead Drawer for Admins and Managers, (4) Log listing approvals purely internally in `lead_events` with zero outbound WhatsApp/Telegram messages to keep messaging volume minimal, and (5) Stabilize activity timeline compound sorting.  
+**Depends on:** Phase 23  
+**Plans:**
+- [x] Plan 24.1: Database RLS Executive Hardening & Admin-Only Property Governance ([`24.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/24/24.1-PLAN.md))
+- [x] Plan 24.2: CRM Lead Drawer Executive Reassignment, Admin Seller Guard & Activity Timeline Polish ([`24.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/24/24.2-PLAN.md))
+
+
 
 

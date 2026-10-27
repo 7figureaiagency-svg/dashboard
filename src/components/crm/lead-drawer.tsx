@@ -80,7 +80,15 @@ import { computeLeadScore } from "@/lib/lead-scoring";
 import { WhatsAppChatView } from "@/components/crm/whatsapp-chat-view";
 import { WorkflowTimeline } from "@/components/crm/workflow-timeline";
 import { HistoryTimeline } from "@/components/crm/history-timeline";
-import { useActivity, useInventory, useLeadEvents, usePropertySubmissions, useUpdateLead } from "@/lib/crm-data";
+import { useCurrentUser } from "@/lib/auth";
+import {
+  useActivity,
+  useExecutives,
+  useInventory,
+  useLeadEvents,
+  usePropertySubmissions,
+  useUpdateLead,
+} from "@/lib/crm-data";
 import {
   LEAD_STATUSES,
   PROPERTY_SUBMISSION_STATUS_MAP,
@@ -159,6 +167,11 @@ export function LeadDrawer({
   activity?: Activity[];
 }) {
   const update = useUpdateLead();
+  const { data: me } = useCurrentUser();
+  const isAdmin = me?.role === "admin";
+  const isManager = me?.role === "manager";
+  const canReassign = isAdmin || isManager;
+  const { data: executives = [] } = useExecutives(lead?.client_id);
   const { data: inventory = [] } = useInventory();
   const { data: allSubmissions = [] } = usePropertySubmissions(lead?.client_id);
   const { data: allActivity = [] } = useActivity(lead?.client_id);
@@ -679,7 +692,7 @@ export function LeadDrawer({
           <Separator />
 
           <Tabs defaultValue="chat" className="w-full">
-            <TabsList className={`w-full grid ${(submissions.length > 0 || isDual || field("lead_type") === "PROVIDER") ? "grid-cols-4" : "grid-cols-3"} h-10 p-1 bg-muted/60 rounded-xl`}>
+            <TabsList className={`w-full grid ${(isAdmin && (submissions.length > 0 || isDual || field("lead_type") === "PROVIDER")) ? "grid-cols-4" : "grid-cols-3"} h-10 p-1 bg-muted/60 rounded-xl`}>
               <TabsTrigger
                 value="chat"
                 className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-[#008069] data-[state=active]:text-white transition-all rounded-lg truncate"
@@ -692,7 +705,7 @@ export function LeadDrawer({
               >
                 <Sparkles className="size-3.5 shrink-0" /> Workflow
               </TabsTrigger>
-              {(submissions.length > 0 || isDual || field("lead_type") === "PROVIDER") && (
+              {isAdmin && (submissions.length > 0 || isDual || field("lead_type") === "PROVIDER") && (
                 <TabsTrigger
                   value="seller"
                   className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-purple-600 data-[state=active]:text-white transition-all rounded-lg truncate"
@@ -729,7 +742,7 @@ export function LeadDrawer({
               />
             </TabsContent>
 
-            {(submissions.length > 0 || isDual || field("lead_type") === "PROVIDER") && (
+            {isAdmin && (submissions.length > 0 || isDual || field("lead_type") === "PROVIDER") && (
               <TabsContent value="seller" className="mt-3 space-y-3">
                 <div className="flex items-center justify-between pb-1">
                   <div className="flex items-center gap-2">
@@ -1165,6 +1178,31 @@ export function LeadDrawer({
                   render={(v) => STATUS_MAP[v]?.label ?? v}
                 />
               </div>
+              {canReassign && (
+                <div className="space-y-1">
+                  <Label htmlFor="assigned-executive">Assigned Executive</Label>
+                  <Select
+                    value={(profile.assigned_executive_id !== undefined ? profile.assigned_executive_id : lead.assigned_executive_id) ?? "__unassigned__"}
+                    onValueChange={(v) =>
+                      set("assigned_executive_id", v === "__unassigned__" ? null : v)
+                    }
+                  >
+                    <SelectTrigger id="assigned-executive" className="h-10 rounded-xl bg-background border-border/80 text-xs font-medium">
+                      <SelectValue placeholder="Select executive…" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="__unassigned__" className="text-muted-foreground italic text-xs">
+                        Unassigned
+                      </SelectItem>
+                      {executives.map((exec) => (
+                        <SelectItem key={exec.id} value={exec.id} className="text-xs">
+                          {exec.name} {exec.role ? `(${exec.role})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-1 sm:col-span-2">
                 <Label htmlFor="notes">
                   Executive notes <span style={{ color: "var(--tone-red)" }}>*</span>
@@ -1196,6 +1234,11 @@ export function LeadDrawer({
                     )
                   : null;
 
+                const selectedExecutiveId =
+                  profile.assigned_executive_id !== undefined
+                    ? profile.assigned_executive_id
+                    : (matchedProperty?.assigned_executive_id ?? lead.assigned_executive_id ?? null);
+
                 run(
                   {
                     status: field("status"),
@@ -1207,10 +1250,7 @@ export function LeadDrawer({
                     timeline: field("timeline"),
                     selected_property_name: selectedName,
                     executive_notes: notes,
-                    // Re-assign executive to whoever owns the selected property
-                    ...(matchedProperty
-                      ? { assigned_executive_id: matchedProperty.assigned_executive_id }
-                      : {}),
+                    assigned_executive_id: selectedExecutiveId || null,
                     ...contactResolution(lead),
                   },
                   "Lead updated successfully",

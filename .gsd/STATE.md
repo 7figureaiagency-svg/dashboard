@@ -7,15 +7,30 @@ updated: 2026-10-27T09:24:00+05:30
 ## Current Position
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
-**Phase:** 23 - Vernacular Temporal Slot Precision, Multi-Entity Owner Intake & Clean Hyperlink Engine  
+**Phase:** 24 - Executive RLS & Admin Property Governance  
 **Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/23/23.1-PLAN.md` (Vernacular Slot Time Precision & Hyperlinked Location Engine) — ✅ Complete
-- `.gsd/phases/23/23.2-PLAN.md` (Multi-Entity Owner Intake, Duplex Precision & FSM Metadata Persistence) — ✅ Complete
+- `.gsd/phases/24/24.1-PLAN.md` (Database RLS Executive Hardening & Admin-Only Property Governance) — ✅ Complete
+- `.gsd/phases/24/24.2-PLAN.md` (CRM Lead Drawer Executive Reassignment, Admin Seller Guard & Activity Timeline Polish) — ✅ Complete
 
 ## Last Action
 
-Completed Phase 23 (Vernacular Temporal Slot Precision, Multi-Entity Owner Intake & Clean Hyperlink Engine):
+Completed Phase 24 (E2E QA Audit Bug Remediation & Role Governance Hardening):
+- Plan 24.1:
+  - Added `user_id` column to `public.executives` linking to `auth.users(id)`.
+  - Created `public.current_executive_id()` and `public.is_admin()` SECURITY DEFINER functions.
+  - Recreated `leads` SELECT and UPDATE RLS policies enforcing executive row-level isolation (`assigned_executive_id = current_executive_id() OR is_admin() OR assigned_executive_id IS NULL`).
+  - Recreated `property_submissions` SELECT, UPDATE, DELETE RLS policies strictly requiring `client_id = current_client_id() AND is_admin()` (0 rows accessible to non-admin users).
+  - Applied migration `20261027120000_executive_rls_and_admin_property_governance.sql` to Supabase production.
+- Plan 24.2:
+  - Added Apple HIG "Assigned Executive" `Select` dropdown in `LeadDrawer` profile form for Admins and Managers to reassign lead ownership.
+  - Strictly gated the "Seller" tab in `LeadDrawer` behind `isAdmin`, completely hiding owner property submissions from Sales Executives.
+  - Retained `adminOnly: true` on the Inventory nav item in `dashboard.tsx` and added an active tab reset guard for non-admins.
+  - Verified `useApprovePropertySubmission` dispatches zero outbound WhatsApp/Telegram messages (preserving anti-ban & minimizing message volume) and logs internally to `lead_events`.
+  - Added compound sorting by timestamp and ID to `useActivity` and `HistoryTimeline` to eliminate flickering.
+- Verification:
+  - Verified `scratch/test_phase24_bug_remediation.cjs`: 13/13 assertions passed (100%).
+  - Verified `npm.cmd run build`: 796ms, 0 errors.
 - Plan 23.1:
   - Upgraded `parseVisitSlot` in `supabase/functions/realtor-lead-engine/index.ts` with Gujarati temporal day tokens (aje, aaje, આજે -> Today; kale, kaale, કાલે -> Tomorrow; parso, parsva -> Day After), Gujarati time tokens (vage, વાગે), Indic digit normalization, and morning/AM default for 10-11 AM IST.
   - Upgraded slot assembly across all 5 booking/reschedule handlers to concatenate `preferred_date_raw` and `preferred_time_raw`, ensuring time slots are never lost.
