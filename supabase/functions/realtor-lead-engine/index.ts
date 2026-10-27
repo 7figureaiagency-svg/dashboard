@@ -5174,12 +5174,13 @@ async function handleOwnerFlow({
     };
   }
 
+  const existingArchived = Array.isArray(existingMeta.archived_submissions) ? existingMeta.archived_submissions : [];
   return {
     replyText,
     nextState: "OWNER_DETAILS_GATHERED",
     leadUpdates: buildOwnerLeadUpdates("OWNER_DETAILS_GATHERED", draft, {
       submission_id: sub?.id || existingMeta.submission_id,
-      archived_submissions: archived,
+      archived_submissions: existingArchived,
     }),
   };
 }
@@ -8973,7 +8974,7 @@ Deno.serve(async (req: Request) => {
     // Resolve Tenant Branding & Operating City
     const { data: tenantClient } = await supabase
       .from("clients")
-      .select("id, name, city, office_address, notification_channel, bot_knowledge")
+      .select("id, name, city, office_address, notification_channel, bot_knowledge, access_token")
       .eq("id", activeTenantId)
       .maybeSingle();
 
@@ -9420,7 +9421,7 @@ Deno.serve(async (req: Request) => {
       if (platform === "TELEGRAM") {
         await sendTelegramMessage(botToken, senderId, replyText);
       } else if (platform === "WHATSAPP" && phoneNumberId) {
-        const waAccessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+        const waAccessToken = tenantClient?.access_token || Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
         await sendWhatsAppMessage(phoneNumberId, waAccessToken, senderId, replyText);
       }
     }
