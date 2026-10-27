@@ -6238,11 +6238,55 @@ export async function dispatchStateAction(
   // 4. ROLE SELECTION PENDING (State: ROLE_SELECTION_PENDING)
   // ---------------------------------------------------------------------------
   if (currentState === "ROLE_SELECTION_PENDING") {
+    // 1. F-02 Greeting Guard: Intercept greetings so saying "hi" never defaults to Seeker!
+    const isGreetingInRole =
+      intent === "GREETING" ||
+      /^(hi|hello|hey|namaste|kem\s*cho|pranam|namaskar|good\s*morning|good\s*afternoon|good\s*evening)\b/i.test(lower.trim());
+
+    if (isGreetingInRole) {
+      return {
+        replyText: getGreetingTriageReply(lang, nameStr, agencyName),
+        nextState: "ROLE_SELECTION_PENDING",
+      };
+    }
+
+    // 2. Option 3: Both / Dual Role (Upgrade / Sell + Buy)
+    const isBothChoice =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
+      /^(3|3️⃣|option\s*3|third|3rd|both|banne|dono|upgrade)\b/i.test(lower.trim());
+
+    if (isBothChoice) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par tame banne service access kari shako chho.\n\nTame pehla potani property list karva mango chho, ke pehla nava property options jova mango chho?\n👉 1️⃣ <b>Pehle property list karein 📋</b>  2️⃣ <b>Pehle naye options dekhein 🏡</b>`
+          : lang === "ENGLISH"
+          ? `Welcome <b>${nameStr}</b>! 🙏 You can access both services at ${agencyName}.\n\nWould you prefer to list your existing property first, or explore new property options first?\n👉 1️⃣ <b>List property first 📋</b>  2️⃣ <b>Search options first 🏡</b>`
+          : `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par aap dono services access kar sakte hain.\n\nAap pehle apni existing property list karna chahenge, ya pehle naye property options dekhna chahenge?\n👉 1️⃣ <b>Pehle property list karein 📋</b>  2️⃣ <b>Pehle naye options dekhein 🏡</b>`;
+
+      return {
+        replyText,
+        nextState: "DUAL_ROLE_MENU_PENDING",
+        leadUpdates: {
+          lead_type: "DUAL_ROLE",
+          state: "DUAL_ROLE_MENU_PENDING",
+          metadata: {
+            ...(lead.metadata || {}),
+            is_initial_dual_onboarding: true,
+            has_buyer_profile: true,
+            has_seller_profile: true,
+          },
+        },
+      };
+    }
+
+    // 3. Option 2: Owner / Seller / Landlord
     const isOwnerChoice =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
       intent === "SUBMIT_LISTING" ||
       actionResult.user_role === "OWNER" ||
-      /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower);
+      /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|vechvu|vechva|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim()) ||
+      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower) ||
+      /(?:bechna|bechni|vechvu|vechva|sell\s*(?:karna|karni|karvu|karva|kar))/i.test(lower);
 
     if (isOwnerChoice) {
       // If user already specified property type (e.g. "muje meri shop bechni he"), directly forward to handleOwnerFlow!
@@ -6311,49 +6355,39 @@ export async function dispatchStateAction(
           },
         },
       };
-    } else {
-      // Transition to QUALIFYING as SEEKER (Option 1 or change requirement)
-      const pType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
-      const bVal = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
-      const locVal = actionResult.location || extractLocationFromText(context.messageText);
-      const parsedReq = parseRequirementFromText(context.messageText);
-      const reqVal: string | null =
-        actionResult.transaction_type === "RENT" ? "RENT"
-        : (actionResult.transaction_type === "BUY" || parsedReq === "BUY" || /(?:buy|kharid|purchase|leni)/i.test(lower)) ? "BUY"
-        : (parsedReq || (actionResult.action as any)?.requirement || null);
+    }
 
-      let replyText = "";
-      if (pType && reqVal) {
-        if (!locVal) {
-          replyText =
-            lang === "GUJLISH"
-              ? `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType} (${reqVal === "BUY" ? "Kharidva" : "Rent"})</b> note kari lidhu chhe. Kripya janavjo, tame kaya specific area/locality ma property shodhva mango chho? 📍`
-              : lang === "ENGLISH"
-              ? `Certainly <b>${nameStr}</b>! 🏡 Noted <b>${pType} (${reqVal === "BUY" ? "Buy" : "Rent"})</b>. Which specific locality or area are you looking in? 📍`
-              : `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType} (${reqVal === "BUY" ? "Kharidne ke liye" : "Rent par"})</b> note kar liya hai. Kripya batayein, aap kis area ya locality me property dekh rahe hain? 📍`;
-        } else if (!bVal) {
-          replyText =
-            lang === "GUJLISH"
-              ? `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> at <b>${locVal}</b> note kari lidhu chhe. Tamaro approximate budget ketlo chhe? 💰`
-              : lang === "ENGLISH"
-              ? `Certainly <b>${nameStr}</b>! 🏡 Noted <b>${pType}</b> at <b>${locVal}</b>. What is your approximate budget? 💰`
-              : `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> in <b>${locVal}</b> note kar liya hai. Aapka approximate budget kitna hai? 💰`;
-        }
-      } else if (pType) {
-        replyText =
-          lang === "GUJLISH"
-            ? `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> note kari lidhu chhe. Kripya janavjo, aa property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe?`
-            : lang === "ENGLISH"
-            ? `Certainly <b>${nameStr}</b>! 🏡 Noted <b>${pType}</b>. Are you looking to <b>Buy</b> or <b>Rent</b> this property?`
-            : `Zaroor <b>${nameStr}</b>! 🏡 <b>${pType}</b> note kar liya hai. Kripya batayein, aap ye property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye?`;
-      } else {
-        replyText =
-          lang === "GUJLISH"
-            ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
-            : lang === "ENGLISH"
-            ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
-            : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
+    // 4. Direct buyer criteria auto-bypass & Option 1 handling:
+    const pType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+    const bVal = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
+    const locVal = actionResult.location || extractLocationFromText(context.messageText);
+    const parsedReq = parseRequirementFromText(context.messageText);
+    const hasBuyerDirectCriteria = Boolean(
+      pType ||
+      bVal ||
+      locVal ||
+      parsedReq === "BUY" ||
+      parsedReq === "RENT" ||
+      intent === "CHANGE_REQUIREMENT" ||
+      intent === "SEEKER_QUALIFICATION"
+    );
+
+    const isSeekerChoice =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+      /^(1|1️⃣|option\s*1|first|1st|leni|lena|kharidna|kharidvu|buy|rent)\b/i.test(lower.trim());
+
+    if (isSeekerChoice || hasBuyerDirectCriteria) {
+      if (hasBuyerDirectCriteria) {
+        return handleQualificationCascade(lead, actionResult, context);
       }
+
+      // Transition to QUALIFYING as SEEKER (Option 1 pure choice)
+      const replyText =
+        lang === "GUJLISH"
+          ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
+          : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
 
       const isDualFromRoleSelection = lead?.lead_type === "PROVIDER" || lead?.lead_type === "DUAL_ROLE" || Boolean(lead?.metadata?.has_seller_profile);
       return {
@@ -6370,13 +6404,15 @@ export async function dispatchStateAction(
               active_persona: "BUYER",
             }
           } : {}),
-          ...(pType ? { property_type: pType } : {}),
-          ...(reqVal ? { requirement: reqVal } : {}),
-          ...(bVal ? { budget: bVal } : {}),
-          ...(locVal ? { location: locVal } : {}),
         },
       };
     }
+
+    // 5. Unrecognized input in ROLE_SELECTION_PENDING -> Re-prompt 3-choice menu without advancing state
+    return {
+      replyText: getGreetingTriageReply(lang, nameStr, agencyName),
+      nextState: "ROLE_SELECTION_PENDING",
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -7913,9 +7949,98 @@ export async function dispatchStateAction(
       };
     }
 
-    // If user provided requirement right away:
-    if (intent === "CHANGE_REQUIREMENT") {
+    // Direct buyer criteria auto-bypass:
+    const detectedFreshBuyerType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+    const detectedFreshLoc = actionResult.location || extractLocationFromText(context.messageText);
+    const detectedFreshBudget = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
+    const detectedFreshReq = parseRequirementFromText(context.messageText);
+
+    if (
+      detectedFreshBuyerType ||
+      detectedFreshLoc ||
+      detectedFreshBudget ||
+      detectedFreshReq === "BUY" ||
+      detectedFreshReq === "RENT" ||
+      intent === "CHANGE_REQUIREMENT" ||
+      intent === "SEEKER_QUALIFICATION"
+    ) {
       return handleQualificationCascade(lead, actionResult, context);
+    }
+
+    // Option 1 directly chosen:
+    const isFreshOption1 =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+      /^(1|1️⃣|option\s*1|first|1st|leni|lena|kharidna|kharidvu)\b/i.test(lower.trim());
+    if (isFreshOption1) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
+          : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
+
+      return {
+        replyText,
+        nextState: "QUALIFYING",
+        leadUpdates: {
+          lead_type: "SEEKER",
+          state: "QUALIFYING",
+        },
+      };
+    }
+
+    // Option 2 directly chosen:
+    const isFreshOption2 =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
+      /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|vechvu|rent\s*out|list|listing)\b/i.test(lower.trim());
+    if (isFreshOption2) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
+          : lang === "ENGLISH"
+          ? `Thank you <b>${nameStr}</b>! 🙏 We would be delighted to assist you in listing your property with ${agencyName}.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
+          : `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
+
+      return {
+        replyText,
+        nextState: "OWNER_CONFIG_PENDING",
+        leadUpdates: {
+          lead_type: "PROVIDER",
+          state: "OWNER_CONFIG_PENDING",
+          metadata: {
+            ...(lead.metadata || {}),
+            owner_draft: { started_at: new Date().toISOString() },
+          },
+        },
+      };
+    }
+
+    // Option 3 directly chosen:
+    const isFreshOption3 =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
+      /^(3|3️⃣|option\s*3|third|3rd|both|banne|dono|upgrade)\b/i.test(lower.trim());
+    if (isFreshOption3) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par tame banne service access kari shako chho.\n\nTame pehla potani property list karva mango chho, ke pehla nava property options jova mango chho?\n👉 1️⃣ <b>Pehle property list karein 📋</b>  2️⃣ <b>Pehle naye options dekhein 🏡</b>`
+          : lang === "ENGLISH"
+          ? `Welcome <b>${nameStr}</b>! 🙏 You can access both services at ${agencyName}.\n\nWould you prefer to list your existing property first, or explore new property options first?\n👉 1️⃣ <b>List property first 📋</b>  2️⃣ <b>Search options first 🏡</b>`
+          : `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par aap dono services access kar sakte hain.\n\nAap pehle apni existing property list karna chahenge, ya pehle naye property options dekhna chahenge?\n👉 1️⃣ <b>Pehle property list karein 📋</b>  2️⃣ <b>Pehle naye options dekhein 🏡</b>`;
+
+      return {
+        replyText,
+        nextState: "DUAL_ROLE_MENU_PENDING",
+        leadUpdates: {
+          lead_type: "DUAL_ROLE",
+          state: "DUAL_ROLE_MENU_PENDING",
+          metadata: {
+            ...(lead.metadata || {}),
+            is_initial_dual_onboarding: true,
+            has_buyer_profile: true,
+            has_seller_profile: true,
+          },
+        },
+      };
     }
 
     // Otherwise show dual-role greeting:
