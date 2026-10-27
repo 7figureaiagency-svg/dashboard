@@ -3421,7 +3421,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
             let briefingMsg = "";
             if (lang === "GUJLISH") {
-              briefingMsg = `Suprabhat <b>${name} bhai</b>! 🌅\n\nAaje tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>${formattedTime}</b> par scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu timing confirm samjie?`;
+              briefingMsg = `Suprabhat <b>${name} bhai</b>! 🌅\n\nAaje tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>${formattedTime}</b> par scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu timing confirm samjie?`;
             } else if (lang === "ENGLISH") {
               briefingMsg = `Good morning <b>${name}</b>! 🌅\n\nA quick briefing that your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled today at <b>${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the site location. Looking forward to meeting you!`;
             } else {
@@ -3517,7 +3517,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
             let reminderMsg = "";
             if (lang === "GUJLISH") {
-              reminderMsg = `Namaste <b>${name} bhai</b>! ⏰ Reminder: Tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>1 kalak ma (${formattedTime})</b> scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Jo time ma thodo ferfar hoy to janavjo!`;
+              reminderMsg = `Namaste <b>${name} bhai</b>! ⏰ Reminder: Tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>1 kalak ma (${formattedTime})</b> scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Jo time ma thodo ferfar hoy to janavjo!`;
             } else if (lang === "ENGLISH") {
               reminderMsg = `Hello <b>${name}</b>! ⏰ Reminder: Your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled in <b>1 hour at ${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the site on time. Please let us know if you need any adjustments to your schedule!`;
             } else {
@@ -3887,7 +3887,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 const topProject = projectName && projectName !== "VIP Property" ? projectName : "selected property";
 
                 if (lang === "GUJLISH") {
-                  nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Ame je properties share kari hati (jaise <b>${topProject}</b>), shu tame check kari? Developer taraf thi limited units par <b>exclusive price sheet ane spot token booking benefits</b> chali rahya chhe. Jo tame direct inspection karva mangta ho, to ame <b>kaale sanje 5 vage</b> VIP Site Visit arrange kari shakie chiye. 🚗`;
+                  nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Ame je properties share kari hati (jaise <b>${topProject}</b>), shu tame check kari? Developer taraf thi limited units par <b>exclusive price sheet ane spot token booking benefits</b> chali rahya chhe. Jo tame direct inspection karva mangta ho, to ame <b>kaale sanje 5 vage</b> VIP Site Visit arrange kari shakie chhiye. 🚗`;
                 } else if (lang === "ENGLISH") {
                   nudgeMsg = `Hello <b>${name}</b>! 👋 Did you get a chance to review the shortlisted properties (such as <b>${topProject}</b>)? The developer is currently offering <b>exclusive price sheet & spot token booking benefits</b> on select units. Shall we schedule a VIP Site Visit <b>tomorrow at 5:00 PM</b>? 🚗`;
                 } else {
@@ -4552,7 +4552,7 @@ async function handleOwnerFlow({
     if (!sub) {
       const replyText =
         lang === "GUJLISH"
-          ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari property haji amara portal par listed nathi. Kripya tamari property details (area, type, expected price) share karo jethi ame verified buyers connect kari shakiye! 🏡`
+          ? `Ji <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Tamari property haji amara portal par listed nathi. Kripya tamari property details (area, type, expected price) share karo jethi ame verified buyers connect kari shakiye! 🏡`
           : lang === "ENGLISH"
           ? `Hello <b>${senderName || "Friend"}</b>! We don't have an active property listing recorded for you yet. Please share your property details so we can match you with verified buyers! 🏡`
           : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki property abhi hamare portal par listed nahi hai. Kripya apni property details (area, type, expected price) share karein taaki hum verified buyers connect kar sakein! 🏡`;
@@ -4613,12 +4613,12 @@ async function handleOwnerFlow({
 
     const replyText = matchCount > 0
       ? (lang === "GUJLISH"
-        ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari listed property (<b>${propLabel}</b>) mate amara system ma <b>${matchCount} verified buyers</b> actively search kari rahya chhe${budgetPhrase}. 🤝\n\nAmari sales team temne tamari property actively pitch kari rahi chhe. Koi pan visit confirm thay etle ame tarat j tamne update karshe! 🙏`
+        ? `Ji <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Tamari listed property (<b>${propLabel}</b>) mate amara system ma <b>${matchCount} verified buyers</b> actively search kari rahya chhe${budgetPhrase}. 🤝\n\nAmari sales team temne tamari property actively pitch kari rahi chhe. Koi pan visit confirm thay etle ame tarat j tamne update karshe! 🙏`
         : lang === "ENGLISH"
         ? `Hello <b>${senderName || "Friend"}</b>! For your listed property (<b>${propLabel}</b>), we have <b>${matchCount} verified prospective buyers</b> actively looking in this range${budgetPhrase}. 🤝\n\nOur team is currently pitching your property to them. We will notify you immediately once a site visit is scheduled! 🙏`
         : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) ke liye hamare system me <b>${matchCount} verified buyers</b> actively search kar rahe hain${budgetPhrase}. 🤝\n\nHamari sales team unhe aapka listing card aur brochure share kar rahi hai. Jaise hi koi buyer visit book karta hai, hum turant aapse connect karenge! 🙏`)
       : (lang === "GUJLISH"
-        ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari listed property (<b>${propLabel}</b>) amara active portal par live chhe. 📋 Amari marketing team actively prospective buyers sathe follow-up kari rahi chhe. Navi inquiry malta j ame tamne sampark karshe! 🙏`
+        ? `Ji <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Tamari listed property (<b>${propLabel}</b>) amara active portal par live chhe. 📋 Amari marketing team actively prospective buyers sathe follow-up kari rahi chhe. Navi inquiry malta j ame tamne sampark karshe! 🙏`
         : lang === "ENGLISH"
         ? `Hello <b>${senderName || "Friend"}</b>! Your property (<b>${propLabel}</b>) is actively listed in our database. 📋 Our marketing team is running targeted campaigns for this locality. As soon as a matching buyer expresses interest, we will notify you right away! 🙏`
         : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) hamare active portal par successfully live hai. 📋 Filhaal matching inquiries par hamari team targeted outreach chala rahi hai. Naya matching buyer aate hi hum aapse turant connect karenge! 🙏`);
@@ -4644,7 +4644,7 @@ async function handleOwnerFlow({
     if (isDecliningSecondListing) {
       if (existingMeta.declined_second_listing) {
         const replyText = lang === "GUJLISH"
-          ? `Bilkul koi vaat nahi <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Amari team tamari property mate verified leads aavta j update karshe. Have a great day! 🙏`
+          ? `Bilkul koi vaat nahi <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Amari team tamari property mate verified leads aavta j update karshe. Have a great day! 🙏`
           : lang === "ENGLISH"
           ? `Understood <b>${senderName || "Friend"}</b>! We will keep you posted as soon as verified inquiries arrive for your property. Have a great day! 🙏`
           : `Bilkul koi baat nahi <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamari team aapki property ke verified leads aate hi update karegi. Have a great day! 🙏`;
@@ -4698,7 +4698,7 @@ async function handleOwnerFlow({
         lead.state = "QUALIFYING";
 
         const replyText = lang === "GUJLISH"
-          ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "ji"}</b>! 🏡 Tame kaya type ni property shodhva mango chho — Residential (Flat/Villa) ke Commercial (Office/Shop)?`
+          ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "ji"}</b>! 🏡 Tame kaya type ni property joi rahya chho — Residential (Flat/Villa) ke Commercial (Office/Shop)?`
           : lang === "ENGLISH"
           ? `Wonderful <b>${senderName || "Friend"}</b>! 🏡 What type of property are you looking for — Residential (Flat/Villa) or Commercial (Office/Shop)?`
           : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! 🏡 Aap kis type ki property search karna chahte hain — Residential (Flat/Villa) ya Commercial (Office/Shop)?`;
@@ -4746,7 +4746,7 @@ async function handleOwnerFlow({
       if (parsedType) {
         draft.property_type = parsedType;
         draft.configuration = parsedType;
-        if (isLease || /(office|shop|showroom|warehouse|commercial)/i.test(parsedType)) {
+        if (isLease || /(office|shop|showroom|commercial)/i.test(parsedType)) {
           draft.property_category = "COMMERCIAL";
         } else if (/(plot|land|zameen)/i.test(parsedType)) {
           draft.property_category = "PLOT";
@@ -4866,7 +4866,7 @@ async function handleOwnerFlow({
     const isAcknowledgement = /^(thik|theek|thk|thek|ok|okay|k|sahi|achha|acha|saras|barobar|done|understood|samajh|dhanyawad|thanks|thank you|shukriya|aabhar)/i.test(lower.trim());
     const replyText = isAcknowledgement
       ? (lang === "GUJLISH"
-        ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Amari team physical inspection ane verification mate jaldi sampark karshe. Kripya dhyan rakhjo! 🙏`
+        ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Amari acquisition team verification mate jaldi tamaro sampark karshe! 🙏`
         : lang === "ENGLISH"
         ? `Certainly <b>${senderName || "Friend"}</b>! Our acquisition team will connect with you shortly for on-site inspection. Feel free to reach out if you need anything else! 🙏`
         : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamari team inspection & verification ke liye jald aapse call par connect karegi. Koi bhi aur requirement ho to zaroor batayein! 🙏`)
@@ -5343,7 +5343,7 @@ async function handleOwnerFlow({
   const agency = agencyName || "NextGen Realty";
   const replyText =
     lang === "GUJLISH"
-      ? `Khub khub aabhar <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 🎉\n\nTamari property listing details ${agency} desk par successfully register thai gai chhe:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Amara senior property acquisition manager documents verification, physical inspection ane professional photography mate jaldi thi tamari sathe call par connect karshe.`
+      ? `Khub khub aabhar <b>${senderName ? `${senderName} bhai` : "ji"}</b>! 🎉\n\nTamari property listing details ${agency} desk par successfully register thai gai chhe:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Amara senior property acquisition manager documents verification, physical inspection ane professional photography mate jaldi thi tamari sathe call par connect karshe.`
       : lang === "ENGLISH"
       ? `Thank you so much <b>${senderName || "Friend"}</b>! 🎉\n\nYour property listing has been successfully registered on the ${agency} desk:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Our senior property acquisition manager will connect with you shortly over a call for document verification, on-site inspection, and professional photography.`
       : `Bahut bahut dhanyawad <b>${senderName ? `${senderName} ji` : "ji"}</b>! 🎉\n\nAapki property listing details ${agency} desk par successfully register ho gayi hain:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Hamare senior property acquisition manager documents verification, physical inspection aur professional photography ke liye jald hi aapse call par connect karenge.`;
@@ -5392,7 +5392,7 @@ async function handleOwnerFlow({
 
     const queuedPrompt =
       lang === "GUJLISH"
-        ? `\n\n👉 <b>Have chalo tamara ${nextProp.property_type || "biji property"} ni details complete kariye!</b> Aa property kaya Project ke Society ma sthit chhe?`
+        ? `\n\n👉 <b>Have chalo tamara ${nextProp.property_type || "biji property"} ni details complete kariye!</b> Aa property kaya Project ke Society ma aaveli chhe?`
         : lang === "ENGLISH"
         ? `\n\n👉 <b>Now let's proceed with your ${nextProp.property_type || "second property"}!</b> Which Project or Society is this property located in?`
         : `\n\n👉 <b>Ab chaliye aapki ${nextProp.property_type || "doosri property"} ki details note karte hain!</b> Ye property kis Project ya Society me sthit hai?`;
@@ -5498,7 +5498,7 @@ export async function dispatchStateAction(
   const displayCity = context.displayCity || resolvedCity || "aapke shehar";
   const activeTenantId = context.tenantId || defaultTenantId;
   const lower = context.lower || context.messageText.toLowerCase().trim();
-  const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+  const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : "ji";
 
   // ---------------------------------------------------------------------------
   // 1. GLOBAL CRITICAL INTERCEPTORS
@@ -5588,7 +5588,7 @@ export async function dispatchStateAction(
 
     const replyText =
       lang === "GUJLISH"
-        ? `Amari agency <b>${agencyName}</b> nu main office <b>${addr}</b> par sthit chhe! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, tame kaya type ni property mate visit karva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Space</b>?`
+        ? `Amari agency <b>${agencyName}</b> nu main office <b>${addr}</b> par aavelo chhe! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, tame kaya type ni property mate visit karva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Space</b>?`
         : lang === "ENGLISH"
         ? `Our main office for <b>${agencyName}</b> is located at <b>${addr}</b>! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, what type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Space</b>?`
         : `Hamari agency <b>${agencyName}</b> ka main office <b>${addr}</b> par sthit hai! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, aap kis type ki property search kar rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Space</b>?`;
@@ -5656,7 +5656,7 @@ export async function dispatchStateAction(
   if (isAgencyIdentityQuery && !isRealEstateTerm) {
     const replyText =
       lang === "GUJLISH"
-        ? `Amari agency nu naam <b>${agencyName}</b> chhe! 🙏 Ame ${displayCity} ma verified residential (Flats, Villas) ane commercial properties ma deal kariye chiye.\n\n👉 <b>${nameStr}</b>, tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Space</b>? 🏢`
+        ? `Amari agency nu naam <b>${agencyName}</b> chhe! 🙏 Ame ${displayCity} ma verified residential (Flats, Villas) ane commercial properties ma deal kariye chhiye.\n\n👉 <b>${nameStr}</b>, tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Space</b>? 🏢`
         : lang === "ENGLISH"
         ? `We are <b>${agencyName}</b>! 🙏 We specialize in verified residential (Flats, Villas) and commercial properties across ${displayCity}.\n\n👉 <b>${nameStr}</b>, what type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Space</b>? 🏢`
         : `Hamari agency ka naam <b>${agencyName}</b> hai! 🙏 Hum ${displayCity} me verified residential (Flats, Villas) aur commercial properties provide karte hain.\n\n👉 <b>${nameStr}</b>, aap kis type ki property search kar rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Space</b>? 🏢`;
@@ -5673,14 +5673,14 @@ export async function dispatchStateAction(
     if (isGibberish) {
       replyText =
         lang === "GUJLISH"
-          ? `Mane barobar samajh na padi. 😊 Hu fakt property search, site visits ane real estate details ma j tamne madad kari shaku chhu. 🏢\n\nKripya janavjo, tame kaya type ni property shodhva mango chho — <b>2BHK / 3BHK Flat, Villa ke Commercial Space?</b> 🏡`
+          ? `Mane barobar samajh na padi. 😊 Hu fakt property search, site visits ane real estate details ma j tamne madad kari shaku chhu. 🏢\n\nKripya janavjo, tame kaya type ni property joi rahya chho — <b>2BHK / 3BHK Flat, Villa ke Commercial Space?</b> 🏡`
           : lang === "ENGLISH"
           ? `I couldn't quite understand that. 😊 I can assist you with property search, site visits, and verified real estate options. 🏢\n\nPlease let us know what type of property you are looking for — <b>Flat, Villa, or Commercial Space?</b> 🏡`
           : `Main samajh nahi paaya. 😊 Main sirf property search, site visits aur real estate queries me hi aapki help kar sakta hu. 🏢\n\nKripya batayein, aap kis type ki property search kar rahe hain — <b>2BHK / 3BHK Flat, Villa ya Commercial Space?</b> 🏡`;
     } else {
       replyText =
         lang === "GUJLISH"
-          ? `Hu ${agencyName} no AI property assistant chhu ane hu fakt property search, site visits ane real estate sambhandhit details ma j tamne help kari shaku chhu. 😊🏢\n\nKripya janavjo, tame kaya type ni property shodhva mango chho — <b>Residential ke Commercial?</b> 🏡`
+          ? `Hu ${agencyName} no AI property assistant chhu ane hu fakt property search, site visits ane real estate sambhandhit details ma j tamne help kari shaku chhu. 😊🏢\n\nKripya janavjo, tame kaya type ni property joi rahya chho — <b>Residential ke Commercial?</b> 🏡`
           : lang === "ENGLISH"
           ? `I am ${agencyName}'s AI property assistant, and I can only assist you with property search, site visits, and real estate details. 😊🏢\n\nPlease let me know what kind of residential or commercial property you are looking for! 🏡`
           : `Main ${agencyName} ka AI property assistant hu aur main sirf property search, site visits aur real estate queries me hi aapki help kar sakta hu. 😊🏢\n\nKripya batayein, aap kis type ki property search kar rahe hain — <b>Residential ya Commercial?</b> 🏡`;
@@ -6050,7 +6050,7 @@ export async function dispatchStateAction(
           const formatted = new Date(newSlot).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
           const replyText =
             lang === "GUJLISH"
-              ? `Ji bilkul <b>${nameStr}</b>! Tamari site visit <b>${formatted}</b> mate reschedule thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chiye)! 🤝📍`
+              ? `Ji bilkul <b>${nameStr}</b>! Tamari site visit <b>${formatted}</b> mate reschedule thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chhiye)! 🤝📍`
               : lang === "ENGLISH"
               ? `Certainly <b>${nameStr}</b>! Your site visit has been rescheduled to <b>${formatted}</b>. Our senior sales executive will meet you directly at the site location on time! 🤝📍`
               : `Ji bilkul <b>${nameStr}</b>! Aapki site visit <b>${formatted}</b> ke liye reschedule kar di gayi hai. Hamare senior sales executive time par aapse direct site location par milenge! 🤝📍`;
@@ -6238,7 +6238,7 @@ export async function dispatchStateAction(
           ? `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> or <b>Rent/Lease</b> this property? 🔑`
           : `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent / Lease</b> par chahiye? 🔑`)
         : (lang === "GUJLISH"
-          ? `Bahuj saras <b>${nameStr}</b>! 🏡 Chalo navi property search shuru kariye.\n\n👉 <b>Tame kaya type ni property shodhva mango chho — Residential (Flat / Villa) ke Commercial (Shop / Office / Plot)?</b>`
+          ? `Bahuj saras <b>${nameStr}</b>! 🏡 Chalo navi property search shuru kariye.\n\n👉 <b>Tame kaya type ni property joi rahya chho — Residential (Flat / Villa) ke Commercial (Shop / Office / Plot)?</b>`
           : lang === "ENGLISH"
           ? `Wonderful <b>${nameStr}</b>! 🏡 Let's start a fresh property search.\n\n👉 <b>What type of property are you looking for — Residential (Flat / Villa) or Commercial (Shop / Office / Plot)?</b>`
           : `Bahut badhiya <b>${nameStr}</b>! 🏡 Chaliye nayi property search shuru karte hain.\n\n👉 <b>Aap kis type ki property search kar rahe hain — Residential (Flat / Villa) ya Commercial (Shop / Office / Plot)?</b>`);
@@ -6367,7 +6367,7 @@ export async function dispatchStateAction(
 
         const replyText =
           lang === "GUJLISH"
-            ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
+            ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
             : lang === "ENGLISH"
             ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
             : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
@@ -6509,7 +6509,7 @@ export async function dispatchStateAction(
         const targetState: DialogState = (lead.property_type && lead.budget) ? "OPTIONS_SENT" : "QUALIFYING";
         const replyText =
           lang === "GUJLISH"
-            ? `Ji <b>${nameStr}</b>! Chalo tamara buyer property search par aagal vadhiye. Tame kaya type ni property shodhva mango chho? 🏡`
+            ? `Ji <b>${nameStr}</b>! Chalo tamara buyer property search par aagal vadhiye. Tame kaya type ni property joi rahya chho? 🏡`
             : lang === "ENGLISH"
             ? `Certainly <b>${nameStr}</b>! Let's continue with your property search. What type of property are you looking for? 🏡`
             : `Ji <b>${nameStr}</b>! Chaliye aapke property search par aage badhte hain. Aap kis type ki property search karna chahte hain? 🏡`;
@@ -6784,7 +6784,7 @@ export async function dispatchStateAction(
       // Transition to QUALIFYING as SEEKER (Option 1 pure choice)
       const replyText =
         lang === "GUJLISH"
-          ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
+          ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
           : lang === "ENGLISH"
           ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
           : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
@@ -7058,7 +7058,7 @@ export async function dispatchStateAction(
 
       const replyText = isFuture
         ? (lang === "GUJLISH"
-          ? `Welcome back <b>${nameStr}</b>! 🙏\n\nTamari VIP Site Visit already booked chhe:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu tamne timing reschedule karvo chhe ke koi biji query chhe?`
+          ? `Welcome back <b>${nameStr}</b>! 🙏\n\nTamari VIP Site Visit already booked chhe:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu tamne timing reschedule karvo chhe ke koi biji query chhe?`
           : lang === "ENGLISH"
           ? `Welcome back <b>${nameStr}</b>! 🙏\n\nYou already have a VIP Site Visit booked:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time. Would you like to reschedule the time or do you have any questions?`
           : `Welcome back <b>${nameStr}</b>! 🙏\n\nAapki VIP Site Visit already booked hai:${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge. Kya aapko timing reschedule karna hai ya koi aur query hai?`)
@@ -7167,7 +7167,7 @@ export async function dispatchStateAction(
       const pType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
       const replyText =
         lang === "GUJLISH"
-          ? `Bahuj saras <b>${nameStr}</b>! 🏡 Chalo navi property search shuru kariye.\n\n👉 <b>Tame kaya type ni property shodhva mango chho — Residential (Flat / Villa) ke Commercial (Shop / Office / Plot)?</b>`
+          ? `Bahuj saras <b>${nameStr}</b>! 🏡 Chalo navi property search shuru kariye.\n\n👉 <b>Tame kaya type ni property joi rahya chho — Residential (Flat / Villa) ke Commercial (Shop / Office / Plot)?</b>`
           : lang === "ENGLISH"
           ? `Wonderful <b>${nameStr}</b>! 🏡 Let's start a fresh property search.\n\n👉 <b>What type of property are you looking for — Residential (Flat / Villa) or Commercial (Shop / Office / Plot)?</b>`
           : `Bahut badhiya <b>${nameStr}</b>! 🏡 Chaliye nayi property search shuru karte hain.\n\n👉 <b>Aap kis type ki property search kar rahe hain — Residential (Flat / Villa) ya Commercial (Shop / Office / Plot)?</b>`;
@@ -7228,7 +7228,7 @@ export async function dispatchStateAction(
 
       const replyText =
         lang === "GUJLISH"
-          ? `Tamari VIP Site Visit Details: 🚗${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Jo timing reschedule karvo hoy to batavjo!`
+          ? `Tamari VIP Site Visit Details: 🚗${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Jo timing reschedule karvo hoy to batavjo!`
           : lang === "ENGLISH"
           ? `Your VIP Site Visit Details: 🚗${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the location. Let us know if you need to reschedule!`
           : `Aapki VIP Site Visit Details: 🚗${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par milenge. Agar timing reschedule karni ho to batayein!`;
@@ -7327,7 +7327,7 @@ export async function dispatchStateAction(
       const formatted = new Date(newSlot).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
       const replyText =
         lang === "GUJLISH"
-          ? `Ji bilkul <b>${nameStr}</b>! Tamari site visit <b>${formatted}</b> mate reschedule thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chiye)! 🤝📍`
+          ? `Ji bilkul <b>${nameStr}</b>! Tamari site visit <b>${formatted}</b> mate reschedule thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chhiye)! 🤝📍`
           : lang === "ENGLISH"
           ? `Certainly <b>${nameStr}</b>! Your site visit has been rescheduled to <b>${formatted}</b>. Our senior sales executive will meet you directly at the site location on time! 🤝📍`
           : `Ji bilkul <b>${nameStr}</b>! Aapki site visit <b>${formatted}</b> ke liye reschedule kar di gayi hai. Hamare senior sales executive time par aapse direct site location par milenge (Milte hain site par)! 🤝📍`;
@@ -7473,7 +7473,7 @@ export async function dispatchStateAction(
         const formatted = new Date(newSlot).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
         const replyText =
           lang === "GUJLISH"
-            ? `Ji bilkul <b>${nameStr}</b>! Tamari VIP site visit <b>${formatted}</b> mate reschedule thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chiye)! 🤝📍`
+            ? `Ji bilkul <b>${nameStr}</b>! Tamari VIP site visit <b>${formatted}</b> mate reschedule thai gai chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chhiye)! 🤝📍`
             : lang === "ENGLISH"
             ? `Certainly <b>${nameStr}</b>! Your VIP site visit has been rescheduled to <b>${formatted}</b>. Our senior sales executive will meet you directly at the site location on time! 🤝📍`
             : `Ji bilkul <b>${nameStr}</b>! Aapki VIP site visit <b>${formatted}</b> ke liye reschedule kar di gayi hai. Hamare senior sales executive time par aapse direct site location par milenge (Milte hain site par)! 🤝📍`;
@@ -7945,7 +7945,7 @@ export async function dispatchStateAction(
         const formatted = new Date(newSlot).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
         const replyText =
           lang === "GUJLISH"
-            ? `Ji bilkul <b>${nameStr}</b>! Tamari VIP site visit <b>${formatted}</b> mate fari thi schedule kari didhi chhe. (Site par maliye chiye)! 🤝📍`
+            ? `Ji bilkul <b>${nameStr}</b>! Tamari VIP site visit <b>${formatted}</b> mate fari thi schedule kari didhi chhe. (Site par maliye chhiye)! 🤝📍`
             : lang === "ENGLISH"
             ? `Certainly <b>${nameStr}</b>! Your VIP site visit has been rescheduled to <b>${formatted}</b>. See you at the site! 🤝📍`
             : `Ji bilkul <b>${nameStr}</b>! Aapki VIP site visit <b>${formatted}</b> ke liye dobara schedule kar di gayi hai (Milte hain site par)! 🤝📍`;
@@ -8243,7 +8243,7 @@ export async function dispatchStateAction(
 
       const replyText =
         lang === "GUJLISH"
-          ? `Mubarak <b>${nameStr}</b>! 🎉\n\nTamari VIP Site Visit <b>${formatted}</b> par confirm thai gai chhe! 🚗${propDetails ? `\n🏢 <b>Project:</b> ${propDetails.project_name} (${propDetails.location})` : ""}${mapLink}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior property advisor time par direct site location par tamne malshe.`
+          ? `Mubarak <b>${nameStr}</b>! 🎉\n\nTamari VIP Site Visit <b>${formatted}</b> par confirm thai gai chhe! 🚗${propDetails ? `\n🏢 <b>Project:</b> ${propDetails.project_name} (${propDetails.location})` : ""}${mapLink}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior property advisor time par direct site location par tamne malshe.`
           : lang === "ENGLISH"
           ? `Congratulations <b>${nameStr}</b>! 🎉\n\nYour VIP Site Visit is confirmed for <b>${formatted}</b>! 🚗${propDetails ? `\n🏢 <b>Project:</b> ${propDetails.project_name} (${propDetails.location})` : ""}${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time.`
           : `Badhai ho <b>${nameStr}</b>! 🎉\n\nAapki VIP Site Visit <b>${formatted}</b> ke liye confirm ho gayi hai! 🚗${propDetails ? `\n🏢 <b>Project:</b> ${propDetails.project_name} (${propDetails.location})` : ""}${mapLink}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge.`;
@@ -8403,7 +8403,7 @@ export async function dispatchStateAction(
     if (isFreshOption1) {
       const replyText =
         lang === "GUJLISH"
-          ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
+          ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
           : lang === "ENGLISH"
           ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
           : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
@@ -8545,7 +8545,7 @@ async function handleFaqResponse(
 ): Promise<DialogTransitionResult> {
   const lang = context.lang || "HINGLISH";
   const senderName = context.senderName || "Friend";
-  const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+  const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : "ji";
   const agencyName = context.agencyName || "Nextgen Realty";
   const resolvedCity = context.resolvedCity;
   const activeTenantId = context.tenantId || defaultTenantId;
@@ -8697,7 +8697,7 @@ async function handleFaqResponse(
     const mapLink = formatMapHyperlink(mapUrl, "View on Google Maps");
     replyText =
       lang === "GUJLISH"
-        ? `Ji ${nameStr}! <b>${projName}</b> ${projLoc} na ekdam prime location par sthit chhe! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• ${mapLink}${bridgeCta}`
+        ? `Ji ${nameStr}! <b>${projName}</b> ${projLoc} na ekdam prime location par aavelo chhe! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• ${mapLink}${bridgeCta}`
         : lang === "ENGLISH"
         ? `Hello ${nameStr}! <b>${projName}</b> is situated at a prime location in ${projLoc}! 📍\n\n• 🚗 <b>Nearby Landmarks:</b> ${landmarksStr}\n• ${mapLink}${bridgeCta}`
         : `Ji ${nameStr}! <b>${projName}</b> ${projLoc} ki ekdam prime location par sthit hai! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• ${mapLink}${bridgeCta}`;
@@ -8759,7 +8759,7 @@ async function handleBrochureOrMapResponse(
 
   const replyText = hasBookedVisit
     ? (lang === "GUJLISH"
-      ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${formattedLink}\n\nTamari VIP Site Visit 🚗 already confirm chhe. 🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe.`
+      ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${formattedLink}\n\nTamari VIP Site Visit 🚗 already confirm chhe. 🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par tamne malshe.`
       : lang === "ENGLISH"
       ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "Project"}</b>, <b>${senderName}</b>:\n${formattedLink}\n\nYour VIP Site Visit 🚗 is already confirmed. 🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time.`
       : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${formattedLink}\n\nAapki VIP Site Visit 🚗 already confirm hai. 🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge.`)
@@ -8783,7 +8783,7 @@ async function handleQualificationCascade(
 ): Promise<DialogTransitionResult> {
   const lang = context.lang || "HINGLISH";
   const senderName = context.senderName || "Friend";
-  const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+  const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : "ji";
   const activeTenantId = context.tenantId || defaultTenantId;
   const resolvedCity = context.resolvedCity;
 
@@ -8870,21 +8870,21 @@ async function handleQualificationCascade(
     if (missingField === "PROPERTY_TYPE") {
       replyText =
         lang === "GUJLISH"
-          ? `Tame kaya type ni property shodhva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? 🏡`
+          ? `Tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? 🏡`
           : lang === "ENGLISH"
           ? `What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? 🏡`
           : `Aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial Shop/Office</b>? 🏡`;
     } else if (missingField === "COMMERCIAL_SUBTYPE") {
       replyText =
         lang === "GUJLISH"
-          ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space ma tame kaya type ni property shodhva mango chho — Commercial Shop, Office, ke Showroom?</b>`
+          ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space ma tame kaya type ni property joi rahya chho — Commercial Shop, Office, ke Showroom?</b>`
           : lang === "ENGLISH"
           ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>What type of commercial property are you looking for — Commercial Shop, Office, or Showroom?</b>`
           : `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space me aap kis type ki property search kar rahe hain — Commercial Shop, Office, ya Showroom?</b>`;
     } else if (missingField === "RESIDENTIAL_SUBTYPE") {
       replyText =
         lang === "GUJLISH"
-          ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential ma tame kaya type ni property shodhva mango chho — 2BHK / 3BHK Flat, ke Villa?</b>`
+          ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential ma tame kaya type ni property joi rahya chho — 2BHK / 3BHK Flat, ke Villa?</b>`
           : lang === "ENGLISH"
           ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>What type of residential property are you looking for — 2BHK / 3BHK Flat, or Villa?</b>`
           : `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential me aap kis type ki property search kar rahe hain — 2BHK / 3BHK Flat, ya Villa?</b>`;
@@ -9752,7 +9752,7 @@ Deno.serve(async (req: Request) => {
       } else if (lead.state === "OWNER_DETAILS_GATHERED" || (typeof lead.state === "string" && lead.state.startsWith("OWNER_"))) {
         replyText =
           lang === "GUJLISH"
-            ? `Ji bilkul <b>${senderName} bhai</b>! Tamari property verification process ma chhe. Amari listing team jaldi direct call par tamaro sampark karshe. Kripya dhyan rakhjo! 🙏`
+            ? `Ji bilkul <b>${senderName} bhai</b>! Tamari property verification process ma chhe. Amari acquisition team verification mate jaldi tamaro sampark karshe! 🙏`
             : lang === "ENGLISH"
             ? `Sure <b>${senderName}</b>! Your property listing is under active review. Our acquisition team will connect with you directly. Let us know if you need to update any details! 🙏`
             : `Ji bilkul <b>${senderName} ji</b>! Aapki property submission active review me hai. Hamari acquisition team documents verify karke aapse jald hi direct call par connect karegi! 🙏`;
@@ -10072,7 +10072,7 @@ Deno.serve(async (req: Request) => {
     // 11. OUTBOUND DISPATCH (Only if not silent!)
     // =========================================================================
     if (!isSilent && (!replyText || !replyText.trim())) {
-      const leadName = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : (lang === "GUJLISH" ? "Mitra" : "ji");
+      const leadName = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : "ji";
       replyText =
         lang === "GUJLISH"
           ? `Ji ${leadName}! Kripya janavjo tamne kaya type ni property ma interest chhe — Flat, Villa, ke Commercial Office/Shop? 🏡`
