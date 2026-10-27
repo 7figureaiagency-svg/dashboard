@@ -8,12 +8,28 @@ updated: 2026-10-27T09:24:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 23 - Vernacular Temporal Slot Precision, Multi-Entity Owner Intake & Clean Hyperlink Engine  
-**Status:** ⏳ Ready to Execute (Plans 23.1 & 23.2 Planned)  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/23/23.1-PLAN.md` (Vernacular Slot Time Precision & Hyperlinked Location Engine) — ⏳ Ready
-- `.gsd/phases/23/23.2-PLAN.md` (Multi-Entity Owner Intake, Duplex Precision & FSM Metadata Persistence) — ⏳ Ready
+- `.gsd/phases/23/23.1-PLAN.md` (Vernacular Slot Time Precision & Hyperlinked Location Engine) — ✅ Complete
+- `.gsd/phases/23/23.2-PLAN.md` (Multi-Entity Owner Intake, Duplex Precision & FSM Metadata Persistence) — ✅ Complete
 
 ## Last Action
+
+Completed Phase 23 (Vernacular Temporal Slot Precision, Multi-Entity Owner Intake & Clean Hyperlink Engine):
+- Plan 23.1:
+  - Upgraded `parseVisitSlot` in `supabase/functions/realtor-lead-engine/index.ts` with Gujarati temporal day tokens (aje, aaje, આજે -> Today; kale, kaale, કાલે -> Tomorrow; parso, parsva -> Day After), Gujarati time tokens (vage, વાગે), Indic digit normalization, and morning/AM default for 10-11 AM IST.
+  - Upgraded slot assembly across all 5 booking/reschedule handlers to concatenate `preferred_date_raw` and `preferred_time_raw`, ensuring time slots are never lost.
+  - Introduced `formatMapHyperlink` and `formatBrochureHyperlink` helpers and replaced all raw map/brochure URL occurrences across morning briefings, pre-visit reminders, and confirmations with clean hyperlinks.
+- Plan 23.2:
+  - Added Duplex disambiguation in `parsePropertyTypeFromText` (no longer collapses to Penthouse).
+  - Added multi-entity simultaneous extraction (`extractProjectOrSocietyFromText`) for project + property type utterances like `'Ananta astha' as project ka name and property type '3bhk duplex'`.
+  - Added fallback property type extraction in `OWNER_CONFIG_PENDING`.
+  - Fixed FSM metadata handshake in `handleOwnerFlow`: returns `leadUpdates: buildOwnerLeadUpdates(...)` across all return paths, forwarded by `dispatchStateAction` to prevent metadata wipeout in the main router.
+- Code Review & Deployment:
+  - Addressed Code Review findings: P0 `ReferenceError: archived is not defined` fixed with safe array fallback; P1 tenant WhatsApp token fallback added.
+  - Deployed Edge Function `v73-vernacular-slot-owner-precision` to Supabase production (`yeiygfysijptjdepctnx`).
+  - Verified 16/16 assertions pass in `scratch/test_phase23_slot_owner_hyperlink.cjs`.
+  - Frontend build verified (`npm.cmd run build`: 850ms, 0 errors).
 
 Completed Phase 22 (Plan 22.2 Gap Closure):
 - Aligned Edge Function version string to `v72-state-conditioned-intent-engine` across `/health` and root greeting endpoints in `supabase/functions/realtor-lead-engine/index.ts`.
