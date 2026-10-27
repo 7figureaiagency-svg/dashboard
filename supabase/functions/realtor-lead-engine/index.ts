@@ -1327,9 +1327,11 @@ function parsePropertyTypeFromText(text: string): string {
     ) {
       return `${bhkMatch[1]}BHK Villa`;
     }
+    if (lower.includes("duplex") || lower.includes("ડુપ્લેક્સ")) {
+      return `${bhkMatch[1]}BHK Duplex`;
+    }
     if (
-      lower.includes("penthouse") || lower.includes("duplex") ||
-      lower.includes("પેન્ટહાઉસ") || lower.includes("ડુપ્લેક્સ")
+      lower.includes("penthouse") || lower.includes("પેન્ટહાઉસ")
     ) {
       return `${bhkMatch[1]}BHK Penthouse`;
     }
@@ -1345,7 +1347,8 @@ function parsePropertyTypeFromText(text: string): string {
 
   // 3. Specific Residential Subtypes
   if (lower.includes("studio") || lower.includes("1rk") || lower.includes("સ્ટુડિયો") || lower.includes("૧rk")) return "Studio Apartment";
-  if (lower.includes("penthouse") || lower.includes("duplex") || lower.includes("પેન્ટહાઉસ") || lower.includes("ડુપ્લેક્સ")) return "Penthouse";
+  if (lower.includes("duplex") || lower.includes("ડુપ્લેક્સ")) return "Duplex";
+  if (lower.includes("penthouse") || lower.includes("પેન્ટહાઉસ")) return "Penthouse";
   if (lower.includes("farmhouse") || lower.includes("farm house") || lower.includes("ફાર્મહાઉસ") || lower.includes("ફાર્મ હાઉસ")) return "Farmhouse";
   if (lower.includes("row house") || lower.includes("rowhouse") || lower.includes("tenament") || lower.includes("tenement") || lower.includes("રો હાઉસ") || lower.includes("ટેનામેન્ટ")) return "Row House";
   if (
@@ -1370,6 +1373,66 @@ function parsePropertyTypeFromText(text: string): string {
   if (lower.includes("commercial") || lower.includes("કોમર્શિયલ")) return "Commercial";
 
   return "";
+}
+
+function extractProjectOrSocietyFromText(text: string, parsedPropType?: string): string {
+  if (!text) return "";
+  const trimmed = text.trim();
+
+  // 1. Quoted project name followed by project/society/ka name/nu name
+  // e.g. 'Ananta astha' as project ka name
+  const quotedBeforeProj = trimmed.match(/['"]([a-zA-Z0-9\s-]+?)['"]\s+(?:as\s+)?(?:project|society)(?:\s*(?:ka|nu|no)?\s*name)?/i);
+  if (quotedBeforeProj && quotedBeforeProj[1].trim()) {
+    return quotedBeforeProj[1].trim();
+  }
+
+  // 2. Project/society keyword followed by quoted string or name
+  // e.g. project ka name 'Ananta Astha' or project name: 'Ananta Astha'
+  const projAfterKeyword = trimmed.match(/(?:project|society)(?:\s*(?:ka|nu|no)?\s*name)?\s*[:=]?\s*['"]([a-zA-Z0-9\s-]+?)['"]/i);
+  if (projAfterKeyword && projAfterKeyword[1].trim()) {
+    return projAfterKeyword[1].trim();
+  }
+
+  // 3. Unquoted "X as project" or "X project ka name"
+  // e.g. Ananta astha as project ka name
+  const asProject = trimmed.match(/([a-zA-Z0-9\s-]+?)\s+(?:as\s+)(?:project|society)(?:\s*(?:ka|nu|no)?\s*name)?/i);
+  if (asProject && asProject[1].trim()) {
+    const candidate = asProject[1].trim();
+    if (!/^(and|aur|ane|ye|meri|mera|maro|mari)$/i.test(candidate)) {
+      return candidate;
+    }
+  }
+
+  // 4. "project ka name X" without quotes up to and/aur/property/type/comma/end
+  // e.g. project ka name Ananta Astha and property type
+  const unquotedProj = trimmed.match(/(?:project|society)(?:\s*(?:ka|nu|no)?\s*name)\s*[:=]?\s*([a-zA-Z0-9\s-]+?)(?:\s+(?:and|ane|aur|property|type|hai|chhe|che|pe|par|\.)|$)/i);
+  if (unquotedProj && unquotedProj[1].trim()) {
+    const candidate = unquotedProj[1].trim();
+    if (!/^(ka|nu|no|name|hai|chhe|che|is)$/i.test(candidate) && candidate.length >= 2) {
+      return candidate;
+    }
+  }
+
+  // 5. Strip parsedPropType and common filler words to see if a clean society name remains
+  if (parsedPropType) {
+    const stripped = trimmed
+      .replace(/['"]/g, "")
+      .replace(new RegExp(parsedPropType.replace(/\s+/g, "\\s*"), "gi"), "")
+      .replace(/\b(?:property\s*type|project(?:\s*(?:ka|nu|no)?\s*name)?|society(?:\s*(?:ka|nu|no)?\s*name)?|as|aur|ane|and|hai|chhe|che|me|ma|in|at|bechna|bechni|vechvu|vechva|sell|listing)\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (stripped.length >= 3 && !/^\d+$/.test(stripped)) {
+      return stripped;
+    }
+  }
+
+  return "";
+}
+
+function formatSocietyName(raw: string): string {
+  if (!raw) return "";
+  const cleaned = raw.replace(/^['"]|['"]$/g, "").replace(/^(?:ye|meri|mera|maro|mari|in|at)\s+/i, "").trim();
+  return cleaned.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
 function parseRequirementFromText(text: string): string {
@@ -2228,6 +2291,9 @@ interface IntentResult {
 15c. "Plot 500var flat 1200sqft" ->
 {"action": {"intent": "SUBMIT_LISTING", "plot_area_sqft": 4500, "super_built_up_sqft": 1200}, "language": "GUJLISH", "user_role": "OWNER"}
 
+15d. "'Ananta astha' as project ka name and property type 3bhk duplex" / "Ananta Astha 3bhk duplex bechna hai" ->
+{"action": {"intent": "SUBMIT_LISTING", "project_or_society": "Ananta Astha", "property_type": "3BHK Duplex", "transaction_type": "SELL"}, "language": "HINGLISH", "user_role": "OWNER"}
+
 16. "can you connect me with an agent" / "phone pe baat karni hai" ->
 {"action": {"intent": "REQUEST_HUMAN_CALL"}, "language": "ENGLISH", "user_role": "SEEKER"}
 
@@ -2293,6 +2359,7 @@ interface IntentResult {
     - If user mentions built-up area (e.g. "2000 built up"): super_built_up_sqft: 2000.
     - If user mentions plot area (e.g. "900 plot area"): plot_area_sqft: 900.
     - If user mentions carpet area: carpet_sqft: <int>.
+    - When user gives both project/society name and property type (e.g. "'Ananta Astha' as project ka name and property type '3bhk duplex'" or "Ananta Astha 3BHK Duplex"), extract project_or_society: "Ananta Astha" and property_type: "3BHK Duplex" in SUBMIT_LISTING!
 
 ### LANGUAGE DISCRIMINATION:
 - "GUJARATI_SCRIPT": if written in Gujarati script (e.g. અ, બ, ક).
@@ -2366,7 +2433,7 @@ export function buildLeadContextForClassifier(lead: any, messageText: string): s
   } else if (state === "ROLE_SELECTION_PENDING") {
     currentPendingQuestion = "ROLE_SELECTION (Bot asked user: 1 or 'Leni hai' to Buy/Rent properties, 2 or 'Deni hai' to Sell/Rent Out their property. Replies indicating property types like 'Office', 'Residential', 'Commercial', 'Shop', 'Flat' are SEEKER requests, NEVER OFF_TOPIC!)";
   } else if (state === "OWNER_CONFIG_PENDING") {
-    currentPendingQuestion = "PROPERTY_CONFIG (Bot asked for property type / configuration: Flat, Villa, Commercial Office, Shop, Plot)";
+    currentPendingQuestion = "PROPERTY_CONFIG (Bot asked for property type / configuration: Flat, Villa, Commercial Office, Shop, Plot. If user specifies project/society name too, extract BOTH project_or_society and property_type!)";
   } else if (state === "OWNER_SOCIETY_PENDING") {
     currentPendingQuestion = "SOCIETY_OR_ROAD (Bot asked for Commercial Complex, Business Hub, Society, or Road name)";
   } else if (state === "OWNER_LOCATION_PENDING") {
@@ -4223,6 +4290,26 @@ async function handleOwnerFlow({
     }
   }
 
+  // 1b2. Fallback property type extraction & simultaneous project/society extraction:
+  if (!draft.property_type) {
+    const parsedProp = parsePropertyTypeFromText(messageText);
+    if (parsedProp) {
+      draft.property_type = parsedProp;
+      draft.configuration = parsedProp;
+    }
+  }
+
+  if (!draft.society_name && !draft.project_name) {
+    const extractedProj = extractProjectOrSocietyFromText(messageText, draft.property_type);
+    if (extractedProj) {
+      const cleanSoc = formatSocietyName(extractedProj);
+      if (cleanSoc.length >= 2) {
+        draft.society_name = cleanSoc;
+        draft.project_name = cleanSoc;
+      }
+    }
+  }
+
   // 1c. In-House Buyer Matching / Demand Status Inquiry ("Koi buyer mila?", "Inquiry aayi?")
   const isBuyerDemandInquiry =
     /(?:buyer|khareedne\s*wala|kharidne\s*wala|graahak|grahak|customer|inquiry|inquiries|koi\s*aaya|koi\s*aayi|koi\s*mila|ketla\s*malya|any\s*buyers|interested\s*buyers)/i.test(lower) &&
@@ -4614,7 +4701,8 @@ async function handleOwnerFlow({
   const isComm = draft.property_category === "COMMERCIAL" || /(office|shop|showroom|warehouse)/i.test(String(draft.property_type || ""));
   if (lead.state === "OWNER_SOCIETY_PENDING" || (!draft.society_name && !draft.project_name)) {
     if (lead.state === "OWNER_SOCIETY_PENDING" && messageText.trim().length >= 2) {
-      const cleaned = messageText.replace(/^(?:ye|meri|mera|maro|mari|in|at)\s+/i, "").trim();
+      const extractedProj = extractProjectOrSocietyFromText(messageText, draft.property_type);
+      const cleaned = formatSocietyName(extractedProj || messageText);
       draft.society_name = cleaned;
       draft.project_name = cleaned;
     } else {
@@ -4664,10 +4752,10 @@ async function handleOwnerFlow({
       const socLabel = draft.society_name || draft.project_name || "Society";
       const replyText =
         lang === "GUJLISH"
-          ? `Noted <b>${socLabel}</b>! 🏢\n\n👉 <b>Aa property ${city ? `${city} na ` : ""}kaya exact Area ke Landmark pase sthit chhe?</b> 📍`
+          ? `Noted <b>${socLabel}</b>${draft.property_type ? ` (${draft.property_type})` : ""}! 🏢\n\n👉 <b>Aa property ${city ? `${city} na ` : ""}kaya exact Area ke Landmark pase sthit chhe?</b> 📍`
           : lang === "ENGLISH"
-          ? `Noted <b>${socLabel}</b>! 🏢\n\n👉 <b>In which exact Area or near which Landmark${city ? ` in ${city}` : ""} is this located?</b> 📍`
-          : `Noted <b>${socLabel}</b>! 🏢\n\n👉 <b>Ye property ${city ? `${city} ke ` : ""}kaunse exact Area ya Landmark ke paas sthit hai?</b> 📍`;
+          ? `Noted <b>${socLabel}</b>${draft.property_type ? ` (${draft.property_type})` : ""}! 🏢\n\n👉 <b>In which exact Area or near which Landmark${city ? ` in ${city}` : ""} is this located?</b> 📍`
+          : `Noted <b>${socLabel}</b>${draft.property_type ? ` (${draft.property_type})` : ""}! 🏢\n\n👉 <b>Ye property ${city ? `${city} ke ` : ""}kaunse exact Area ya Landmark ke paas sthit hai?</b> 📍`;
 
       await supabase.from("leads").update({
         lead_type: effectiveOwnerLeadType,
