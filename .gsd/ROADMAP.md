@@ -194,6 +194,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 20: AI Lead Scoring Engine & Conversion Heatmap | ✅ Complete | 1/1 | 100% |
 | 21: Autonomous Property Pitch Crafter Engine | ✅ Complete | 2/2 | 100% |
 | 22: State-Conditioned Multilingual Intent Engine | ✅ Complete | 2/2 | 100% |
+| 23: Vernacular Slot, Owner Intake & Hyperlinks | ⏳ Ready | 0/2 | 0% |
 
 ---
 
@@ -223,5 +224,16 @@ updated: 2026-10-19T18:50:30+05:30
 **Plans:**
 - [x] Plan 22.1: State-Conditioned Multilingual Intent Engine (TypeChat + Active Question Context Injection) ([`22.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/22/22.1-PLAN.md))
 - [x] Plan 22.2: Edge Function Production Deployment & Strict Version Assertion ([`22.2-GAP-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/22/22.2-GAP-PLAN.md))
+
+---
+
+### Phase 23: Vernacular Temporal Slot Precision, Multi-Entity Owner Intake & Clean Hyperlink Engine
+**Status:** ⏳ Ready to Execute  
+**Objective:** Resolve Telegram site visit scheduling and owner intake bugs: (1) Correctly parse vernacular Gujarati slot requests ('Aje 10 vage') to 10:00 AM IST today rather than defaulting to 5:00 PM tomorrow, (2) Support simultaneous project name ('Ananta astha') and property type ('3bhk duplex') extraction without repeating Step 1 questions, eliminate FSM metadata wipeout in the main router, and (3) Convert all raw, ugly Google Maps URL strings across turn messages, confirmations, and sweeps into concise, clickable HTML hyperlinks matching property search cards.  
+**Depends on:** Phase 22  
+**Plans:**
+- [ ] Plan 23.1: Vernacular Slot Time Precision & Hyperlinked Location Engine ([`23.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/23/23.1-PLAN.md))
+- [ ] Plan 23.2: Multi-Entity Owner Intake, Duplex Precision & FSM Metadata Persistence ([`23.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/23/23.2-PLAN.md))
+
 
 
