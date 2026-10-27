@@ -8,11 +8,22 @@ updated: 2026-10-27T09:24:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 25 - Owner Intake Stop-Word Guard & Entity Extraction Disambiguation  
-**Status:** ⏳ Ready to Execute  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/25/25.1-PLAN.md` (Owner Intake Stop-Word Guard & Entity Extraction Disambiguation) — ⏳ Ready to Execute
+- `.gsd/phases/25/25.1-PLAN.md` (Owner Intake Stop-Word Guard & Entity Extraction Disambiguation) — ✅ Complete
 
 ## Last Action
+
+Completed Phase 25 (Owner Intake Stop-Word Guard & Entity Extraction Disambiguation):
+- Plan 25.1:
+  - Created `STOP_WORDS_SET` with comprehensive dictionary covering vernacular pronouns, auxiliary verbs, property type keywords, and intent verbs.
+  - Implemented `isLikelySocietyOrProjectName(name: string): boolean` guard function in `supabase/functions/realtor-lead-engine/index.ts` to reject conversational boilerplate ('Muje meri he', 'flat', 'shop bechni he').
+  - Upgraded `extractProjectOrSocietyFromText` and `formatSocietyName` to strip property subtype tokens ('shop', 'office', 'flat', etc.) and validate candidates against `isLikelySocietyOrProjectName`.
+  - Added direct owner listing routing in `FRESH` and `ROLE_SELECTION_PENDING` states so first-message owner declarations like 'muje meri shop bechni he' immediately enter `handleOwnerFlow`.
+  - Bumped Edge Function version to `v74-owner-entity-guard` and deployed to Supabase production (`yeiygfysijptjdepctnx`).
+  - Verified live health check: HTTP 200, `status: "ONLINE"`, `version: "v74-owner-entity-guard"`.
+  - Verified 16/16 assertions pass in `scratch/test_phase25_owner_entity_guard.cjs`.
+  - Frontend build verified: `npm run build` compiled in 1.23s with 0 errors.
 
 Completed Phase 24 (E2E QA Audit Bug Remediation & Role Governance Hardening):
 - Plan 24.1:

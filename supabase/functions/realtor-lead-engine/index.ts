@@ -1375,6 +1375,33 @@ function parsePropertyTypeFromText(text: string): string {
   return "";
 }
 
+const STOP_WORDS_SET = new Set([
+  "muje", "mujhe", "mane", "mare", "mari", "maro", "maru", "meri", "mera", "mere",
+  "apni", "apna", "apne", "i", "my", "we", "our", "me", "us", "humko", "hume", "hum",
+  "main", "hu", "ame", "tame", "aap", "ek", "one", "1", "2", "3", "4", "5", "ye",
+  "aa", "yeh", "this", "that", "bechna", "bechni", "bechne", "bechvu", "vechvu", "vechva",
+  "vechvo", "sell", "selling", "list", "listing", "karna", "karni", "karne", "karvu",
+  "karva", "karo", "want", "wants", "wanted", "he", "hai", "h", "hain", "che", "chhe",
+  "to", "chahiye", "joiye", "ka", "ki", "ke", "nu", "no", "ni", "na", "in", "at", "me",
+  "ma", "par", "pe", "se", "thi", "as", "aur", "ane", "and", "is", "sho", "shop", "office",
+  "flat", "apartment", "duplex", "penthouse", "villa", "bungalow", "house", "ghar",
+  "makan", "makaan", "plot", "land", "zamin", "showroom", "godown", "warehouse", "dukan",
+  "dukaan", "commercial", "residential", "property", "project", "society", "name"
+]);
+
+function isLikelySocietyOrProjectName(name: string): boolean {
+  if (!name || typeof name !== "string") return false;
+  const cleaned = name.trim().replace(/['"]/g, "");
+  if (cleaned.length < 2) return false;
+  if (/^\d+$/.test(cleaned)) return false;
+
+  const words = cleaned.toLowerCase().split(/[\s,.-]+/).filter(Boolean);
+  if (words.length === 0) return false;
+
+  const nonStopWords = words.filter((w) => !STOP_WORDS_SET.has(w));
+  return nonStopWords.length > 0;
+}
+
 function extractProjectOrSocietyFromText(text: string, parsedPropType?: string): string {
   if (!text) return "";
   const trimmed = text.trim();
@@ -1383,14 +1410,16 @@ function extractProjectOrSocietyFromText(text: string, parsedPropType?: string):
   // e.g. 'Ananta astha' as project ka name
   const quotedBeforeProj = trimmed.match(/['"]([a-zA-Z0-9\s-]+?)['"]\s+(?:as\s+)?(?:project|society)(?:\s*(?:ka|nu|no)?\s*name)?/i);
   if (quotedBeforeProj && quotedBeforeProj[1].trim()) {
-    return quotedBeforeProj[1].trim();
+    const cand = quotedBeforeProj[1].trim();
+    if (isLikelySocietyOrProjectName(cand)) return cand;
   }
 
   // 2. Project/society keyword followed by quoted string or name
   // e.g. project ka name 'Ananta Astha' or project name: 'Ananta Astha'
   const projAfterKeyword = trimmed.match(/(?:project|society)(?:\s*(?:ka|nu|no)?\s*name)?\s*[:=]?\s*['"]([a-zA-Z0-9\s-]+?)['"]/i);
   if (projAfterKeyword && projAfterKeyword[1].trim()) {
-    return projAfterKeyword[1].trim();
+    const cand = projAfterKeyword[1].trim();
+    if (isLikelySocietyOrProjectName(cand)) return cand;
   }
 
   // 3. Unquoted "X as project" or "X project ka name"
@@ -1398,7 +1427,7 @@ function extractProjectOrSocietyFromText(text: string, parsedPropType?: string):
   const asProject = trimmed.match(/([a-zA-Z0-9\s-]+?)\s+(?:as\s+)(?:project|society)(?:\s*(?:ka|nu|no)?\s*name)?/i);
   if (asProject && asProject[1].trim()) {
     const candidate = asProject[1].trim();
-    if (!/^(and|aur|ane|ye|meri|mera|maro|mari)$/i.test(candidate)) {
+    if (isLikelySocietyOrProjectName(candidate)) {
       return candidate;
     }
   }
@@ -1408,20 +1437,31 @@ function extractProjectOrSocietyFromText(text: string, parsedPropType?: string):
   const unquotedProj = trimmed.match(/(?:project|society)(?:\s*(?:ka|nu|no)?\s*name)\s*[:=]?\s*([a-zA-Z0-9\s-]+?)(?:\s+(?:and|ane|aur|property|type|hai|chhe|che|pe|par|\.)|$)/i);
   if (unquotedProj && unquotedProj[1].trim()) {
     const candidate = unquotedProj[1].trim();
-    if (!/^(ka|nu|no|name|hai|chhe|che|is)$/i.test(candidate) && candidate.length >= 2) {
+    if (isLikelySocietyOrProjectName(candidate)) {
       return candidate;
     }
   }
 
-  // 5. Strip parsedPropType and common filler words to see if a clean society name remains
+  // 5. Strip parsedPropType, property subtype tokens and conversational filler words to see if a clean society name remains
   if (parsedPropType) {
+    const propTokens = [
+      parsedPropType,
+      "commercial", "residential", "flat", "apartment", "duplex", "penthouse",
+      "villa", "bungalow", "house", "ghar", "makan", "makaan", "plot", "land", "zamin",
+      "shop", "showroom", "office", "warehouse", "godown", "dukan", "dukaan"
+    ].join("|");
+
     const stripped = trimmed
       .replace(/['"]/g, "")
-      .replace(new RegExp(parsedPropType.replace(/\s+/g, "\\s*"), "gi"), "")
-      .replace(/\b(?:property\s*type|project(?:\s*(?:ka|nu|no)?\s*name)?|society(?:\s*(?:ka|nu|no)?\s*name)?|as|aur|ane|and|hai|chhe|che|me|ma|in|at|bechna|bechni|vechvu|vechva|sell|listing)\b/gi, "")
+      .replace(new RegExp(`\\b(?:${propTokens})\\b`, "gi"), "")
+      .replace(/\b(?:property\s*type|project(?:\s*(?:ka|nu|no)?\s*name)?|society(?:\s*(?:ka|nu|no)?\s*name)?|type)\b/gi, "")
+      .replace(/\b(?:muje|mujhe|mane|mare|mari|maro|maru|meri|mera|mere|apni|apna|apne|i|my|we|our|me|us|humko|hume|hum|main|hu|ame|tame|aap|ek|one|1|2|3|4|5|ye|aa|yeh|this)\b/gi, "")
+      .replace(/\b(?:bechna|bechni|bechne|bechvu|vechvu|vechva|vechvo|sell|selling|list|listing|karna|karni|karne|karvu|karva|karo|want|wants|wanted)\b/gi, "")
+      .replace(/\b(?:he|hai|h|hain|che|chhe|to|chahiye|joiye|ka|ki|ke|nu|no|ni|na|in|at|me|ma|par|pe|se|thi|as|aur|ane|and|is)\b/gi, "")
       .replace(/\s+/g, " ")
       .trim();
-    if (stripped.length >= 3 && !/^\d+$/.test(stripped)) {
+
+    if (isLikelySocietyOrProjectName(stripped)) {
       return stripped;
     }
   }
@@ -1431,7 +1471,8 @@ function extractProjectOrSocietyFromText(text: string, parsedPropType?: string):
 
 function formatSocietyName(raw: string): string {
   if (!raw) return "";
-  const cleaned = raw.replace(/^['"]|['"]$/g, "").replace(/^(?:ye|meri|mera|maro|mari|in|at)\s+/i, "").trim();
+  const cleaned = raw.replace(/^['"]|['"]$/g, "").replace(/^(?:ye|meri|mera|maro|mari|muje|mujhe|mare|mane|in|at)\s+/i, "").trim();
+  if (!isLikelySocietyOrProjectName(cleaned)) return "";
   return cleaned.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
@@ -6192,6 +6233,44 @@ export async function dispatchStateAction(
       /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower);
 
     if (isOwnerChoice) {
+      // If user already specified property type (e.g. "muje meri shop bechni he"), directly forward to handleOwnerFlow!
+      const detectedPropType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+      if (detectedPropType) {
+        const ownerRes = await handleOwnerFlow({
+          lead: {
+            ...lead,
+            lead_type: "PROVIDER",
+            metadata: {
+              ...(lead.metadata || {}),
+              owner_draft: {
+                started_at: new Date().toISOString(),
+                transaction_type: (actionResult.transaction_type === "RENT" || actionResult.transaction_type === "LEASE") ? "RENT_OUT" : "SELL",
+                property_type: detectedPropType,
+                configuration: detectedPropType,
+                ...(actionResult.property_category ? { property_category: actionResult.property_category } : {}),
+                ...(actionResult.location ? { location: actionResult.location } : {}),
+              },
+            },
+          },
+          messageText: context.messageText,
+          lower,
+          lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+          senderName,
+          senderId: context.senderId,
+          platform: context.platform,
+          tenantId: activeTenantId,
+          supabase,
+          aiAnalysis: actionResult,
+          city: resolvedCity,
+          agencyName,
+        });
+        return {
+          replyText: ownerRes.replyText,
+          nextState: ownerRes.nextState as DialogState,
+          leadUpdates: ownerRes.leadUpdates,
+        };
+      }
+
       // Transition to OWNER_CONFIG_PENDING
       const initialDraft: any = {
         started_at: new Date().toISOString(),
@@ -7793,6 +7872,39 @@ export async function dispatchStateAction(
   // 12. FRESH STATE (State: FRESH)
   // ---------------------------------------------------------------------------
   if (currentState === "FRESH") {
+    // If user expressed owner/seller intent right away (e.g. "muje meri shop bechni he", "flat bechna hai"):
+    const isFirstMessageOwner =
+      actionResult.user_role === "OWNER" ||
+      intent === "SUBMIT_LISTING" ||
+      parseRequirementFromText(context.messageText) === "SELL" ||
+      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower) ||
+      /(?:bechna|bechni|vechvu|vechva|sell\s*(?:karna|karni|karvu|karva|kar))/i.test(lower);
+
+    if (isFirstMessageOwner) {
+      const ownerRes = await handleOwnerFlow({
+        lead: {
+          ...lead,
+          lead_type: "PROVIDER",
+        },
+        messageText: context.messageText,
+        lower,
+        lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+        senderName,
+        senderId: context.senderId,
+        platform: context.platform,
+        tenantId: activeTenantId,
+        supabase,
+        aiAnalysis: actionResult,
+        city: resolvedCity,
+        agencyName,
+      });
+      return {
+        replyText: ownerRes.replyText,
+        nextState: ownerRes.nextState as DialogState,
+        leadUpdates: ownerRes.leadUpdates,
+      };
+    }
+
     // If user provided requirement right away:
     if (intent === "CHANGE_REQUIREMENT") {
       return handleQualificationCascade(lead, actionResult, context);
@@ -8431,7 +8543,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v73-vernacular-slot-owner-precision",
+        version: "v74-owner-entity-guard",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -8547,7 +8659,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v73 Ready (Vernacular Slot Time Precision & Multi-Entity Owner Intake)", { status: 200 });
+    return new Response("Realtor Lead Engine v74 Ready (Owner Intake Stop-Word Guard & Entity Extraction Disambiguation)", { status: 200 });
   }
 
   try {

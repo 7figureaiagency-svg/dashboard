@@ -248,11 +248,11 @@ updated: 2026-10-19T18:50:30+05:30
 ---
 
 ### Phase 25: Owner Intake Stop-Word Guard & Entity Extraction Disambiguation
-**Status:** ⏳ Ready to Execute  
+**Status:** ✅ Complete  
 **Objective:** Fix false project/society name extraction from conversational owner declarations (e.g. 'muje meri shop bechni he' -> 'Muje meri he'). Implement `isLikelySocietyOrProjectName` stop-word guard, refine `extractProjectOrSocietyFromText`, ensure `handleOwnerFlow` cleanly acknowledges property types and asks for Commercial Complex/Road (Step 2: `OWNER_SOCIETY_PENDING`), and route first-turn owner declarations directly to `handleOwnerFlow` in `FRESH` and `ROLE_SELECTION_PENDING` states.  
 **Depends on:** Phase 24  
 **Plans:**
-- [ ] Plan 25.1: Owner Intake Stop-Word Guard & Entity Extraction Disambiguation ([`25.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/25/25.1-PLAN.md))
+- [x] Plan 25.1: Owner Intake Stop-Word Guard & Entity Extraction Disambiguation ([`25.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/25/25.1-PLAN.md))
 
 
 
