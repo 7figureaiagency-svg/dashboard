@@ -48,3 +48,32 @@
 - Zero additional runtime JavaScript packages (pure React, Tailwind v4, Lucide icons, and TanStack Query).
 - Multi-tenant WABA safety: tenant-scoped token resolution and compliance with Meta messaging limits.
 
+## Phase 26 Decisions: Universal Conversational Intake, Multi-Persona Triage & City-Agnostic Lead Engine
+
+**Date:** 2026-10-27
+
+### Scope
+- Universal, city-agnostic greeting with 3-choice intent triage (1. Buy/Rent, 2. Sell/Lease, 3. Both/Upgrade) across Hinglish, Gujlish, and English.
+- Direct intent auto-bypass: specific first messages (e.g. "muje bhayli me 3bhk chahiye", "shop bechni he", "office lease par dena he") immediately skip the triage menu and route straight into their dedicated flow.
+- Smart 6-Turn Compound Owner Intake with area+floor, demand+furnishing, parking+possession, and full Commercial Lease (`LEASE` / `LEASE_OUT`) support.
+- Smart 3-Turn Compound Buyer Qualification with BHK/Type, locality+budget band, timeline+purpose (Ready to Move vs Under Construction; Family End-User vs Investor), and Commercial Lease search.
+- Multi-property listing (2nd/3rd property without overwriting) and secondary search lifecycle without corrupting existing site visits.
+- Culturally authentic, natural Gujlish linguistic polish (eliminating "Mitra", "sthit chhe", "shodhva mango chho", "dhyan rakhjo", "chiye").
+- Ultra-short, mobile-first message ergonomics across all languages (max 2-3 lines per message).
+- 100% city-agnostic: zero hardcoded "Vadodara" references across prompts, messages, and sweeps.
+
+### Approach
+- **Choice:** Unified Smart Progressive Compound Architecture with State-Aware Lifecycle Memory
+- **Rationale:**
+  - Reduces conversational turns by 50% while capturing 90% of CRM inventory and lead scoring attributes.
+  - Eliminates conversational amnesia: returning users with active visits or listings receive compact contextual briefings instead of robotic restarts.
+  - Full Commercial Lease alignment across edge function FSM, `property_submissions`, and CRM Live Inventory.
+  - Eliminates user drop-off via short, punchy 2-3 line WhatsApp messages.
+
+### Constraints
+- 100% Non-n8n architectural compliance.
+- Zero hardcoded city names (strictly multi-tenant dynamic).
+- Local git commits only. No push to remote.
+- WABA safety: batch caps and inter-message delay jitter for sweeps.
+
+

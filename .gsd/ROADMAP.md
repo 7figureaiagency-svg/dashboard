@@ -194,7 +194,10 @@ updated: 2026-10-19T18:50:30+05:30
 | 20: AI Lead Scoring Engine & Conversion Heatmap | ✅ Complete | 1/1 | 100% |
 | 21: Autonomous Property Pitch Crafter Engine | ✅ Complete | 2/2 | 100% |
 | 22: State-Conditioned Multilingual Intent Engine | ✅ Complete | 2/2 | 100% |
-| 23: Vernacular Slot, Owner Intake & Hyperlinks | ⏳ Ready | 0/2 | 0% |
+| 23: Vernacular Slot, Owner Intake & Hyperlinks | ✅ Complete | 2/2 | 100% |
+| 24: E2E QA Audit Bug Remediation & Role Governance | ✅ Complete | 2/2 | 100% |
+| 25: Owner Intake Stop-Word Guard & Entity Extraction | ✅ Complete | 1/1 | 100% |
+| 26: Universal Conversational Intake & Multi-Persona Engine | ⏳ Planned | 0/3 | 0% |
 
 ---
 
@@ -253,6 +256,18 @@ updated: 2026-10-19T18:50:30+05:30
 **Depends on:** Phase 24  
 **Plans:**
 - [x] Plan 25.1: Owner Intake Stop-Word Guard & Entity Extraction Disambiguation ([`25.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/25/25.1-PLAN.md))
+
+---
+
+### Phase 26: Universal Conversational Intake, Multi-Persona Triage & City-Agnostic Lead Engine
+**Status:** ⏳ Planned  
+**Objective:** Transform the conversational realtor engine into an ultra-short, mobile-first, 100% city-agnostic system. (1) Universal greeting with 3-choice intent triage (Buy/Rent, Sell/Lease, Both/Upgrade) across Gujlish, Hinglish, and English with direct intent auto-bypass for specific queries, (2) Smart 6-Turn Compound Owner Intake capturing Area+Floor, Demand+Furnishing, and Parking+Possession with full Commercial Lease (`LEASE` / `LEASE_OUT`) and multi-property listing support, and (3) Smart 3-Turn Compound Buyer Qualification capturing BHK/Type, Locality+Budget, and Timeline+Purpose (Ready to Move vs Under Construction; Family End-User vs Investor) with returning lead lifecycle memory.  
+**Depends on:** Phase 25  
+**Plans:**
+- [ ] Plan 26.1: Universal City-Agnostic Greeting, Intent Triage & Auto-Bypass ([`26.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/26/26.1-PLAN.md))
+- [x] Plan 26.2: Smart 6-Turn Compound Owner Intake & Commercial Lease Engine ([`26.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/26/26.2-PLAN.md))
+- [x] Plan 26.3: Smart 3-Turn Compound Buyer Qualification & Multi-Search Lifecycle ([`26.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/26/26.3-PLAN.md))
+
 
 
 

@@ -5368,7 +5368,6 @@ async function handleOwnerFlow({
 
   const summary = `• 🏢 <b>Property:</b> ${draft.configuration || draft.property_type} in ${draft.society_name || draft.location}\n• 📏 <b>Area:</b> ${areaSummary}\n• 💰 <b>Expected ${isRent ? "Rent" : "Demand"}:</b> ${priceFormatted}\n• 🔑 <b>Status:</b> ${draft.possession_status?.replace(/_/g, " ")} | ${draft.furnishing_status?.replace(/_/g, " ")}`;
 
-  const agency = agencyName || "NextGen Realty";
   const replyText =
     lang === "GUJLISH"
       ? `Khub khub aabhar <b>${senderName ? `${senderName} bhai` : "ji"}</b>! 🎉\n\nTamari property listing details ${agency} desk par successfully register thai gai chhe:\n\n${summary}\n\n🤝 <b>Next Steps:</b> Amara senior property acquisition manager documents verification, physical inspection ane professional photography mate jaldi thi tamari sathe call par connect karshe.`

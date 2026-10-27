@@ -7,12 +7,22 @@ updated: 2026-10-27T09:24:00+05:30
 ## Current Position
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
-**Phase:** 25 - Owner Intake Stop-Word Guard & Entity Extraction Disambiguation  
-**Status:** ✅ Complete  
+**Phase:** 26 - Universal Conversational Intake, Multi-Persona Triage & City-Agnostic Lead Engine  
+**Status:** ⏳ In Progress  
 **Plans:**
-- `.gsd/phases/25/25.1-PLAN.md` (Owner Intake Stop-Word Guard & Entity Extraction Disambiguation) — ✅ Complete
+- `.gsd/phases/26/26.1-PLAN.md` (Universal City-Agnostic Greeting, Intent Triage & Auto-Bypass) — ⏳ Planned
+- `.gsd/phases/26/26.2-PLAN.md` (Smart 6-Turn Compound Owner Intake & Commercial Lease Engine) — ✅ Completed
+- `.gsd/phases/26/26.3-PLAN.md` (Smart 3-Turn Compound Buyer Qualification & Multi-Search Lifecycle) — ✅ Completed
+
 
 ## Last Action
+
+Completed Phase 26.3 (Smart 3-Turn Compound Buyer Qualification & Multi-Search Lifecycle):
+- Task 1: Restructured `handleQualificationCascade` into 3 compound turns (Type+Transaction, Locality+Budget, Timeline+Purpose). Implemented F-04 dynamic single-field prompt handling (acknowledging single fields without amnesiac re-prompting). Enhanced timeline and purpose parsers.
+- Task 2: Commercial Lease Seeker Disambiguation (F-05 fix: protected commercial sub-50k budget from collapsing to residential rent; enabled `matchesListingType` to match LEASE, RENT, and RENTAL commercial units). Formatted hyperlinked property cards (`View on Google Maps`, `Download Brochure`) with ultra-short VIP Visit CTA trailer. Triggered F-12 AI lead scoring handshake (elevating fully qualified buyers to 82+ HOT 🔥).
+- Task 3: Secondary Search Visit Preservation (F-09 fix: secondary property searches by leads with active booked site visits strictly preserve `site_visit_booked: true` and active `site_visits` records). Pervasive Gujlish polish (purged all occurrences of 'shodhva mango chho', 'Kharidva mango chho', 'Tamara budget mujab', and hardcoded 'Vadodara').
+- Verification: Validated all 10 core truths in `scratch/test_phase26_3_all.cjs`.
+
 
 Completed Phase 25 (Owner Intake Stop-Word Guard & Entity Extraction Disambiguation):
 - Plan 25.1:
