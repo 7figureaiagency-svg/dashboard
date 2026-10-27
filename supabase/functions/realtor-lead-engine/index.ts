@@ -2916,6 +2916,7 @@ async function classifyLeadIntent(
     "OWNER_LOCATION_PENDING",
     "OWNER_AREA_PENDING",
     "OWNER_PRICE_PENDING",
+    "OWNER_AMENITIES_PENDING",
     "OWNER_POSSESSION_PENDING",
     "OWNER_FURNISHING_PENDING",
     "OWNER_PHONE_PENDING",
@@ -4666,10 +4667,10 @@ async function handleOwnerFlow({
         .limit(1)
         .maybeSingle();
 
-      const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || "Vadodara"}` : "Aapki property";
+      const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || city || "Prime Location"}` : "Aapki property";
 
       const replyText = lang === "GUJLISH"
-        ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari listed property (<b>${propLabel}</b>) amara desk par active chhe. Verified inquiry aavta j ame tamaro sampark karshe. Shu tame koi property Buy ya Rent na options jova mango chho? 🏡`
+        ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Tamari listed property (<b>${propLabel}</b>) amara desk par active chhe. Verified inquiry aavta j ame tamaro sampark karshe. Shu tame koi property Buy ya Rent na options jova mango chho? 🏡`
         : lang === "ENGLISH"
         ? `Certainly <b>${senderName || "Friend"}</b>! Your listed property (<b>${propLabel}</b>) is actively registered with us. We will connect with you as soon as a verified buyer/tenant inquiries. Would you like to explore properties to Buy or Rent? 🏡`
         : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) hamare desk par actively registered hai. Verified inquiry aate hi hum aapse connect karenge. Kya aap koi property Buy ya Rent karne ke options dekhna chahte hain? 🏡`;
@@ -4697,7 +4698,7 @@ async function handleOwnerFlow({
         lead.state = "QUALIFYING";
 
         const replyText = lang === "GUJLISH"
-          ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! 🏡 Tame kaya type ni property shodhva mango chho — Residential (Flat/Villa) ke Commercial (Office/Shop)?`
+          ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "ji"}</b>! 🏡 Tame kaya type ni property shodhva mango chho — Residential (Flat/Villa) ke Commercial (Office/Shop)?`
           : lang === "ENGLISH"
           ? `Wonderful <b>${senderName || "Friend"}</b>! 🏡 What type of property are you looking for — Residential (Flat/Villa) or Commercial (Office/Shop)?`
           : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! 🏡 Aap kis type ki property search karna chahte hain — Residential (Flat/Villa) ya Commercial (Office/Shop)?`;
@@ -4706,10 +4707,10 @@ async function handleOwnerFlow({
     }
 
     const isSecondListing =
-      /^(?:haan|ha|ji\s*haan|yes|yep|sure|list\s*another|karni\s*hai|aur\s*bhi|ek\s*aur|bilkul)\b/i.test(lower.trim()) ||
+      /^(?:2|2️⃣|option\s*2|dusri|biji|haan|ha|ji\s*haan|yes|yep|sure|list\s*another|karni\s*hai|aur\s*bhi|ek\s*aur|bilkul)\b/i.test(lower.trim()) ||
       /(?:dusri|biji|ek\s*aur|nayi|navi|another|second|2nd)\s*(?:property|flat|house|ghar|makan|villa|office|shop|plot)\b/i.test(lower) ||
       /(?:dusri\s*property\s*sell|nayi\s*property\s*list|office\s*bhade|shop\s*rent|flat\s*bechna|ghar\s*bechna|biji\s*vechvi)/i.test(lower) ||
-      ((/(?:bechna|bechni|vechvu|vechva|sell|list|bhade|bhaade|kiraya|kiraye|rent\s*par\s*den|chadani)/i.test(lower)) &&
+      ((/(?:bechna|bechni|vechvu|vechva|sell|list|bhade|bhaade|kiraya|kiraye|rent\s*par\s*den|chadani|lease)/i.test(lower)) &&
        (/\b(flat|house|ghar|makan|villa|office|shop|plot|godown|showroom|commercial)\b/i.test(lower))) ||
       aiAnalysis?.action?.intent === "SUBMIT_LISTING" ||
       (aiAnalysis?.action?.intent === "CONFIRM_CRITERIA" && (aiAnalysis?.action as any)?.confirm);
@@ -4739,12 +4740,13 @@ async function handleOwnerFlow({
       draft = { attributes: {} };
 
       const parsedType = parsePropertyTypeFromText(messageText);
-      const isRent = /(?:rent|bhade|bhadu|kiraya|kiraye|chadani|lease)/i.test(lower);
-      draft.transaction_type = isRent ? "RENT_OUT" : "SELL";
+      const isRent = /(?:rent|bhade|bhadu|kiraya|kiraye|chadani)/i.test(lower);
+      const isLease = /(?:lease|pattay)/i.test(lower);
+      draft.transaction_type = isLease ? "LEASE_OUT" : isRent ? "RENT_OUT" : "SELL";
       if (parsedType) {
         draft.property_type = parsedType;
         draft.configuration = parsedType;
-        if (/(office|shop|showroom|warehouse|commercial)/i.test(parsedType)) {
+        if (isLease || /(office|shop|showroom|warehouse|commercial)/i.test(parsedType)) {
           draft.property_category = "COMMERCIAL";
         } else if (/(plot|land|zameen)/i.test(parsedType)) {
           draft.property_category = "PLOT";
@@ -4775,12 +4777,12 @@ async function handleOwnerFlow({
         const propLabel = draft.configuration || draft.property_type;
         const replyText = isComm
           ? (lang === "GUJLISH"
-            ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Nayi property <b>${propLabel}</b> (${isRent ? "Rent par aapva" : "Vechva"}) note kari lidhi chhe. 👍\n\n👉 <b>Aa property kaya Commercial Complex, Business Hub ke Road par sthit chhe? (e.g. Atlantis K-10, Sayaji Plaza ya Main Road)</b> 🏢`
+            ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Nayi property <b>${propLabel}</b> (${isLease ? "Lease par aapva" : isRent ? "Rent par aapva" : "Vechva"}) note kari lidhi chhe. 👍\n\n👉 <b>Aa property kaya Commercial Complex, Business Hub ke Road par aaveli chhe? (e.g. Atlantis K-10, Sayaji Plaza ya Main Road)</b> 🏢`
             : lang === "ENGLISH"
-            ? `Great <b>${senderName || "Friend"}</b>! Noted your new property <b>${propLabel}</b> (${isRent ? "for Rent/Lease" : "for Sale"}). 👍\n\n👉 <b>Which Commercial Complex, Business Hub, or Road is this located on? (e.g. Atlantis K-10, Sayaji Plaza, or Main Road)</b> 🏢`
-            : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! Nayi property <b>${propLabel}</b> (${isRent ? "Rent par chadhane" : "Sell karne"} ke liye) note kar li hai. 👍\n\n👉 <b>Ye property kis Commercial Complex, Business Hub ya Road par sthit hai? (e.g. Atlantis K-10, Sayaji Plaza ya Main Road)</b> 🏢`)
+            ? `Great <b>${senderName || "Friend"}</b>! Noted your new property <b>${propLabel}</b> (${isLease ? "for Lease" : isRent ? "for Rent" : "for Sale"}). 👍\n\n👉 <b>Which Commercial Complex, Business Hub, or Road is this located on? (e.g. Atlantis K-10, Sayaji Plaza, or Main Road)</b> 🏢`
+            : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! Nayi property <b>${propLabel}</b> (${isLease ? "Lease par dene" : isRent ? "Rent par chadhane" : "Sell karne"} ke liye) note kar li hai. 👍\n\n👉 <b>Ye property kis Commercial Complex, Business Hub ya Road par sthit hai? (e.g. Atlantis K-10, Sayaji Plaza ya Main Road)</b> 🏢`)
           : (lang === "GUJLISH"
-            ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Nayi property <b>${propLabel}</b> note kari lidhi chhe. 👍\n\n👉 <b>Aa property kaya Project ke Society ma sthit chhe? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
+            ? `Bahuj saras <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Nayi property <b>${propLabel}</b> note kari lidhi chhe. 👍\n\n👉 <b>Aa property kaya Project ke Society ma aaveli chhe? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
             : lang === "ENGLISH"
             ? `Great <b>${senderName || "Friend"}</b>! Noted your new property <b>${propLabel}</b>. 👍\n\n👉 <b>Which Project or Society is your property located in? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
             : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! Nayi property <b>${propLabel}</b> note kar li hai. 👍\n\n👉 <b>Ye property kis Project ya Society me sthit hai? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`);
@@ -4789,7 +4791,7 @@ async function handleOwnerFlow({
       } else {
         const replyText =
           lang === "GUJLISH"
-            ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Nayi property listing desk par swagat chhe. 🏡✨\n\n👉 <b>Tamari nayi property kaya type ni chhe — 2BHK / 3BHK Flat, Villa, ke Commercial Shop/Office?</b> 🏢`
+            ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Nayi property listing desk par swagat chhe. 🏡✨\n\n👉 <b>Tamari nayi property kaya type ni chhe — 2BHK / 3BHK Flat, Villa, ke Commercial Shop/Office?</b> 🏢`
             : lang === "ENGLISH"
             ? `Certainly <b>${senderName || "Friend"}</b>! Let's get your next property listed. 🏡✨\n\n👉 <b>What type of property is this — 2BHK / 3BHK Flat, Villa, or Commercial Shop/Office?</b> 🏢`
             : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Nayi property listing desk par swagat hai. 🏡✨\n\n👉 <b>Aapki nayi property kis type ki hai — 2BHK / 3BHK Flat, Villa, ya Commercial Shop/Office?</b> 🏢`;
@@ -4808,7 +4810,7 @@ async function handleOwnerFlow({
         .limit(1)
         .maybeSingle();
 
-      const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || "Vadodara"}` : "Aapki property";
+      const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || city || "Prime Location"}` : "Aapki property";
       const isSubApprovedA =
         sub?.status === "CONVERTED_TO_INVENTORY" ||
         sub?.status === "APPROVED" ||
@@ -4821,12 +4823,12 @@ async function handleOwnerFlow({
 
       const replyText = isSubApprovedA
         ? (lang === "GUJLISH"
-          ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari listed property (<b>${propLabel}</b>) approve thai ne successfully list thai chuki chhe! 🏡✨\n\nAmari sales team verified buyers ane tenants sathe aane actively match kari rahi chhe. Koi pan suitable inquiry aave etle ame tarat j tamaro sampark karshe! 🙏`
+          ? `Ji <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Tamari listed property (<b>${propLabel}</b>) approve thai ne successfully list thai chuki chhe! 🏡✨\n\nAmari sales team verified buyers ane tenants sathe aane actively match kari rahi chhe. Koi pan suitable inquiry aave etle ame tarat j tamaro sampark karshe! 🙏`
           : lang === "ENGLISH"
           ? `Hello <b>${senderName || "Friend"}</b>! Your listed property (<b>${propLabel}</b>) has been approved and successfully listed in our inventory! 🏡✨\n\nOur sales team is actively matching it with verified buyers and tenants. We will connect with you as soon as a suitable offer arrives! 🙏`
           : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) approve hoke successfully list ho chuki hai! 🏡✨\n\nHamari sales team verified buyers & tenants ke saath ise actively match kar rahi hai. Koi bhi suitable inquiry aane par hum turant aapse connect karenge! 🙏`)
         : (lang === "GUJLISH"
-          ? `Ji <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Tamari listed property (<b>${propLabel}</b>) hal ma <b>${statusLabel}</b> stage par chhe. 📋 Amari inspection team verification mate jald aapse call par connect karshe! 🙏`
+          ? `Ji <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Tamari listed property (<b>${propLabel}</b>) hal ma <b>${statusLabel}</b> stage par chhe. 📋 Amari inspection team verification mate jald aapse call par connect karshe! 🙏`
           : lang === "ENGLISH"
           ? `Hello <b>${senderName || "Friend"}</b>! Your listed property (<b>${propLabel}</b>) is currently in the <b>${statusLabel}</b> stage. 📋 Our acquisition team will connect with you shortly for on-site inspection! 🙏`
           : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋 Hamari inspection team verification ke liye jald aapse call par connect karegi! 🙏`);
@@ -4849,10 +4851,10 @@ async function handleOwnerFlow({
       lead.lead_type = "DUAL_ROLE";
       lead.state = "QUALIFYING";
 
-      const displayCityOwner = (context as any)?.displayCity || city || "prime locations";
+      const displayCityOwner = city || "prime locations";
       const replyText =
         lang === "GUJLISH"
-          ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Amari pase ${displayCityOwner} ma verified properties available chhe. Kripya janavjo — tame kaya area ane budget ma property shodhva mango chho? 🏡`
+          ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Amari pase ${displayCityOwner} ma verified properties available chhe. Kripya janavjo — tame kaya area ane budget ma property joi rahya chho? 🏡`
           : lang === "ENGLISH"
           ? `Certainly <b>${senderName || "Friend"}</b>! We have prime verified properties across ${displayCityOwner}. Please share your preferred locality and budget range! 🏡`
           : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamare paas ${displayCityOwner} me verified properties available hain. Kripya batayein — aap kis area aur budget me property dekh rahe hain? 🏡`;
@@ -6146,12 +6148,21 @@ export async function dispatchStateAction(
       }
       const newDraft: any = { started_at: new Date().toISOString(), attributes: {} };
       const parsedType = parsePropertyTypeFromText(context.messageText);
-      const isRent = /(?:rent|bhade|bhadu|kiraya|kiraye|chadani|lease)/i.test(lower);
-      newDraft.transaction_type = isRent ? "RENT_OUT" : "SELL";
+      const isLease = /(?:lease|pattay)/i.test(lower);
+      const isRent = /(?:rent|bhade|bhadu|kiraya|kiraye|chadani)/i.test(lower);
+      newDraft.transaction_type = isLease ? "LEASE_OUT" : isRent ? "RENT_OUT" : "SELL";
       if (parsedType) {
         newDraft.property_type = parsedType;
         newDraft.configuration = parsedType;
-        newDraft.property_category = /(office|shop|showroom|commercial)/i.test(parsedType) ? "COMMERCIAL" : /(plot|land)/i.test(parsedType) ? "PLOT" : "RESIDENTIAL";
+        if (isLease || /(office|shop|showroom|commercial)/i.test(parsedType)) {
+          newDraft.property_category = "COMMERCIAL";
+        } else if (/(plot|land)/i.test(parsedType)) {
+          newDraft.property_category = "PLOT";
+        } else {
+          newDraft.property_category = "RESIDENTIAL";
+        }
+      } else if (isLease) {
+        newDraft.property_category = "COMMERCIAL";
       }
       const targetState: DialogState = newDraft.property_type ? "OWNER_SOCIETY_PENDING" : "OWNER_CONFIG_PENDING";
       const replyText =
