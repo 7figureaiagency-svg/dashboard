@@ -53,6 +53,16 @@ function formatForWhatsApp(text: string): string {
   return out.trim();
 }
 
+function formatMapHyperlink(mapUrl: string | undefined | null, label = "View on Google Maps"): string {
+  if (!mapUrl || !mapUrl.trim()) return "";
+  return `📍 <a href="${mapUrl.trim()}">${label}</a>`;
+}
+
+function formatBrochureHyperlink(brochureUrl: string | undefined | null, label = "Download Official Brochure"): string {
+  if (!brochureUrl || !brochureUrl.trim()) return "";
+  return `📄 <a href="${brochureUrl.trim()}">${label}</a>`;
+}
+
 function formatPriceShort(priceNum: number): string {
   if (priceNum >= 10000000) {
     const cr = (priceNum / 10000000).toFixed(2).replace(/\.00$/, "").replace(/(\.[1-9])0$/, "$1");
@@ -723,10 +733,10 @@ async function dispatchPortalWhatsAppOutreach(
   }
 
   const brochureBlock = property?.brochure_url
-    ? `\n📄 *Project Brochure & Layouts:*\n${property.brochure_url}\n`
+    ? `\n${formatBrochureHyperlink(property.brochure_url, "Project Brochure & Layouts")}\n`
     : "";
   const mapBlock = property?.map_url
-    ? `\n📍 *Google Maps Location:*\n${property.map_url}\n`
+    ? `\n${formatMapHyperlink(property.map_url, "View on Google Maps")}\n`
     : "";
 
   const messageText = `Namaste ${leadName} ji! 🙏
@@ -3292,17 +3302,18 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const { projectName, prop } = await resolveLeadProjectName(l, supabase, leadTenantId);
             const propLoc = prop?.location || "the site";
             const mapUrl = prop?.map_url || "https://maps.google.com";
+            const mapLink = formatMapHyperlink(mapUrl, "View on Google Maps");
             const formattedTime = visitDate.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
             const lang = l.user_language || "HINGLISH";
             const name = l.first_name || "Customer";
 
             let briefingMsg = "";
             if (lang === "GUJLISH") {
-              briefingMsg = `Suprabhat <b>${name} bhai</b>! 🌅\n\nAaje tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>${formattedTime}</b> par scheduled chhe! 🚗\n\n📍 <b>Site Location Map:</b> ${mapUrl}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu timing confirm samjie?`;
+              briefingMsg = `Suprabhat <b>${name} bhai</b>! 🌅\n\nAaje tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>${formattedTime}</b> par scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu timing confirm samjie?`;
             } else if (lang === "ENGLISH") {
-              briefingMsg = `Good morning <b>${name}</b>! 🌅\n\nA quick briefing that your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled today at <b>${formattedTime}</b>! 🚗\n\n📍 <b>Location Map:</b> ${mapUrl}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the site location. Looking forward to meeting you!`;
+              briefingMsg = `Good morning <b>${name}</b>! 🌅\n\nA quick briefing that your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled today at <b>${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the site location. Looking forward to meeting you!`;
             } else {
-              briefingMsg = `Suprabhat <b>${name} ji</b>! 🌅\n\nAaj aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>${formattedTime}</b> par scheduled hai! 🚗\n\n📍 <b>Site Location Map:</b> ${mapUrl}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par aapse milenge. Kya hum timing confirm samjhein?`;
+              briefingMsg = `Suprabhat <b>${name} ji</b>! 🌅\n\nAaj aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>${formattedTime}</b> par scheduled hai! 🚗\n\n${mapLink}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par aapse milenge. Kya hum timing confirm samjhein?`;
             }
 
             await sleepJitter();
@@ -3387,17 +3398,18 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const { projectName, prop } = await resolveLeadProjectName(l, supabase, leadTenantId);
             const propLoc = prop?.location || "the site";
             const mapUrl = prop?.map_url || "https://maps.google.com";
+            const mapLink = formatMapHyperlink(mapUrl, "View on Google Maps");
             const formattedTime = new Date(visitTime).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
             const lang = l.user_language || "HINGLISH";
             const name = l.first_name || "Customer";
 
             let reminderMsg = "";
             if (lang === "GUJLISH") {
-              reminderMsg = `Namaste <b>${name} bhai</b>! ⏰ Reminder: Tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>1 kalak ma (${formattedTime})</b> scheduled chhe! 🚗\n\n📍 <b>Site Location Map:</b> ${mapUrl}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Jo time ma thodo ferfar hoy to janavjo!`;
+              reminderMsg = `Namaste <b>${name} bhai</b>! ⏰ Reminder: Tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>1 kalak ma (${formattedTime})</b> scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Jo time ma thodo ferfar hoy to janavjo!`;
             } else if (lang === "ENGLISH") {
-              reminderMsg = `Hello <b>${name}</b>! ⏰ Reminder: Your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled in <b>1 hour at ${formattedTime}</b>! 🚗\n\n📍 <b>Location Map:</b> ${mapUrl}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the site on time. Please let us know if you need any adjustments to your schedule!`;
+              reminderMsg = `Hello <b>${name}</b>! ⏰ Reminder: Your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled in <b>1 hour at ${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the site on time. Please let us know if you need any adjustments to your schedule!`;
             } else {
-              reminderMsg = `Namaste <b>${name} ji</b>! ⏰ Reminder: Aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>1 ghante me (${formattedTime})</b> scheduled hai! 🚗\n\n📍 <b>Site Location Map:</b> ${mapUrl}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par aapse milenge. Agar timing me thoda aage-piche ho to kripya bataiye!`;
+              reminderMsg = `Namaste <b>${name} ji</b>! ⏰ Reminder: Aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>1 ghante me (${formattedTime})</b> scheduled hai! 🚗\n\n${mapLink}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par aapse milenge. Agar timing me thoda aage-piche ho to kripya bataiye!`;
             }
 
             await sleepJitter();
@@ -5862,7 +5874,7 @@ export async function dispatchStateAction(
       const isPastUnconf = Boolean(latestVisit && !isVisitInFuture && ["SCHEDULED", "CONFIRMED", "RESCHEDULED"].includes(latestVisit.status));
       const propName = latestVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? `${lead.property_type} (${lead.location || "Vadodara"})` : "VIP Property");
       const visitTime = scheduledTime ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" }) : "Scheduled Time";
-      const mapLink = latestVisit?.inventory?.map_url ? `\n📍 <b>Map Location:</b> ${latestVisit.inventory.map_url}` : "";
+      const mapLink = latestVisit?.inventory?.map_url ? `\n${formatMapHyperlink(latestVisit.inventory.map_url, "View on Google Maps")}` : "";
 
       if (isUpcoming) {
         const replyText =
@@ -6403,7 +6415,7 @@ export async function dispatchStateAction(
         ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
         : "Scheduled Time";
       const propInfo = propDetails ? `\n🏢 <b>Property:</b> ${propDetails.project_name} (${propDetails.location})` : "";
-      const mapInfo = propDetails?.map_url ? `\n📍 <b>Google Map Location:</b> ${propDetails.map_url}` : "";
+      const mapInfo = propDetails?.map_url ? `\n${formatMapHyperlink(propDetails.map_url, "View on Google Maps")}` : "";
 
       const replyText = isFuture
         ? (lang === "GUJLISH"
@@ -6573,7 +6585,7 @@ export async function dispatchStateAction(
         ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
         : "Scheduled Time";
       const propInfo = propDetails ? `\n🏢 <b>Property:</b> ${propDetails.project_name} (${propDetails.location})` : "";
-      const mapInfo = propDetails?.map_url ? `\n📍 <b>Google Map Location:</b> ${propDetails.map_url}` : "";
+      const mapInfo = propDetails?.map_url ? `\n${formatMapHyperlink(propDetails.map_url, "View on Google Maps")}` : "";
 
       const replyText =
         lang === "GUJLISH"
@@ -7566,7 +7578,7 @@ export async function dispatchStateAction(
       });
 
       const formatted = new Date(scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
-      const mapLink = propDetails?.map_url ? `\n📍 <b>Google Map Location:</b> ${propDetails.map_url}` : "";
+      const mapLink = propDetails?.map_url ? `\n${formatMapHyperlink(propDetails.map_url, "View on Google Maps")}` : "";
 
       const replyText =
         lang === "GUJLISH"
@@ -7909,12 +7921,13 @@ async function handleFaqResponse(
   } else if (topic === "LANDMARKS") {
     const landmarksStr = Array.isArray(prop?.landmarks) && prop.landmarks.length > 0 ? prop.landmarks.join(", ") : "Prime connectivity hub";
     const mapUrl = prop?.map_url || "https://maps.google.com";
+    const mapLink = formatMapHyperlink(mapUrl, "View on Google Maps");
     replyText =
       lang === "GUJLISH"
-        ? `Ji ${nameStr}! <b>${projName}</b> ${projLoc} na ekdam prime location par sthit chhe! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• 🗺️ <b>Location Map:</b> <a href="${mapUrl}">Google Maps Link</a>${bridgeCta}`
+        ? `Ji ${nameStr}! <b>${projName}</b> ${projLoc} na ekdam prime location par sthit chhe! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• ${mapLink}${bridgeCta}`
         : lang === "ENGLISH"
-        ? `Hello ${nameStr}! <b>${projName}</b> is situated at a prime location in ${projLoc}! 📍\n\n• 🚗 <b>Nearby Landmarks:</b> ${landmarksStr}\n• 🗺️ <b>Location Map:</b> <a href="${mapUrl}">Google Maps Link</a>${bridgeCta}`
-        : `Ji ${nameStr}! <b>${projName}</b> ${projLoc} ki ekdam prime location par sthit hai! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• 🗺️ <b>Location Map:</b> <a href="${mapUrl}">Google Maps Link</a>${bridgeCta}`;
+        ? `Hello ${nameStr}! <b>${projName}</b> is situated at a prime location in ${projLoc}! 📍\n\n• 🚗 <b>Nearby Landmarks:</b> ${landmarksStr}\n• ${mapLink}${bridgeCta}`
+        : `Ji ${nameStr}! <b>${projName}</b> ${projLoc} ki ekdam prime location par sthit hai! 📍\n\n• 🚗 <b>Key Landmarks:</b> ${landmarksStr}\n• ${mapLink}${bridgeCta}`;
   } else {
     // AMENITIES
     const hasLift = Array.isArray(prop?.amenities) ? prop.amenities.some((a: string) => /lift/i.test(a)) : true;
@@ -7967,17 +7980,21 @@ async function handleBrochureOrMapResponse(
     ? (prop?.map_url || "https://maps.google.com")
     : (prop?.brochure_url || prop?.map_url || "https://maps.google.com");
 
+  const formattedLink = isMapReq
+    ? formatMapHyperlink(link, "View on Google Maps")
+    : formatBrochureHyperlink(link, "Download Official Brochure");
+
   const replyText = hasBookedVisit
     ? (lang === "GUJLISH"
-      ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nTamari VIP Site Visit 🚗 already confirm chhe. 🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe.`
+      ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${formattedLink}\n\nTamari VIP Site Visit 🚗 already confirm chhe. 🤝 <b>Site par maliye chiye!</b> Amara senior sales executive time par direct site location par tamne malshe.`
       : lang === "ENGLISH"
-      ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "Project"}</b>, <b>${senderName}</b>:\n${link}\n\nYour VIP Site Visit 🚗 is already confirmed. 🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time.`
-      : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nAapki VIP Site Visit 🚗 already confirm hai. 🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge.`)
+      ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "Project"}</b>, <b>${senderName}</b>:\n${formattedLink}\n\nYour VIP Site Visit 🚗 is already confirmed. 🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the property location on time.`
+      : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${formattedLink}\n\nAapki VIP Site Visit 🚗 already confirm hai. 🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par aapse direct site location par milenge.`)
     : (lang === "GUJLISH"
-      ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nAa check kari ne janavjo, VIP Site Visit 🚗 mate kayo time anukool raheshe - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
+      ? `Aa rahyu ${senderName ? `<b>${senderName} bhai</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> nu official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${formattedLink}\n\nAa check kari ne janavjo, VIP Site Visit 🚗 mate kayo time anukool raheshe - <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?`
       : lang === "ENGLISH"
-      ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "Project"}</b>, <b>${senderName}</b>:\n${link}\n\nWhen would you like to schedule a VIP Site Visit 🚗 once you review this - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
-      : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${link}\n\nIse dekh kar bataiye, VIP Site Visit 🚗 ke liye kaunsa slot prefer karenge - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`);
+      ? `Here is the official ${isMapReq ? "Location Map 📍" : "Brochure 📄"} for <b>${prop?.project_name || "Project"}</b>, <b>${senderName}</b>:\n${formattedLink}\n\nWhen would you like to schedule a VIP Site Visit 🚗 once you review this - <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?`
+      : `Yeh lijiye ${senderName ? `<b>${senderName} ji</b>, ` : ""}<b>${prop?.project_name || "Project"}</b> ka official ${isMapReq ? "Location Map 📍" : "Brochure 📄"}:\n${formattedLink}\n\nIse dekh kar bataiye, VIP Site Visit 🚗 ke liye kaunsa slot prefer karenge - <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?`);
 
   return {
     replyText,
