@@ -62,6 +62,15 @@ export function computeLeadScore(lead: Partial<Lead> | null | undefined): LeadSc
   // ---------------------------------------------------------------------------
   // 1. Stage & Commitment Signals (Max 45 Pts)
   // ---------------------------------------------------------------------------
+  const hasFullQual = Boolean(
+    lead.property_type &&
+    lead.requirement &&
+    lead.location &&
+    lead.budget &&
+    lead.timeline &&
+    lead.purpose
+  );
+
   if (rawState === "SITE_VISIT_DONE" || rawState === "VISIT_DONE" || meta.visit_feedback) {
     stageScore += 45;
     reasons.push("Site visit completed (+45)");
@@ -71,6 +80,9 @@ export function computeLeadScore(lead: Partial<Lead> | null | undefined): LeadSc
   } else if (rawState === "SITE_VISIT_PROPOSED") {
     stageScore += 25;
     reasons.push("Visit slot actively selected (+25)");
+  } else if (hasFullQual) {
+    stageScore += 35;
+    reasons.push("Full 6-field qualification completed (+35)");
   } else if (rawState === "OPTIONS_SENT" || meta.alternative_options_sent || (Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0)) {
     stageScore += 18;
     reasons.push("Alternative options requested (+18)");

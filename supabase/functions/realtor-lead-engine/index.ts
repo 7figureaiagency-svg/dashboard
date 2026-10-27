@@ -1495,15 +1495,20 @@ function parseRequirementFromText(text: string): string {
 
 function parsePurposeFromText(text: string): string {
   const lower = text.toLowerCase();
-  if (lower.includes("invest") || lower.includes("roi") || lower.includes("rental yield") || lower.includes("nivesh") || lower.includes("returns") || lower.includes("રોકાણ") || lower.includes("ઇન્વેસ્ટમેન્ટ")) {
+  if (
+    lower.includes("invest") || lower.includes("roi") || lower.includes("rental yield") ||
+    lower.includes("nivesh") || lower.includes("returns") || lower.includes("rent pe") ||
+    lower.includes("rent par dena") || lower.includes("bhadu aave") ||
+    lower.includes("રોકાણ") || lower.includes("ઇન્વેસ્ટમેન્ટ")
+  ) {
     return "INVESTMENT";
   }
   if (
-    lower.includes("self") || lower.includes("rehna") || lower.includes("rehne") || lower.includes("raheva") ||
-    lower.includes("own use") || lower.includes("family") || lower.includes("student") || lower.includes("personal") ||
-    lower.includes("bachelor") || lower.includes("living") || lower.includes("construction") || lower.includes("bungalow") ||
-    lower.includes("ghar") || lower.includes("makan") || lower.includes("khud") || lower.includes("રહેવા") ||
-    lower.includes("પોતાના માટે") || lower.includes("પરિવાર") || lower.includes("ફેમિલી")
+    lower.includes("self") || lower.includes("rehna") || lower.includes("rehne") || lower.includes("rehane") ||
+    lower.includes("raheva") || lower.includes("own use") || lower.includes("family") || lower.includes("student") ||
+    lower.includes("personal") || lower.includes("bachelor") || lower.includes("living") || lower.includes("ghar") ||
+    lower.includes("makan") || lower.includes("khud") || lower.includes("રહેવા") || lower.includes("પોતાના માટે") ||
+    lower.includes("પરિવાર") || lower.includes("ફેમિલી")
   ) {
     return "SELF_USE";
   }
@@ -1524,14 +1529,37 @@ function parsePurposeFromText(text: string): string {
 function parseTimelineFromText(text: string): string {
   const normalized = normalizeIndicDigits(text || "");
   const lower = normalized.toLowerCase();
-  if (lower.includes("immediate") || lower.includes("ready to move") || lower.includes("rtm") || lower.includes("turant") || lower.includes("jaldi") || lower.includes("tarat") || lower.includes("તરત")) {
-    return "IMMEDIATE";
+  if (
+    lower.includes("ready to move") ||
+    lower.includes("ready-to-move") ||
+    lower.includes("ready") ||
+    lower.includes("rtm") ||
+    lower.includes("turant shift") ||
+    lower.includes("turant") ||
+    lower.includes("immediate") ||
+    lower.includes("jaldi") ||
+    lower.includes("tarat") ||
+    lower.includes("તરત")
+  ) {
+    return "READY_TO_MOVE";
+  }
+  if (
+    lower.includes("under construction") ||
+    lower.includes("under-construction") ||
+    lower.includes("construction") ||
+    lower.includes("uc") ||
+    lower.includes("nava project") ||
+    lower.includes("new project") ||
+    lower.includes("3 month") ||
+    lower.includes("6 month") ||
+    lower.includes("saal") ||
+    lower.includes("3 મહિના") ||
+    lower.includes("6 મહિના")
+  ) {
+    return "UNDER_CONSTRUCTION";
   }
   if (lower.includes("1 month") || lower.includes("ek mahina") || lower.includes("30 days") || lower.includes("1 મહિનો") || lower.includes("1 મહિના")) {
-    return "1_MONTH";
-  }
-  if (lower.includes("3 month") || lower.includes("under construction") || lower.includes("6 month") || lower.includes("saal") || lower.includes("3 મહિના") || lower.includes("6 મહિના")) {
-    return "3_TO_6_MONTHS";
+    return "READY_TO_MOVE";
   }
   return "";
 }
@@ -3021,13 +3049,13 @@ function matchesLocation(leadLoc?: string | null, propLoc?: string | null, landm
   return false;
 }
 
-function matchesListingType(leadReq?: string | null, propListingType?: string | null, propPrice?: number): boolean {
+function matchesListingType(leadReq?: string | null, propListingType?: string | null, propPrice?: number, isCommercial?: boolean): boolean {
   if (!leadReq) return true;
   const r = String(leadReq).toUpperCase().trim();
   const l = String(propListingType || "").toUpperCase().trim();
   const price = Number(propPrice || 0);
 
-  if (r === "LEASE") {
+  if (r === "LEASE" || (isCommercial && (r === "RENT" || r === "LEASE"))) {
     if (l === "LEASE" || l === "RENT" || l === "RENTAL") return true;
     if (!l && price > 0 && price <= 500000) return true;
     return false;
@@ -3173,8 +3201,8 @@ function formatN8nPropertyCard(p: any, index: number, isBestDeal: boolean = fals
 
     const commDetailsBlock = commLines.length ? `\n${commLines.join("\n")}` : "";
     const links: string[] = [];
-    if (p.brochure_url) links.push(`📄 <a href="${p.brochure_url}">Brochure</a>`);
-    if (p.map_url) links.push(`📍 <a href="${p.map_url}">Map</a>`);
+    if (p.map_url) links.push(`📍 <a href="${p.map_url}">View on Google Maps</a>`);
+    if (p.brochure_url) links.push(`📄 <a href="${p.brochure_url}">Download Brochure</a>`);
     if (p.image_url) links.push(`🖼️ <a href="${p.image_url}">Photos</a>`);
     const linksText = links.length ? `\n• ${links.join(" | ")}` : "";
 
@@ -3213,8 +3241,8 @@ function formatN8nPropertyCard(p: any, index: number, isBestDeal: boolean = fals
 
   // Links
   const links: string[] = [];
-  if (p.brochure_url) links.push(`📄 <a href="${p.brochure_url}">Brochure</a>`);
-  if (p.map_url) links.push(`📍 <a href="${p.map_url}">Map</a>`);
+  if (p.map_url) links.push(`📍 <a href="${p.map_url}">View on Google Maps</a>`);
+  if (p.brochure_url) links.push(`📄 <a href="${p.brochure_url}">Download Brochure</a>`);
   if (p.image_url) links.push(`🖼️ <a href="${p.image_url}">Photos</a>`);
   const linksText = links.length ? `\n• ${links.join(" | ")}` : "";
 
@@ -5588,10 +5616,10 @@ export async function dispatchStateAction(
 
     const replyText =
       lang === "GUJLISH"
-        ? `Amari agency <b>${agencyName}</b> nu main office <b>${addr}</b> par aavelo chhe! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, tame kaya type ni property mate visit karva mango chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Space</b>?`
+        ? `Amari agency <b>${agencyName}</b> nu main office <b>${addr}</b> par aavelo chhe! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Space</b>?`
         : lang === "ENGLISH"
         ? `Our main office for <b>${agencyName}</b> is located at <b>${addr}</b>! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, what type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Space</b>?`
-        : `Hamari agency <b>${agencyName}</b> ka main office <b>${addr}</b> par sthit hai! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, aap kis type ki property search kar rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Space</b>?`;
+        : `Hamari agency <b>${agencyName}</b> ka main office <b>${addr}</b> par hai! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, aap kis type ki property search kar rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Space</b>?`;
 
     return {
       replyText,
@@ -5716,7 +5744,7 @@ export async function dispatchStateAction(
   if (intent === "MARKET_ADVISORY") {
     const replyText =
       lang === "GUJLISH"
-        ? `Ji ${nameStr}! Hal ma 2 & 3 BHK premium apartments ane gated villas ma sabse high demand chhe, jya pricing <b>₹45 Lakhs thi shuru</b> thay chhe. 🏡\n\nTame property <b>Buy (Kharidva)</b> mango chho ke <b>Rent</b> par joiye chhe?`
+        ? `Ji ${nameStr}! Hal ma 2 & 3 BHK premium apartments ane gated villas ma sabse high demand chhe, jya pricing <b>₹45 Lakhs thi shuru</b> thay chhe. 🏡\n\nTame property <b>Buy (Kharidva) mate joiye chhe ke Bhade</b>?`
         : lang === "ENGLISH"
         ? `Hello ${nameStr}! Currently, 2 & 3 BHK premium apartments and villas are in highest demand, with verified options starting from <b>₹45 Lakhs</b>. 🏡\n\nAre you looking to <b>Buy</b> or <b>Rent</b>?`
         : `Ji ${nameStr}! Abhi market me 2 & 3 BHK premium apartments aur villas ki sabse high demand hai, jinki pricing <b>₹45 Lakhs se shuru</b> hoti hai. 🏡\n\nAap property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent</b> par chahiye?`;
@@ -6233,7 +6261,7 @@ export async function dispatchStateAction(
 
       const replyText = givenPropType
         ? (lang === "GUJLISH"
-          ? `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva)</b> mango chho ke <b>Rent / Lease</b> par joiye chhe? 🔑`
+          ? `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva) mate joiye chhe ke Rent / Lease</b> par? 🔑`
           : lang === "ENGLISH"
           ? `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> or <b>Rent/Lease</b> this property? 🔑`
           : `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent / Lease</b> par chahiye? 🔑`)
@@ -7257,6 +7285,31 @@ export async function dispatchStateAction(
       };
     }
 
+    const isSecondarySearchChoice =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
+      /^(?:3|3️⃣|third|3rd|option\s*3|biji\s*property|dusri\s*property|other\s*propert|nayi\s*property|aur\s*options|kuch\s*aur\s*options)\b/i.test(lower);
+
+    if (isSecondarySearchChoice) {
+      const replyText =
+        lang === "GUJLISH"
+          ? `Bilkul <b>${nameStr}</b>! Tamari scheduled visit safe chhe. Navi property kaya type ni joi rahya chho? 🏢`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! Your scheduled visit remains confirmed. What type of new property are you looking for? 🏢`
+          : `Bilkul <b>${nameStr}</b>! Aapki scheduled visit safe hai. Nayi property kis type ki search kar rahe hain? 🏢`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_BOOKED",
+        leadUpdates: {
+          site_visit_booked: true,
+          metadata: {
+            ...(lead.metadata || {}),
+            secondary_search_in_progress: true,
+          },
+        },
+      };
+    }
+
     const isPropertyListChoice =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 3) ||
       /^(?:4|4️⃣|fourth|4th|option\s*4|property\s*list|list\s*property|vechvu|bechna)\b/i.test(lower);
@@ -7441,10 +7494,27 @@ export async function dispatchStateAction(
       };
     }
 
-    // H. NEW PROPERTY INQUIRY FROM BOOKED VISIT
+    // H. NEW PROPERTY INQUIRY FROM BOOKED VISIT (F-09: Secondary Search Active Visit Preservation)
     const parsedTypeInBooked = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
     if (intent === "CHANGE_REQUIREMENT" || parsedTypeInBooked) {
-      return handleQualificationCascade(lead, actionResult, context);
+      const cascadeRes = await handleQualificationCascade(lead, actionResult, context);
+      return {
+        ...cascadeRes,
+        nextState: cascadeRes.nextState === "OPTIONS_SENT" ? "OPTIONS_SENT" : "SITE_VISIT_BOOKED",
+        leadUpdates: {
+          ...(cascadeRes.leadUpdates || {}),
+          site_visit_booked: true,
+          site_visit_at: lead.site_visit_at || lead.site_visit_datetime,
+          site_visit_datetime: lead.site_visit_datetime || lead.site_visit_at,
+          state: cascadeRes.leadUpdates?.state === "OPTIONS_SENT" ? "OPTIONS_SENT" : "SITE_VISIT_BOOKED",
+          metadata: {
+            ...(lead.metadata || {}),
+            ...(cascadeRes.leadUpdates?.metadata || {}),
+            secondary_search_active: true,
+            primary_visit_preserved: true,
+          },
+        },
+      };
     }
   }
 
@@ -8592,7 +8662,8 @@ async function handleFaqResponse(
   let replyText = "";
 
   if (topic === "OFFICE_ADDRESS") {
-    const addr = context.botKnowledge?.office_address || "402, Alkapuri Arcade, RC Dutt Road, Alkapuri, Vadodara";
+    const defaultAddr = resolvedCity ? `Prime Commercial Hub, ${resolvedCity}` : "Prime Commercial Hub";
+    const addr = context.botKnowledge?.office_address || defaultAddr;
     const hours = context.botKnowledge?.operating_hours || "10:00 AM - 7:30 PM (Mon-Sat)";
     const phone = context.botKnowledge?.contact_phone || "";
     const phoneSnippet = phone ? `\n• 📞 <b>Direct Support:</b> <code>${phone}</code>` : "";
@@ -8605,7 +8676,8 @@ async function handleFaqResponse(
         : `Ji ${nameStr}! <b>${agencyName}</b> ka office address yeh hai: 🏢\n\n• 📍 <b>Address:</b> ${addr}\n• ⏰ <b>Timings:</b> ${hours}${phoneSnippet}\n\nAap hamare office aakar bhi hamare property experts ke saath consultation kar sakte hain!${bridgeCta}`;
   } else if (topic === "OFFICE_TIMINGS") {
     const hours = context.botKnowledge?.operating_hours || "10:00 AM - 7:30 PM (Mon-Sat)";
-    const addr = context.botKnowledge?.office_address || "Alkapuri, Vadodara";
+    const defaultAddr = resolvedCity ? `Prime Commercial Hub, ${resolvedCity}` : "Prime Commercial Hub";
+    const addr = context.botKnowledge?.office_address || defaultAddr;
 
     replyText =
       lang === "GUJLISH"
@@ -8614,12 +8686,15 @@ async function handleFaqResponse(
         ? `Hello ${nameStr}! The operating hours for <b>${agencyName}</b> are: ⏰\n\n• 🕒 <b>Office Timings:</b> ${hours}\n• 🏢 <b>Location:</b> ${addr}\n\nFeel free to visit us during these hours!${bridgeCta}`
         : `Ji ${nameStr}! <b>${agencyName}</b> ke working hours yeh hain: ⏰\n\n• 🕒 <b>Office Timings:</b> ${hours}\n• 🏢 <b>Location:</b> ${addr}\n\nAap is samay ke dauraan hamare office visit kar sakte hain!${bridgeCta}`;
   } else if (topic === "AGENCY_INFO") {
+    const cityDisplay = context.displayCity || resolvedCity || "tamara shehar";
+    const cityDisplayEn = context.displayCity || resolvedCity || "your city";
+    const cityDisplayHi = context.displayCity || resolvedCity || "aapke shehar";
     replyText =
       lang === "GUJLISH"
-        ? `Amari agency nu naam <b>${agencyName}</b> chhe! 🙏 Ame ${context.displayCity || "Vadodara"} ma verified residential (Flats, Villas) ane commercial properties ma deal kariye chhiye. Amari team tamne direct developer pricing ane transparent paperwork sathe best deal aape chhe!${bridgeCta}`
+        ? `Amari agency nu naam <b>${agencyName}</b> chhe! 🙏 Ame ${cityDisplay} ma verified residential (Flats, Villas) ane commercial properties ma deal kariye chhiye. Amari team tamne direct developer pricing ane transparent paperwork sathe best deal aape chhe!${bridgeCta}`
         : lang === "ENGLISH"
-        ? `We are <b>${agencyName}</b>! 🙏 We specialize in verified residential (Flats, Villas) and commercial properties across ${context.displayCity || "Vadodara"} with direct developer rates and end-to-end guidance!${bridgeCta}`
-        : `Hamari agency ka naam <b>${agencyName}</b> hai! 🙏 Hum ${context.displayCity || "Vadodara"} me verified residential (Flats, Villas) aur commercial properties me deal karte hain. Hamari team aapko direct developer pricing aur 100% verified paperwork provide karti hai!${bridgeCta}`;
+        ? `We are <b>${agencyName}</b>! 🙏 We specialize in verified residential (Flats, Villas) and commercial properties across ${cityDisplayEn} with direct developer rates and end-to-end guidance!${bridgeCta}`
+        : `Hamari agency ka naam <b>${agencyName}</b> hai! 🙏 Hum ${cityDisplayHi} me verified residential (Flats, Villas) aur commercial properties me deal karte hain. Hamari team aapko direct developer pricing aur 100% verified paperwork provide karti hai!${bridgeCta}`;
   } else if (topic === "CUSTOM_FAQ") {
     let customAns = "";
     const customFaqs = context.botKnowledge?.custom_faqs;
@@ -8793,13 +8868,16 @@ async function handleQualificationCascade(
   let budget = actionResult.price_or_budget || parseBudgetFromText(context.messageText) || (lead?.budget ? Number(lead.budget) : 0);
   let timeline = actionResult.timeline || parseTimelineFromText(context.messageText) || lead?.timeline;
 
-  // Vernacular Rental & Sub-50k Budget Auto-Classification Guard:
-  // e.g. "Bhade flat vadodra maa reva mate", "12000" -> strictly RENT
+  // F-05: Commercial Lease Seeker Disambiguation & Sub-50k Budget Protection
   const lowerMsg = (context.messageText || "").toLowerCase();
-  const hasRentalCue = /(?:bhade|bhadu|bhada|bhaade|kiraya|kiraye|rent\s*par|bhada\s*par|bhade\s*thi|reva\s*mate)/i.test(lowerMsg);
+  const isCommercialInquiry = /(?:commercial|office|shop|showroom|godown|warehouse|retail|co-working)/i.test(propType || context.messageText);
+  const hasRentalCue = /(?:bhade|bhadu|bhada|bhaade|kiraya|kiraye|rent\s*par|bhada\s*par|bhade\s*thi|reva\s*mate|pattay|lease)/i.test(lowerMsg);
   const isSub50kMonthlyBudget = budget && Number(budget) >= 1000 && Number(budget) < 50000 && !/(?:lakh|lac|cr|crore)/i.test(lowerMsg);
 
-  if (hasRentalCue || isSub50kMonthlyBudget) {
+  if (isCommercialInquiry && (hasRentalCue || isSub50kMonthlyBudget || /(?:lease|pattay)/i.test(lowerMsg))) {
+    requirement = "LEASE";
+    if (!purpose) purpose = "BUSINESS";
+  } else if (hasRentalCue || isSub50kMonthlyBudget) {
     if (requirement !== "LEASE") {
       requirement = "RENT";
     }
@@ -8817,41 +8895,73 @@ async function handleQualificationCascade(
     location = "FLEXIBLE";
   }
 
-  // Auto-default purpose
-  const isResidential = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(propType || "");
-  if (!purpose) {
-    purpose = isResidential ? "SELF_USE" : "BUSINESS";
-  }
-
   const rawPropType = String(propType || "").trim();
   const isGenericCommercial = rawPropType.toLowerCase() === "commercial" || rawPropType === "કોમર્શિયલ";
   const isGenericResidential = rawPropType.toLowerCase() === "residential" || rawPropType === "રેસિડેન્શિયલ";
 
-  let missingField: string | null = null;
-  if (!propType) {
-    missingField = "PROPERTY_TYPE";
-  } else if (isGenericCommercial) {
-    missingField = "COMMERCIAL_SUBTYPE";
-  } else if (isGenericResidential) {
-    missingField = "RESIDENTIAL_SUBTYPE";
-  } else if (!requirement) {
-    missingField = "REQUIREMENT";
-  } else if (!location && purpose !== "INVESTMENT") {
-    missingField = "LOCATION";
-  } else if (!budget || Number(budget) === 0) {
-    missingField = "BUDGET";
+  // Check Turn 1: Configuration & Transaction Type
+  const hasPropType = Boolean(propType && !isGenericCommercial && !isGenericResidential);
+  const hasRequirement = Boolean(requirement);
+
+  // Check Turn 2: Locality & Budget Band (F-04 Fix)
+  const hasLocation = Boolean(location);
+  const hasBudget = Boolean(budget && Number(budget) > 0);
+
+  // Check Turn 3: Timeline & Purpose
+  const isResidential = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(propType || "");
+  const hasRelaxedTurn3 = /(?:koi\s*bhi|chalega|chalshe|both|dono|any|options?\s*(?:dikhao|batao|moklo)|kuch\s*bhi)/i.test(context.messageText);
+  if (hasRelaxedTurn3 && hasPropType && hasRequirement && hasLocation && hasBudget) {
+    if (!timeline) timeline = "READY_TO_MOVE";
+    if (!purpose) purpose = isResidential ? "SELF_USE" : "BUSINESS";
+  }
+
+  const hasTimeline = Boolean(timeline);
+  const hasPurpose = Boolean(purpose);
+
+  let missingStage: string | null = null;
+  if (!hasPropType && !hasRequirement) {
+    missingStage = "TURN_1_COMPOUND";
+  } else if (!hasPropType) {
+    if (isGenericCommercial) {
+      missingStage = "COMMERCIAL_SUBTYPE";
+    } else if (isGenericResidential) {
+      missingStage = "RESIDENTIAL_SUBTYPE";
+    } else {
+      missingStage = "PROPERTY_TYPE";
+    }
+  } else if (!hasRequirement) {
+    missingStage = "REQUIREMENT";
+  } else if (!hasLocation && !hasBudget) {
+    missingStage = "TURN_2_BOTH";
+  } else if (hasLocation && !hasBudget) {
+    missingStage = "TURN_2_BUDGET_ONLY";
+  } else if (!hasLocation && hasBudget) {
+    missingStage = "TURN_2_LOCATION_ONLY";
+  } else if (!hasTimeline && !hasPurpose) {
+    missingStage = "TURN_3_BOTH";
+  } else if (!hasTimeline && hasPurpose) {
+    missingStage = "TURN_3_TIMELINE_ONLY";
+  } else if (hasTimeline && !hasPurpose) {
+    missingStage = "TURN_3_PURPOSE_ONLY";
   }
 
   const isDual = lead?.lead_type === "DUAL_ROLE" || Boolean(lead?.metadata?.has_seller_profile) || lead?.lead_type === "PROVIDER";
+  const hasActiveBookedVisit = Boolean(lead?.site_visit_booked);
   const leadUpdates: Record<string, any> = {
-    state: missingField ? "QUALIFYING" : "OPTIONS_SENT",
+    state: missingStage ? (hasActiveBookedVisit ? (lead.state || "SITE_VISIT_BOOKED") : "QUALIFYING") : "OPTIONS_SENT",
     lead_type: isDual ? "DUAL_ROLE" : "SEEKER",
     property_type: propType || null,
+    property_category: isCommercialInquiry ? "COMMERCIAL" : (isResidential ? "RESIDENTIAL" : (lead?.property_category || null)),
     requirement: requirement || null,
     purpose: purpose || null,
     location: location || null,
     budget: budget || null,
     timeline: timeline || null,
+    ...(hasActiveBookedVisit ? {
+      site_visit_booked: true,
+      site_visit_at: lead.site_visit_at || lead.site_visit_datetime,
+      site_visit_datetime: lead.site_visit_datetime || lead.site_visit_at,
+    } : {}),
     ...(isDual ? {
       metadata: {
         ...(lead.metadata || {}),
@@ -8862,33 +8972,40 @@ async function handleQualificationCascade(
     } : {}),
   };
 
-  if (missingField !== null) {
+  if (missingStage !== null) {
     let replyText = "";
     const isComm = /(commercial|shop|office|showroom|warehouse|godown)/i.test(propType || "");
     const isRentOrLease = String(requirement || "").toLowerCase().includes("rent") || String(requirement || "").toLowerCase().includes("lease");
 
-    if (missingField === "PROPERTY_TYPE") {
+    if (missingStage === "TURN_1_COMPOUND") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Property Buy karvi chhe ke Rent par joiye chhe? Ane kaya type ni joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? 🏡`
+          : lang === "ENGLISH"
+          ? `Are you looking to Buy or Rent? And what type of property — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? 🏡`
+          : `Property Buy karni hai ya Rent par chahiye? Aur kis type ki dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Shop/Office</b>? 🏡`;
+    } else if (missingStage === "PROPERTY_TYPE") {
       replyText =
         lang === "GUJLISH"
           ? `Tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? 🏡`
           : lang === "ENGLISH"
           ? `What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? 🏡`
           : `Aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial Shop/Office</b>? 🏡`;
-    } else if (missingField === "COMMERCIAL_SUBTYPE") {
+    } else if (missingStage === "COMMERCIAL_SUBTYPE") {
       replyText =
         lang === "GUJLISH"
-          ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space ma tame kaya type ni property joi rahya chho — Commercial Shop, Office, ke Showroom?</b>`
+          ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space ma tame kaya type ni property joi rahya chho — Shop, Office ke Showroom?</b>`
           : lang === "ENGLISH"
-          ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>What type of commercial property are you looking for — Commercial Shop, Office, or Showroom?</b>`
-          : `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space me aap kis type ki property search kar rahe hain — Commercial Shop, Office, ya Showroom?</b>`;
-    } else if (missingField === "RESIDENTIAL_SUBTYPE") {
+          ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>What type of commercial property are you looking for — Shop, Office, or Showroom?</b>`
+          : `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space me aap kis type ki property dekh rahe hain — Shop, Office ya Showroom?</b>`;
+    } else if (missingStage === "RESIDENTIAL_SUBTYPE") {
       replyText =
         lang === "GUJLISH"
-          ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential ma tame kaya type ni property joi rahya chho — 2BHK / 3BHK Flat, ke Villa?</b>`
+          ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential ma tame kaya type ni property joi rahya chho — 2BHK, 3BHK Flat ke Villa?</b>`
           : lang === "ENGLISH"
-          ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>What type of residential property are you looking for — 2BHK / 3BHK Flat, or Villa?</b>`
-          : `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential me aap kis type ki property search kar rahe hain — 2BHK / 3BHK Flat, ya Villa?</b>`;
-    } else if (missingField === "REQUIREMENT") {
+          ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>What type of residential property are you looking for — 2BHK, 3BHK Flat, or Villa?</b>`
+          : `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential me aap kis type ki property search kar rahe hain — 2BHK, 3BHK Flat ya Villa?</b>`;
+    } else if (missingStage === "REQUIREMENT") {
       const typeLabel = propType || "Property";
       replyText = isComm
         ? (lang === "GUJLISH"
@@ -8897,31 +9014,69 @@ async function handleQualificationCascade(
           ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> 💼 or <b>Rent/Lease</b> 🔑 commercial space?`
           : `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Commercial space <b>Buy</b> 💼 karna chahte hain ya <b>Rent / Lease</b> 🔑 par chahiye?`)
         : (lang === "GUJLISH"
-          ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva)</b> 🏠 mango chho ke <b>Rent</b> 🔑 par joiye chhe?`
+          ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva)</b> 🏠 mate joiye chhe ke <b>Rent</b> 🔑 par joiye chhe?`
           : lang === "ENGLISH"
           ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> 🏠 or <b>Rent</b> 🔑 this property?`
           : `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> 🏠 chahte hain ya <b>Rent</b> 🔑 par chahiye?`);
-    } else if (missingField === "LOCATION") {
-      const targetCity = resolvedCity || "aapke shehar";
+    } else if (missingStage === "TURN_2_BOTH") {
       replyText =
         lang === "GUJLISH"
-          ? `Bahuj saras! <b>${propType}</b> note kari lidhu chhe. 👍\n\n👉 ${targetCity} ma tamari preferred <b>location</b> kayi chhe 📍?`
+          ? `Noted — <b>${propType}</b>! 👍\n\n👉 Kayo exact <b>Area/Landmark</b> joi rahya chho, ane tamaro andaje <b>Budget range</b> ketlo chhe? 📍💰`
           : lang === "ENGLISH"
-          ? `Great! Noted <b>${propType}</b>. 👍\n\n👉 Which preferred <b>location</b> in ${targetCity} are you looking for 📍?`
-          : `Bahut badhiya! <b>${propType}</b> note kar liya hai. 👍\n\n👉 ${targetCity} me aapki preferred <b>location</b> konsi hai 📍?`;
-    } else if (missingField === "BUDGET") {
-      const locLabel = location ? `<b>${location}</b>` : "Location";
+          ? `Noted — <b>${propType}</b>! 👍\n\n👉 Which exact <b>Area/Landmark</b> are you looking in, and what is your approximate <b>Budget range</b>? 📍💰`
+          : `Noted — <b>${propType}</b>! 👍\n\n👉 Kaunse exact <b>Area/Landmark</b> me dekh rahe hain, aur aapka approximate <b>Budget range</b> kitna hai? 📍💰`;
+    } else if (missingStage === "TURN_2_BUDGET_ONLY") {
       replyText = isRentOrLease
         ? (lang === "GUJLISH"
-          ? `Noted ${locLabel}! 📍\n\n👉 Tamari monthly rent budget range ketli raheshe 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
+          ? `Noted <b>${location}</b>! 📍\n\n👉 Tamaro andaje <b>Monthly rent budget</b> ketlo raheshe 💰 (e.g. 15,000 ke 25,000/mo)?`
           : lang === "ENGLISH"
-          ? `Noted ${locLabel}! 📍\n\n👉 What is your monthly rent budget range 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`
-          : `Noted ${locLabel}! 📍\n\n👉 Monthly rent budget range kya rahegi 💰 (e.g. <b>₹15,000</b>, <b>₹25,000/mo</b>)?`)
+          ? `Noted <b>${location}</b>! 📍\n\n👉 What is your approximate <b>Monthly rent budget</b> 💰 (e.g. 15,000 or 25,000/mo)?`
+          : `Noted <b>${location}</b>! 📍\n\n👉 Aapka approximate <b>Monthly rent budget</b> kitna rahega 💰 (e.g. 15,000 ya 25,000/mo)?`)
         : (lang === "GUJLISH"
-          ? `Noted ${locLabel}! 📍\n\n👉 Best options filter karva mate tamaro budget ketlo raheshe 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
+          ? `Noted <b>${location}</b>! 📍\n\n👉 Tamaro andaje <b>Budget range</b> ketlo raheshe 💰 (e.g. 50 Lakhs, 1 Cr ke 25,000/mo)?`
           : lang === "ENGLISH"
-          ? `Noted ${locLabel}! 📍\n\n👉 To filter the best options, what is your comfortable budget range 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`
-          : `Noted ${locLabel}! 📍\n\n👉 Best options filter karne ke liye aapka comfortable budget range kya rahega 💰 (e.g. <b>50 Lakhs</b>, <b>1 Cr</b>)?`);
+          ? `Noted <b>${location}</b>! 📍\n\n👉 What is your approximate <b>Budget range</b> 💰 (e.g. 50 Lakhs, 1 Cr or 25,000/mo)?`
+          : `Noted <b>${location}</b>! 📍\n\n👉 Aapka approximate <b>Budget range</b> kitna rahega 💰 (e.g. 50 Lakhs, 1 Cr ya 25,000/mo)?`);
+    } else if (missingStage === "TURN_2_LOCATION_ONLY") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Noted budget — <b>${formatPriceShort(budget)}</b>! 💰\n\n👉 Tame kaya preferred <b>Area ke Landmark</b> pase search kari rahya chho? 📍`
+          : lang === "ENGLISH"
+          ? `Noted budget — <b>${formatPriceShort(budget)}</b>! 💰\n\n👉 Which preferred <b>Area or Landmark</b> are you searching around? 📍`
+          : `Noted budget — <b>${formatPriceShort(budget)}</b>! 💰\n\n👉 Aap kis preferred <b>Area ya Landmark</b> ke paas search kar rahe hain? 📍`;
+    } else if (missingStage === "TURN_3_BOTH") {
+      replyText = isComm
+        ? (lang === "GUJLISH"
+          ? `Bahuj saras! 👍\n\n👉 <b>Ready to Move</b> joiye chhe ke Under Construction? Ane <b>Self Business/Office</b> mate chhe ke Investment? 🔑`
+          : lang === "ENGLISH"
+          ? `Great! 👍\n\n👉 Do you need <b>Ready to Move</b> or Under Construction? And is it for <b>Self Business</b> or Investment? 🔑`
+          : `Bahut badiya! 👍\n\n👉 <b>Ready to Move</b> chahiye ya Under Construction? Aur <b>Self Business/Office</b> ke liye hai ya Investment? 🔑`)
+        : (lang === "GUJLISH"
+          ? `Bahuj saras! 👍\n\n👉 <b>Ready to Move</b> joiye chhe ke Under Construction chalshe? Ane <b>Family raheva mate</b> chhe ke Investment? 🔑`
+          : lang === "ENGLISH"
+          ? `Excellent! 👍\n\n👉 Do you need <b>Ready to Move</b> or is Under Construction fine? And is it for <b>Family living</b> or Investment? 🔑`
+          : `Bahut badiya! 👍\n\n👉 <b>Ready to Move</b> chahiye ya Under Construction chalega? Aur <b>Family rehne ke liye</b> hai ya Investment? 🔑`);
+    } else if (missingStage === "TURN_3_TIMELINE_ONLY") {
+      const purpLabel = purpose === "INVESTMENT" ? "Investment" : (isComm ? "Business use" : "Family use");
+      replyText =
+        lang === "GUJLISH"
+          ? `Noted — <b>${purpLabel}</b>! 👍\n\n👉 Tamne <b>Ready to Move</b> joiye chhe ke Under Construction chalshe? 🔑`
+          : lang === "ENGLISH"
+          ? `Noted — <b>${purpLabel}</b>! 👍\n\n👉 Are you looking for <b>Ready to Move</b> or Under Construction? 🔑`
+          : `Noted — <b>${purpLabel}</b>! 👍\n\n👉 Aapko <b>Ready to Move</b> chahiye ya Under Construction chalega? 🔑`;
+    } else if (missingStage === "TURN_3_PURPOSE_ONLY") {
+      const tlLabel = timeline === "READY_TO_MOVE" ? "Ready to Move" : "Under Construction";
+      replyText = isComm
+        ? (lang === "GUJLISH"
+          ? `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Aa <b>Self Business/Office</b> mate joi rahya chho ke Investment purpose thi? 🏢`
+          : lang === "ENGLISH"
+          ? `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Is this for <b>Self Business/Office</b> or for Investment? 🏢`
+          : `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Yeh <b>Self Business/Office</b> ke liye dekh rahe hain ya Investment purpose se? 🏢`)
+        : (lang === "GUJLISH"
+          ? `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Aa <b>Family raheva mate</b> joi rahya chho ke Investment purpose thi? 🏡`
+          : lang === "ENGLISH"
+          ? `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Is this for <b>Family living</b> or for Investment? 🏡`
+          : `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Yeh <b>Family rehne ke liye</b> dekh rahe hain ya Investment purpose se? 🏡`);
     }
 
     return {
@@ -8942,11 +9097,12 @@ async function handleQualificationCascade(
   const leadBudget = Number(budget || 0);
   const maxBudget = leadBudget > 0 ? leadBudget * 1.15 : Infinity;
   const isLeadFlex = location === "FLEXIBLE";
+  const isCommSearch = /(commercial|shop|office|showroom|warehouse|godown|retail)/i.test(propType || "");
 
   const strictMatches = available.filter((p: any) => {
     const price = Number(p.price || 0);
     if (leadBudget > 0 && price > maxBudget) return false;
-    if (!matchesListingType(requirement, p.listing_type, price)) return false;
+    if (!matchesListingType(requirement, p.listing_type, price, isCommSearch)) return false;
     if (!matchesPropertyType(propType, p.property_category, p.configuration, p.project_name)) return false;
     if (!isLeadFlex && !matchesLocation(location, p.location, p.landmarks)) return false;
     return true;
@@ -8961,6 +9117,25 @@ async function handleQualificationCascade(
 
   const properties = strictMatches.slice(0, 3);
 
+  // F-12 AI Lead Scoring Handshake: Full qualification completed -> elevate to HOT (80+)
+  const qualScoreResult = computeEngineLeadScore(lead, "OPTIONS_SENT", leadUpdates);
+  const elevatedScore = Math.max(qualScoreResult.score, 82);
+  leadUpdates.metadata = {
+    ...(lead?.metadata || {}),
+    ...(leadUpdates.metadata || {}),
+    lead_score: elevatedScore,
+    lead_temperature: "HOT",
+    score_breakdown: {
+      ...qualScoreResult.breakdown,
+      stage: Math.max(qualScoreResult.breakdown.stage, 35),
+    },
+    score_reasons: [
+      ...qualScoreResult.reasons.filter((r: string) => !r.includes("Initial inquiry")),
+      "Full 6-field buyer qualification completed (+HOT)",
+    ],
+    score_updated_at: new Date().toISOString(),
+  };
+
   if (properties.length > 0) {
     const optionIds = properties.map((p) => p.property_id);
     leadUpdates.last_option_ids = optionIds;
@@ -8971,15 +9146,15 @@ async function handleQualificationCascade(
     const trailer =
       properties.length === 1
         ? (lang === "GUJLISH"
-          ? `👉 <i>Tame <b>${properties[0].project_name}</b> ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho — <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?</i>`
+          ? `👉 <i>Tame <b>${properties[0].project_name}</b> ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho — <b>Kaale sanje 5:00 vage</b> ke <b>Sunday savare 11:00 vage</b>?</i>`
           : lang === "ENGLISH"
-          ? `👉 <i>When would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>${properties[0].project_name}</b> — <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?</i>`
-          : `👉 <i>Aap <b>${properties[0].project_name}</b> ki <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge — <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?</i>`)
+          ? `👉 <i>When would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>${properties[0].project_name}</b> — <b>Tomorrow 5:00 PM</b> or <b>Sunday 11:00 AM</b>?</i>`
+          : `👉 <i>Aap <b>${properties[0].project_name}</b> ki <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge — <b>Kal shaam 5:00 baje</b> ya <b>Sunday subah 11:00 baje</b>?</i>`)
         : (lang === "GUJLISH"
-          ? `👉 <i>Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho — <b>Option 1</b>, <b>Option 2</b> ke <b>Option 3</b>?</i>`
+          ? `👉 <b>Kayi property ni VIP Site Visit 🚗 schedule kariye — Option 1 ke Option 2?</b> (Kaale sanje 5:00 vage ke Sunday savare 11:00 vage?)`
           : lang === "ENGLISH"
-          ? `👉 <i>Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for — <b>Option 1</b>, <b>Option 2</b>, or <b>Option 3</b>?</i>`
-          : `👉 <i>Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge — <b>Option 1</b>, <b>Option 2</b> ya <b>Option 3</b>?</i>`);
+          ? `👉 <b>Which property would you like to schedule a VIP Site Visit 🚗 for — Option 1 or Option 2?</b> (Tomorrow 5:00 PM or Sunday 11:00 AM?)`
+          : `👉 <b>Kis property ki VIP Site Visit 🚗 schedule karein — Option 1 ya Option 2?</b> (Kal shaam 5:00 baje ya Sunday subah 11:00 baje?)`);
 
     const budgetStr = leadBudget > 0 ? `₹${formatPriceShort(leadBudget)} budget` : "aapke budget";
     const heading =
@@ -9095,7 +9270,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v74-owner-entity-guard",
+        version: "v75-universal-conversational-intake",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -9109,6 +9284,10 @@ Deno.serve(async (req: Request) => {
           groq_len: (Deno.env.get("GROQ_API_KEY") || "").length,
         },
         features: [
+          "universal-conversational-intake",
+          "smart-compound-flows",
+          "commercial-lease-lifecycle",
+          "city-agnostic-templates",
           "dual-role-lifecycle-engine",
           "scenario-3-disambiguation-menu",
           "high-value-dual-role-sales-alert",
@@ -9211,7 +9390,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v74 Ready (Owner Intake Stop-Word Guard & Entity Extraction Disambiguation)", { status: 200 });
+    return new Response("Realtor Lead Engine v75 Ready (Universal Conversational Intake, Multi-Persona Triage & City-Agnostic Engine)", { status: 200 });
   }
 
   try {
@@ -9854,6 +10033,15 @@ Deno.serve(async (req: Request) => {
       const reasons: string[] = [];
 
       // 1. Stage & Commitment Signals (Max 45 Pts)
+      const hasFullQual = Boolean(
+        (updates?.property_type || leadData?.property_type) &&
+        (updates?.requirement || leadData?.requirement) &&
+        (updates?.location || leadData?.location) &&
+        (updates?.budget || leadData?.budget) &&
+        (updates?.timeline || leadData?.timeline) &&
+        (updates?.purpose || leadData?.purpose)
+      );
+
       if (effectiveState === "SITE_VISIT_DONE" || effectiveState === "VISIT_DONE" || mergedMeta.visit_feedback) {
         stageScore += 45;
         reasons.push("Site visit completed (+45)");
@@ -9863,6 +10051,9 @@ Deno.serve(async (req: Request) => {
       } else if (effectiveState === "SITE_VISIT_PROPOSED") {
         stageScore += 25;
         reasons.push("Visit slot actively selected (+25)");
+      } else if (hasFullQual) {
+        stageScore += 35;
+        reasons.push("Full 6-field qualification completed (+35)");
       } else if (
         effectiveState === "OPTIONS_SENT" ||
         mergedMeta.alternative_options_sent ||
