@@ -4099,7 +4099,7 @@ async function handleOwnerFlow({
   aiAnalysis?: ClassifiedIntent;
   city?: string | null;
   agencyName?: string;
-}): Promise<{ replyText: string; nextState: string }> {
+}): Promise<{ replyText: string; nextState: string; leadUpdates?: any }> {
   // 1. Initialize or load in-progress draft from metadata
   const existingMeta = lead.metadata || {};
   let draft = existingMeta.owner_draft || {};
@@ -4125,6 +4125,18 @@ async function handleOwnerFlow({
 
   const isDualLead = lead.lead_type === "DUAL_ROLE" || Boolean(existingMeta.has_buyer_profile || lead.budget || lead.property_type || lead.site_visit_at || lead.site_visit_booked);
   const effectiveOwnerLeadType = isDualLead ? "DUAL_ROLE" : "PROVIDER";
+
+  const buildOwnerLeadUpdates = (targetState: string, customDraft = draft, extraMeta: Record<string, any> = {}) => ({
+    lead_type: targetState === "QUALIFYING" ? "DUAL_ROLE" : effectiveOwnerLeadType,
+    state: targetState,
+    metadata: {
+      ...(lead.metadata || {}),
+      has_seller_profile: true,
+      ...(isDualLead || targetState === "QUALIFYING" ? { has_buyer_profile: true, ...(targetState === "QUALIFYING" ? { active_persona: "BUYER" } : {}) } : {}),
+      owner_draft: customDraft,
+      ...extraMeta,
+    },
+  });
 
   // Auto-assign owner leads to Admin executive immediately upon starting intake
   if (!lead.assigned_executive_id) {
@@ -4349,7 +4361,7 @@ async function handleOwnerFlow({
           : lang === "ENGLISH"
           ? `Hello <b>${senderName || "Friend"}</b>! We don't have an active property listing recorded for you yet. Please share your property details so we can match you with verified buyers! 🏡`
           : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki property abhi hamare portal par listed nahi hai. Kripya apni property details (area, type, expected price) share karein taaki hum verified buyers connect kar sakein! 🏡`;
-      return { replyText, nextState: "OWNER_CONFIG_PENDING" };
+      return { replyText, nextState: "OWNER_CONFIG_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_CONFIG_PENDING") };
     }
 
     const subLoc = (sub.location || "").toLowerCase().trim();
@@ -4427,7 +4439,7 @@ async function handleOwnerFlow({
       },
     });
 
-    return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
+    return { replyText, nextState: "OWNER_DETAILS_GATHERED", leadUpdates: buildOwnerLeadUpdates("OWNER_DETAILS_GATHERED") };
   }
 
   // If already gathered, check if user is listing a SECOND property, inquiring status, or asking for buyer options
@@ -4441,7 +4453,7 @@ async function handleOwnerFlow({
           : lang === "ENGLISH"
           ? `Understood <b>${senderName || "Friend"}</b>! We will keep you posted as soon as verified inquiries arrive for your property. Have a great day! 🙏`
           : `Bilkul koi baat nahi <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamari team aapki property ke verified leads aate hi update karegi. Have a great day! 🙏`;
-        return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
+        return { replyText, nextState: "OWNER_DETAILS_GATHERED", leadUpdates: buildOwnerLeadUpdates("OWNER_DETAILS_GATHERED", draft, { declined_second_listing: true }) };
       }
 
       await supabase.from("leads").update({
@@ -4468,7 +4480,7 @@ async function handleOwnerFlow({
         ? `Certainly <b>${senderName || "Friend"}</b>! Your listed property (<b>${propLabel}</b>) is actively registered with us. We will connect with you as soon as a verified buyer/tenant inquiries. Would you like to explore properties to Buy or Rent? 🏡`
         : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) hamare desk par actively registered hai. Verified inquiry aate hi hum aapse connect karenge. Kya aap koi property Buy ya Rent karne ke options dekhna chahte hain? 🏡`;
 
-      return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
+      return { replyText, nextState: "OWNER_DETAILS_GATHERED", leadUpdates: buildOwnerLeadUpdates("OWNER_DETAILS_GATHERED", draft, { declined_second_listing: true }) };
     }
 
     if (existingMeta.declined_second_listing) {
@@ -4495,7 +4507,7 @@ async function handleOwnerFlow({
           : lang === "ENGLISH"
           ? `Wonderful <b>${senderName || "Friend"}</b>! 🏡 What type of property are you looking for — Residential (Flat/Villa) or Commercial (Office/Shop)?`
           : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! 🏡 Aap kis type ki property search karna chahte hain — Residential (Flat/Villa) ya Commercial (Office/Shop)?`;
-        return { replyText, nextState: "QUALIFYING" };
+        return { replyText, nextState: "QUALIFYING", leadUpdates: buildOwnerLeadUpdates("QUALIFYING", draft, { active_persona: "BUYER" }) };
       }
     }
 
@@ -4579,7 +4591,7 @@ async function handleOwnerFlow({
             ? `Great <b>${senderName || "Friend"}</b>! Noted your new property <b>${propLabel}</b>. 👍\n\n👉 <b>Which Project or Society is your property located in? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
             : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! Nayi property <b>${propLabel}</b> note kar li hai. 👍\n\n👉 <b>Ye property kis Project ya Society me sthit hai? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`);
 
-        return { replyText, nextState: "OWNER_SOCIETY_PENDING" };
+        return { replyText, nextState: "OWNER_SOCIETY_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_SOCIETY_PENDING", draft) };
       } else {
         const replyText =
           lang === "GUJLISH"
@@ -4588,7 +4600,7 @@ async function handleOwnerFlow({
             ? `Certainly <b>${senderName || "Friend"}</b>! Let's get your next property listed. 🏡✨\n\n👉 <b>What type of property is this — 2BHK / 3BHK Flat, Villa, or Commercial Shop/Office?</b> 🏢`
             : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Nayi property listing desk par swagat hai. 🏡✨\n\n👉 <b>Aapki nayi property kis type ki hai — 2BHK / 3BHK Flat, Villa, ya Commercial Shop/Office?</b> 🏢`;
 
-        return { replyText, nextState: "OWNER_CONFIG_PENDING" };
+        return { replyText, nextState: "OWNER_CONFIG_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_CONFIG_PENDING", draft) };
       }
     }
 
@@ -4625,7 +4637,7 @@ async function handleOwnerFlow({
           ? `Hello <b>${senderName || "Friend"}</b>! Your listed property (<b>${propLabel}</b>) is currently in the <b>${statusLabel}</b> stage. 📋 Our acquisition team will connect with you shortly for on-site inspection! 🙏`
           : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋 Hamari inspection team verification ke liye jald aapse call par connect karegi! 🙏`);
 
-      return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
+      return { replyText, nextState: "OWNER_DETAILS_GATHERED", leadUpdates: buildOwnerLeadUpdates("OWNER_DETAILS_GATHERED", draft) };
     }
 
     if (isSeekerInquiry) {
@@ -4650,7 +4662,7 @@ async function handleOwnerFlow({
           ? `Certainly <b>${senderName || "Friend"}</b>! We have prime verified properties across Vadodara. Please share your preferred locality and budget range! 🏡`
           : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamare paas Vadodara me verified properties available hain. Kripya batayein — aap kis area aur budget me property dekh rahe hain? 🏡`;
 
-      return { replyText, nextState: "QUALIFYING" };
+      return { replyText, nextState: "QUALIFYING", leadUpdates: buildOwnerLeadUpdates("QUALIFYING", draft, { active_persona: "BUYER" }) };
     }
 
     const agency = agencyName || "NextGen Realty";
@@ -4666,7 +4678,7 @@ async function handleOwnerFlow({
         : lang === "ENGLISH"
         ? `Sure <b>${senderName}</b>! Your property listing is registered on the ${agency} listing desk. 📋 Feel free to reach out if you have any questions! 🙏`
         : `Ji bilkul <b>${senderName} ji</b>! Aapki property details ${agency} listing desk par successfully registered hain. 📋 Koi bhi aur requirement ya query ho to zaroor batayein! 🙏`);
-    return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
+    return { replyText, nextState: "OWNER_DETAILS_GATHERED", leadUpdates: buildOwnerLeadUpdates("OWNER_DETAILS_GATHERED", draft) };
   }
 
   // ---------------------------------------------------------------------------
@@ -4694,7 +4706,7 @@ async function handleOwnerFlow({
       },
     }).eq("id", lead.id);
 
-    return { replyText, nextState: "OWNER_CONFIG_PENDING" };
+    return { replyText, nextState: "OWNER_CONFIG_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_CONFIG_PENDING", draft) };
   }
 
   // Step 2: Project / Society Name (Smart Commercial vs Residential)
@@ -4740,7 +4752,7 @@ async function handleOwnerFlow({
         },
       }).eq("id", lead.id);
 
-      return { replyText, nextState: "OWNER_SOCIETY_PENDING" };
+      return { replyText, nextState: "OWNER_SOCIETY_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_SOCIETY_PENDING", draft) };
     }
   }
 
@@ -4768,7 +4780,7 @@ async function handleOwnerFlow({
         },
       }).eq("id", lead.id);
 
-      return { replyText, nextState: "OWNER_LOCATION_PENDING" };
+      return { replyText, nextState: "OWNER_LOCATION_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_LOCATION_PENDING", draft) };
     }
   }
 
@@ -4828,7 +4840,7 @@ async function handleOwnerFlow({
       },
     }).eq("id", lead.id);
 
-    return { replyText, nextState: "OWNER_AREA_PENDING" };
+    return { replyText, nextState: "OWNER_AREA_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_AREA_PENDING", draft) };
   }
 
   // Step 5: Expected Price / Demand / Monthly Rent
@@ -4886,7 +4898,7 @@ async function handleOwnerFlow({
       },
     }).eq("id", lead.id);
 
-    return { replyText, nextState: "OWNER_PRICE_PENDING" };
+    return { replyText, nextState: "OWNER_PRICE_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_PRICE_PENDING", draft) };
   }
 
   // Open Plot / Land check: vacant plots do not have possession status or furnishing
@@ -4919,7 +4931,7 @@ async function handleOwnerFlow({
       },
     }).eq("id", lead.id);
 
-    return { replyText, nextState: "OWNER_POSSESSION_PENDING" };
+    return { replyText, nextState: "OWNER_POSSESSION_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_POSSESSION_PENDING", draft) };
   }
 
   // Step 7: Furnishing Status
@@ -4943,7 +4955,7 @@ async function handleOwnerFlow({
       },
     }).eq("id", lead.id);
 
-    return { replyText, nextState: "OWNER_FURNISHING_PENDING" };
+    return { replyText, nextState: "OWNER_FURNISHING_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_FURNISHING_PENDING", draft) };
   }
 
   // Step 7b: Telegram / Web Direct Calling Number Capture (if phone is missing)
@@ -4975,7 +4987,7 @@ async function handleOwnerFlow({
       },
     }).eq("id", lead.id);
 
-    return { replyText, nextState: "OWNER_PHONE_PENDING" };
+    return { replyText, nextState: "OWNER_PHONE_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_PHONE_PENDING", draft) };
   }
 
   // ---------------------------------------------------------------------------
@@ -5152,10 +5164,24 @@ async function handleOwnerFlow({
         ? `\n\n👉 <b>Now let's proceed with your ${nextProp.property_type || "second property"}!</b> Which Project or Society is this property located in?`
         : `\n\n👉 <b>Ab chaliye aapki ${nextProp.property_type || "doosri property"} ki details note karte hain!</b> Ye property kis Project ya Society me sthit hai?`;
 
-    return { replyText: `${replyText}${queuedPrompt}`, nextState: "OWNER_SOCIETY_PENDING" };
+    return {
+      replyText: `${replyText}${queuedPrompt}`,
+      nextState: "OWNER_SOCIETY_PENDING",
+      leadUpdates: buildOwnerLeadUpdates("OWNER_SOCIETY_PENDING", newDraft, {
+        submission_id: sub?.id || existingMeta.submission_id,
+        archived_submissions: archived,
+      }),
+    };
   }
 
-  return { replyText, nextState: "OWNER_DETAILS_GATHERED" };
+  return {
+    replyText,
+    nextState: "OWNER_DETAILS_GATHERED",
+    leadUpdates: buildOwnerLeadUpdates("OWNER_DETAILS_GATHERED", draft, {
+      submission_id: sub?.id || existingMeta.submission_id,
+      archived_submissions: archived,
+    }),
+  };
 }
 
 // =========================================================================
@@ -5786,6 +5812,7 @@ export async function dispatchStateAction(
     return {
       replyText: ownerRes.replyText,
       nextState: ownerRes.nextState as DialogState,
+      leadUpdates: ownerRes.leadUpdates,
     };
   }
 
@@ -6857,6 +6884,7 @@ export async function dispatchStateAction(
       return {
         replyText: ownerRes.replyText,
         nextState: ownerRes.nextState as DialogState,
+        leadUpdates: ownerRes.leadUpdates,
       };
     }
 
@@ -7336,19 +7364,10 @@ export async function dispatchStateAction(
         city: resolvedCity,
         agencyName,
       });
-      const isDual = lead.lead_type === "DUAL_ROLE" || Boolean(lead.metadata?.has_buyer_profile || lead.property_type || lead.budget || lead.site_visit_at);
       return {
         replyText: ownerRes.replyText,
         nextState: ownerRes.nextState as DialogState,
-        leadUpdates: {
-          lead_type: isDual ? "DUAL_ROLE" : "PROVIDER",
-          state: ownerRes.nextState as DialogState,
-          metadata: {
-            ...(lead.metadata || {}),
-            has_seller_profile: true,
-            ...(isDual ? { has_buyer_profile: true, active_persona: "SELLER" } : {}),
-          },
-        },
+        leadUpdates: ownerRes.leadUpdates,
       };
     }
 
@@ -7568,6 +7587,7 @@ export async function dispatchStateAction(
       return {
         replyText: ownerRes.replyText,
         nextState: ownerRes.nextState as DialogState,
+        leadUpdates: ownerRes.leadUpdates,
       };
     }
 
@@ -7832,10 +7852,10 @@ export async function dispatchStateAction(
       city: resolvedCity,
       agencyName,
     });
-    const isDual = lead.lead_type === "SEEKER" || lead.lead_type === "DUAL_ROLE" || Boolean(lead.metadata?.has_buyer_profile || lead.property_type || lead.budget || lead.site_visit_at || lead.site_visit_booked);
     return {
       replyText: ownerRes.replyText,
       nextState: ownerRes.nextState as DialogState,
+      leadUpdates: ownerRes.leadUpdates,
     };
   }
 
@@ -8410,7 +8430,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v72-state-conditioned-intent-engine",
+        version: "v73-vernacular-slot-owner-precision",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -8526,7 +8546,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v72 Ready (State-Conditioned Intent Engine)", { status: 200 });
+    return new Response("Realtor Lead Engine v73 Ready (Vernacular Slot Time Precision & Multi-Entity Owner Intake)", { status: 200 });
   }
 
   try {
@@ -9333,6 +9353,9 @@ Deno.serve(async (req: Request) => {
       score_reasons: leadScoreResult.reasons,
       score_updated_at: new Date().toISOString(),
     };
+    if (updateLeadMeta.owner_draft) {
+      enrichedLeadMetadata.owner_draft = updateLeadMeta.owner_draft;
+    }
 
     // Centralized last_bot_prompt tracking across interactive turns
     if (!isSilent && replyText && replyText.trim()) {
