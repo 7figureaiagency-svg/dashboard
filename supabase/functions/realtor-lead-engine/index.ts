@@ -4696,12 +4696,13 @@ async function handleOwnerFlow({
       lead.lead_type = "DUAL_ROLE";
       lead.state = "QUALIFYING";
 
+      const displayCityOwner = (context as any)?.displayCity || city || "prime locations";
       const replyText =
         lang === "GUJLISH"
-          ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Amari pase Vadodara ma verified properties available chhe. Kripya janavjo — tame kaya area ane budget ma property shodhva mango chho? 🏡`
+          ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "Mitra"}</b>! Amari pase ${displayCityOwner} ma verified properties available chhe. Kripya janavjo — tame kaya area ane budget ma property shodhva mango chho? 🏡`
           : lang === "ENGLISH"
-          ? `Certainly <b>${senderName || "Friend"}</b>! We have prime verified properties across Vadodara. Please share your preferred locality and budget range! 🏡`
-          : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamare paas Vadodara me verified properties available hain. Kripya batayein — aap kis area aur budget me property dekh rahe hain? 🏡`;
+          ? `Certainly <b>${senderName || "Friend"}</b>! We have prime verified properties across ${displayCityOwner}. Please share your preferred locality and budget range! 🏡`
+          : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamare paas ${displayCityOwner} me verified properties available hain. Kripya batayein — aap kis area aur budget me property dekh rahe hain? 🏡`;
 
       return { replyText, nextState: "QUALIFYING", leadUpdates: buildOwnerLeadUpdates("QUALIFYING", draft, { active_persona: "BUYER" }) };
     }
@@ -5281,6 +5282,16 @@ export interface DialogTransitionResult {
   isSilent?: boolean;
 }
 
+export function getGreetingTriageReply(lang: string, nameStr: string, agencyName: string): string {
+  if (lang === "GUJLISH") {
+    return `Namaste <b>${nameStr}</b>! ${agencyName} ma swagat chhe. 🙏\n👉 1️⃣ <b>Levi chhe</b> (Buy/Rent)  2️⃣ <b>Aapvi chhe</b> (Sell/Lease)  3️⃣ <b>Banne</b> 🔄\n<i>(1, 2 ya 3 reply karo, athva direct requirement lakho)</i>`;
+  }
+  if (lang === "ENGLISH") {
+    return `Hello <b>${nameStr}</b>! Welcome to ${agencyName}. 🙏\n👉 1️⃣ <b>Buy / Rent</b>  2️⃣ <b>Sell / Lease</b>  3️⃣ <b>Both</b> 🔄\n<i>(Reply with 1, 2, or 3, or type your requirement)</i>`;
+  }
+  return `Namaste <b>${nameStr}</b>! ${agencyName} me aapka swagat hai. 🙏\n👉 1️⃣ <b>Leni hai</b> (Buy/Rent)  2️⃣ <b>Deni hai</b> (Sell/Lease)  3️⃣ <b>Dono</b> 🔄\n<i>(1, 2 ya 3 reply karein, ya direct requirement likhein)</i>`;
+}
+
 export async function dispatchStateAction(
   lead: any,
   actionResult: ClassifiedActionResult,
@@ -5603,7 +5614,7 @@ export async function dispatchStateAction(
       const formattedVisitTime = scheduledTime
         ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
         : "Scheduled Time";
-      const visitProjectName = latestVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? `${lead.property_type} (${lead.location || "Vadodara"})` : "VIP Property");
+      const visitProjectName = latestVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? (lead.location ? `${lead.property_type} (${lead.location})` : lead.property_type) : "VIP Property");
 
       const listingSocietyName = latestSub?.project_name || latestSub?.society_name || lead.metadata?.owner_draft?.project_name || lead.metadata?.owner_draft?.society_name || "Listed Property";
       const listingStatusRaw = latestSub?.status || "PENDING_VERIFICATION";
@@ -5647,9 +5658,10 @@ export async function dispatchStateAction(
         opt1LabelEnglish = "1️⃣ <b>Visit Reschedule / Search Properties 🏡</b>";
         opt1LabelHinglish = "1️⃣ <b>Visit Reschedule / Nayi Property Search 🏡</b>";
       } else {
-        visitSnippetGujlish = `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`;
-        visitSnippetEnglish = `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`;
-        visitSnippetHinglish = `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"} in ${lead.location || "Vadodara"}.\n`;
+        const locSuffix = lead.location ? ` in ${lead.location}` : "";
+        visitSnippetGujlish = `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"}${locSuffix}.\n`;
+        visitSnippetEnglish = `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"}${locSuffix}.\n`;
+        visitSnippetHinglish = `🏡 <b>Active Property Search:</b> ${lead.property_type || "Property"}${locSuffix}.\n`;
       }
 
       const replyText =
@@ -5914,7 +5926,7 @@ export async function dispatchStateAction(
         .limit(1)
         .maybeSingle();
 
-      const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || "Vadodara"}` : "Aapki property";
+      const propLabel = sub ? `${sub.configuration || sub.property_type || "Property"} at ${sub.project_name || sub.society_name || sub.location || displayCity}` : "Aapki property";
       const isSubApprovedC =
         sub?.status === "CONVERTED_TO_INVENTORY" ||
         sub?.status === "APPROVED" ||
@@ -6029,7 +6041,7 @@ export async function dispatchStateAction(
       const isUpcoming = Boolean(latestVisit && ["SCHEDULED", "CONFIRMED", "RESCHEDULED"].includes(latestVisit.status) && lead.site_visit_booked && isVisitInFuture);
       const isMissed = Boolean(lead.state === "VISIT_MISSED" || latestVisit?.status === "MISSED");
       const isPastUnconf = Boolean(latestVisit && !isVisitInFuture && ["SCHEDULED", "CONFIRMED", "RESCHEDULED"].includes(latestVisit.status));
-      const propName = latestVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? `${lead.property_type} (${lead.location || "Vadodara"})` : "VIP Property");
+      const propName = latestVisit?.inventory?.project_name || lead.metadata?.selected_property_name || (lead.property_type ? (lead.location ? `${lead.property_type} (${lead.location})` : lead.property_type) : "VIP Property");
       const visitTime = scheduledTime ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" }) : "Scheduled Time";
       const mapLink = latestVisit?.inventory?.map_url ? `\n${formatMapHyperlink(latestVisit.inventory.map_url, "View on Google Maps")}` : "";
 
@@ -6129,7 +6141,7 @@ export async function dispatchStateAction(
         .maybeSingle();
 
       const propLabel = sub
-        ? `${sub.configuration || sub.property_type || "Property"} at ${sub.society_name || sub.project_name || sub.location || "Vadodara"}`
+        ? `${sub.configuration || sub.property_type || "Property"} at ${sub.society_name || sub.project_name || sub.location || displayCity}`
         : "Aapki listed property";
       const isSubApprovedB =
         sub?.status === "CONVERTED_TO_INVENTORY" ||
@@ -6465,11 +6477,7 @@ export async function dispatchStateAction(
       const targetState: DialogState = isFresh ? "ROLE_SELECTION_PENDING" : "QUALIFYING";
 
       const replyText = isFresh
-        ? (lang === "GUJLISH"
-          ? `Ji bilkul <b>${nameStr}</b>! ${agencyName} ma aapnu swagat chhe. 🏢✨\n\nTame ${agencyName} sathe shu karva mango chho?\n\n1️⃣ <b>Property Leni chhe</b> (Kharidva / Rent par joiye chhe) 🏡\n2️⃣ <b>Property Deni chhe</b> (Vechva / Rent par aapvi chhe) 📋`
-          : lang === "ENGLISH"
-          ? `Certainly <b>${nameStr}</b>! Welcome to ${agencyName}. 🏢✨\n\nHow would you like to proceed?\n\n1️⃣ <b>Looking for a Property</b> (Buy / Rent) 🏡\n2️⃣ <b>List / Offer a Property</b> (Sell / Rent Out) 📋`
-          : `Ji bilkul <b>${nameStr}</b>! ${agencyName} me aapka swagat hai. 🏢✨\n\nAap ${agencyName} ke sath kya karna chahenge?\n\n1️⃣ <b>Property leni hai</b> (Kharidna / Rent pe lena) 🏡\n2️⃣ <b>Apni property deni hai</b> (Bechna / Rent out karna) 🔑`)
+        ? getGreetingTriageReply(lang, nameStr, agencyName)
         : (lang === "GUJLISH"
           ? `Noted <b>${nameStr}</b>! 👍 Ame tamara nava criteria note kari lidha chhe. Kripya janavjo, tamne kaya nava area ma properties joiye chhe? 📍`
           : lang === "ENGLISH"
@@ -7911,12 +7919,7 @@ export async function dispatchStateAction(
     }
 
     // Otherwise show dual-role greeting:
-    const replyText =
-      lang === "GUJLISH"
-        ? `Namaste <b>${nameStr}</b>! ${agencyName} ma aapnu swagat chhe. 🏢✨\n\nTame ${agencyName} sathe shu karva mango chho?\n\n1️⃣ <b>Property Leni chhe</b> (Kharidva / Rent par joiye chhe) 🏡\n2️⃣ <b>Property Deni chhe</b> (Vechva / Rent par aapvi chhe) 📋\n\n<i>(Tame 1 ke 2 lakhi ne reply kari shako chho)</i>`
-        : lang === "ENGLISH"
-        ? `Hello <b>${nameStr}</b>! Welcome to ${agencyName}. 🏢✨\n\nHow can we assist you today?\n\n1️⃣ <b>Looking for a Property</b> (Buy / Rent) 🏡\n2️⃣ <b>List / Offer a Property</b> (Sell / Rent Out) 📋\n\n<i>(You can reply with 1 or 2)</i>`
-        : `Namaste <b>${nameStr}</b>! ${agencyName} me aapka swagat hai. 🏢✨\n\nAap ${agencyName} ke sath kya karna chahte hain?\n\n1️⃣ <b>Property Leni hai</b> (Buy / Rent par chahiye) 🏡\n2️⃣ <b>Property Deni hai</b> (Bechni / Rent par deni hai) 📋\n\n<i>(Aap 1 ya 2 likh kar reply kar sakte hain)</i>`;
+    const replyText = getGreetingTriageReply(lang, nameStr, agencyName);
 
     return {
       replyText,
@@ -7972,12 +7975,7 @@ export async function dispatchStateAction(
     };
   }
 
-  const defaultReply =
-    lang === "GUJLISH"
-      ? `Ji <b>${nameStr}</b>! Kripya janavjo tamne kaya type ni property ma interest chhe — Flat, Villa, ke Commercial Office/Shop? 🏡`
-      : lang === "ENGLISH"
-      ? `Hello <b>${nameStr}</b>! How may we assist you with your property search — are you looking for a Flat, Villa, or Commercial space? 🏡`
-      : `Ji <b>${nameStr}</b>! Kripya batayein aap kis type ki property search kar rahe hain — Flat, Villa, ya Commercial Office/Shop? 🏡`;
+  const defaultReply = getGreetingTriageReply(lang, nameStr, agencyName);
 
   return {
     replyText: defaultReply,
