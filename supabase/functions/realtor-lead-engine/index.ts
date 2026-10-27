@@ -766,7 +766,7 @@ function isWithinWorkingHours(startHour = 10, endHour = 19): boolean {
 
 // 5. Natural Language Slot Parser with 10 AM - 6 PM IST Validation
 function parseVisitSlot(slotText = ""): { isoUtc: string; isValidTime: boolean; isPast: boolean } {
-  const text = slotText.toLowerCase().trim();
+  const text = normalizeIndicDigits(slotText).toLowerCase().trim();
   const ist = getIstTime();
 
   let targetYear = ist.getUTCFullYear();
@@ -781,28 +781,31 @@ function parseVisitSlot(slotText = ""): { isoUtc: string; isValidTime: boolean; 
     let daysAhead = (dayIndex - currentDayOfWeek + 7) % 7;
     if (daysAhead === 0) daysAhead = 7;
     targetDay += daysAhead;
-  } else if (text.includes("aaj") || text.includes("today")) {
-    // Today
-  } else if (text.includes("kal") || text.includes("tomorrow")) {
-    targetDay += 1;
-  } else if (text.includes("parso") || text.includes("day after")) {
+  } else if (/\b(parso|parsva|parsom|day\s+after)\b/i.test(text) || text.includes("પરમ")) {
     targetDay += 2;
+  } else if (/\b(aje|aaje|aaj|today)\b/i.test(text) || text.includes("આજે")) {
+    // Today (targetDay remains today)
+  } else if (/\b(kale|kaale|kal|tomorrow)\b/i.test(text) || text.includes("કાલે")) {
+    targetDay += 1;
   } else {
     targetDay += 1; // Default tomorrow
   }
 
   let hours = 17; // Default 5 PM IST
   let minutes = 0;
-  const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje|vage)?/i);
+  const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje|vage|વાગે|બજે)?/i);
   if (timeMatch) {
     let h = parseInt(timeMatch[1], 10);
     const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
     const period = timeMatch[3]?.toLowerCase();
     let isPm = period === "pm";
     let isAm = period === "am";
-    if (text.includes("sham") || text.includes("shaam") || text.includes("evening") || text.includes("sanje") || text.includes("dopahar") || text.includes("bapori")) {
+    if (text.includes("sham") || text.includes("shaam") || text.includes("evening") || text.includes("sanje") || text.includes("સાંજે") || text.includes("dopahar") || text.includes("bapori") || text.includes("બપોરે")) {
       isPm = true;
-    } else if (text.includes("subah") || text.includes("savare") || text.includes("morning")) {
+    } else if (text.includes("subah") || text.includes("savare") || text.includes("સવારે") || text.includes("morning")) {
+      isAm = true;
+    } else if (h === 10 || h === 11) {
+      // 10 and 11 default to morning/AM in real estate visits unless evening/sham/sanje specified
       isAm = true;
     } else if (h <= 7) {
       isPm = true; // 1-7 in real estate visits default to PM
@@ -5585,7 +5588,13 @@ export async function dispatchStateAction(
       }
 
       if (isRescheduleVisit) {
-        const slotRaw = (action as RescheduleVisitAction).new_slot_raw || context.messageText;
+        const reschedAct = action as RescheduleVisitAction;
+        const bookAct = action as BookVisitAction;
+        const combinedSlot = [
+          reschedAct.new_slot_raw || bookAct.preferred_date_raw,
+          bookAct.preferred_time_raw
+        ].filter(Boolean).join(" ");
+        const slotRaw = combinedSlot || context.messageText;
         const slotResult = parseVisitSlot(slotRaw);
 
         if (slotResult.isValidTime && !slotResult.isPast) {
@@ -6599,7 +6608,13 @@ export async function dispatchStateAction(
 
     // B. RESCHEDULE_VISIT
     if (intent === "RESCHEDULE_VISIT" || (intent === "BOOK_VISIT" && (action as BookVisitAction).preferred_date_raw)) {
-      const slotRaw = (action as RescheduleVisitAction).new_slot_raw || (action as BookVisitAction).preferred_date_raw || context.messageText;
+      const reschedAct = action as RescheduleVisitAction;
+      const bookAct = action as BookVisitAction;
+      const combinedSlot = [
+        reschedAct.new_slot_raw || bookAct.preferred_date_raw,
+        bookAct.preferred_time_raw
+      ].filter(Boolean).join(" ");
+      const slotRaw = combinedSlot || context.messageText;
       const slotResult = parseVisitSlot(slotRaw);
 
       if (!slotResult.isValidTime) {
@@ -6757,7 +6772,13 @@ export async function dispatchStateAction(
   // ---------------------------------------------------------------------------
   if (currentState === "VISIT_MISSED") {
     if (intent === "RESCHEDULE_VISIT" || intent === "BOOK_VISIT") {
-      const slotRaw = (action as RescheduleVisitAction).new_slot_raw || (action as BookVisitAction).preferred_date_raw || context.messageText;
+      const reschedAct = action as RescheduleVisitAction;
+      const bookAct = action as BookVisitAction;
+      const combinedSlot = [
+        reschedAct.new_slot_raw || bookAct.preferred_date_raw,
+        bookAct.preferred_time_raw
+      ].filter(Boolean).join(" ");
+      const slotRaw = combinedSlot || context.messageText;
       const slotResult = parseVisitSlot(slotRaw);
 
       if (slotResult.isValidTime && !slotResult.isPast) {
@@ -7233,7 +7254,13 @@ export async function dispatchStateAction(
 
     // 2. Re-booking or rescheduling request
     if (intent === "BOOK_VISIT" || intent === "RESCHEDULE_VISIT") {
-      const slotRaw = (action as RescheduleVisitAction).new_slot_raw || (action as BookVisitAction).preferred_date_raw || context.messageText;
+      const reschedAct = action as RescheduleVisitAction;
+      const bookAct = action as BookVisitAction;
+      const combinedSlot = [
+        reschedAct.new_slot_raw || bookAct.preferred_date_raw,
+        bookAct.preferred_time_raw
+      ].filter(Boolean).join(" ");
+      const slotRaw = combinedSlot || context.messageText;
       const slotResult = parseVisitSlot(slotRaw);
       if (slotResult.isValidTime && !slotResult.isPast) {
         const newSlot = slotResult.isoUtc;
@@ -7327,7 +7354,7 @@ export async function dispatchStateAction(
     // CR-02 SAFEGUARD: If no options are available in last_option_ids and no property is selected,
     // do not allow SELECT_OPTION or slot booking to refer to phantom properties!
     if (!hasOptions && !lead.selected_property_id) {
-      const hasSlotKeywords = /\b(aaj|kal|kale|kaale|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i.test(lower);
+      const hasSlotKeywords = /\b(aaj|aje|aaje|kal|kale|kaale|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|parsva|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage|વાગે|બજે))\b/i.test(lower) || /આજે|કાલે|પરમ/i.test(lower);
       if (intent === "SELECT_OPTION" || intent === "BOOK_VISIT" || hasSlotKeywords) {
         const critSummary = formatLeadCriteriaSummary(lead, lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH", resolvedCity);
         const replyText =
@@ -7445,7 +7472,7 @@ export async function dispatchStateAction(
     }
 
     // BOOK_VISIT (Explicit action or natural slot detected)
-    const hasSlotKeywords = /\b(aaj|kal|kale|kaale|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i.test(lower);
+    const hasSlotKeywords = /\b(aaj|aje|aaje|kal|kale|kaale|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|parsva|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage|વાગે|બજે))\b/i.test(lower) || /આજે|કાલે|પરમ/i.test(lower);
     if (intent === "BOOK_VISIT" || hasSlotKeywords) {
       const bookAct = (intent === "BOOK_VISIT" ? action : { intent: "BOOK_VISIT" }) as BookVisitAction;
       let targetPropId = lead.selected_property_id;
@@ -7472,8 +7499,9 @@ export async function dispatchStateAction(
         return { replyText, nextState: "OPTIONS_SENT" };
       }
 
-      const slotRaw = bookAct.preferred_date_raw || bookAct.slot_iso || context.messageText;
-      const hasSlot = Boolean(bookAct.preferred_date_raw || bookAct.slot_iso) || /\b(kal|kale|kaale|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|today|aaj|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i.test(lower);
+      const combinedDate = [bookAct.preferred_date_raw, bookAct.preferred_time_raw].filter(Boolean).join(" ");
+      const slotRaw = combinedDate || bookAct.slot_iso || context.messageText;
+      const hasSlot = Boolean(combinedDate || bookAct.slot_iso) || /\b(aaj|aje|aaje|kal|kale|kaale|tomorrow|today|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|parsva|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage|વાગે|બજે))\b/i.test(lower) || /આજે|કાલે|પરમ/i.test(lower);
 
       if (!hasSlot) {
         const replyText =
