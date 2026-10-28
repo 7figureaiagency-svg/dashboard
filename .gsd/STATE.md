@@ -7,22 +7,19 @@ updated: 2026-10-27T09:24:00+05:30
 ## Current Position
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
-**Phase:** 26 - Universal Conversational Intake, Multi-Persona Triage & City-Agnostic Lead Engine  
-**Status:** ✅ Complete  
+**Phase:** 27 - Stage-Conditioned Intent Classification Engine & Indic Dialect Modules  
+**Status:** 🟡 In Progress  
 **Plans:**
-- `.gsd/phases/26/26.1-PLAN.md` (Universal City-Agnostic Greeting, Intent Triage & Auto-Bypass) — ✅ Completed
-- `.gsd/phases/26/26.2-PLAN.md` (Smart 6-Turn Compound Owner Intake & Commercial Lease Engine) — ✅ Completed
-- `.gsd/phases/26/26.3-PLAN.md` (Smart 3-Turn Compound Buyer Qualification & Multi-Search Lifecycle) — ✅ Completed
-- `.gsd/phases/26/VERIFICATION.md` (Independent Empirical Verification) — ✅ Passed (44/44 truths verified)
+- `.gsd/phases/27/27.1-PLAN.md` (Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation) — ✅ Completed
+- `.gsd/phases/27/27.2-PLAN.md` (Hybrid Intent Router Optimization, Negative Prompt Constraints & Dialect Telemetry) — ⏳ Pending
 
 ## Last Action
 
-Completed Phase 26 (Universal Conversational Intake, Multi-Persona Triage & City-Agnostic Lead Engine):
-- Plan 26.1: Ultra-short (<= 3 lines) universal greeting with 3-choice intent triage (1️⃣ Buy/Rent, 2️⃣ Sell/Lease, 3️⃣ Both/Upgrade). Resolved F-02 (ROLE_SELECTION_PENDING greeting guard) and F-01 (DUAL_ROLE_MENU_PENDING fresh vs returning disambiguation). Direct-intent auto-bypass for specific initial queries.
-- Plan 26.2: Smart 6-Turn Compound Owner Intake capturing Area+Floor, Demand+Furnishing, Parking+Possession. Resolved F-03 (Primary vs Secondary graceful defaults on single-field inputs), F-07 (nested attributes JSONB), F-08 (transaction type normalization to SELL, RENT, LEASE), F-11 (dynamic city fallback, 0 hardcoded "Vadodara"), and F-06 (eradicated all "Mitra", "sthit chhe", "shodhva mango chho", "dhyan rakhjo", "chiye").
-- Plan 26.3: Smart 3-Turn Compound Buyer Qualification (Turn 1 Type+Tx, Turn 2 Locality+Budget, Turn 3 Timeline+Purpose). Resolved F-04 (dynamic single-field prompt handling), F-05 (commercial lease sub-50k budget protection and matching), F-09 (secondary search active visit preservation), and F-12 (AI lead scoring handshake +35 pts elevating to 82+ HOT 🔥).
-- Live Production Deployment: Bumped Edge Function to `v75-universal-conversational-intake`. Successfully deployed and verified live health status: ONLINE.
-- Verification: 44/44 assertions passed across all unit, FSM, and live curl suites. Frontend compiled in 706ms.
+Completed Plan 27.1 (Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation):
+- Monolithic 2,150+ token prompt refactored into lean `CORE_INTENT_SYSTEM_PROMPT` (~630 tokens, 2,520 chars) and dynamic `buildStageMicroPrompt` (~350-450 tokens), achieving a 53-64% reduction in per-turn prompt overhead.
+- Implemented `isBhkOrPropertyConfiguration` and `disambiguateNumericChoice` preventing numeric collision: "2 BHK" in `ROLE_SELECTION_PENDING` strictly routes to `CHANGE_REQUIREMENT` (SEEKER), while isolated single digits (1, 2, 3) map deterministically to active stage options across `OWNER_POSSESSION_PENDING`, `OWNER_FURNISHING_PENDING`, `SITE_VISIT_DONE`, `CRITERIA_CONFIRMATION_PENDING`, and `OPTIONS_SENT`.
+- Implemented `normalizeGujaratiDigits` and boundary-checked token trees `VERNACULAR_RENTAL_REGEX` and `VERNACULAR_SALE_REGEX`.
+- Verified 22/22 unit assertions passed in `scratch/test_numeric_guards.cjs` and prompt footprint reduction verified in `scratch/inspect_prompts.cjs`. Frontend compiled cleanly with `npm.cmd run build` (0 errors, 2.30s).
 
 
 Completed Phase 25 (Owner Intake Stop-Word Guard & Entity Extraction Disambiguation):
