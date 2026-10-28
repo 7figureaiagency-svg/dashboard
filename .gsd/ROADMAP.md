@@ -196,8 +196,8 @@ updated: 2026-10-19T18:50:30+05:30
 | 22: State-Conditioned Multilingual Intent Engine | ✅ Complete | 2/2 | 100% |
 | 23: Vernacular Slot, Owner Intake & Hyperlinks | ✅ Complete | 2/2 | 100% |
 | 24: E2E QA Audit Bug Remediation & Role Governance | ✅ Complete | 2/2 | 100% |
-| 25: Owner Intake Stop-Word Guard & Entity Extraction | ✅ Complete | 1/1 | 100% |
-| 26: Universal Conversational Intake & Multi-Persona Engine | ⏳ Planned | 0/3 | 0% |
+| 26: Universal Conversational Intake & Multi-Persona Engine | ✅ Complete | 3/3 | 100% |
+| 27: Dynamic Stage-Conditioned Intent Engine | ⏳ Planned | 0/3 | 0% |
 
 ---
 
@@ -276,9 +276,9 @@ updated: 2026-10-19T18:50:30+05:30
 **Objective:** Upgrade the real estate conversational agent to achieve 100% intent classification and entity extraction accuracy across all vernacular dialects, single-word replies, and conversational detours. Implement stage-conditioned micro-prompts injecting active turn goals and collected memory, resolve numeric ambiguities (Rent vs Buy vs Area), support in-flow side-question FAQs with seamless state resumption, and replace fragile fallback regexes with strict token trees.  
 **Depends on:** Phase 26  
 **Plans:**
-- [ ] Plan 27.1: Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation
-- [ ] Plan 27.2: Conversational Side-Question Interception, Seamless State Resumption & Zero-Regex Token Trees
-- [ ] Plan 27.3: Empirical Verification & Multi-Dialect Vernacular Simulation Matrix (Hinglish/Gujlish/Single-Token)
+- [ ] Plan 27.1: Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation ([`27.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.1-PLAN.md))
+- [ ] Plan 27.2: Conversational Side-Question Interception, Seamless State Resumption & Multi-Entity Draft Archival ([`27.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.2-PLAN.md))
+- [ ] Plan 27.3: Empirical Verification & Multi-Dialect Vernacular Simulation Matrix ([`27.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.3-PLAN.md))
 
 
 
