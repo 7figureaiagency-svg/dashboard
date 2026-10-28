@@ -1386,7 +1386,9 @@ const STOP_WORDS_SET = new Set([
   "ma", "par", "pe", "se", "thi", "as", "aur", "ane", "and", "is", "sho", "shop", "office",
   "flat", "apartment", "duplex", "penthouse", "villa", "bungalow", "house", "ghar",
   "makan", "makaan", "plot", "land", "zamin", "showroom", "godown", "warehouse", "dukan",
-  "dukaan", "commercial", "residential", "property", "project", "society", "name"
+  "dukaan", "commercial", "residential", "property", "project", "society", "name",
+  "bhk", "rk", "1bhk", "2bhk", "3bhk", "4bhk", "5bhk", "1rk", "2rk",
+  "bedroom", "bedrooms", "room", "rooms", "floor"
 ]);
 
 function isLikelySocietyOrProjectName(name: string): boolean {
@@ -1394,6 +1396,11 @@ function isLikelySocietyOrProjectName(name: string): boolean {
   const cleaned = name.trim().replace(/['"]/g, "");
   if (cleaned.length < 2) return false;
   if (/^\d+$/.test(cleaned)) return false;
+
+  // Strict Guard: Pure property configurations and unit types can NEVER be a society/project name!
+  if (/^(?:[1-5]\s*bhk|[1-5]\s*rk|bhk|rk|flat|flats|apartment|villa|plot|land|shop|office|commercial|residential|house|bungalow|duplex|penthouse)$/i.test(cleaned)) {
+    return false;
+  }
 
   const words = cleaned.toLowerCase().split(/[\s,.-]+/).filter(Boolean);
   if (words.length === 0) return false;
@@ -1443,13 +1450,14 @@ function extractProjectOrSocietyFromText(text: string, parsedPropType?: string):
   }
 
   // 5. Strip parsedPropType, property subtype tokens and conversational filler words to see if a clean society name remains
-  if (parsedPropType) {
+  if (parsedPropType || /\b(?:[1-5]\s*bhk|flat|villa|shop|office|plot)\b/i.test(trimmed)) {
     const propTokens = [
       parsedPropType,
       "commercial", "residential", "flat", "apartment", "duplex", "penthouse",
       "villa", "bungalow", "house", "ghar", "makan", "makaan", "plot", "land", "zamin",
-      "shop", "showroom", "office", "warehouse", "godown", "dukan", "dukaan"
-    ].join("|");
+      "shop", "showroom", "office", "warehouse", "godown", "dukan", "dukaan",
+      "[1-5]?\\s*bhk", "[1-5]?\\s*rk", "bhk", "rk"
+    ].filter(Boolean).join("|");
 
     const stripped = trimmed
       .replace(/['"]/g, "")
@@ -1477,17 +1485,42 @@ function formatSocietyName(raw: string): string {
 }
 
 function parseRequirementFromText(text: string): string {
-  const lower = text.toLowerCase();
+  const lower = (text || "").toLowerCase();
   if (lower.includes("lease") || lower.includes("corporate lease") || lower.includes("long term lease") || lower.includes("લીઝ")) {
     return "LEASE";
   }
-  if (lower.includes("rent") || lower.includes("kiraya") || lower.includes("bhadu") || lower.includes("bhaade") || lower.includes("bhade") || lower.includes("bhada") || lower.includes("rental") || lower.includes("reva mate") || lower.includes("ભાડે") || lower.includes("ભાડુ") || lower.includes("કિરાયા") || lower.includes("किરાયા") || lower.includes("किराया")) {
+  // RENT must precede BUY so that "rent pe leni hai" or "rent par lena" classifies as RENT
+  if (
+    lower.includes("rent") || lower.includes("kiraya") || lower.includes("kiraye") ||
+    lower.includes("bhadu") || lower.includes("bhaade") || lower.includes("bhade") ||
+    lower.includes("bhada") || lower.includes("rental") || lower.includes("reva mate") ||
+    lower.includes("ભાડે") || lower.includes("ભાડુ") || lower.includes("કિરાયા") ||
+    lower.includes("किરાયા") || lower.includes("किराया") || lower.includes("किराये")
+  ) {
     return "RENT";
   }
-  if (lower.includes("sell") || lower.includes("bechna") || lower.includes("vechvu") || lower.includes("bikri") || lower.includes("વેચવું") || lower.includes("વેચવા") || lower.includes("બેચના") || lower.includes("बेचना")) {
+  if (
+    lower.includes("sell") || lower.includes("bechna") || lower.includes("bechni") ||
+    lower.includes("bechne") || lower.includes("vechvu") || lower.includes("vechva") ||
+    lower.includes("vechvo") || lower.includes("bikri") ||
+    /\b(?:deni|dena|dene)\s*(?:hai|he|h|chhe|che|chahte)?\b/i.test(lower) ||
+    lower.includes("વેચવું") || lower.includes("વેચવા") || lower.includes("બેચના") ||
+    lower.includes("बेचना") || lower.includes("बेचनी")
+  ) {
     return "SELL";
   }
-  if (lower.includes("buy") || lower.includes("kharid") || lower.includes("purchase") || lower.includes("khareed") || lower.includes("levu") || lower.includes("khareedna") || lower.includes("ખરીદવું") || lower.includes("ખરીદવા") || lower.includes("ખરીદ") || lower.includes("લેવું") || lower.includes("લેવા") || lower.includes("લેવો") || lower.includes("खरीदना") || lower.includes("खरीद")) {
+  if (
+    lower.includes("buy") || lower.includes("purchase") ||
+    lower.includes("kharid") || lower.includes("khareed") ||
+    lower.includes("kharidvu") || lower.includes("kharidva") || lower.includes("kharidvo") ||
+    lower.includes("khareedvu") || lower.includes("khareedva") || lower.includes("khareedvo") ||
+    lower.includes("khareedna") || lower.includes("kharidna") ||
+    lower.includes("levu") || lower.includes("leva") || lower.includes("levo") ||
+    /\b(?:leni|lena|lene)\s*(?:hai|he|h|chhe|che|chahte)?\b/i.test(lower) ||
+    lower.includes("ખરીદવું") || lower.includes("ખરીદવા") || lower.includes("ખરીદ") ||
+    lower.includes("લેવું") || lower.includes("લેવા") || lower.includes("લેવો") ||
+    lower.includes("खरीदना") || lower.includes("खरीद") || lower.includes("लेनी") || lower.includes("लेना")
+  ) {
     return "BUY";
   }
   return "";
@@ -2909,11 +2942,23 @@ async function classifyLeadIntent(
     fallbackIntent = "BOOK_VISIT";
   }
 
+  // Pure Property Type mention Guard (e.g. "2 BHK", "Villa", "Commercial Shop")
+  // If user mentions a property type without explicit owner selling keywords, it is strictly SEEKER criteria!
+  const hasDetectedPropType = Boolean(parsePropertyTypeFromText(messageText));
+  const hasExplicitOwnerAction = /(?:bechna|bechni|bechne|vechvu|vechva|vechvo|sell|selling|bikri|deni|dena|dene|list|listing|chadani)/i.test(lower);
+
   // Handle explicit 1 vs 2 in ROLE_SELECTION_PENDING
   if (lead?.state === "ROLE_SELECTION_PENDING") {
-    if (/^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim())) {
+    const isPureOption2 =
+      /^(?:2|2️⃣|option\s*2|second|2nd)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim()) ||
+      /^(?:deni|dene|sell|bechna|vechvu|vechva|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim());
+    const isPureOption1 =
+      /^(?:1|1️⃣|option\s*1|first|1st)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim()) ||
+      /^(?:leni|lena|lene|kharidna|kharidvu|buy|rent\s*pe\s*chahiye|search)\b/i.test(lower.trim());
+
+    if (isPureOption2 && !hasDetectedPropType) {
       fallbackIntent = "OWNER_LISTING";
-    } else if (/^(1|1️⃣|option\s*1|first|1st|leni|lene|kharidna|buy|rent\s*pe\s*chahiye|search)\b/i.test(lower.trim())) {
+    } else if (isPureOption1 || hasDetectedPropType) {
       fallbackIntent = "SEEKER_QUALIFICATION";
     }
   }
@@ -2966,12 +3011,18 @@ async function classifyLeadIntent(
     fallbackIntent = "SEEKER_QUALIFICATION";
   }
 
+  if (hasDetectedPropType && !hasExplicitOwnerAction && !isInOwnerIntake) {
+    if (fallbackIntent === "UNKNOWN" || fallbackIntent === "OWNER_LISTING") {
+      fallbackIntent = "CHANGE_CRITERIA";
+    }
+  }
+
   let isOwnerMsg = false;
   if (isInOwnerIntake) {
     isOwnerMsg = true;
-  } else if (fallbackIntent === "OWNER_LISTING") {
+  } else if (fallbackIntent === "OWNER_LISTING" && (!hasDetectedPropType || hasExplicitOwnerAction)) {
     isOwnerMsg = true;
-  } else if (lead?.lead_type === "PROVIDER" && !isCompletedOwner) {
+  } else if (lead?.lead_type === "PROVIDER" && !isCompletedOwner && !hasDetectedPropType) {
     isOwnerMsg = true;
   } else if (isCompletedOwner && !hasSeekerKeywords && fallbackIntent !== "GREETING" && fallbackIntent !== "OPT_OUT") {
     // If completed owner without seeker keywords or greeting, preserve owner context
@@ -6707,13 +6758,21 @@ export async function dispatchStateAction(
     }
 
     // 3. Option 2: Owner / Seller / Landlord
-    const isOwnerChoice =
+    const detectedBuyerPropType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+    const hasExplicitOwnerAction = /(?:bechna|bechni|bechne|vechvu|vechva|vechvo|sell|selling|bikri|deni|dena|dene|list|listing|chadani)/i.test(lower);
+
+    const isPureOption2 =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
-      intent === "SUBMIT_LISTING" ||
-      actionResult.user_role === "OWNER" ||
-      /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|vechvu|vechva|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim()) ||
+      /^(?:2|2️⃣|option\s*2|second|2nd)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim()) ||
+      /^(?:deni|dene|sell|bechna|vechvu|vechva|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim()) ||
       /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower) ||
       /(?:bechna|bechni|vechvu|vechva|sell\s*(?:karna|karni|karvu|karva|kar))/i.test(lower);
+
+    // CRITICAL GUARD: If user mentions a property type (e.g. "2 BHK", "Villa", "Shop") without explicit selling verbs,
+    // it is strictly a buyer requirement and NEVER an owner choice!
+    const isOwnerChoice = !hasExplicitOwnerAction && detectedBuyerPropType
+      ? false
+      : (isPureOption2 || ((intent === "SUBMIT_LISTING" || actionResult.user_role === "OWNER") && hasExplicitOwnerAction));
 
     if (isOwnerChoice) {
       // If user already specified property type (e.g. "muje meri shop bechni he"), directly forward to handleOwnerFlow!
@@ -8861,11 +8920,11 @@ async function handleQualificationCascade(
   const activeTenantId = context.tenantId || defaultTenantId;
   const resolvedCity = context.resolvedCity;
 
-  let propType = actionResult.property_type || parsePropertyTypeFromText(context.messageText) || lead?.property_type;
-  let requirement = actionResult.transaction_type || parseRequirementFromText(context.messageText) || lead?.requirement;
-  let purpose = parsePurposeFromText(context.messageText) || lead?.purpose;
-  let budget = actionResult.price_or_budget || parseBudgetFromText(context.messageText) || (lead?.budget ? Number(lead.budget) : 0);
-  let timeline = actionResult.timeline || parseTimelineFromText(context.messageText) || lead?.timeline;
+  let propType = actionResult.property_type || parsePropertyTypeFromText(context.messageText) || lead?.property_type || lead?.metadata?.seeker_draft?.property_type;
+  let requirement = actionResult.transaction_type || parseRequirementFromText(context.messageText) || lead?.requirement || lead?.metadata?.seeker_draft?.requirement;
+  let purpose = parsePurposeFromText(context.messageText) || lead?.purpose || lead?.metadata?.seeker_draft?.purpose;
+  let budget = actionResult.price_or_budget || parseBudgetFromText(context.messageText) || (lead?.budget ? Number(lead.budget) : 0) || (lead?.metadata?.seeker_draft?.budget ? Number(lead.metadata.seeker_draft.budget) : 0);
+  let timeline = actionResult.timeline || parseTimelineFromText(context.messageText) || lead?.timeline || lead?.metadata?.seeker_draft?.timeline;
 
   // F-05: Commercial Lease Seeker Disambiguation & Sub-50k Budget Protection
   const lowerMsg = (context.messageText || "").toLowerCase();
@@ -8889,7 +8948,7 @@ async function handleQualificationCascade(
     .eq("status", "AVAILABLE");
 
   const matchedLocs = extractLocationsFromText(context.messageText, allTenantInventory || []);
-  let location = actionResult.location || (matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(context.messageText, allTenantInventory || [])) || lead?.location;
+  let location = actionResult.location || (matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(context.messageText, allTenantInventory || [])) || lead?.location || lead?.metadata?.seeker_draft?.location;
   if (!location && (actionResult.is_flexible_location || /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|any\s*location|flexible|gamete)\b/i.test(context.lower))) {
     location = "FLEXIBLE";
   }
@@ -8946,6 +9005,17 @@ async function handleQualificationCascade(
 
   const isDual = lead?.lead_type === "DUAL_ROLE" || Boolean(lead?.metadata?.has_seller_profile) || lead?.lead_type === "PROVIDER";
   const hasActiveBookedVisit = Boolean(lead?.site_visit_booked);
+
+  const seekerDraft = {
+    ...(lead?.metadata?.seeker_draft || {}),
+    ...(propType ? { property_type: propType } : {}),
+    ...(requirement ? { requirement } : {}),
+    ...(location ? { location } : {}),
+    ...(budget ? { budget } : {}),
+    ...(purpose ? { purpose } : {}),
+    ...(timeline ? { timeline } : {}),
+  };
+
   const leadUpdates: Record<string, any> = {
     state: missingStage ? (hasActiveBookedVisit ? (lead.state || "SITE_VISIT_BOOKED") : "QUALIFYING") : "OPTIONS_SENT",
     lead_type: isDual ? "DUAL_ROLE" : "SEEKER",
@@ -8956,18 +9026,19 @@ async function handleQualificationCascade(
     location: location || null,
     budget: budget || null,
     timeline: timeline || null,
+    metadata: {
+      ...(lead?.metadata || {}),
+      seeker_draft: seekerDraft,
+      ...(isDual ? {
+        has_seller_profile: true,
+        has_buyer_profile: true,
+        active_persona: "BUYER",
+      } : {}),
+    },
     ...(hasActiveBookedVisit ? {
       site_visit_booked: true,
       site_visit_at: lead.site_visit_at || lead.site_visit_datetime,
       site_visit_datetime: lead.site_visit_datetime || lead.site_visit_at,
-    } : {}),
-    ...(isDual ? {
-      metadata: {
-        ...(lead.metadata || {}),
-        has_seller_profile: true,
-        has_buyer_profile: true,
-        active_persona: "BUYER",
-      }
     } : {}),
   };
 
@@ -10228,7 +10299,7 @@ Deno.serve(async (req: Request) => {
     if (transitionResult.leadUpdates && Object.keys(transitionResult.leadUpdates).length > 0) {
       const sanitizedUpdates = { ...transitionResult.leadUpdates };
       delete (sanitizedUpdates as any).status;
-      await supabase
+      const { error: updateErr } = await supabase
         .from("leads")
         .update({
           ...sanitizedUpdates,
@@ -10237,8 +10308,12 @@ Deno.serve(async (req: Request) => {
           metadata: enrichedLeadMetadata,
         })
         .eq("id", lead.id);
+
+      if (updateErr) {
+        console.error(`[CRITICAL] Lead update failed for id ${lead.id}:`, updateErr.message, updateErr.details);
+      }
     } else {
-      await supabase
+      const { error: updateErr } = await supabase
         .from("leads")
         .update({
           state: nextState,
@@ -10246,6 +10321,10 @@ Deno.serve(async (req: Request) => {
           metadata: enrichedLeadMetadata,
         })
         .eq("id", lead.id);
+
+      if (updateErr) {
+        console.error(`[CRITICAL] Lead state update failed for id ${lead.id}:`, updateErr.message, updateErr.details);
+      }
     }
 
     // Dispatch real-time sales alert if triggered
