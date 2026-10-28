@@ -446,6 +446,20 @@ export function useApprovePropertySubmission() {
         throw new Error("Cannot approve property: missing tenant client_id");
       }
 
+      const landmarksList = Array.isArray(rawAttrs.landmarks)
+        ? (rawAttrs.landmarks as string[])
+        : typeof rawAttrs.landmarks_input === "string"
+        ? (rawAttrs.landmarks_input as string).split(",").map((s) => s.trim()).filter(Boolean)
+        : [];
+
+      const areaVal = submission.carpet_area_sqft
+        ? Number(submission.carpet_area_sqft)
+        : submission.super_built_up_sqft
+        ? Number(submission.super_built_up_sqft)
+        : rawAttrs.area_sqft
+        ? Number(rawAttrs.area_sqft)
+        : null;
+
       // 3. Insert into inventory (both bhk_num column and inside attributes jsonb)
       const { error: insertError } = await supabase.from("inventory").insert({
         property_id: propertyId,
@@ -455,20 +469,29 @@ export function useApprovePropertySubmission() {
         configuration: submission.configuration || "2BHK",
         bhk_num,
         location: submission.location || "Vadodara",
-        city: "Vadodara",
+        city: submission.city || (rawAttrs.city as string) || "Vadodara",
         price,
-        area_sqft: area,
+        area_sqft: areaVal,
         carpet_area_sqft: submission.carpet_area_sqft ? Number(submission.carpet_area_sqft) : null,
         super_built_up_area_sqft: submission.super_built_up_sqft ? Number(submission.super_built_up_sqft) : null,
-        status: "AVAILABLE",
-        stock_type: "RESALE",
-        listing_type: listingType,
+        status: (rawAttrs.status as string) || "AVAILABLE",
+        stock_type: (rawAttrs.stock_type as string) || "RESALE",
+        listing_type: (rawAttrs.listing_type as string) || listingType,
         transaction_type: listingType === "RENT" ? "RENTAL" : "RESALE",
-        furnished_status: submission.furnishing_status || "UNFURNISHED",
+        furnished_status: submission.furnishing_status || (rawAttrs.furnished_status as string) || "UNFURNISHED",
         possession_status: submission.possession_status || "READY_TO_MOVE",
-        price_negotiable: false,
-        amenities: [],
-        image_urls: submission.images ?? [],
+        price_negotiable: rawAttrs.price_negotiable === "true" || rawAttrs.price_negotiable === true,
+        maintenance_charges: rawAttrs.maintenance_charges ? Number(rawAttrs.maintenance_charges) : null,
+        property_age_years: rawAttrs.property_age_years ? Number(rawAttrs.property_age_years) : null,
+        facing: (rawAttrs.facing as string) || null,
+        ownership_type: (rawAttrs.ownership_type as string) || null,
+        rera_number: (rawAttrs.rera_number as string) || null,
+        landmarks: landmarksList,
+        amenities: Array.isArray(rawAttrs.amenities) ? (rawAttrs.amenities as string[]) : [],
+        image_urls: submission.images ?? (Array.isArray(rawAttrs.image_urls) ? (rawAttrs.image_urls as string[]) : []),
+        brochure_url: (rawAttrs.brochure_url as string) || null,
+        map_url: (rawAttrs.map_url as string) || null,
+        assigned_executive_id: (rawAttrs.assigned_executive_id as string) || null,
         attributes: {
           ...rawAttrs,
           bhk_num,

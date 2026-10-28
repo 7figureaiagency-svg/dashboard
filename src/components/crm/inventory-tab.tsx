@@ -2093,115 +2093,294 @@ function OwnerSubmissionsView({
       {/* Details Dialog */}
       {detailsSubmission && (
         <Dialog open={!!detailsSubmission} onOpenChange={(open) => !open && setDetailsSubmission(null)}>
-          <DialogContent className="max-w-xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center justify-between gap-2">
-                <span>{detailsSubmission.project_name || detailsSubmission.society_name || "Owner Property Submission"}</span>
+          <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl w-[95vw] p-4 sm:p-6 rounded-2xl border border-border/60 bg-background shadow-2xl">
+            <DialogHeader className="space-y-1.5 pb-2 border-b border-border/40">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
+                    {detailsSubmission.project_name || detailsSubmission.society_name || "Owner Property Submission"}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span>
+                      Submitted by <strong className="text-foreground font-medium">{detailsSubmission.owner_name || "Property Owner"}</strong>
+                    </span>
+                    <span>•</span>
+                    <span>
+                      {detailsSubmission.created_at
+                        ? new Date(detailsSubmission.created_at).toLocaleString("en-IN", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })
+                        : "recently"}
+                    </span>
+                    {detailsSubmission.lead_id && (
+                      <>
+                        <span>•</span>
+                        <span className="font-mono text-muted-foreground/80">Ref: #{detailsSubmission.lead_id}</span>
+                      </>
+                    )}
+                  </DialogDescription>
+                </div>
                 <ToneBadge
                   tone={PROPERTY_SUBMISSION_STATUS_MAP[detailsSubmission.status || "PENDING_VERIFICATION"]?.tone ?? "yellow"}
                   label={PROPERTY_SUBMISSION_STATUS_MAP[detailsSubmission.status || "PENDING_VERIFICATION"]?.label ?? (detailsSubmission.status || "Pending")}
+                  className="shrink-0"
                 />
-              </DialogTitle>
-              <DialogDescription>
-                Submitted by {detailsSubmission.owner_name || "Property Owner"} on{" "}
-                {detailsSubmission.created_at ? new Date(detailsSubmission.created_at).toLocaleString("en-IN") : "recently"}
-              </DialogDescription>
+              </div>
             </DialogHeader>
 
-            <div className="grid grid-cols-2 gap-3 text-sm py-2">
-              <div className="rounded-lg border bg-muted/40 p-2.5">
-                <span className="text-xs text-muted-foreground block">Owner Details</span>
-                <span className="font-semibold block">{detailsSubmission.owner_name || "—"}</span>
-                <span className="text-xs font-mono text-muted-foreground block">{detailsSubmission.owner_phone || "—"}</span>
-                {detailsSubmission.owner_phone && (
-                  <a
-                    href={`tel:${detailsSubmission.owner_phone}`}
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1 font-medium"
-                  >
-                    <Phone className="size-3" /> Call Owner ({detailsSubmission.owner_phone})
-                  </a>
-                )}
-              </div>
+            {(() => {
+              const rawAttrs =
+                typeof detailsSubmission.attributes === "object" && detailsSubmission.attributes !== null
+                  ? (detailsSubmission.attributes as Record<string, unknown>)
+                  : {};
 
-              <div className="rounded-lg border bg-muted/40 p-2.5">
-                <span className="text-xs text-muted-foreground block">Location & Society</span>
-                <span className="font-semibold block">{detailsSubmission.society_name || detailsSubmission.project_name || "—"}</span>
-                <span className="text-xs text-muted-foreground block">📍 {detailsSubmission.location || "Vadodara"}</span>
-              </div>
+              const priceDisplay = detailsSubmission.expected_price
+                ? formatMoney(Number(detailsSubmission.expected_price))
+                : detailsSubmission.expected_rent
+                ? `${formatMoney(Number(detailsSubmission.expected_rent))}/mo`
+                : "Not specified";
 
-              <div className="rounded-lg border bg-muted/40 p-2.5">
-                <span className="text-xs text-muted-foreground block">Category & Type</span>
-                <span className="font-semibold block">{detailsSubmission.property_category || "RESIDENTIAL"}</span>
-                <span className="text-xs text-muted-foreground block">{detailsSubmission.configuration || "—"} ({detailsSubmission.transaction_type || "SELL"})</span>
-              </div>
+              const specs = [
+                rawAttrs.floor_number !== undefined && rawAttrs.floor_number !== null
+                  ? `Floor: ${rawAttrs.floor_number}${rawAttrs.total_floors ? ` of ${rawAttrs.total_floors}` : ""}`
+                  : null,
+                rawAttrs.bathrooms ? `${rawAttrs.bathrooms} Bathrooms` : null,
+                rawAttrs.balconies ? `${rawAttrs.balconies} Balconies` : null,
+                rawAttrs.parking ? `Parking: ${rawAttrs.parking}` : null,
+                rawAttrs.facing ? `Facing: ${String(rawAttrs.facing).replaceAll("_", " ")}` : null,
+                rawAttrs.property_age_years ? `Age: ${rawAttrs.property_age_years} yrs` : null,
+                rawAttrs.ownership_type ? `Ownership: ${String(rawAttrs.ownership_type).replaceAll("_", " ")}` : null,
+                rawAttrs.rera_number ? `RERA: ${rawAttrs.rera_number}` : null,
+              ].filter(Boolean);
 
-              <div className="rounded-lg border bg-muted/40 p-2.5">
-                <span className="text-xs text-muted-foreground block">Carpet & Built-up Area</span>
-                <span className="font-semibold block">{detailsSubmission.carpet_area_sqft ? `${detailsSubmission.carpet_area_sqft} sq.ft` : "—"}</span>
-                <span className="text-xs text-muted-foreground block">{detailsSubmission.super_built_up_sqft ? `${detailsSubmission.super_built_up_sqft} sq.ft super` : "—"}</span>
-              </div>
+              const amenities = Array.isArray(rawAttrs.amenities)
+                ? (rawAttrs.amenities as string[])
+                : [];
 
-              <div className="rounded-lg border bg-muted/40 p-2.5">
-                <span className="text-xs text-muted-foreground block">Asking Price / Rent</span>
-                <span className="font-semibold block text-base text-primary">
-                  {detailsSubmission.expected_price
-                    ? formatMoney(Number(detailsSubmission.expected_price))
-                    : detailsSubmission.expected_rent
-                    ? `${formatMoney(Number(detailsSubmission.expected_rent))}/mo`
-                    : "Not specified"}
+              const landmarks = Array.isArray(rawAttrs.landmarks)
+                ? (rawAttrs.landmarks as string[])
+                : typeof rawAttrs.landmarks_input === "string"
+                ? (rawAttrs.landmarks_input as string).split(",").map((s) => s.trim()).filter(Boolean)
+                : [];
+
+              const images = detailsSubmission.images && Array.isArray(detailsSubmission.images)
+                ? detailsSubmission.images
+                : Array.isArray(rawAttrs.image_urls)
+                ? (rawAttrs.image_urls as string[])
+                : [];
+
+              const displayLoc = detailsSubmission.location && detailsSubmission.location !== detailsSubmission.project_name
+                ? detailsSubmission.location
+                : (detailsSubmission.city || "Vadodara");
+
+              return (
+                <div className="space-y-3 py-2 text-sm">
+                  {/* Grid Cards (1 col mobile, 2 col tablet/desktop) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* 1. Owner Details */}
+                    <div className="rounded-xl border border-border/50 bg-muted/30 dark:bg-muted/15 p-3.5 space-y-1 transition-colors hover:border-border">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase flex items-center gap-1.5">
+                        <User className="size-3 text-primary" />
+                        Owner Details
+                      </span>
+                      <span className="font-semibold block text-foreground text-sm">{detailsSubmission.owner_name || "—"}</span>
+                      <span className="text-xs font-mono text-muted-foreground block">{detailsSubmission.owner_phone || "No phone recorded"}</span>
+                      {detailsSubmission.owner_phone && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <a
+                            href={`tel:${detailsSubmission.owner_phone}`}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                          >
+                            <Phone className="size-3" /> Call
+                          </a>
+                          <span className="text-muted-foreground/40">•</span>
+                          <a
+                            href={toWhatsAppUrl(detailsSubmission.owner_phone, `Namaste ${detailsSubmission.owner_name || ""} ji! NextGen Realty team se property inquiry ke regarding sampark kar rahe hain.`)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
+                          >
+                            <MessageCircle className="size-3" /> WhatsApp
+                          </a>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. Location & Society */}
+                    <div className="rounded-xl border border-border/50 bg-muted/30 dark:bg-muted/15 p-3.5 space-y-1 transition-colors hover:border-border">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase flex items-center gap-1.5">
+                        <MapPin className="size-3 text-primary" />
+                        Location & Society
+                      </span>
+                      <span className="font-semibold block text-foreground text-sm truncate" title={detailsSubmission.society_name || detailsSubmission.project_name || "—"}>
+                        {detailsSubmission.society_name || detailsSubmission.project_name || "—"}
+                      </span>
+                      <span className="text-xs text-muted-foreground block truncate">
+                        📍 {displayLoc}
+                        {detailsSubmission.city && !displayLoc.toLowerCase().includes(detailsSubmission.city.toLowerCase()) ? `, ${detailsSubmission.city}` : ""}
+                      </span>
+                    </div>
+
+                    {/* 3. Category & Type */}
+                    <div className="rounded-xl border border-border/50 bg-muted/30 dark:bg-muted/15 p-3.5 space-y-1 transition-colors hover:border-border">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase flex items-center gap-1.5">
+                        <Building2 className="size-3 text-primary" />
+                        Category & Configuration
+                      </span>
+                      <span className="font-semibold block text-foreground text-sm">
+                        {detailsSubmission.property_category || "RESIDENTIAL"}
+                      </span>
+                      <span className="text-xs text-muted-foreground block">
+                        {detailsSubmission.configuration?.replaceAll("_", " ") || "—"}
+                        <span className="inline-block mx-1.5 text-muted-foreground/40">•</span>
+                        <span className="font-medium text-foreground/80">{detailsSubmission.transaction_type || "SELL"}</span>
+                      </span>
+                    </div>
+
+                    {/* 4. Area & Sizing */}
+                    <div className="rounded-xl border border-border/50 bg-muted/30 dark:bg-muted/15 p-3.5 space-y-1 transition-colors hover:border-border">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase flex items-center gap-1.5">
+                        <FileText className="size-3 text-primary" />
+                        Carpet & Built-up Area
+                      </span>
+                      <span className="font-semibold block text-foreground text-sm tabular-nums">
+                        {detailsSubmission.carpet_area_sqft ? `${Number(detailsSubmission.carpet_area_sqft).toLocaleString("en-IN")} sq.ft Carpet` : "—"}
+                      </span>
+                      <span className="text-xs text-muted-foreground block tabular-nums">
+                        {detailsSubmission.super_built_up_sqft
+                          ? `${Number(detailsSubmission.super_built_up_sqft).toLocaleString("en-IN")} sq.ft Super Built-up`
+                          : rawAttrs.built_up_area || rawAttrs.area_sqft
+                          ? `${Number(rawAttrs.built_up_area || rawAttrs.area_sqft).toLocaleString("en-IN")} sq.ft Built-up`
+                          : "Super Built-up not specified"}
+                      </span>
+                    </div>
+
+                    {/* 5. Asking Price / Rent */}
+                    <div className="rounded-xl border border-border/50 bg-muted/30 dark:bg-muted/15 p-3.5 space-y-1 transition-colors hover:border-border">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase flex items-center gap-1.5">
+                        <Flame className="size-3 text-primary" />
+                        Asking Demand / Price
+                      </span>
+                      <span className="font-bold block text-base text-emerald-600 dark:text-emerald-400 tabular-nums">
+                        {priceDisplay}
+                      </span>
+                      <span className="text-xs text-muted-foreground block">
+                        {rawAttrs.price_negotiable === "true" || rawAttrs.price_negotiable === true
+                          ? "Negotiable"
+                          : "Fixed / Standard terms"}
+                        {rawAttrs.maintenance_charges ? ` · Maint: ₹${Number(rawAttrs.maintenance_charges).toLocaleString("en-IN")}/mo` : ""}
+                      </span>
+                    </div>
+
+                    {/* 6. Status & Furnishing */}
+                    <div className="rounded-xl border border-border/50 bg-muted/30 dark:bg-muted/15 p-3.5 space-y-1 transition-colors hover:border-border">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase flex items-center gap-1.5">
+                        <Building2 className="size-3 text-primary" />
+                        Possession & Furnishing
+                      </span>
+                      <span className="font-semibold block text-foreground text-sm">
+                        {detailsSubmission.possession_status?.replaceAll("_", " ") || "—"}
+                      </span>
+                      <span className="text-xs text-muted-foreground block">
+                        {detailsSubmission.furnishing_status?.replaceAll("_", " ") || "—"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Specifications & Attributes */}
+                  {specs.length > 0 && (
+                    <div className="rounded-xl border border-border/50 bg-muted/20 p-3 space-y-2">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase block">
+                        Additional Specifications
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 text-xs">
+                        {specs.map((s, idx) => (
+                          <span key={idx} className="rounded-lg bg-background border border-border/60 px-2.5 py-1 font-medium text-foreground">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Landmarks */}
+                  {landmarks.length > 0 && (
+                    <div className="rounded-xl border border-border/50 bg-muted/20 p-3 space-y-1.5">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase block">
+                        Nearby Landmarks & Connectivity
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 text-xs">
+                        {landmarks.map((lm, idx) => (
+                          <span key={idx} className="rounded-lg bg-background border border-border/60 px-2.5 py-0.5 text-muted-foreground">
+                            📍 {lm}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Amenities */}
+                  {amenities.length > 0 && (
+                    <div className="rounded-xl border border-border/50 bg-muted/20 p-3 space-y-1.5">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase block">
+                        Amenities ({amenities.length})
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 text-xs">
+                        {amenities.map((am, idx) => (
+                          <span key={idx} className="rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 font-medium">
+                            ✓ {am.replaceAll("_", " ")}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Notes / Special Instructions */}
+                  {detailsSubmission.notes && (
+                    <div className="rounded-xl border border-border/50 bg-background p-3 space-y-1">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase block">
+                        Notes / Special Instructions
+                      </span>
+                      <p className="text-xs leading-relaxed text-foreground whitespace-pre-line">{detailsSubmission.notes}</p>
+                    </div>
+                  )}
+
+                  {/* Photos Preview */}
+                  {images.length > 0 && (
+                    <div className="rounded-xl border border-border/50 bg-muted/20 p-3 space-y-2">
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase block">
+                        Uploaded Photos ({images.length})
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {images.map((url, idx) => (
+                          <a key={idx} href={url} target="_blank" rel="noreferrer" className="group relative block overflow-hidden rounded-lg border border-border/60">
+                            <img src={url} alt="Property" className="size-16 object-cover transition-transform group-hover:scale-105" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            <DialogFooter className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-border/40 mt-2">
+              <div className="text-xs text-muted-foreground flex items-center justify-between sm:justify-start gap-2">
+                <span>
+                  Lead Ref: <strong className="font-mono text-foreground font-medium">{detailsSubmission.lead_id || "—"}</strong>
+                </span>
+                <span className="sm:hidden text-muted-foreground/60">•</span>
+                <span className="sm:hidden text-[11px]">
+                  {detailsSubmission.created_at ? new Date(detailsSubmission.created_at).toLocaleDateString("en-IN") : ""}
                 </span>
               </div>
 
-              <div className="rounded-lg border bg-muted/40 p-2.5">
-                <span className="text-xs text-muted-foreground block">Status & Furnishing</span>
-                <span className="font-semibold block">{detailsSubmission.possession_status?.replaceAll("_", " ") || "—"}</span>
-                <span className="text-xs text-muted-foreground block">{detailsSubmission.furnishing_status?.replaceAll("_", " ") || "—"}</span>
-              </div>
-            </div>
-
-            {detailsSubmission.notes && (
-              <div className="rounded-lg border p-2.5 bg-background">
-                <span className="text-xs font-medium text-muted-foreground block mb-1">Notes / Special Instructions</span>
-                <p className="text-xs leading-relaxed text-foreground">{detailsSubmission.notes}</p>
-              </div>
-            )}
-
-            {detailsSubmission.attributes && typeof detailsSubmission.attributes === "object" && (
-              (() => {
-                const attrs = detailsSubmission.attributes as Record<string, unknown>;
-                const specs = [
-                  attrs.floor_number !== undefined && attrs.floor_number !== null
-                    ? `Floor: ${attrs.floor_number}${attrs.total_floors ? ` of ${attrs.total_floors}` : ""}`
-                    : null,
-                  attrs.bathrooms ? `${attrs.bathrooms} Bathrooms` : null,
-                  attrs.balconies ? `${attrs.balconies} Balconies` : null,
-                  attrs.parking ? `${attrs.parking} Parking` : null,
-                ].filter(Boolean);
-                if (specs.length === 0) return null;
-                return (
-                  <div className="rounded-lg border bg-muted/20 p-2.5">
-                    <span className="text-xs text-muted-foreground block mb-1">Additional Specifications</span>
-                    <div className="flex flex-wrap gap-1.5 text-xs">
-                      {specs.map((s, idx) => (
-                        <span key={idx} className="rounded bg-muted px-2 py-0.5 font-medium">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()
-            )}
-
-            <DialogFooter className="flex items-center justify-between sm:justify-between pt-2">
-              <div className="text-xs text-muted-foreground">
-                Lead Ref: {detailsSubmission.lead_id || "—"}
-              </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
                 <Button
                   size="sm"
                   variant="outline"
-                  className="apple-button h-8 rounded-xl text-xs gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold"
+                  className="apple-button h-9 sm:h-8 rounded-xl text-xs gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold flex-1 sm:flex-none"
                   onClick={() => {
                     const toPitch = detailsSubmission;
                     setDetailsSubmission(null);
@@ -2215,7 +2394,7 @@ function OwnerSubmissionsView({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                  className="apple-button h-9 sm:h-8 rounded-xl text-xs gap-1.5 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 font-medium flex-1 sm:flex-none"
                   onClick={() => {
                     const toMatch = detailsSubmission;
                     setDetailsSubmission(null);
@@ -2223,12 +2402,13 @@ function OwnerSubmissionsView({
                   }}
                   title="View matching in-house buyers"
                 >
-                  <Users className="size-3.5 mr-1.5" />
-                  Matching Buyers
+                  <Users className="size-3.5" />
+                  <span>Matching Buyers</span>
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
+                  className="apple-button h-9 sm:h-8 rounded-xl text-xs gap-1.5 flex-1 sm:flex-none"
                   onClick={() => {
                     const toEdit = detailsSubmission;
                     setDetailsSubmission(null);
@@ -2236,17 +2416,17 @@ function OwnerSubmissionsView({
                   }}
                   title="Edit submission details"
                 >
-                  <Pencil className="size-3.5 mr-1.5" />
-                  Edit Details
+                  <Pencil className="size-3.5" />
+                  <span>Edit Details</span>
                 </Button>
                 {detailsSubmission.status !== "CONVERTED_TO_INVENTORY" && (
                   <Button
                     size="sm"
-                    className={
+                    className={`apple-button h-9 sm:h-8 rounded-xl text-xs font-semibold gap-1.5 w-full sm:w-auto ${
                       isAdmin
-                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                        ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
                         : "bg-muted text-muted-foreground cursor-not-allowed opacity-60"
-                    }
+                    }`}
                     disabled={approveMutation.isPending || !isAdmin}
                     onClick={() => {
                       if (!isAdmin) {
@@ -2258,11 +2438,16 @@ function OwnerSubmissionsView({
                     }}
                     title={isAdmin ? "Approve & Add to Live Inventory" : "Admin approval required"}
                   >
-                    <CheckCircle2 className="size-4 mr-1.5" />
-                    Approve & Add to Live Inventory
+                    <CheckCircle2 className="size-4" />
+                    <span>Approve & Add to Live Inventory</span>
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => setDetailsSubmission(null)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="apple-button h-9 sm:h-8 rounded-xl text-xs flex-1 sm:flex-none"
+                  onClick={() => setDetailsSubmission(null)}
+                >
                   Close
                 </Button>
               </div>
@@ -2418,34 +2603,70 @@ function EditOwnerSubmissionDialog({
   submission,
   open,
   onOpenChange,
+  clientId,
 }: {
   submission: PropertySubmission | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  clientId?: string | null;
 }) {
   const updateMutation = useUpdatePropertySubmission();
+  const { data: executives = [] } = useExecutives(clientId);
+  const [uploading, setUploading] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   const [form, setForm] = useState({
+    // Owner
     owner_name: "",
     owner_phone: "",
+    // Core Identity
     project_name: "",
     society_name: "",
-    location: "",
-    property_category: "RESIDENTIAL",
+    rera_number: "",
+    property_category: "FLAT",
     configuration: "2BHK",
+    city: "Vadodara",
+    location: "",
+    landmarks_input: "",
+    description: "",
+    status: "PENDING_VERIFICATION",
+    // Deal Terms
     transaction_type: "SELL",
+    stock_type: "RESALE",
+    listing_type: "SALE",
+    ownership_type: "FREEHOLD",
+    facing: "",
+    property_age_years: "",
+    // Financials
     expected_price: "",
     expected_rent: "",
+    price_negotiable: "false",
+    maintenance_charges: "",
+    // Areas
+    area_sqft: "",
     carpet_area_sqft: "",
     super_built_up_sqft: "",
+    // Status & Furnishing
     possession_status: "READY_TO_MOVE",
     furnishing_status: "UNFURNISHED",
-    notes: "",
+    // Physical Specs
     floor_number: "",
     total_floors: "",
     bathrooms: "",
     balconies: "",
     parking: "",
+    // Commercial Dimensions
+    attr_length_ft: "",
+    attr_width_ft: "",
+    attr_height_ft: "",
+    attr_power_supply_kw: "",
+    // Amenities & Media
+    amenities: [] as string[],
+    image_urls: [] as string[],
+    brochure_url: "",
+    map_url: "",
+    // Sales Assignment
+    assigned_executive_id: "",
   });
 
   useEffect(() => {
@@ -2455,66 +2676,142 @@ function EditOwnerSubmissionDialog({
           ? (submission.attributes as Record<string, unknown>)
           : {};
 
+      const lmList = Array.isArray(rawAttrs.landmarks)
+        ? (rawAttrs.landmarks as string[]).join(", ")
+        : typeof rawAttrs.landmarks_input === "string"
+        ? (rawAttrs.landmarks_input as string)
+        : "";
+
+      const amList = Array.isArray(rawAttrs.amenities)
+        ? (rawAttrs.amenities as string[])
+        : [];
+
+      const imgList = submission.images && Array.isArray(submission.images) && submission.images.length > 0
+        ? submission.images
+        : Array.isArray(rawAttrs.image_urls)
+        ? (rawAttrs.image_urls as string[])
+        : [];
+
       setForm({
         owner_name: submission.owner_name ?? "",
         owner_phone: submission.owner_phone ?? "",
         project_name: submission.project_name ?? submission.society_name ?? "",
         society_name: submission.society_name ?? submission.project_name ?? "",
-        location: submission.location ?? "Vadodara",
-        property_category: submission.property_category ?? "RESIDENTIAL",
+        rera_number: (rawAttrs.rera_number as string) ?? "",
+        property_category: submission.property_category ?? "FLAT",
         configuration: submission.configuration ?? "2BHK",
+        city: submission.city ?? (rawAttrs.city as string) ?? "Vadodara",
+        location: submission.location ?? "",
+        landmarks_input: lmList,
+        description: submission.notes ?? (rawAttrs.description as string) ?? "",
+        status: submission.status ?? "PENDING_VERIFICATION",
         transaction_type: submission.transaction_type ?? "SELL",
+        stock_type: (rawAttrs.stock_type as string) ?? "RESALE",
+        listing_type: (rawAttrs.listing_type as string) ?? (submission.transaction_type === "RENT" ? "RENT" : "SALE"),
+        ownership_type: (rawAttrs.ownership_type as string) ?? "FREEHOLD",
+        facing: (rawAttrs.facing as string) ?? "",
+        property_age_years: rawAttrs.property_age_years !== undefined && rawAttrs.property_age_years !== null ? String(rawAttrs.property_age_years) : "",
         expected_price: submission.expected_price ? String(submission.expected_price) : "",
         expected_rent: submission.expected_rent ? String(submission.expected_rent) : "",
+        price_negotiable: rawAttrs.price_negotiable === "true" || rawAttrs.price_negotiable === true ? "true" : "false",
+        maintenance_charges: rawAttrs.maintenance_charges !== undefined && rawAttrs.maintenance_charges !== null ? String(rawAttrs.maintenance_charges) : "",
+        area_sqft: rawAttrs.area_sqft !== undefined && rawAttrs.area_sqft !== null ? String(rawAttrs.area_sqft) : (rawAttrs.built_up_area !== undefined && rawAttrs.built_up_area !== null ? String(rawAttrs.built_up_area) : ""),
         carpet_area_sqft: submission.carpet_area_sqft ? String(submission.carpet_area_sqft) : "",
         super_built_up_sqft: submission.super_built_up_sqft ? String(submission.super_built_up_sqft) : "",
         possession_status: submission.possession_status ?? "READY_TO_MOVE",
         furnishing_status: submission.furnishing_status ?? "UNFURNISHED",
-        notes: submission.notes ?? "",
-        floor_number:
-          rawAttrs.floor_number !== undefined && rawAttrs.floor_number !== null
-            ? String(rawAttrs.floor_number)
-            : "",
-        total_floors:
-          rawAttrs.total_floors !== undefined && rawAttrs.total_floors !== null
-            ? String(rawAttrs.total_floors)
-            : "",
-        bathrooms:
-          rawAttrs.bathrooms !== undefined && rawAttrs.bathrooms !== null
-            ? String(rawAttrs.bathrooms)
-            : "",
-        balconies:
-          rawAttrs.balconies !== undefined && rawAttrs.balconies !== null
-            ? String(rawAttrs.balconies)
-            : "",
-        parking:
-          rawAttrs.parking !== undefined && rawAttrs.parking !== null
-            ? String(rawAttrs.parking)
-            : "",
+        floor_number: rawAttrs.floor_number !== undefined && rawAttrs.floor_number !== null ? String(rawAttrs.floor_number) : "",
+        total_floors: rawAttrs.total_floors !== undefined && rawAttrs.total_floors !== null ? String(rawAttrs.total_floors) : "",
+        bathrooms: rawAttrs.bathrooms !== undefined && rawAttrs.bathrooms !== null ? String(rawAttrs.bathrooms) : "",
+        balconies: rawAttrs.balconies !== undefined && rawAttrs.balconies !== null ? String(rawAttrs.balconies) : "",
+        parking: rawAttrs.parking !== undefined && rawAttrs.parking !== null ? String(rawAttrs.parking) : "",
+        attr_length_ft: rawAttrs.frontage_width_ft !== undefined && rawAttrs.frontage_width_ft !== null ? String(rawAttrs.frontage_width_ft) : "",
+        attr_width_ft: rawAttrs.depth_ft !== undefined && rawAttrs.depth_ft !== null ? String(rawAttrs.depth_ft) : "",
+        attr_height_ft: rawAttrs.ceiling_height_ft !== undefined && rawAttrs.ceiling_height_ft !== null ? String(rawAttrs.ceiling_height_ft) : "",
+        attr_power_supply_kw: rawAttrs.power_supply_kw !== undefined && rawAttrs.power_supply_kw !== null ? String(rawAttrs.power_supply_kw) : "",
+        amenities: amList,
+        image_urls: imgList,
+        brochure_url: (rawAttrs.brochure_url as string) ?? "",
+        map_url: (rawAttrs.map_url as string) ?? "",
+        assigned_executive_id: (rawAttrs.assigned_executive_id as string) ?? "",
       });
     }
   }, [submission]);
 
-  const setField = (key: string, val: string) => {
+  const setField = (key: string, val: any) => {
     setForm((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const toggleAmenity = (amenity: string) => {
+    setForm((prev) => ({
+      ...prev,
+      amenities: prev.amenities.includes(amenity)
+        ? prev.amenities.filter((a) => a !== amenity)
+        : [...prev.amenities, amenity],
+    }));
+  };
+
+  const removeImage = (url: string) => {
+    setForm((prev) => ({
+      ...prev,
+      image_urls: prev.image_urls.filter((u) => u !== url),
+    }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!submission) return;
 
+    if (!form.project_name.trim() || !form.location.trim()) {
+      toast.error("Project name and Location are required.");
+      return;
+    }
+
+    if (form.map_url.trim() && !isValidUrl(form.map_url.trim())) {
+      toast.error("Please enter a valid Google Maps URL (https://...)");
+      return;
+    }
+
     const rawAttrs =
       typeof submission.attributes === "object" && submission.attributes !== null
         ? (submission.attributes as Record<string, unknown>)
         : {};
 
+    const landmarksArray = form.landmarks_input
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     const updatedAttrs = {
       ...rawAttrs,
+      rera_number: form.rera_number.trim() || null,
+      city: form.city.trim() || "Vadodara",
+      landmarks: landmarksArray,
+      landmarks_input: form.landmarks_input.trim(),
+      description: form.description.trim() || null,
+      stock_type: form.stock_type,
+      listing_type: form.listing_type,
+      ownership_type: form.ownership_type,
+      facing: form.facing || null,
+      property_age_years: form.property_age_years.trim() ? Number(form.property_age_years) : null,
+      price_negotiable: form.price_negotiable === "true",
+      maintenance_charges: form.maintenance_charges.trim() ? Number(form.maintenance_charges) : null,
+      area_sqft: form.area_sqft.trim() ? Number(form.area_sqft) : null,
+      built_up_area: form.area_sqft.trim() ? Number(form.area_sqft) : null,
       floor_number: form.floor_number.trim() ? Number(form.floor_number) : null,
       total_floors: form.total_floors.trim() ? Number(form.total_floors) : null,
       bathrooms: form.bathrooms.trim() ? Number(form.bathrooms) : null,
       balconies: form.balconies.trim() ? Number(form.balconies) : null,
-      parking: form.parking.trim() ? form.parking.trim() : null,
+      parking: form.parking.trim() || null,
+      frontage_width_ft: form.attr_length_ft.trim() ? Number(form.attr_length_ft) : null,
+      depth_ft: form.attr_width_ft.trim() ? Number(form.attr_width_ft) : null,
+      ceiling_height_ft: form.attr_height_ft.trim() ? Number(form.attr_height_ft) : null,
+      power_supply_kw: form.attr_power_supply_kw.trim() ? Number(form.attr_power_supply_kw) : null,
+      amenities: form.amenities,
+      image_urls: form.image_urls,
+      brochure_url: form.brochure_url.trim() || null,
+      map_url: form.map_url.trim() || null,
+      assigned_executive_id: form.assigned_executive_id || null,
       owner_name: form.owner_name.trim() || null,
       owner_phone: form.owner_phone.trim() || null,
     };
@@ -2524,8 +2821,9 @@ function EditOwnerSubmissionDialog({
       owner_phone: form.owner_phone.trim() || null,
       project_name: form.project_name.trim() || null,
       society_name: form.society_name.trim() || form.project_name.trim() || null,
+      city: form.city.trim() || "Vadodara",
       location: form.location.trim() || null,
-      property_category: form.property_category || "RESIDENTIAL",
+      property_category: form.property_category || "FLAT",
       configuration: form.configuration || null,
       transaction_type: form.transaction_type || "SELL",
       expected_price: form.expected_price.trim() ? Number(form.expected_price) : null,
@@ -2534,7 +2832,9 @@ function EditOwnerSubmissionDialog({
       super_built_up_sqft: form.super_built_up_sqft.trim() ? Number(form.super_built_up_sqft) : null,
       possession_status: form.possession_status || null,
       furnishing_status: form.furnishing_status || null,
-      notes: form.notes.trim() || null,
+      status: form.status || "PENDING_VERIFICATION",
+      notes: form.description.trim() || null,
+      images: form.image_urls,
       attributes: updatedAttrs as never,
     };
 
@@ -2543,91 +2843,64 @@ function EditOwnerSubmissionDialog({
         id: submission.id,
         values: payload,
       });
+      toast.success("Owner submission updated with all inventory fields");
       onOpenChange(false);
     } catch {
       // Error is surfaced by mutation toast
     }
   };
 
-  const CATEGORY_OPTIONS = ["RESIDENTIAL", "COMMERCIAL", "LAND_PLOT", "FLAT", "VILLA", "PLOT"];
-  const CONFIG_OPTIONS = [
-    "1RK",
-    "1BHK",
-    "2BHK",
-    "3BHK",
-    "4BHK",
-    "5BHK",
-    "PENTHOUSE",
-    "DUPLEX",
-    "VILLA",
-    "SHOP",
-    "SHOWROOM",
-    "OFFICE",
-    "WAREHOUSE",
-    "PLOT",
-    "AGRICULTURAL_LAND",
-  ];
-  const TX_OPTIONS = ["SELL", "RENT", "LEASE"];
-  const POSSESSION_OPTIONS = [
-    "READY_TO_MOVE",
-    "UNDER_CONSTRUCTION",
-    "RESALE",
-    "WITHIN_3_MONTHS",
-    "WITHIN_6_MONTHS",
-  ];
-  const FURNISHING_OPTIONS = ["UNFURNISHED", "SEMI_FURNISHED", "FULLY_FURNISHED"];
+  const isCommercial = form.property_category === "COMMERCIAL";
+  const isPlot = ["PLOT", "LAND"].includes(form.property_category);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl w-[95vw] p-4 sm:p-6 rounded-2xl border border-border/60 bg-background shadow-2xl">
+        <DialogHeader className="space-y-1 pb-3 border-b border-border/40">
+          <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl font-bold">
             <Pencil className="size-4 text-primary" />
-            <span>Edit Owner Property Submission</span>
+            <span>Edit Owner Submission (Complete Inventory Fields)</span>
           </DialogTitle>
-          <DialogDescription>
-            Update owner contact, project specifications, and expected price before or after verification.
+          <DialogDescription className="text-xs text-muted-foreground">
+            Complete or edit all specifications and collateral before Admin approval into Live Inventory.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSave} className="space-y-4 pt-1">
-          {/* Section: Owner Information */}
-          <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
-            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-              <User className="size-3.5 text-muted-foreground" />
-              <span>Owner Contact Information</span>
+          {/* Section 1: Owner Information */}
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+              <User className="size-3.5 text-primary" />
+              <span>1. Owner Contact Details</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Owner Name</Label>
+              <Field label="Owner Full Name">
                 <Input
                   value={form.owner_name}
                   onChange={(e) => setField("owner_name", e.target.value)}
                   placeholder="e.g. Rajesh Patel"
-                  className="h-8 text-xs"
+                  className="h-9 text-xs"
                 />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Owner Phone</Label>
+              </Field>
+              <Field label="Owner Direct Phone / WhatsApp">
                 <Input
                   value={form.owner_phone}
                   onChange={(e) => setField("owner_phone", e.target.value)}
                   placeholder="e.g. +91 98765 43210"
-                  className="h-8 text-xs font-mono"
+                  className="h-9 text-xs font-mono"
                 />
-              </div>
+              </Field>
             </div>
           </div>
 
-          {/* Section: Property Identification & Location */}
-          <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
-            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-              <Building2 className="size-3.5 text-muted-foreground" />
-              <span>Property & Locality Details</span>
+          {/* Section 2: Property Identity & Locality */}
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+              <Building2 className="size-3.5 text-primary" />
+              <span>2. Property Identity & Locality</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Project / Society Name</Label>
+              <Field label="Project / Society Name *">
                 <Input
                   value={form.project_name}
                   onChange={(e) => {
@@ -2635,267 +2908,555 @@ function EditOwnerSubmissionDialog({
                     setField("society_name", e.target.value);
                   }}
                   placeholder="e.g. Nilamber Bellissimo"
-                  className="h-8 text-xs"
+                  className="h-9 text-xs font-medium"
                   required
                 />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Location / Area</Label>
+              </Field>
+              <Field label="RERA Registration Number">
+                <Input
+                  value={form.rera_number}
+                  onChange={(e) => setField("rera_number", e.target.value)}
+                  placeholder="e.g. PR/GJ/VADODARA/..."
+                  className="h-9 text-xs font-mono"
+                />
+              </Field>
+              <Field label="Category">
+                <Dropdown
+                  value={form.property_category}
+                  options={PROPERTY_CATEGORIES}
+                  onChange={(v) => {
+                    const validOptions = configurationsForCategory(v);
+                    setForm((p) => ({
+                      ...p,
+                      property_category: v,
+                      configuration: validOptions.includes(p.configuration)
+                        ? p.configuration
+                        : (validOptions[0] ?? ""),
+                    }));
+                  }}
+                />
+              </Field>
+              <Field label="Configuration / Unit Type">
+                <Dropdown
+                  value={form.configuration}
+                  options={configurationsForCategory(form.property_category)}
+                  onChange={(v) => setField("configuration", v)}
+                />
+              </Field>
+              <Field label="City">
+                <Input
+                  value={form.city}
+                  onChange={(e) => setField("city", e.target.value)}
+                  placeholder="e.g. Vadodara, Ahmedabad, Surat"
+                  className="h-9 text-xs"
+                />
+              </Field>
+              <Field label="Location / Area / Landmark *">
                 <Input
                   value={form.location}
-                  onChange={(e) => setField("location", e.target.value)}
-                  placeholder="e.g. Waghodia, Vasna, Gotri"
-                  className="h-8 text-xs"
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const titleCase = raw
+                      .split(" ")
+                      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                      .join(" ");
+                    setField("location", titleCase);
+                  }}
+                  placeholder="e.g. Waghodia Road, Gotri, Vasna"
+                  className="h-9 text-xs"
                   required
                 />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Landmarks & Nearby Connectivity (Comma separated)">
+                  <Input
+                    value={form.landmarks_input}
+                    onChange={(e) => setField("landmarks_input", e.target.value)}
+                    placeholder="e.g. Near Bansal Mall, Gotri D-Mart, Yash Complex"
+                    className="h-9 text-xs"
+                  />
+                </Field>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Category</Label>
-                <Select
-                  value={form.property_category}
-                  onValueChange={(val) => setField("property_category", val)}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORY_OPTIONS.map((c) => (
-                      <SelectItem key={c} value={c} className="text-xs">
-                        {c.replaceAll("_", " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Configuration</Label>
-                <Select
-                  value={form.configuration}
-                  onValueChange={(val) => setField("configuration", val)}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Config" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CONFIG_OPTIONS.map((cfg) => (
-                      <SelectItem key={cfg} value={cfg} className="text-xs">
-                        {cfg.replaceAll("_", " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Transaction Type</Label>
-                <Select
-                  value={form.transaction_type}
-                  onValueChange={(val) => setField("transaction_type", val)}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TX_OPTIONS.map((t) => (
-                      <SelectItem key={t} value={t} className="text-xs">
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="sm:col-span-2">
+                <Field label="Property Highlights & Description / Notes">
+                  <Textarea
+                    value={form.description}
+                    onChange={(e) => setField("description", e.target.value)}
+                    placeholder="Key features, landmark proximity, special amenities, owner notes…"
+                    rows={3}
+                    className="text-xs resize-none"
+                  />
+                </Field>
               </div>
             </div>
           </div>
 
-          {/* Section: Pricing & Area */}
-          <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
-            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-              <span>💰 Commercials & Sizing</span>
+          {/* Section 3: Transaction Terms & Classification */}
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+              <FileText className="size-3.5 text-primary" />
+              <span>3. Deal Terms & Classification</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Submission Status">
+                <Select value={form.status} onValueChange={(v) => setField("status", v)}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PENDING_VERIFICATION">Pending Verification</SelectItem>
+                    <SelectItem value="CONVERTED_TO_INVENTORY">Converted to Live Inventory</SelectItem>
+                    <SelectItem value="REJECTED">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Transaction Type">
+                <Dropdown
+                  value={form.transaction_type}
+                  options={TRANSACTION_TYPES}
+                  onChange={(v) => setField("transaction_type", v)}
+                />
+              </Field>
+              <Field label="Stock Type">
+                <Dropdown
+                  value={form.stock_type}
+                  options={STOCK_TYPES}
+                  onChange={(v) => setField("stock_type", v)}
+                />
+              </Field>
+              <Field label="Listing Type">
+                <Dropdown
+                  value={form.listing_type}
+                  options={LISTING_TYPES}
+                  onChange={(v) => setField("listing_type", v)}
+                />
+              </Field>
+              <Field label="Ownership Type">
+                <Dropdown
+                  value={form.ownership_type}
+                  options={OWNERSHIP_TYPES}
+                  onChange={(v) => setField("ownership_type", v)}
+                />
+              </Field>
+              <Field label="Facing Direction">
+                <Dropdown
+                  value={form.facing}
+                  options={FACING_OPTIONS}
+                  onChange={(v) => setField("facing", v)}
+                />
+              </Field>
+              <Field label="Property Age (Years)">
+                <Input
+                  inputMode="numeric"
+                  value={form.property_age_years}
+                  onChange={(e) => setField("property_age_years", e.target.value)}
+                  placeholder="0 for new construction"
+                  className="h-9 text-xs"
+                />
+              </Field>
+            </div>
+          </div>
+
+          {/* Section 4: Pricing & Commercials */}
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+              <Flame className="size-3.5 text-primary" />
+              <span>4. Pricing & Commercials</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">
-                  Expected Sale Price (₹)
-                  {form.expected_price && Number(form.expected_price) > 0 && (
-                    <span className="ml-1 text-[11px] font-normal text-primary">
-                      ({formatMoney(Number(form.expected_price))})
-                    </span>
-                  )}
-                </Label>
+              <Field label="Expected Sale Price (₹)">
                 <Input
-                  type="number"
+                  inputMode="numeric"
                   value={form.expected_price}
                   onChange={(e) => setField("expected_price", e.target.value)}
                   placeholder="e.g. 7500000"
-                  className="h-8 text-xs"
+                  className="h-9 text-xs font-semibold tabular-nums"
                 />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">
-                  Expected Rent (₹/month)
-                  {form.expected_rent && Number(form.expected_rent) > 0 && (
-                    <span className="ml-1 text-[11px] font-normal text-primary">
-                      ({formatMoney(Number(form.expected_rent))}/mo)
-                    </span>
-                  )}
-                </Label>
+                <p className="text-xs text-muted-foreground">{formatMoney(toNumber(form.expected_price))}</p>
+              </Field>
+              <Field label="Expected Rent (₹/month)">
                 <Input
-                  type="number"
+                  inputMode="numeric"
                   value={form.expected_rent}
                   onChange={(e) => setField("expected_rent", e.target.value)}
                   placeholder="e.g. 25000"
-                  className="h-8 text-xs"
+                  className="h-9 text-xs tabular-nums"
                 />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Carpet Area (sq.ft)</Label>
-                <Input
-                  type="number"
-                  value={form.carpet_area_sqft}
-                  onChange={(e) => setField("carpet_area_sqft", e.target.value)}
-                  placeholder="e.g. 1250"
-                  className="h-8 text-xs"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Super Built-up Area (sq.ft)</Label>
-                <Input
-                  type="number"
-                  value={form.super_built_up_sqft}
-                  onChange={(e) => setField("super_built_up_sqft", e.target.value)}
-                  placeholder="e.g. 1650"
-                  className="h-8 text-xs"
-                />
-              </div>
+                <p className="text-xs text-muted-foreground">{form.expected_rent ? `${formatMoney(toNumber(form.expected_rent))}/mo` : "—"}</p>
+              </Field>
+              <Field label="Price Negotiable">
+                <div className="flex h-9 items-center gap-2">
+                  <Switch
+                    checked={form.price_negotiable === "true"}
+                    onCheckedChange={(v) => setField("price_negotiable", v ? "true" : "false")}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {form.price_negotiable === "true" ? "Yes (Negotiable)" : "No (Firm Price)"}
+                  </span>
+                </div>
+              </Field>
+              {!isPlot && (
+                <Field label="Maintenance Charges (₹/month)">
+                  <Input
+                    inputMode="numeric"
+                    value={form.maintenance_charges}
+                    onChange={(e) => setField("maintenance_charges", e.target.value)}
+                    placeholder="e.g. 2500"
+                    className="h-9 text-xs"
+                  />
+                </Field>
+              )}
             </div>
           </div>
 
-          {/* Section: Status & Interior Specs */}
-          <div className="rounded-lg border bg-muted/20 p-3.5 space-y-3">
-            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-              <span>🏗️ Status & Specifications</span>
+          {/* Section 5: Area & Physical Dimensions */}
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+              <Maximize2 className="size-3.5 text-primary" />
+              <span>5. Area & Floor Dimensions</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label={isPlot ? "Plot / Land Area (sq.ft) *" : "Built-up Area (sq.ft)"}>
+                <Input
+                  inputMode="numeric"
+                  value={form.area_sqft}
+                  onChange={(e) => setField("area_sqft", e.target.value)}
+                  placeholder="e.g. 1500"
+                  className="h-9 text-xs"
+                />
+              </Field>
+              {!isPlot && (
+                <>
+                  <Field label="Carpet Area (sq.ft)">
+                    <Input
+                      inputMode="numeric"
+                      value={form.carpet_area_sqft}
+                      onChange={(e) => setField("carpet_area_sqft", e.target.value)}
+                      placeholder="e.g. 1150"
+                      className="h-9 text-xs font-medium"
+                    />
+                  </Field>
+                  <Field label="Super Built-up Area (sq.ft)">
+                    <Input
+                      inputMode="numeric"
+                      value={form.super_built_up_sqft}
+                      onChange={(e) => setField("super_built_up_sqft", e.target.value)}
+                      placeholder="e.g. 1650"
+                      className="h-9 text-xs"
+                    />
+                  </Field>
+                  <Field label="Floor Number">
+                    <Input
+                      inputMode="numeric"
+                      value={form.floor_number}
+                      onChange={(e) => setField("floor_number", e.target.value)}
+                      placeholder="e.g. 4"
+                      className="h-9 text-xs"
+                    />
+                  </Field>
+                  <Field label="Total Floors in Building">
+                    <Input
+                      inputMode="numeric"
+                      value={form.total_floors}
+                      onChange={(e) => setField("total_floors", e.target.value)}
+                      placeholder="e.g. 14"
+                      className="h-9 text-xs"
+                    />
+                  </Field>
+                  <Field label="Bathrooms / Washrooms">
+                    <Input
+                      inputMode="numeric"
+                      value={form.bathrooms}
+                      onChange={(e) => setField("bathrooms", e.target.value)}
+                      placeholder="e.g. 3"
+                      className="h-9 text-xs"
+                    />
+                  </Field>
+                  <Field label="Balconies">
+                    <Input
+                      inputMode="numeric"
+                      value={form.balconies}
+                      onChange={(e) => setField("balconies", e.target.value)}
+                      placeholder="e.g. 2"
+                      className="h-9 text-xs"
+                    />
+                  </Field>
+                  <Field label="Parking Space">
+                    <Input
+                      value={form.parking}
+                      onChange={(e) => setField("parking", e.target.value)}
+                      placeholder="e.g. 1 Covered, 2 Open"
+                      className="h-9 text-xs"
+                    />
+                  </Field>
+                </>
+              )}
+            </div>
+
+            {/* Commercial Dimensions */}
+            {isCommercial && (
+              <div className="pt-2 border-t border-border/40 space-y-2">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                  Commercial Physical Specs
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <Field label="Frontage (ft)">
+                    <Input
+                      inputMode="decimal"
+                      value={form.attr_length_ft}
+                      onChange={(e) => setField("attr_length_ft", e.target.value)}
+                      placeholder="e.g. 20"
+                      className="h-8 text-xs"
+                    />
+                  </Field>
+                  <Field label="Depth (ft)">
+                    <Input
+                      inputMode="decimal"
+                      value={form.attr_width_ft}
+                      onChange={(e) => setField("attr_width_ft", e.target.value)}
+                      placeholder="e.g. 45"
+                      className="h-8 text-xs"
+                    />
+                  </Field>
+                  <Field label="Ceiling Height (ft)">
+                    <Input
+                      inputMode="decimal"
+                      value={form.attr_height_ft}
+                      onChange={(e) => setField("attr_height_ft", e.target.value)}
+                      placeholder="e.g. 12"
+                      className="h-8 text-xs"
+                    />
+                  </Field>
+                  <Field label="Power (kW)">
+                    <Input
+                      inputMode="decimal"
+                      value={form.attr_power_supply_kw}
+                      onChange={(e) => setField("attr_power_supply_kw", e.target.value)}
+                      placeholder="e.g. 15"
+                      className="h-8 text-xs"
+                    />
+                  </Field>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Section 6: Possession & Furnishing */}
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+              <Key className="size-3.5 text-primary" />
+              <span>6. Possession & Furnishing</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Possession Status</Label>
+              <Field label="Possession Status">
                 <Select
                   value={form.possession_status}
-                  onValueChange={(val) => setField("possession_status", val)}
+                  onValueChange={(v) => setField("possession_status", v)}
                 >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Possession" />
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Select possession…" />
                   </SelectTrigger>
                   <SelectContent>
-                    {POSSESSION_OPTIONS.map((p) => (
-                      <SelectItem key={p} value={p} className="text-xs">
-                        {p.replaceAll("_", " ")}
+                    {POSSESSION_STATUSES.map((o) => (
+                      <SelectItem key={o} value={o} className="text-xs">
+                        {o.replaceAll("_", " ")}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
+              {!isPlot && (
+                <Field label="Furnished Status">
+                  <Dropdown
+                    value={form.furnishing_status}
+                    options={FURNISHED_STATUSES}
+                    onChange={(v) => setField("furnishing_status", v)}
+                  />
+                </Field>
+              )}
+            </div>
+          </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Furnishing Status</Label>
+          {/* Section 7: Amenities Checklist */}
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+              <Sparkles className="size-3.5 text-primary" />
+              <span>7. Amenities Checklist ({form.amenities.length} selected)</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pt-1">
+              {AMENITY_OPTIONS.map((amenity) => (
+                <label
+                  key={amenity}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer rounded-lg p-1 hover:bg-muted/40 transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    className="size-3.5 rounded border-input"
+                    checked={form.amenities.includes(amenity)}
+                    onChange={() => toggleAmenity(amenity)}
+                  />
+                  <span>{amenity.replaceAll("_", " ")}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 8: Media, Brochure & Google Maps URL */}
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+              <Upload className="size-3.5 text-primary" />
+              <span>8. Photos, Brochure & Digital Collateral</span>
+            </div>
+            <div className="space-y-3">
+              {/* Image Upload */}
+              <Field label="Property Photos (Multiple)">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      if (files.length === 0) return;
+                      const effectiveClientId = submission?.client_id || clientId;
+                      if (!effectiveClientId) {
+                        toast.error("No tenant selected — cannot upload photos");
+                        return;
+                      }
+                      setUploadingImages(true);
+                      try {
+                        const urls = await uploadPropertyImages(files, effectiveClientId);
+                        setForm((p) => ({ ...p, image_urls: [...p.image_urls, ...urls] }));
+                        toast.success(`${urls.length} photo${urls.length > 1 ? "s" : ""} uploaded`);
+                      } catch (err) {
+                        toast.error((err as Error).message);
+                      } finally {
+                        setUploadingImages(false);
+                        e.target.value = "";
+                      }
+                    }}
+                    className="text-xs"
+                  />
+                  {uploadingImages && <Upload className="size-4 animate-pulse text-primary shrink-0" />}
+                </div>
+                {form.image_urls.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {form.image_urls.map((url) => (
+                      <div key={url} className="group relative">
+                        <img
+                          src={url}
+                          alt="Property"
+                          className="size-16 rounded-lg border object-cover shadow-2xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(url)}
+                          className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-90 transition-opacity hover:opacity-100 shadow-xs"
+                          aria-label="Remove photo"
+                        >
+                          <X className="size-2.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Field>
+
+              {/* Brochure Upload */}
+              <Field label="Brochure Document (PDF)">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const effectiveClientId = submission?.client_id || clientId;
+                      if (!effectiveClientId) {
+                        toast.error("No tenant selected — cannot upload brochure");
+                        return;
+                      }
+                      setUploading(true);
+                      try {
+                        const url = await uploadBrochure(file, effectiveClientId);
+                        setField("brochure_url", url);
+                        toast.success("Brochure uploaded successfully");
+                      } catch (err) {
+                        toast.error((err as Error).message);
+                      } finally {
+                        setUploading(false);
+                      }
+                    }}
+                    className="text-xs"
+                  />
+                  {uploading && <Upload className="size-4 animate-pulse text-primary shrink-0" />}
+                </div>
+                {form.brochure_url && (
+                  <a
+                    className="truncate text-xs text-primary underline block mt-1"
+                    href={form.brochure_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View uploaded brochure PDF
+                  </a>
+                )}
+              </Field>
+
+              {/* Google Maps URL */}
+              <Field label="Google Maps Location URL">
+                <Input
+                  value={form.map_url}
+                  onChange={(e) => setField("map_url", e.target.value)}
+                  placeholder="https://maps.google.com/..."
+                  className="h-9 text-xs font-mono"
+                />
+              </Field>
+            </div>
+          </div>
+
+          {/* Section 9: Sales Assignment */}
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+              <Users className="size-3.5 text-primary" />
+              <span>9. Sales Executive Assignment</span>
+            </div>
+            <Field label="Assign Sales Executive (Optional)">
+              {executives.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No active sales executives found in this agency.
+                </p>
+              ) : (
                 <Select
-                  value={form.furnishing_status}
-                  onValueChange={(val) => setField("furnishing_status", val)}
+                  value={form.assigned_executive_id || "__none__"}
+                  onValueChange={(v) => setField("assigned_executive_id", v === "__none__" ? "" : v)}
                 >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Furnishing" />
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="None (unassigned)" />
                   </SelectTrigger>
                   <SelectContent>
-                    {FURNISHING_OPTIONS.map((f) => (
-                      <SelectItem key={f} value={f} className="text-xs">
-                        {f.replaceAll("_", " ")}
+                    <SelectItem value="__none__">None (unassigned)</SelectItem>
+                    {executives.map((ex) => (
+                      <SelectItem key={ex.id} value={ex.id} className="text-xs">
+                        {ex.name} ({ex.role}) · {ex.phone}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1">
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Floor</Label>
-                <Input
-                  type="number"
-                  value={form.floor_number}
-                  onChange={(e) => setField("floor_number", e.target.value)}
-                  placeholder="e.g. 4"
-                  className="h-7 text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Total Floors</Label>
-                <Input
-                  type="number"
-                  value={form.total_floors}
-                  onChange={(e) => setField("total_floors", e.target.value)}
-                  placeholder="e.g. 10"
-                  className="h-7 text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Baths</Label>
-                <Input
-                  type="number"
-                  value={form.bathrooms}
-                  onChange={(e) => setField("bathrooms", e.target.value)}
-                  placeholder="e.g. 3"
-                  className="h-7 text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Balconies</Label>
-                <Input
-                  type="number"
-                  value={form.balconies}
-                  onChange={(e) => setField("balconies", e.target.value)}
-                  placeholder="e.g. 2"
-                  className="h-7 text-xs"
-                />
-              </div>
-              <div className="col-span-2 sm:col-span-1 space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Parking</Label>
-                <Input
-                  value={form.parking}
-                  onChange={(e) => setField("parking", e.target.value)}
-                  placeholder="1 Covered"
-                  className="h-7 text-xs"
-                />
-              </div>
-            </div>
+              )}
+            </Field>
           </div>
 
-          {/* Section: Notes */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Realtor Notes / Verification Remarks</Label>
-            <Textarea
-              value={form.notes}
-              onChange={(e) => setField("notes", e.target.value)}
-              placeholder="e.g. Corner flat, East facing, owner open to slight negotiation on token..."
-              rows={3}
-              className="text-xs resize-none"
-            />
-          </div>
-
-          <DialogFooter className="flex items-center justify-between sm:justify-between pt-3 border-t">
+          <DialogFooter className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-border/40 mt-4">
             <span className="text-xs text-muted-foreground">
-              Lead ID: {submission?.lead_id ? `${submission.lead_id.slice(0, 14)}…` : "Direct"}
+              Lead Ref: {submission?.lead_id ? `#${submission.lead_id}` : "Direct Owner"}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 justify-end">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                className="apple-button h-9 sm:h-8 rounded-xl text-xs"
                 onClick={() => onOpenChange(false)}
                 disabled={updateMutation.isPending}
               >
@@ -2905,7 +3466,7 @@ function EditOwnerSubmissionDialog({
                 type="submit"
                 size="sm"
                 disabled={updateMutation.isPending}
-                className="bg-primary text-primary-foreground"
+                className="apple-button h-9 sm:h-8 rounded-xl text-xs font-semibold bg-primary text-primary-foreground shadow-xs"
               >
                 {updateMutation.isPending ? "Saving Changes…" : "Save Changes"}
               </Button>
@@ -2916,7 +3477,6 @@ function EditOwnerSubmissionDialog({
     </Dialog>
   );
 }
-
 
 function PropertyForm({
   draft,
