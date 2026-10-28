@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// JSR import removed to prevent bundler 10s fetch timeout
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -1376,29 +1376,48 @@ function parsePropertyTypeFromText(text: string): string {
 }
 
 const STOP_WORDS_SET = new Set([
-  "muje", "mujhe", "mane", "mare", "mari", "maro", "maru", "meri", "mera", "mere",
-  "apni", "apna", "apne", "i", "my", "we", "our", "me", "us", "humko", "hume", "hum",
-  "main", "hu", "ame", "tame", "aap", "ek", "one", "1", "2", "3", "4", "5", "ye",
-  "aa", "yeh", "this", "that", "bechna", "bechni", "bechne", "bechvu", "vechvu", "vechva",
-  "vechvo", "sell", "selling", "list", "listing", "karna", "karni", "karne", "karvu",
-  "karva", "karo", "want", "wants", "wanted", "he", "hai", "h", "hain", "che", "chhe",
-  "to", "chahiye", "joiye", "ka", "ki", "ke", "nu", "no", "ni", "na", "in", "at", "me",
-  "ma", "par", "pe", "se", "thi", "as", "aur", "ane", "and", "is", "sho", "shop", "office",
-  "flat", "apartment", "duplex", "penthouse", "villa", "bungalow", "house", "ghar",
-  "makan", "makaan", "plot", "land", "zamin", "showroom", "godown", "warehouse", "dukan",
-  "dukaan", "commercial", "residential", "property", "project", "society", "name",
+  "muje", "mujhe", "mane", "mare", "mari", "maro", "maru", "mara", "meri", "mera", "mere",
+  "taro", "tari", "taru", "tara", "tamaro", "tamari", "tamaru", "tamara", "amaro", "amari", "amaru", "amara",
+  "potano", "potani", "potanu", "potana", "apni", "apna", "apne", "hamara", "hamari", "hamare",
+  "i", "my", "we", "our", "me", "us", "humko", "hume", "hum", "main", "hu", "ame", "tame", "aap",
+  "ek", "one", "1", "2", "3", "4", "5", "ye", "aa", "yeh", "this", "that",
+  // Adjectives (Gujarati, Hindi, English)
+  "juno", "juni", "junu", "juna", "navo", "navi", "navu", "nava",
+  "purana", "purani", "purane", "purano", "naya", "nayi", "naye",
+  "old", "new", "used", "resale", "re-sale", "secondhand", "second-hand", "fresh",
+  // Verbs & Conjugations (Gujarati, Hindi, English)
+  "vechvano", "vechvani", "vechvanu", "vechvana", "vechavo", "vechavi", "vechavu", "vechava", "vechvu", "vechva", "vechvo",
+  "bechvano", "bechvani", "bechvanu", "bechvana", "bechne", "bechna", "bechni", "bechvu",
+  "aapo", "aapva", "aapvu", "aapvani", "aapvano", "dena", "deni", "dene",
+  "sell", "selling", "list", "listing", "karna", "karni", "karne", "karvu", "karva", "karo", "want", "wants", "wanted",
+  // Auxiliary & Grammar
+  "he", "hai", "h", "hain", "che", "chhe", "to", "chahiye", "joiye",
+  "ka", "ki", "ke", "nu", "no", "ni", "na", "in", "at", "me", "ma", "par", "pe", "se", "thi", "as", "aur", "ane", "and", "is",
+  // Unicode Indic Adjectives & Verbs
+  "જૂનો", "જૂની", "જૂનું", "જૂના", "જુનો", "જુની", "જુનુ", "જુના", "નવો", "નવી", "નવું", "નવા",
+  "વેચવાનો", "વેચવાની", "વેચવાનું", "વેચવાના", "વેચવું", "વેચવા",
+  "पुराना", "पुरानी", "पुराने", "नया", "नयी", "नए", "बेचना", "बेचनी",
+  // Property Types
+  "sho", "shop", "office", "flat", "apartment", "duplex", "penthouse", "villa", "bungalow", "house", "ghar",
+  "makan", "makaan", "plot", "land", "zamin", "showroom", "godown", "warehouse", "dukan", "dukaan",
+  "commercial", "residential", "property", "project", "society", "name",
   "bhk", "rk", "1bhk", "2bhk", "3bhk", "4bhk", "5bhk", "1rk", "2rk",
   "bedroom", "bedrooms", "room", "rooms", "floor"
 ]);
 
 function isLikelySocietyOrProjectName(name: string): boolean {
   if (!name || typeof name !== "string") return false;
-  const cleaned = name.trim().replace(/['"]/g, "");
+  const cleaned = name.trim().replace(/['".,!?;:()]/g, " ").replace(/\s+/g, " ").trim();
   if (cleaned.length < 2) return false;
   if (/^\d+$/.test(cleaned)) return false;
 
   // Strict Guard: Pure property configurations and unit types can NEVER be a society/project name!
   if (/^(?:[1-5]\s*bhk|[1-5]\s*rk|bhk|rk|flat|flats|apartment|villa|plot|land|shop|office|commercial|residential|house|bungalow|duplex|penthouse)$/i.test(cleaned)) {
+    return false;
+  }
+
+  // Reject descriptive modifiers, adjectives, and seller verbs without a genuine entity name
+  if (/^(?:juno|juni|junu|juna|purana|purani|purane|naya|nayi|naye|navo|navi|navu|nava|resale|old|new|used)\s*(?:flat|flats|villa|house|plot|shop|office|makan|ghar)?(?:\s*(?:vechvano|vechvani|vechvanu|vechvana|vechva|vechvu|bechna|bechni|bechne|bechvano|sell))?$/i.test(cleaned)) {
     return false;
   }
 
@@ -1463,13 +1482,14 @@ function extractProjectOrSocietyFromText(text: string, parsedPropType?: string):
       .replace(/['"]/g, "")
       .replace(new RegExp(`\\b(?:${propTokens})\\b`, "gi"), "")
       .replace(/\b(?:property\s*type|project(?:\s*(?:ka|nu|no)?\s*name)?|society(?:\s*(?:ka|nu|no)?\s*name)?|type)\b/gi, "")
-      .replace(/\b(?:muje|mujhe|mane|mare|mari|maro|maru|meri|mera|mere|apni|apna|apne|i|my|we|our|me|us|humko|hume|hum|main|hu|ame|tame|aap|ek|one|1|2|3|4|5|ye|aa|yeh|this)\b/gi, "")
-      .replace(/\b(?:bechna|bechni|bechne|bechvu|vechvu|vechva|vechvo|sell|selling|list|listing|karna|karni|karne|karvu|karva|karo|want|wants|wanted)\b/gi, "")
+      .replace(/\b(?:muje|mujhe|mane|mare|mari|maro|maru|mara|meri|mera|mere|taro|tari|taru|tara|tamaro|tamari|tamaru|tamara|amaro|amari|amaru|amara|potano|potani|potanu|potana|apni|apna|apne|hamara|hamari|hamare|i|my|we|our|me|us|humko|hume|hum|main|hu|ame|tame|aap|ek|one|1|2|3|4|5|ye|aa|yeh|this)\b/gi, "")
+      .replace(/\b(?:bechna|bechni|bechne|bechvu|bechvano|bechvani|bechvanu|bechvana|vechvu|vechva|vechvo|vechvano|vechvani|vechvanu|vechvana|vechavo|vechavi|vechavu|vechava|aapo|aapva|aapvu|aapvani|aapvano|dena|deni|dene|sell|selling|list|listing|karna|karni|karne|karvu|karva|karo|want|wants|wanted)\b/gi, "")
+      .replace(/\b(?:juno|juni|junu|juna|purana|purani|purane|purano|navo|navi|navu|nava|naya|nayi|naye|resale|re-sale|secondhand|second-hand|fresh|old|new|used)\b/gi, "")
       .replace(/\b(?:he|hai|h|hain|che|chhe|to|chahiye|joiye|ka|ki|ke|nu|no|ni|na|in|at|me|ma|par|pe|se|thi|as|aur|ane|and|is)\b/gi, "")
       .replace(/\s+/g, " ")
       .trim();
 
-    if (isLikelySocietyOrProjectName(stripped)) {
+    if (stripped.length >= 3 && isLikelySocietyOrProjectName(stripped)) {
       return stripped;
     }
   }
@@ -1484,8 +1504,12 @@ function formatSocietyName(raw: string): string {
   return cleaned.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
-function parseRequirementFromText(text: string): string {
-  const lower = (text || "").toLowerCase();
+function parseRequirementFromText(text: string, lastQ?: string): string {
+  const lower = (text || "").toLowerCase().trim();
+  if (lastQ === "REQUIREMENT") {
+    if (/^(?:1|1️⃣|option\s*1|first|1st)\b/i.test(lower)) return "BUY";
+    if (/^(?:2|2️⃣|option\s*2|second|2nd)\b/i.test(lower)) return "RENT";
+  }
   if (lower.includes("lease") || lower.includes("corporate lease") || lower.includes("long term lease") || lower.includes("લીઝ")) {
     return "LEASE";
   }
@@ -1526,8 +1550,12 @@ function parseRequirementFromText(text: string): string {
   return "";
 }
 
-function parsePurposeFromText(text: string): string {
-  const lower = text.toLowerCase();
+function parsePurposeFromText(text: string, lastQ?: string): string {
+  const lower = (text || "").toLowerCase().trim();
+  if (lastQ === "PURPOSE") {
+    if (/^(?:1|1️⃣|option\s*1|first|1st)\b/i.test(lower)) return "SELF_USE";
+    if (/^(?:2|2️⃣|option\s*2|second|2nd)\b/i.test(lower)) return "INVESTMENT";
+  }
   if (
     lower.includes("invest") || lower.includes("roi") || lower.includes("rental yield") ||
     lower.includes("nivesh") || lower.includes("returns") || lower.includes("rent pe") ||
@@ -1559,9 +1587,20 @@ function parsePurposeFromText(text: string): string {
   return "";
 }
 
-function parseTimelineFromText(text: string): string {
+function parseTimelineFromText(text: string, lastQ?: string): string {
   const normalized = normalizeIndicDigits(text || "");
-  const lower = normalized.toLowerCase();
+  const lower = normalized.toLowerCase().trim();
+  if (lastQ === "TIMELINE") {
+    if (/^(?:1|1️⃣|option\s*1|first|1st)\b/i.test(lower)) return "READY_TO_MOVE";
+    if (/^(?:2|2️⃣|option\s*2|second|2nd)\b/i.test(lower)) return "UNDER_CONSTRUCTION";
+  }
+  if (
+    lower.includes("chalega") || lower.includes("chalshe") || lower.includes("koi bhi") ||
+    lower.includes("gamete") || lower.includes("both") || lower.includes("dono") ||
+    lower.includes("any") || lower.includes("kuch bhi")
+  ) {
+    return "READY_TO_MOVE";
+  }
   if (
     lower.includes("ready to move") ||
     lower.includes("ready-to-move") ||
@@ -4668,13 +4707,18 @@ async function handleOwnerFlow({
     // C. Project / Society Name:
     if (aiAnalysis.project_or_society) {
       const cleanSoc = aiAnalysis.project_or_society.replace(/^(?:ye|meri|mera|maro|mari|in|at)\s+/i, "").trim();
-      draft.society_name = cleanSoc;
-      draft.project_name = cleanSoc;
+      if (isLikelySocietyOrProjectName(cleanSoc)) {
+        draft.society_name = cleanSoc;
+        draft.project_name = cleanSoc;
+      }
     }
 
     // D. Location:
     if (aiAnalysis.location && aiAnalysis.location !== "FLEXIBLE") {
-      draft.location = aiAnalysis.location;
+      const cleanLoc = aiAnalysis.location.trim();
+      if (isLikelySocietyOrProjectName(cleanLoc)) {
+        draft.location = cleanLoc;
+      }
     }
 
     // E. Areas (Carpet, Super Built-up, Plot Area):
@@ -5829,12 +5873,12 @@ export interface DialogTransitionResult {
 
 export function getGreetingTriageReply(lang: string, nameStr: string, agencyName: string): string {
   if (lang === "GUJLISH") {
-    return `Namaste <b>${nameStr}</b>! ${agencyName} ma swagat chhe. 🙏\n👉 1️⃣ <b>Levi chhe</b> (Buy/Rent)  2️⃣ <b>Aapvi chhe</b> (Sell/Lease)  3️⃣ <b>Banne</b> 🔄\n<i>(1, 2 ya 3 reply karo, athva direct requirement lakho)</i>`;
+    return `Namaste <b>${nameStr}</b>! ${agencyName} ma swagat chhe. 🙏\n👉 1️⃣ <b>Property Buy ke Rent par levi chhe</b> 🏡  2️⃣ <b>Potani property Sell ke Rent par aapvi chhe</b> 📋  3️⃣ <b>Banne / Upgrade</b> 🔄\n<i>(1, 2 ya 3 reply karo, athva direct requirement lakho)</i>`;
   }
   if (lang === "ENGLISH") {
-    return `Hello <b>${nameStr}</b>! Welcome to ${agencyName}. 🙏\n👉 1️⃣ <b>Buy / Rent</b>  2️⃣ <b>Sell / Lease</b>  3️⃣ <b>Both</b> 🔄\n<i>(Reply with 1, 2, or 3, or type your requirement)</i>`;
+    return `Hello <b>${nameStr}</b>! Welcome to ${agencyName}. 🙏\n👉 1️⃣ <b>Looking to Buy / Rent</b> 🏡  2️⃣ <b>Looking to Sell / Lease</b> 📋  3️⃣ <b>Both / Upgrade</b> 🔄\n<i>(Reply with 1, 2, or 3, or share your requirement directly)</i>`;
   }
-  return `Namaste <b>${nameStr}</b>! ${agencyName} me aapka swagat hai. 🙏\n👉 1️⃣ <b>Leni hai</b> (Buy/Rent)  2️⃣ <b>Deni hai</b> (Sell/Lease)  3️⃣ <b>Dono</b> 🔄\n<i>(1, 2 ya 3 reply karein, ya direct requirement likhein)</i>`;
+  return `Namaste <b>${nameStr}</b>! ${agencyName} me aapka swagat hai. 🙏\n👉 1️⃣ <b>Property Buy ya Rent karni hai</b> 🏡  2️⃣ <b>Apni property Sell ya Rent out karni hai</b> 📋  3️⃣ <b>Dono / Upgrade</b> 🔄\n<i>(1, 2 ya 3 reply karein, ya direct requirement likhein)</i>`;
 }
 
 export async function dispatchStateAction(
@@ -6279,19 +6323,33 @@ export async function dispatchStateAction(
       };
     }
 
-    // Returning lead with Completed Buyer Qualification
+    // Returning lead with Completed Buyer Qualification (Site-Visit First Focus - Zero Call References)
     if (lead.property_type && (lead.budget || lead.location)) {
-      const locSuffix = lead.location ? ` in ${lead.location}` : "";
+      const budgetOrLocStr = (lead.location && lead.location !== "FLEXIBLE" && lead.location !== "UNKNOWN")
+        ? ` (${lead.location})`
+        : (lead.budget && Number(lead.budget) > 0)
+        ? ` (${formatPriceShort(lead.budget)})`
+        : "";
+
       const replyText =
         lang === "GUJLISH"
-          ? `Namaste <b>${nameStr}</b>! 🙏\n🏡 <b>Active Search:</b> ${lead.property_type}${locSuffix}\n\n👉 1️⃣ Matching Options  2️⃣ Criteria Change  3️⃣ Property List`
+          ? `Namaste <b>${nameStr}</b>! 🙏\nTamari <b>${lead.property_type}${budgetOrLocStr}</b> ni search chalu chhe. Kaho, aaje kai rite madad kari shaku?\n\n👉 1️⃣ <b>Top property options jovo 🏡</b>\n👉 2️⃣ <b>VIP Site Visit schedule karo 🚗</b>\n👉 3️⃣ <b>Budget ke requirement badalvi chhe ✏️</b>\n<i>(1, 2 ke 3 reply karo, athva direct lakho)</i>`
           : lang === "ENGLISH"
-          ? `Hello <b>${nameStr}</b>! 🙏\n🏡 <b>Active Search:</b> ${lead.property_type}${locSuffix}\n\n👉 1️⃣ Matching Options  2️⃣ Change Criteria  3️⃣ List Property`
-          : `Namaste <b>${nameStr}</b>! 🙏\n🏡 <b>Active Search:</b> ${lead.property_type}${locSuffix}\n\n👉 1️⃣ Matching Options  2️⃣ Criteria Change  3️⃣ Property List`;
+          ? `Hello <b>${nameStr}</b>! 🙏\nWe have your search for <b>${lead.property_type}${budgetOrLocStr}</b> noted. How can we assist you today?\n\n👉 1️⃣ <b>Explore top property options 🏡</b>\n👉 2️⃣ <b>Schedule a VIP Site Visit 🚗</b>\n👉 3️⃣ <b>Update budget or requirement ✏️</b>\n<i>(Reply with 1, 2, or 3, or type your query)</i>`
+          : `Namaste <b>${nameStr}</b>! 🙏\nAapka <b>${lead.property_type}${budgetOrLocStr}</b> ka search note hai. Kahiye, aaj kaise madad karoon?\n\n👉 1️⃣ <b>Top property options dekhein 🏡</b>\n👉 2️⃣ <b>VIP Site Visit schedule karein 🚗</b>\n👉 3️⃣ <b>Budget ya requirement badalni hai ✏️</b>\n<i>(1, 2 ya 3 reply karein, ya direct likhein)</i>`;
 
       return {
         replyText,
         nextState: "OPTIONS_SENT",
+        leadUpdates: {
+          metadata: {
+            ...(lead.metadata || {}),
+            last_bot_prompt: {
+              question_type: "RETURNING_BUYER_MENU",
+              sent_at: new Date().toISOString(),
+            },
+          },
+        },
       };
     }
   }
@@ -6559,10 +6617,10 @@ export async function dispatchStateAction(
 
       const replyText = givenPropType
         ? (lang === "GUJLISH"
-          ? `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva) mate joiye chhe ke Rent / Lease</b> par? 🔑`
+          ? `Khub saras! <b>${givenPropType}</b>. 👍\n\n👉 Aa property <b>Buy (Kharidva) mate joiye chhe ke Rent / Lease</b> par? 🔑`
           : lang === "ENGLISH"
-          ? `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> or <b>Rent/Lease</b> this property? 🔑`
-          : `Noted — <b>${givenPropType}</b>! 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent / Lease</b> par chahiye? 🔑`)
+          ? `Great choice! <b>${givenPropType}</b>. 👍\n\n👉 Are you looking to <b>Buy</b> or <b>Rent/Lease</b> this property? 🔑`
+          : `Great choice! <b>${givenPropType}</b>. 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> chahte hain ya <b>Rent / Lease</b> par chahiye? 🔑`)
         : (lang === "GUJLISH"
           ? `Bahuj saras <b>${nameStr}</b>! 🏡 Chalo navi property search shuru kariye.\n\n👉 <b>Tame kaya type ni property joi rahya chho — Residential (Flat / Villa) ke Commercial (Shop / Office / Plot)?</b>`
           : lang === "ENGLISH"
@@ -6607,13 +6665,13 @@ export async function dispatchStateAction(
     );
 
     if (isInitialDualOnboarding) {
-      const isInitialListChoice =
-        (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
-        /^(1|1️⃣|first|1st|option\s*1|list|listing|pehle\s*property\s*list|pehle\s*list|bechna|vechvu|apni)\b/i.test(lower.trim());
-
       const isInitialSearchChoice =
+        (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+        /^(1|1️⃣|first|1st|option\s*1|search|buy|naye|kharidna|kharidvu|naye\s*options|pehle\s*naye)\b/i.test(lower.trim());
+
+      const isInitialListChoice =
         (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
-        /^(2|2️⃣|second|2nd|option\s*2|search|buy|naye|kharidna|kharidvu|naye\s*options|pehle\s*naye)\b/i.test(lower.trim());
+        /^(2|2️⃣|second|2nd|option\s*2|list|listing|pehle\s*property\s*list|pehle\s*list|bechna|vechvu|apni)\b/i.test(lower.trim());
 
       const isDirectOwnerUtterance =
         actionResult.user_role === "OWNER" ||
@@ -6984,10 +7042,10 @@ export async function dispatchStateAction(
     if (isBothChoice) {
       const replyText =
         lang === "GUJLISH"
-          ? `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par tame banne service access kari shako chho.\n\nTame pehla potani property list karva mango chho, ke pehla nava property options jova mango chho?\n👉 1️⃣ <b>Pehle property list karein 📋</b>  2️⃣ <b>Pehle naye options dekhein 🏡</b>`
+          ? `Bilkul <b>${nameStr}</b>! Banne ma guide karshe. 👍\nPehla tame nava property options jova mango chho ke potani property list karvi chhe?\n👉 1️⃣ <b>Nava options jovo 🏡</b>  2️⃣ <b>Pehla property list karo 📋</b>`
           : lang === "ENGLISH"
-          ? `Welcome <b>${nameStr}</b>! 🙏 You can access both services at ${agencyName}.\n\nWould you prefer to list your existing property first, or explore new property options first?\n👉 1️⃣ <b>List property first 📋</b>  2️⃣ <b>Search options first 🏡</b>`
-          : `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par aap dono services access kar sakte hain.\n\nAap pehle apni existing property list karna chahenge, ya pehle naye property options dekhna chahenge?\n👉 1️⃣ <b>Pehle property list karein 📋</b>  2️⃣ <b>Pehle naye options dekhein 🏡</b>`;
+          ? `Certainly <b>${nameStr}</b>! We can assist with both. 👍\nWould you prefer to explore new property options first, or list your property?\n👉 1️⃣ <b>Explore new options 🏡</b>  2️⃣ <b>List property first 📋</b>`
+          : `Bilkul <b>${nameStr}</b>! Dono me assist karenge. 👍\nPehle aapko naye property options dekhne hain ya apni property list karni hai?\n👉 1️⃣ <b>Naye options dekhein 🏡</b>  2️⃣ <b>Pehle property list karein 📋</b>`;
 
       return {
         replyText,
@@ -7000,6 +7058,10 @@ export async function dispatchStateAction(
             is_initial_dual_onboarding: true,
             has_buyer_profile: true,
             has_seller_profile: true,
+            last_bot_prompt: {
+              question_type: "DUAL_ROLE_SELECTION",
+              sent_at: new Date().toISOString(),
+            },
           },
         },
       };
@@ -8424,6 +8486,76 @@ export async function dispatchStateAction(
   // 10. OPTIONS SENT, VISIT REQUESTED or SITE VISIT PROPOSED (State: OPTIONS_SENT / VISIT_REQUESTED / SITE_VISIT_PROPOSED)
   // ---------------------------------------------------------------------------
   if (currentState === "OPTIONS_SENT" || currentState === "VISIT_REQUESTED" || currentState === "SITE_VISIT_PROPOSED") {
+    // -------------------------------------------------------------------------
+    // Returning Qualified Buyer Menu Dispatcher (Option 1, 2, 3)
+    // -------------------------------------------------------------------------
+    const isReturningBuyerMenuPending = lead?.metadata?.last_bot_prompt?.question_type === "RETURNING_BUYER_MENU";
+
+    if (isReturningBuyerMenuPending) {
+      const isChoice1 = /^(?:1|1️⃣|option\s*1|first|1st|options?|dikhao|dobara|fari|matching|top)\b/i.test(lower.trim());
+      const isChoice2 = /^(?:2|2️⃣|option\s*2|second|2nd|site\s*visit|visit|book|schedule|gaadi|slot)\b/i.test(lower.trim());
+      const isChoice3 = /^(?:3|3️⃣|option\s*3|third|3rd|change|badal|badlo|badalvi|nayi|navi|refine|criteria|budget)\b/i.test(lower.trim());
+
+      if (isChoice1) {
+        // Option 1: Top property options dekhein
+        return handleQualificationCascade(lead, { ...actionResult, action: { intent: "SEEKER_QUALIFICATION", token: null } }, context);
+      }
+
+      if (isChoice2) {
+        // Option 2: VIP Site Visit schedule karein (Direct 1-tap booking push)
+        const replyText =
+          lang === "GUJLISH"
+            ? `Bilkul <b>${nameStr}</b>! 🚗 <b>VIP Site Visit</b> schedule karva mate tamne kayo slot anukool raheshe — <b>Kaale sanje 5:00 vage</b> ke <b>Sunday savare 11:00 vage</b>?\n\n<i>(Amara senior property expert tamne site par direct guide karshe)</i>`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! 🚗 Which slot suits you best for your <b>VIP Site Visit</b> — <b>Tomorrow 5:00 PM</b> or <b>Sunday 11:00 AM</b>?\n\n<i>(Our senior property advisor will meet you directly at the site location)</i>`
+            : `Bilkul <b>${nameStr}</b>! 🚗 <b>VIP Site Visit</b> schedule karne ke liye kaunsa slot aapke liye best rahega — <b>Kal shaam 5:00 baje</b> ya <b>Sunday subah 11:00 baje</b>?\n\n<i>(Hamare senior property expert direct site par aapko guide karenge)</i>`;
+
+        return {
+          replyText,
+          nextState: "OPTIONS_SENT",
+          leadUpdates: {
+            metadata: {
+              ...(lead.metadata || {}),
+              last_bot_prompt: {
+                question_type: "SLOT_SELECTION",
+                sent_at: new Date().toISOString(),
+              },
+            },
+          },
+        };
+      }
+
+      if (isChoice3) {
+        // Option 3: Budget ya requirement badalni hai
+        const replyText =
+          lang === "GUJLISH"
+            ? `Zaroor <b>${nameStr}</b>! Chalo requirement update kariye.\n\n👉 <b>Tame kaya type ni property joi rahya chho — 2BHK/3BHK Flat, Villa, ke Commercial Office/Shop?</b> 🏡`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! Let's update your requirement.\n\n👉 <b>What type of property are you looking for — 2BHK/3BHK Flat, Villa, or Commercial Office/Shop?</b> 🏡`
+            : `Zaroor <b>${nameStr}</b>! Chaliye requirement update karte hain.\n\n👉 <b>Aap kis type ki property search kar rahe hain — 2BHK/3BHK Flat, Villa, ya Commercial Office/Shop?</b> 🏡`;
+
+        return {
+          replyText,
+          nextState: "QUALIFYING",
+          leadUpdates: {
+            state: "QUALIFYING",
+            property_type: null,
+            budget: null,
+            location: null,
+            timeline: null,
+            purpose: null,
+            metadata: {
+              ...(lead.metadata || {}),
+              seeker_draft: {},
+              last_bot_prompt: {
+                question_type: "PROPERTY_TYPE",
+                sent_at: new Date().toISOString(),
+              },
+            },
+          },
+        };
+      }
+    }
     const hasOptions = Array.isArray(lead?.last_option_ids) && lead.last_option_ids.length > 0;
 
     // CR-02 SAFEGUARD: If no options are available in last_option_ids and no property is selected,
@@ -9335,6 +9467,190 @@ async function handleBrochureOrMapResponse(
   };
 }
 
+// -------------------------------------------------------------------------
+// LEAD SCORING ENGINE (Deterministic 0-100 Score & Temperature Classification)
+// -------------------------------------------------------------------------
+function computeEngineLeadScore(
+  leadData: any,
+  targetState?: string,
+  updates?: any
+) {
+  const mergedMeta = {
+    ...(leadData?.metadata || {}),
+    ...(updates?.metadata || {}),
+  };
+
+  const effectiveState = String(targetState || updates?.state || leadData?.state || "").toUpperCase();
+
+  // Inactive / Terminal Visit States Guard: Never award active visit points if visit was cancelled, missed, or dropped
+  const isVisitExplicitlyInactive =
+    effectiveState === "VISIT_CANCELLED" ||
+    effectiveState === "VISIT_MISSED" ||
+    effectiveState === "DROPPED" ||
+    effectiveState === "NOT_INTERESTED" ||
+    effectiveState === "OPT_OUT" ||
+    effectiveState === "COLD_UNQUALIFIED" ||
+    effectiveState === "COLD";
+
+  const isConfirmedBooked = updates?.site_visit_booked !== undefined
+    ? Boolean(updates.site_visit_booked)
+    : Boolean(leadData?.site_visit_booked);
+
+  const hasVisitDate = Boolean(
+    updates?.site_visit_datetime ||
+    leadData?.site_visit_datetime ||
+    updates?.site_visit_at ||
+    leadData?.site_visit_at
+  );
+
+  const hasActiveSiteVisit =
+    !isVisitExplicitlyInactive &&
+    (isConfirmedBooked || (hasVisitDate && updates?.site_visit_booked !== false && leadData?.site_visit_booked !== false));
+
+  let stageScore = 0;
+  let budgetScore = 0;
+  let engagementScore = 0;
+  let penalties = 0;
+  const reasons: string[] = [];
+
+  // 1. Stage & Commitment Signals (Max 45 Pts)
+  const hasFullQual = Boolean(
+    (updates?.property_type || leadData?.property_type) &&
+    (updates?.requirement || leadData?.requirement) &&
+    (updates?.location || leadData?.location) &&
+    (updates?.budget || leadData?.budget) &&
+    (updates?.timeline || leadData?.timeline) &&
+    (updates?.purpose || leadData?.purpose)
+  );
+
+  if (effectiveState === "SITE_VISIT_DONE" || effectiveState === "VISIT_DONE" || mergedMeta.visit_feedback) {
+    stageScore += 45;
+    reasons.push("Site visit completed (+45)");
+  } else if (effectiveState === "SITE_VISIT_BOOKED" || hasActiveSiteVisit) {
+    stageScore += 35;
+    reasons.push("Site visit locked & scheduled (+35)");
+  } else if (effectiveState === "SITE_VISIT_PROPOSED") {
+    stageScore += 25;
+    reasons.push("Visit slot actively selected (+25)");
+  } else if (hasFullQual) {
+    stageScore += 35;
+    reasons.push("Full 6-field qualification completed (+35)");
+  } else if (
+    effectiveState === "OPTIONS_SENT" ||
+    mergedMeta.alternative_options_sent ||
+    (Array.isArray(leadData?.last_option_ids) && leadData.last_option_ids.length > 0)
+  ) {
+    stageScore += 18;
+    reasons.push("Alternative options requested (+18)");
+  } else if (
+    effectiveState === "QUALIFIED" ||
+    ((updates?.budget || leadData?.budget) && (updates?.location || leadData?.location))
+  ) {
+    stageScore += 12;
+    reasons.push("Requirements qualified (+12)");
+  } else {
+    stageScore += 5;
+    reasons.push("Initial inquiry (+5)");
+  }
+
+  // Dual-role bonus (High Lifetime Value)
+  if (mergedMeta.has_buyer_profile && mergedMeta.has_seller_profile) {
+    stageScore += 10;
+    reasons.push("Dual-role buyer & seller (+10)");
+  }
+
+  // 2. Financial Viability & Ticket Size (Max 25 Pts)
+  const budgetNum = Number(updates?.budget ?? leadData?.budget ?? 0);
+  if (budgetNum >= 15000000) {
+    budgetScore += 25;
+    reasons.push("Ultra-luxury budget >= ₹1.5 Cr (+25)");
+  } else if (budgetNum >= 7500000) {
+    budgetScore += 20;
+    reasons.push("Premium budget ₹75L - ₹1.5 Cr (+20)");
+  } else if (budgetNum >= 4000000) {
+    budgetScore += 15;
+    reasons.push("Mid-segment budget ₹40L - ₹75L (+15)");
+  } else if (budgetNum > 0) {
+    budgetScore += 10;
+    reasons.push("Starter budget < ₹40L (+10)");
+  }
+
+  // 3. Conversational Velocity & Engagement (Max 20 Pts)
+  if (mergedMeta.last_objection || mergedMeta.visit_feedback) {
+    engagementScore += 10;
+    reasons.push("Detailed property feedback provided (+10)");
+  }
+
+  const followupCount = Number(updates?.followup_count ?? leadData?.followup_count ?? 0);
+  if (followupCount >= 3) {
+    engagementScore += 10;
+    reasons.push("High interaction volume (+10)");
+  } else if (followupCount >= 1) {
+    engagementScore += 5;
+  }
+
+  const slaMinutes = Number(leadData?.sla_response_minutes || 0);
+  if (slaMinutes > 0 && slaMinutes <= 10) {
+    engagementScore += 10;
+    reasons.push("Immediate responder (< 10 min) (+10)");
+  }
+
+  // 4. Negative & Churn Penalties (-10 to -35 Pts)
+  if (
+    effectiveState === "DROPPED" ||
+    effectiveState === "NOT_INTERESTED" ||
+    effectiveState === "OPT_OUT" ||
+    updates?.rejection_reason ||
+    leadData?.rejection_reason
+  ) {
+    penalties += 35;
+    reasons.push("Marked dropped or rejected (-35)");
+  }
+
+  if (effectiveState === "VISIT_CANCELLED") {
+    penalties += 20;
+    reasons.push("Cancelled visit (-20)");
+  }
+
+  if (effectiveState === "VISIT_MISSED") {
+    penalties += 20;
+    reasons.push("Missed scheduled site visit (-20)");
+  }
+
+  // Missing phone penalty (must be a valid 10-digit number)
+  const effectivePhone = updates?.phone ?? leadData?.phone;
+  const cleanPhone = String(effectivePhone || "").replace(/\D/g, "");
+  if (cleanPhone.length < 10) {
+    penalties += 10;
+    reasons.push("Missing 10-digit mobile number (-10)");
+  }
+
+  // Clamped Total (0 - 100)
+  const rawTotal = stageScore + budgetScore + engagementScore - penalties;
+  const score = Math.max(0, Math.min(100, Math.round(rawTotal)));
+
+  let temperature: "HOT" | "WARM" | "COLD" = "COLD";
+  if (score >= 70) {
+    temperature = "HOT";
+  } else if (score >= 40) {
+    temperature = "WARM";
+  } else {
+    temperature = "COLD";
+  }
+
+  return {
+    score,
+    temperature,
+    breakdown: {
+      stage: Math.min(45, stageScore),
+      budget: Math.min(25, budgetScore),
+      engagement: Math.min(20, engagementScore),
+      penalties,
+    },
+    reasons,
+  };
+}
+
 async function handleQualificationCascade(
   lead: any,
   actionResult: ClassifiedActionResult,
@@ -9346,11 +9662,34 @@ async function handleQualificationCascade(
   const activeTenantId = context.tenantId || defaultTenantId;
   const resolvedCity = context.resolvedCity;
 
-  let propType = actionResult.property_type || parsePropertyTypeFromText(context.messageText) || lead?.property_type || lead?.metadata?.seeker_draft?.property_type;
-  let requirement = actionResult.transaction_type || parseRequirementFromText(context.messageText) || lead?.requirement || lead?.metadata?.seeker_draft?.requirement;
-  let purpose = parsePurposeFromText(context.messageText) || lead?.purpose || lead?.metadata?.seeker_draft?.purpose;
-  let budget = actionResult.price_or_budget || parseBudgetFromText(context.messageText) || (lead?.budget ? Number(lead.budget) : 0) || (lead?.metadata?.seeker_draft?.budget ? Number(lead.metadata.seeker_draft.budget) : 0);
-  let timeline = actionResult.timeline || parseTimelineFromText(context.messageText) || lead?.timeline || lead?.metadata?.seeker_draft?.timeline;
+  const lastBotPrompt = lead?.metadata?.last_bot_prompt;
+  const lastPromptQ = lastBotPrompt?.question_type;
+
+  // Extract what was JUST provided in this user turn vs cumulative values
+  const justPropType = parsePropertyTypeFromText(context.messageText);
+  const justReq = parseRequirementFromText(context.messageText, lastPromptQ);
+  const justPurpose = parsePurposeFromText(context.messageText, lastPromptQ);
+  const justTimeline = parseTimelineFromText(context.messageText, lastPromptQ);
+  const justBudget = parseBudgetFromText(context.messageText);
+
+  const { data: allTenantInventory } = await supabase
+    .from("inventory")
+    .select("location, landmarks, project_name")
+    .eq("client_id", activeTenantId)
+    .eq("status", "AVAILABLE");
+
+  const matchedLocs = extractLocationsFromText(context.messageText, allTenantInventory || []);
+  const extractedLoc = matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(context.messageText, allTenantInventory || []);
+  const isMsgFlex = /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|any\s*location|flexible|gamete)\b/i.test(context.lower);
+  const justLoc = (actionResult.is_flexible_location || isMsgFlex) ? "FLEXIBLE" : extractedLoc;
+
+  // Cumulative values from this message or previous lead/draft state
+  let propType = actionResult.property_type || justPropType || lead?.property_type || lead?.metadata?.seeker_draft?.property_type;
+  let requirement = actionResult.transaction_type || justReq || lead?.requirement || lead?.metadata?.seeker_draft?.requirement;
+  let purpose = justPurpose || lead?.purpose || lead?.metadata?.seeker_draft?.purpose;
+  let budget = actionResult.price_or_budget || justBudget || (lead?.budget ? Number(lead.budget) : 0) || (lead?.metadata?.seeker_draft?.budget ? Number(lead.metadata.seeker_draft.budget) : 0);
+  let timeline = actionResult.timeline || justTimeline || lead?.timeline || lead?.metadata?.seeker_draft?.timeline;
+  let location = actionResult.location || (justLoc ? justLoc : (lead?.location || lead?.metadata?.seeker_draft?.location));
 
   // F-05: Commercial Lease Seeker Disambiguation & Sub-50k Budget Protection
   const lowerMsg = (context.messageText || "").toLowerCase();
@@ -9367,15 +9706,15 @@ async function handleQualificationCascade(
     }
   }
 
-  const { data: allTenantInventory } = await supabase
-    .from("inventory")
-    .select("location, landmarks, project_name")
-    .eq("client_id", activeTenantId)
-    .eq("status", "AVAILABLE");
+  // PURPOSE-FIRST INVESTMENT FAST-PATH:
+  // If purpose is INVESTMENT, location is automatically set to "FLEXIBLE" (investor cares about yield/ROI across city)
+  if (purpose === "INVESTMENT") {
+    if (!location || location === "UNKNOWN") {
+      location = "FLEXIBLE";
+    }
+  }
 
-  const matchedLocs = extractLocationsFromText(context.messageText, allTenantInventory || []);
-  let location = actionResult.location || (matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(context.messageText, allTenantInventory || [])) || lead?.location || lead?.metadata?.seeker_draft?.location;
-  if (!location && (actionResult.is_flexible_location || /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|any\s*location|flexible|gamete)\b/i.test(context.lower))) {
+  if (!location && (actionResult.is_flexible_location || isMsgFlex)) {
     location = "FLEXIBLE";
   }
 
@@ -9383,25 +9722,15 @@ async function handleQualificationCascade(
   const isGenericCommercial = rawPropType.toLowerCase() === "commercial" || rawPropType === "કોમર્શિયલ";
   const isGenericResidential = rawPropType.toLowerCase() === "residential" || rawPropType === "રેસિડેન્શિયલ";
 
-  // Check Turn 1: Configuration & Transaction Type
+  // Check stage presence
   const hasPropType = Boolean(propType && !isGenericCommercial && !isGenericResidential);
   const hasRequirement = Boolean(requirement);
-
-  // Check Turn 2: Locality & Budget Band (F-04 Fix)
+  const hasPurpose = Boolean(purpose);
   const hasLocation = Boolean(location);
   const hasBudget = Boolean(budget && Number(budget) > 0);
-
-  // Check Turn 3: Timeline & Purpose
-  const isResidential = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(propType || "");
-  const hasRelaxedTurn3 = /(?:koi\s*bhi|chalega|chalshe|both|dono|any|options?\s*(?:dikhao|batao|moklo)|kuch\s*bhi)/i.test(context.messageText);
-  if (hasRelaxedTurn3 && hasPropType && hasRequirement && hasLocation && hasBudget) {
-    if (!timeline) timeline = "READY_TO_MOVE";
-    if (!purpose) purpose = isResidential ? "SELF_USE" : "BUSINESS";
-  }
-
   const hasTimeline = Boolean(timeline);
-  const hasPurpose = Boolean(purpose);
 
+  // Determine Missing Stage (Purpose-First Order)
   let missingStage: string | null = null;
   if (!hasPropType && !hasRequirement) {
     missingStage = "TURN_1_COMPOUND";
@@ -9415,18 +9744,14 @@ async function handleQualificationCascade(
     }
   } else if (!hasRequirement) {
     missingStage = "REQUIREMENT";
-  } else if (!hasLocation && !hasBudget) {
-    missingStage = "TURN_2_BOTH";
-  } else if (hasLocation && !hasBudget) {
-    missingStage = "TURN_2_BUDGET_ONLY";
-  } else if (!hasLocation && hasBudget) {
-    missingStage = "TURN_2_LOCATION_ONLY";
-  } else if (!hasTimeline && !hasPurpose) {
-    missingStage = "TURN_3_BOTH";
-  } else if (!hasTimeline && hasPurpose) {
-    missingStage = "TURN_3_TIMELINE_ONLY";
-  } else if (hasTimeline && !hasPurpose) {
-    missingStage = "TURN_3_PURPOSE_ONLY";
+  } else if (!hasPurpose) {
+    missingStage = "PURPOSE";
+  } else if (!hasLocation) {
+    missingStage = "LOCATION";
+  } else if (!hasBudget) {
+    missingStage = "BUDGET";
+  } else if (!hasTimeline) {
+    missingStage = "TIMELINE";
   }
 
   const isDual = lead?.lead_type === "DUAL_ROLE" || Boolean(lead?.metadata?.has_seller_profile) || lead?.lead_type === "PROVIDER";
@@ -9470,6 +9795,10 @@ async function handleQualificationCascade(
     ...(timeline ? { timeline } : {}),
   };
 
+  const isResidential = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(propType || "");
+  const isComm = /(commercial|shop|office|showroom|warehouse|godown)/i.test(propType || "");
+  const isRentOrLease = String(requirement || "").toLowerCase().includes("rent") || String(requirement || "").toLowerCase().includes("lease");
+
   const leadUpdates: Record<string, any> = {
     state: missingStage ? (hasActiveBookedVisit ? (lead.state || "SITE_VISIT_BOOKED") : "QUALIFYING") : "OPTIONS_SENT",
     lead_type: isDual ? "DUAL_ROLE" : "SEEKER",
@@ -9489,6 +9818,10 @@ async function handleQualificationCascade(
         has_active_booked_visit: hasActiveBookedVisit,
         current_search: seekerDraft,
       },
+      last_bot_prompt: missingStage ? {
+        question_type: missingStage,
+        sent_at: new Date().toISOString(),
+      } : (lead?.metadata?.last_bot_prompt || null),
       ...(isDual ? {
         has_seller_profile: true,
         has_buyer_profile: true,
@@ -9503,110 +9836,183 @@ async function handleQualificationCascade(
   };
 
   if (missingStage !== null) {
-    let replyText = "";
-    const isComm = /(commercial|shop|office|showroom|warehouse|godown)/i.test(propType || "");
-    const isRentOrLease = String(requirement || "").toLowerCase().includes("rent") || String(requirement || "").toLowerCase().includes("lease");
+    // ---------------------------------------------------------------------------
+    // Contextual Acknowledgment vs Typo Clarification
+    // ---------------------------------------------------------------------------
+    const hasAnyEntityInThisTurn = Boolean(
+      justPropType || justReq || justPurpose || justLoc || justBudget || justTimeline
+    );
 
+    // If user's message didn't provide any recognized entity and bot was expecting something specific, trigger polite clarification
+    const isTypoOrUnrecognized = !hasAnyEntityInThisTurn && Boolean(lastPromptQ);
+
+    let ack = "";
+    if (justReq) {
+      if (justReq === "BUY") {
+        ack = lang === "GUJLISH"
+          ? `Samji gayo, <b>Buy</b> karva mate! 👍`
+          : lang === "ENGLISH"
+          ? `Got it, for <b>Purchase</b>! 👍`
+          : `Got it, <b>Buy</b> karne ke liye! 👍`;
+      } else if (justReq === "RENT") {
+        ack = lang === "GUJLISH"
+          ? `Samji gayo, <b>Rent</b> par! 👍`
+          : lang === "ENGLISH"
+          ? `Got it, for <b>Rent</b>! 👍`
+          : `Samajh gaya, <b>Rent</b> par! 👍`;
+      } else if (justReq === "LEASE") {
+        ack = lang === "GUJLISH"
+          ? `Samji gayo, <b>Commercial Lease</b> mate! 👍`
+          : lang === "ENGLISH"
+          ? `Got it, for <b>Commercial Lease</b>! 👍`
+          : `Got it, <b>Commercial Lease</b> ke liye! 👍`;
+      }
+    } else if (justPropType) {
+      ack = lang === "GUJLISH"
+        ? `Khub saras! <b>${propType}</b>. 👍`
+        : lang === "ENGLISH"
+        ? `Great choice! <b>${propType}</b>. 👍`
+        : `Great choice! <b>${propType}</b>. 👍`;
+    } else if (justPurpose) {
+      if (justPurpose === "INVESTMENT") {
+        ack = lang === "GUJLISH"
+          ? `Saras, investment mate aakhi city ma best ROI ane appreciation vada options joi laishu. 📈`
+          : lang === "ENGLISH"
+          ? `Excellent, for investment we will look at options with the best ROI and appreciation across the city. 📈`
+          : `Sahi hai, investment ke liye pure city me best ROI aur appreciation wale options dekh lenge. 📈`;
+      } else {
+        ack = lang === "GUJLISH"
+          ? `Khub saras, family na raheva mate! 🏡`
+          : lang === "ENGLISH"
+          ? `Great, for family living! 🏡`
+          : `Bahut badhiya, family ke rehne ke liye! 🏡`;
+      }
+    } else if (justLoc) {
+      if (justLoc === "FLEXIBLE") {
+        ack = lang === "GUJLISH"
+          ? `Theek chhe, location no koi issue nathi — aakhi city ma saras options joi laishu. 👍`
+          : lang === "ENGLISH"
+          ? `Understood, flexible location — we will explore the best options across the area. 👍`
+          : `Theek hai, location ka koi issue nahi hai — pure area me acche options dekh lenge. 👍`;
+      } else {
+        ack = lang === "GUJLISH"
+          ? `Khub saras, <b>${location}</b> vistar! 📍`
+          : lang === "ENGLISH"
+          ? `Great, <b>${location}</b> area! 📍`
+          : `Bahut badhiya, <b>${location}</b> area! 📍`;
+      }
+    } else if (justBudget) {
+      ack = lang === "GUJLISH"
+        ? `Budget note kari lidho — <b>₹${formatPriceShort(budget)}</b>! 💰`
+        : lang === "ENGLISH"
+        ? `Budget noted — <b>₹${formatPriceShort(budget)}</b>! 💰`
+        : `Budget note kar liya — <b>₹${formatPriceShort(budget)}</b>! 💰`;
+    } else if (justTimeline) {
+      ack = lang === "GUJLISH"
+        ? `Timeline note kari lidhi! 👍`
+        : lang === "ENGLISH"
+        ? `Timeline noted! 👍`
+        : `Noted timeline! 👍`;
+    }
+
+    let cleanQuestion = "";
     if (missingStage === "TURN_1_COMPOUND") {
-      replyText =
+      cleanQuestion =
         lang === "GUJLISH"
-          ? `Property Buy karvi chhe ke Rent par joiye chhe? Ane kaya type ni joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? 🏡`
+          ? `Tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? Ane <b>Buy</b> karvi chhe ke <b>Rent</b> par? 🏡`
           : lang === "ENGLISH"
-          ? `Are you looking to Buy or Rent? And what type of property — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? 🏡`
-          : `Property Buy karni hai ya Rent par chahiye? Aur kis type ki dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Shop/Office</b>? 🏡`;
+          ? `What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? And looking to <b>Buy</b> or <b>Rent</b>? 🏡`
+          : `Aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial Shop/Office</b>? Aur <b>Buy</b> karna hai ya <b>Rent</b> par? 🏡`;
     } else if (missingStage === "PROPERTY_TYPE") {
-      replyText =
+      cleanQuestion =
         lang === "GUJLISH"
-          ? `Tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? 🏡`
+          ? `👉 Tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b> ke <b>Commercial Shop/Office</b>? 🏡`
           : lang === "ENGLISH"
-          ? `What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? 🏡`
-          : `Aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial Shop/Office</b>? 🏡`;
+          ? `👉 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>? 🏡`
+          : `👉 Aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b> ya <b>Commercial Shop/Office</b>? 🏡`;
     } else if (missingStage === "COMMERCIAL_SUBTYPE") {
-      replyText =
+      cleanQuestion =
         lang === "GUJLISH"
-          ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space ma tame kaya type ni property joi rahya chho — Shop, Office ke Showroom?</b>`
+          ? `👉 Commercial space ma tame kaya type ni property joi rahya chho — <b>Shop</b>, <b>Office</b> ke <b>Showroom</b>? 🏢`
           : lang === "ENGLISH"
-          ? `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>What type of commercial property are you looking for — Shop, Office, or Showroom?</b>`
-          : `Noted — <b>Commercial</b>! 🏢\n\n👉 <b>Commercial space me aap kis type ki property dekh rahe hain — Shop, Office ya Showroom?</b>`;
+          ? `👉 What type of commercial space are you looking for — <b>Shop</b>, <b>Office</b>, or <b>Showroom</b>? 🏢`
+          : `👉 Commercial space me aap kis type ki property dekh rahe hain — <b>Shop</b>, <b>Office</b> ya <b>Showroom</b>? 🏢`;
     } else if (missingStage === "RESIDENTIAL_SUBTYPE") {
-      replyText =
+      cleanQuestion =
         lang === "GUJLISH"
-          ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential ma tame kaya type ni property joi rahya chho — 2BHK, 3BHK Flat ke Villa?</b>`
+          ? `👉 Residential ma tame kaya type ni property joi rahya chho — <b>2BHK</b>, <b>3BHK Flat</b> ke <b>Villa</b>? 🏡`
           : lang === "ENGLISH"
-          ? `Noted — <b>Residential</b>! 🏡\n\n👉 <b>What type of residential property are you looking for — 2BHK, 3BHK Flat, or Villa?</b>`
-          : `Noted — <b>Residential</b>! 🏡\n\n👉 <b>Residential me aap kis type ki property search kar rahe hain — 2BHK, 3BHK Flat ya Villa?</b>`;
+          ? `👉 What type of residential property are you looking for — <b>2BHK</b>, <b>3BHK Flat</b>, or <b>Villa</b>? 🏡`
+          : `👉 Residential me aap kis type ki property search kar rahe hain — <b>2BHK</b>, <b>3BHK Flat</b> ya <b>Villa</b>? 🏡`;
     } else if (missingStage === "REQUIREMENT") {
-      const typeLabel = propType || "Property";
-      replyText = isComm
+      cleanQuestion = isComm
         ? (lang === "GUJLISH"
-          ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Commercial space <b>Buy</b> 💼 karvo chhe ke <b>Rent / Lease</b> 🔑 par joiye chhe?`
+          ? `👉 Commercial space <b>Buy</b> 💼 karvo chhe ke <b>Rent / Lease</b> 🔑 par joiye chhe?`
           : lang === "ENGLISH"
-          ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> 💼 or <b>Rent/Lease</b> 🔑 commercial space?`
-          : `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Commercial space <b>Buy</b> 💼 karna chahte hain ya <b>Rent / Lease</b> 🔑 par chahiye?`)
+          ? `👉 Are you looking to <b>Buy</b> 💼 or <b>Rent/Lease</b> 🔑 commercial space?`
+          : `👉 Commercial space <b>Buy</b> 💼 karna chahte hain ya <b>Rent / Lease</b> 🔑 par chahiye?`)
         : (lang === "GUJLISH"
-          ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aa property <b>Buy (Kharidva)</b> 🏠 mate joiye chhe ke <b>Rent</b> 🔑 par joiye chhe?`
+          ? `👉 Aa property <b>Buy (Kharidva)</b> 🏠 mate joiye chhe ke <b>Rent</b> 🔑 par joiye chhe?`
           : lang === "ENGLISH"
-          ? `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Are you looking to <b>Buy</b> 🏠 or <b>Rent</b> 🔑 this property?`
-          : `Noted — <b>${typeLabel}</b>! 👍\n\n👉 Aap ye property <b>Buy (Kharidna)</b> 🏠 chahte hain ya <b>Rent</b> 🔑 par chahiye?`);
-    } else if (missingStage === "TURN_2_BOTH") {
-      replyText =
+          ? `👉 Are you looking to <b>Buy</b> 🏠 or <b>Rent</b> 🔑 this property?`
+          : `👉 Aap ye property <b>Buy (Kharidna)</b> 🏠 chahte hain ya <b>Rent</b> 🔑 par chahiye?`);
+    } else if (missingStage === "PURPOSE") {
+      cleanQuestion =
         lang === "GUJLISH"
-          ? `Noted — <b>${propType}</b>! 👍\n\n👉 Kayo exact <b>Area/Landmark</b> joi rahya chho, ane tamaro andaje <b>Budget range</b> ketlo chhe? 📍💰`
+          ? `👉 Aa property tame <b>Family raheva (Self-Use)</b> mate joi rahya chho ke <b>Investment</b> purpose thi? 🔑`
           : lang === "ENGLISH"
-          ? `Noted — <b>${propType}</b>! 👍\n\n👉 Which exact <b>Area/Landmark</b> are you looking in, and what is your approximate <b>Budget range</b>? 📍💰`
-          : `Noted — <b>${propType}</b>! 👍\n\n👉 Kaunse exact <b>Area/Landmark</b> me dekh rahe hain, aur aapka approximate <b>Budget range</b> kitna hai? 📍💰`;
-    } else if (missingStage === "TURN_2_BUDGET_ONLY") {
-      replyText = isRentOrLease
-        ? (lang === "GUJLISH"
-          ? `Noted <b>${location}</b>! 📍\n\n👉 Tamaro andaje <b>Monthly rent budget</b> ketlo raheshe 💰 (e.g. 15,000 ke 25,000/mo)?`
-          : lang === "ENGLISH"
-          ? `Noted <b>${location}</b>! 📍\n\n👉 What is your approximate <b>Monthly rent budget</b> 💰 (e.g. 15,000 or 25,000/mo)?`
-          : `Noted <b>${location}</b>! 📍\n\n👉 Aapka approximate <b>Monthly rent budget</b> kitna rahega 💰 (e.g. 15,000 ya 25,000/mo)?`)
-        : (lang === "GUJLISH"
-          ? `Noted <b>${location}</b>! 📍\n\n👉 Tamaro andaje <b>Budget range</b> ketlo raheshe 💰 (e.g. 50 Lakhs, 1 Cr ke 25,000/mo)?`
-          : lang === "ENGLISH"
-          ? `Noted <b>${location}</b>! 📍\n\n👉 What is your approximate <b>Budget range</b> 💰 (e.g. 50 Lakhs, 1 Cr or 25,000/mo)?`
-          : `Noted <b>${location}</b>! 📍\n\n👉 Aapka approximate <b>Budget range</b> kitna rahega 💰 (e.g. 50 Lakhs, 1 Cr ya 25,000/mo)?`);
-    } else if (missingStage === "TURN_2_LOCATION_ONLY") {
-      replyText =
+          ? `👉 Are you looking for <b>Family living (Self-Use)</b> or for <b>Investment</b>? 🔑`
+          : `👉 Yeh property aap <b>Family rehne (Self-Use)</b> ke liye dekh rahe hain ya <b>Investment</b> purpose se? 🔑`;
+    } else if (missingStage === "LOCATION") {
+      cleanQuestion =
         lang === "GUJLISH"
-          ? `Noted budget — <b>${formatPriceShort(budget)}</b>! 💰\n\n👉 Tame kaya preferred <b>Area ke Landmark</b> pase search kari rahya chho? 📍`
+          ? `👉 Tame kaya preferred <b>Area ke Landmark</b> pase joi rahya chho? 📍`
           : lang === "ENGLISH"
-          ? `Noted budget — <b>${formatPriceShort(budget)}</b>! 💰\n\n👉 Which preferred <b>Area or Landmark</b> are you searching around? 📍`
-          : `Noted budget — <b>${formatPriceShort(budget)}</b>! 💰\n\n👉 Aap kis preferred <b>Area ya Landmark</b> ke paas search kar rahe hain? 📍`;
-    } else if (missingStage === "TURN_3_BOTH") {
-      replyText = isComm
-        ? (lang === "GUJLISH"
-          ? `Bahuj saras! 👍\n\n👉 <b>Ready to Move</b> joiye chhe ke Under Construction? Ane <b>Self Business/Office</b> mate chhe ke Investment? 🔑`
-          : lang === "ENGLISH"
-          ? `Great! 👍\n\n👉 Do you need <b>Ready to Move</b> or Under Construction? And is it for <b>Self Business</b> or Investment? 🔑`
-          : `Bahut badiya! 👍\n\n👉 <b>Ready to Move</b> chahiye ya Under Construction? Aur <b>Self Business/Office</b> ke liye hai ya Investment? 🔑`)
-        : (lang === "GUJLISH"
-          ? `Bahuj saras! 👍\n\n👉 <b>Ready to Move</b> joiye chhe ke Under Construction chalshe? Ane <b>Family raheva mate</b> chhe ke Investment? 🔑`
-          : lang === "ENGLISH"
-          ? `Excellent! 👍\n\n👉 Do you need <b>Ready to Move</b> or is Under Construction fine? And is it for <b>Family living</b> or Investment? 🔑`
-          : `Bahut badiya! 👍\n\n👉 <b>Ready to Move</b> chahiye ya Under Construction chalega? Aur <b>Family rehne ke liye</b> hai ya Investment? 🔑`);
-    } else if (missingStage === "TURN_3_TIMELINE_ONLY") {
-      const purpLabel = purpose === "INVESTMENT" ? "Investment" : (isComm ? "Business use" : "Family use");
-      replyText =
+          ? `👉 Which preferred <b>Area or Landmark</b> are you looking around? 📍`
+          : `👉 Aap kaunse preferred <b>Area ya Landmark</b> ke paas dekh rahe hain? 📍`;
+    } else if (missingStage === "BUDGET") {
+      if (requirement === "BUY") {
+        cleanQuestion =
+          lang === "GUJLISH"
+            ? `👉 Tamaro andaje <b>Budget range</b> ketlo raheshe? 💰 (e.g. 50 Lakhs, 85 Lakhs ke 1.5 Cr)`
+            : lang === "ENGLISH"
+            ? `👉 What is your approximate <b>Budget range</b>? 💰 (e.g. 50 Lakhs, 85 Lakhs, or 1.5 Cr)`
+            : `👉 Aapka approximate <b>Budget range</b> kitna rahega? 💰 (e.g. 50 Lakhs, 85 Lakhs ya 1.5 Cr)`;
+      } else if (requirement === "RENT") {
+        cleanQuestion =
+          lang === "GUJLISH"
+            ? `👉 Tamaro andaje <b>Monthly rent budget</b> ketlo raheshe? 💰 (e.g. 15,000, 25,000 ke 40,000/month)`
+            : lang === "ENGLISH"
+            ? `👉 What is your approximate <b>Monthly rent budget</b>? 💰 (e.g. 15,000, 25,000, or 40,000/month)`
+            : `👉 Aapka approximate <b>Monthly rent budget</b> kitna rahega? 💰 (e.g. 15,000, 25,000 ya 40,000/month)`;
+      } else {
+        cleanQuestion =
+          lang === "GUJLISH"
+            ? `👉 Tamaro andaje <b>Commercial Lease budget</b> ketlo raheshe? 💰 (e.g. 35,000, 60,000 ke 1 Lakh/month)`
+            : lang === "ENGLISH"
+            ? `👉 What is your approximate <b>Commercial Lease budget</b>? 💰 (e.g. 35,000, 60,000, or 1 Lakh/month)`
+            : `👉 Aapka approximate <b>Commercial Lease budget</b> kitna rahega? 💰 (e.g. 35,000, 60,000 ya 1 Lakh/month)`;
+      }
+    } else if (missingStage === "TIMELINE") {
+      cleanQuestion =
         lang === "GUJLISH"
-          ? `Noted — <b>${purpLabel}</b>! 👍\n\n👉 Tamne <b>Ready to Move</b> joiye chhe ke Under Construction chalshe? 🔑`
+          ? `👉 Tamne <b>Ready to Move</b> joiye chhe ke <b>Under Construction</b> chalshe? 🔑`
           : lang === "ENGLISH"
-          ? `Noted — <b>${purpLabel}</b>! 👍\n\n👉 Are you looking for <b>Ready to Move</b> or Under Construction? 🔑`
-          : `Noted — <b>${purpLabel}</b>! 👍\n\n👉 Aapko <b>Ready to Move</b> chahiye ya Under Construction chalega? 🔑`;
-    } else if (missingStage === "TURN_3_PURPOSE_ONLY") {
-      const tlLabel = timeline === "READY_TO_MOVE" ? "Ready to Move" : "Under Construction";
-      replyText = isComm
-        ? (lang === "GUJLISH"
-          ? `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Aa <b>Self Business/Office</b> mate joi rahya chho ke Investment purpose thi? 🏢`
+          ? `👉 Do you need <b>Ready to Move</b> or is <b>Under Construction</b> fine? 🔑`
+          : `👉 Aapko <b>Ready to Move</b> property chahiye ya <b>Under Construction</b> chalega? 🔑`;
+    }
+
+    let replyText = "";
+    if (isTypoOrUnrecognized) {
+      const clarifyPrefix =
+        lang === "GUJLISH"
+          ? `Kshama karsho, hu samji na shakyo. 🙏\n`
           : lang === "ENGLISH"
-          ? `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Is this for <b>Self Business/Office</b> or for Investment? 🏢`
-          : `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Yeh <b>Self Business/Office</b> ke liye dekh rahe hain ya Investment purpose se? 🏢`)
-        : (lang === "GUJLISH"
-          ? `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Aa <b>Family raheva mate</b> joi rahya chho ke Investment purpose thi? 🏡`
-          : lang === "ENGLISH"
-          ? `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Is this for <b>Family living</b> or for Investment? 🏡`
-          : `Noted — <b>${tlLabel}</b>! 🔑\n\n👉 Yeh <b>Family rehne ke liye</b> dekh rahe hain ya Investment purpose se? 🏡`);
+          ? `Sorry, I did not quite catch that. 🙏\n`
+          : `Maaf kijiye, main samajh nahi paya. 🙏\n`;
+      replyText = `${clarifyPrefix}${cleanQuestion}`;
+    } else {
+      replyText = ack ? `${ack}\n\n${cleanQuestion}` : cleanQuestion;
     }
 
     return {
@@ -9616,7 +10022,7 @@ async function handleQualificationCascade(
     };
   }
 
-  // All 5 qualified! Query matching inventory
+  // All 6 qualified! Query matching inventory
   const { data: allProps } = await supabase
     .from("inventory")
     .select("*")
@@ -9718,8 +10124,6 @@ async function handleQualificationCascade(
   }
 }
 
-
-// 10. Main Edge Function Request Handler
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -9800,7 +10204,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v76-conversational-intelligence-engine",
+        version: "v81-site-visit-first-intake",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -9920,7 +10324,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v76 Ready (Dynamic Stage-Conditioned Intent Engine & Adaptive Real Estate LLM Agent)", { status: 200 });
+    return new Response("Realtor Lead Engine v81 Ready (Site Visit First Intake & Zero Direct Call Traps)", { status: 200 });
   }
 
   try {
@@ -10516,189 +10920,7 @@ Deno.serve(async (req: Request) => {
       lead.user_language = lang;
     }
 
-    // -------------------------------------------------------------------------
-    // LEAD SCORING ENGINE (Deterministic 0-100 Score & Temperature Classification)
-    // -------------------------------------------------------------------------
-    function computeEngineLeadScore(
-      leadData: any,
-      targetState?: string,
-      updates?: any
-    ) {
-      const mergedMeta = {
-        ...(leadData?.metadata || {}),
-        ...(updates?.metadata || {}),
-      };
 
-      const effectiveState = String(targetState || updates?.state || leadData?.state || "").toUpperCase();
-
-      // Inactive / Terminal Visit States Guard: Never award active visit points if visit was cancelled, missed, or dropped
-      const isVisitExplicitlyInactive =
-        effectiveState === "VISIT_CANCELLED" ||
-        effectiveState === "VISIT_MISSED" ||
-        effectiveState === "DROPPED" ||
-        effectiveState === "NOT_INTERESTED" ||
-        effectiveState === "OPT_OUT" ||
-        effectiveState === "COLD_UNQUALIFIED" ||
-        effectiveState === "COLD";
-
-      const isConfirmedBooked = updates?.site_visit_booked !== undefined
-        ? Boolean(updates.site_visit_booked)
-        : Boolean(leadData?.site_visit_booked);
-
-      const hasVisitDate = Boolean(
-        updates?.site_visit_datetime ||
-        leadData?.site_visit_datetime ||
-        updates?.site_visit_at ||
-        leadData?.site_visit_at
-      );
-
-      const hasActiveSiteVisit =
-        !isVisitExplicitlyInactive &&
-        (isConfirmedBooked || (hasVisitDate && updates?.site_visit_booked !== false && leadData?.site_visit_booked !== false));
-
-      let stageScore = 0;
-      let budgetScore = 0;
-      let engagementScore = 0;
-      let penalties = 0;
-      const reasons: string[] = [];
-
-      // 1. Stage & Commitment Signals (Max 45 Pts)
-      const hasFullQual = Boolean(
-        (updates?.property_type || leadData?.property_type) &&
-        (updates?.requirement || leadData?.requirement) &&
-        (updates?.location || leadData?.location) &&
-        (updates?.budget || leadData?.budget) &&
-        (updates?.timeline || leadData?.timeline) &&
-        (updates?.purpose || leadData?.purpose)
-      );
-
-      if (effectiveState === "SITE_VISIT_DONE" || effectiveState === "VISIT_DONE" || mergedMeta.visit_feedback) {
-        stageScore += 45;
-        reasons.push("Site visit completed (+45)");
-      } else if (effectiveState === "SITE_VISIT_BOOKED" || hasActiveSiteVisit) {
-        stageScore += 35;
-        reasons.push("Site visit locked & scheduled (+35)");
-      } else if (effectiveState === "SITE_VISIT_PROPOSED") {
-        stageScore += 25;
-        reasons.push("Visit slot actively selected (+25)");
-      } else if (hasFullQual) {
-        stageScore += 35;
-        reasons.push("Full 6-field qualification completed (+35)");
-      } else if (
-        effectiveState === "OPTIONS_SENT" ||
-        mergedMeta.alternative_options_sent ||
-        (Array.isArray(leadData?.last_option_ids) && leadData.last_option_ids.length > 0)
-      ) {
-        stageScore += 18;
-        reasons.push("Alternative options requested (+18)");
-      } else if (
-        effectiveState === "QUALIFIED" ||
-        ((updates?.budget || leadData?.budget) && (updates?.location || leadData?.location))
-      ) {
-        stageScore += 12;
-        reasons.push("Requirements qualified (+12)");
-      } else {
-        stageScore += 5;
-        reasons.push("Initial inquiry (+5)");
-      }
-
-      // Dual-role bonus (High Lifetime Value)
-      if (mergedMeta.has_buyer_profile && mergedMeta.has_seller_profile) {
-        stageScore += 10;
-        reasons.push("Dual-role buyer & seller (+10)");
-      }
-
-      // 2. Financial Viability & Ticket Size (Max 25 Pts)
-      const budgetNum = Number(updates?.budget ?? leadData?.budget ?? 0);
-      if (budgetNum >= 15000000) {
-        budgetScore += 25;
-        reasons.push("Ultra-luxury budget >= ₹1.5 Cr (+25)");
-      } else if (budgetNum >= 7500000) {
-        budgetScore += 20;
-        reasons.push("Premium budget ₹75L - ₹1.5 Cr (+20)");
-      } else if (budgetNum >= 4000000) {
-        budgetScore += 15;
-        reasons.push("Mid-segment budget ₹40L - ₹75L (+15)");
-      } else if (budgetNum > 0) {
-        budgetScore += 10;
-        reasons.push("Starter budget < ₹40L (+10)");
-      }
-
-      // 3. Conversational Velocity & Engagement (Max 20 Pts)
-      if (mergedMeta.last_objection || mergedMeta.visit_feedback) {
-        engagementScore += 10;
-        reasons.push("Detailed property feedback provided (+10)");
-      }
-
-      const followupCount = Number(updates?.followup_count ?? leadData?.followup_count ?? 0);
-      if (followupCount >= 3) {
-        engagementScore += 10;
-        reasons.push("High interaction volume (+10)");
-      } else if (followupCount >= 1) {
-        engagementScore += 5;
-      }
-
-      const slaMinutes = Number(leadData?.sla_response_minutes || 0);
-      if (slaMinutes > 0 && slaMinutes <= 10) {
-        engagementScore += 10;
-        reasons.push("Immediate responder (< 10 min) (+10)");
-      }
-
-      // 4. Negative & Churn Penalties (-10 to -35 Pts)
-      if (
-        effectiveState === "DROPPED" ||
-        effectiveState === "NOT_INTERESTED" ||
-        effectiveState === "OPT_OUT" ||
-        updates?.rejection_reason ||
-        leadData?.rejection_reason
-      ) {
-        penalties += 35;
-        reasons.push("Marked dropped or rejected (-35)");
-      }
-
-      if (effectiveState === "VISIT_CANCELLED") {
-        penalties += 20;
-        reasons.push("Cancelled visit (-20)");
-      }
-
-      if (effectiveState === "VISIT_MISSED") {
-        penalties += 20;
-        reasons.push("Missed scheduled site visit (-20)");
-      }
-
-      // Missing phone penalty (must be a valid 10-digit number)
-      const effectivePhone = updates?.phone ?? leadData?.phone;
-      const cleanPhone = String(effectivePhone || "").replace(/\D/g, "");
-      if (cleanPhone.length < 10) {
-        penalties += 10;
-        reasons.push("Missing 10-digit mobile number (-10)");
-      }
-
-      // Clamped Total (0 - 100)
-      const rawTotal = stageScore + budgetScore + engagementScore - penalties;
-      const score = Math.max(0, Math.min(100, Math.round(rawTotal)));
-
-      let temperature: "HOT" | "WARM" | "COLD" = "COLD";
-      if (score >= 70) {
-        temperature = "HOT";
-      } else if (score >= 40) {
-        temperature = "WARM";
-      } else {
-        temperature = "COLD";
-      }
-
-      return {
-        score,
-        temperature,
-        breakdown: {
-          stage: Math.min(45, stageScore),
-          budget: Math.min(25, budgetScore),
-          engagement: Math.min(20, engagementScore),
-          penalties,
-        },
-        reasons,
-      };
-    }
 
     // -------------------------------------------------------------------------
     // DETERMINISTIC FSM STATE ROUTING (Zero Regex Cascades)
