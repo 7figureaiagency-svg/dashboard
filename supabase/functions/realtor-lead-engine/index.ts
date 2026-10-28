@@ -63,6 +63,11 @@ function formatBrochureHyperlink(brochureUrl: string | undefined | null, label =
   return `📄 <a href="${brochureUrl.trim()}">${label}</a>`;
 }
 
+function formatArea(val: number | string | undefined | null): string {
+  if (!val) return "";
+  return Number(val).toLocaleString("en-IN");
+}
+
 function formatPriceShort(priceNum: number): string {
   if (priceNum >= 10000000) {
     const cr = (priceNum / 10000000).toFixed(2).replace(/\.00$/, "").replace(/(\.[1-9])0$/, "$1");
@@ -2714,6 +2719,7 @@ export function buildLeadContextForClassifier(lead: any, messageText: string): s
     "OWNER_SOCIETY_PENDING",
     "OWNER_LOCATION_PENDING",
     "OWNER_AREA_PENDING",
+    "OWNER_FLOOR_PENDING",
     "OWNER_SIZE_PENDING",
     "OWNER_PRICE_PENDING",
     "OWNER_AMENITIES_PENDING",
@@ -2764,6 +2770,8 @@ export function buildLeadContextForClassifier(lead: any, messageText: string): s
     currentPendingQuestion = "LOCATION_AREA (Bot asked for exact area / locality in the city)";
   } else if (state === "OWNER_AREA_PENDING" || state === "OWNER_SIZE_PENDING") {
     currentPendingQuestion = "CARPET_AREA_SQFT (Bot asked for Carpet / Plot / Built-up Area. Extract numbers into carpet_sqft, super_built_up_sqft, or plot_area_sqft)";
+  } else if (state === "OWNER_FLOOR_PENDING") {
+    currentPendingQuestion = "FLOOR_NUMBER (Bot asked which floor the property is on, e.g. Ground floor, 2nd floor, 4th floor, or NA)";
   } else if (state === "OWNER_PRICE_PENDING") {
     currentPendingQuestion = "PRICE_OR_RENT (Bot asked for expected selling price or monthly rent. If user specifies built-up or plot area, extract super_built_up_sqft / plot_area_sqft!)";
   } else if (state === "OWNER_AMENITIES_PENDING") {
@@ -3249,6 +3257,7 @@ async function classifyLeadIntent(
     "OWNER_SOCIETY_PENDING",
     "OWNER_LOCATION_PENDING",
     "OWNER_AREA_PENDING",
+    "OWNER_FLOOR_PENDING",
     "OWNER_PRICE_PENDING",
     "OWNER_AMENITIES_PENDING",
     "OWNER_POSSESSION_PENDING",
@@ -4472,21 +4481,43 @@ function parseFloorFromText(text: string): { floor_number: number | string | nul
     return { floor_number: floorNum, total_floors: totalFloors };
   }
 
-  // 2. Ground floor / Basement / Top floor
+  // 2. Ground floor / Basement / Top floor / NA / Independent
   if (/\b(?:ground\s*floor|ground|gf)\b/i.test(lower)) {
     floorNum = 0;
   } else if (/\b(?:basement|lower\s*ground|lg)\b/i.test(lower)) {
     floorNum = -1;
-  } else if (/\b(?:top\s*floor|highest\s*floor)\b/i.test(lower)) {
+  } else if (/\b(?:top\s*floor|highest\s*floor|top)\b/i.test(lower)) {
     floorNum = "Top";
+  } else if (/\b(?:na|nathi|nahi|not\s*applicable|independent|bungalow|row\s*house)\b/i.test(lower)) {
+    floorNum = "Independent/NA";
   }
 
   // 3. Single floor: "4th floor", "floor 4", "4 floor", "4th", "3rd floor", "1st floor", "2nd floor", "5th floor"
   if (floorNum === null) {
-    const singleMatch = lower.match(/(?:floor\s*[:=-]?\s*(\d+)|(\d+)(?:st|nd|rd|th)\s*floor|(\d+)\s*floor)/i);
+    const singleMatch = lower.match(/(?:floor\s*[:=-]?\s*(\d+)|(\d+)(?:st|nd|rd|th)\s*floor|(\d+)\s*floor|(\d+)(?:st|nd|rd|th)\b)/i);
     if (singleMatch) {
-      const val = parseInt(singleMatch[1] || singleMatch[2] || singleMatch[3], 10);
+      const val = parseInt(singleMatch[1] || singleMatch[2] || singleMatch[3] || singleMatch[4], 10);
       if (val >= 0 && val <= 150) {
+        floorNum = val;
+      }
+    }
+  }
+
+  // 4. Conversational vernacular words: "pehla", "bijo", "trijo", "chotho", "first", "second", etc.
+  if (floorNum === null) {
+    if (/\b(?:first|1st|pehla|pehlo)\b/i.test(lower)) floorNum = 1;
+    else if (/\b(?:second|2nd|doosra|bijo)\b/i.test(lower)) floorNum = 2;
+    else if (/\b(?:third|3rd|teesra|trijo)\b/i.test(lower)) floorNum = 3;
+    else if (/\b(?:fourth|4th|chautha|chotho)\b/i.test(lower)) floorNum = 4;
+    else if (/\b(?:fifth|5th|paanchwa|panchmo)\b/i.test(lower)) floorNum = 5;
+  }
+
+  // 5. Standalone single/double digits (e.g. user just replies "4", "2", "12")
+  if (floorNum === null) {
+    const standaloneDigit = lower.match(/^\s*(\d{1,2})\s*$/);
+    if (standaloneDigit) {
+      const val = parseInt(standaloneDigit[1], 10);
+      if (val >= 0 && val <= 99) {
         floorNum = val;
       }
     }
@@ -5474,6 +5505,57 @@ async function handleOwnerFlow({
     return { replyText, nextState: "OWNER_AREA_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_AREA_PENDING", draft) };
   }
 
+  // Turn 4b: Floor Recovery Protocol (Compound Question Disambiguation)
+  if (lead.state === "OWNER_FLOOR_PENDING") {
+    const floorInfo = parseFloorFromText(messageText);
+    if (floorInfo.floor_number !== null) {
+      draft.attributes.floor_number = floorInfo.floor_number;
+    }
+    if (floorInfo.total_floors !== null) {
+      draft.attributes.total_floors = floorInfo.total_floors;
+    }
+    if (draft.attributes.floor_number === undefined || draft.attributes.floor_number === null) {
+      const lowerTrim = lower.trim();
+      if (/(na|nathi|nahi|not\s*applicable|independent|bungalow|row\s*house)/i.test(lowerTrim)) {
+        draft.attributes.floor_number = "Independent/NA";
+      } else {
+        const rawDig = lowerTrim.match(/\b(\d{1,2})\b/);
+        if (rawDig) {
+          draft.attributes.floor_number = parseInt(rawDig[1], 10);
+        } else {
+          draft.attributes.floor_number = messageText.trim();
+        }
+      }
+    }
+  }
+
+  // Floor Recovery Protocol: If multi-story building and floor is missing, ask floor before moving to price
+  const isFloorApplicable = /(flat|apartment|office|commercial|penthouse)/i.test(String(draft.property_type || draft.configuration || ""));
+  const hasFloor = draft.attributes?.floor_number !== undefined && draft.attributes?.floor_number !== null;
+
+  if (isFloorApplicable && !hasFloor) {
+    const areaVal = draft.carpet_area_sqft || draft.super_built_up_sqft || draft.plot_area_sqft;
+    const replyText =
+      lang === "GUJLISH"
+        ? `Noted <b>${formatArea(areaVal)} sq.ft</b>! 👍 Ane aa property kaya <b>Floor</b> par chhe? (e.g. Ground floor, 2nd floor, 5th floor) 🏢`
+        : lang === "ENGLISH"
+        ? `Noted <b>${formatArea(areaVal)} sq.ft</b>! 👍 And which <b>Floor</b> is this property located on? (e.g. Ground floor, 2nd floor, 5th floor) 🏢`
+        : `Noted <b>${formatArea(areaVal)} sq.ft</b>! 👍 Aur ye property kaunse <b>Floor</b> par hai? (e.g. Ground floor, 2nd floor, 5th floor) 🏢`;
+
+    await supabase.from("leads").update({
+      lead_type: effectiveOwnerLeadType,
+      state: "OWNER_FLOOR_PENDING",
+      metadata: {
+        ...existingMeta,
+        has_seller_profile: true,
+        ...(isDualLead ? { has_buyer_profile: true } : {}),
+        owner_draft: draft,
+      },
+    }).eq("id", lead.id);
+
+    return { replyText, nextState: "OWNER_FLOOR_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_FLOOR_PENDING", draft) };
+  }
+
   // Turn 5: Price/Rent + Furnishing Compound Question (F-03 Fix)
   const isRent = draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT";
 
@@ -5876,6 +5958,7 @@ export type DialogState =
   | "OWNER_SOCIETY_PENDING"
   | "OWNER_LOCATION_PENDING"
   | "OWNER_AREA_PENDING"
+  | "OWNER_FLOOR_PENDING"
   | "OWNER_PRICE_PENDING"
   | "OWNER_POSSESSION_PENDING"
   | "OWNER_FURNISHING_PENDING"
@@ -6143,6 +6226,7 @@ export async function dispatchStateAction(
     "OWNER_SOCIETY_PENDING",
     "OWNER_LOCATION_PENDING",
     "OWNER_AREA_PENDING",
+    "OWNER_FLOOR_PENDING",
     "OWNER_PRICE_PENDING",
     "OWNER_AMENITIES_PENDING",
     "OWNER_POSSESSION_PENDING",
@@ -9145,6 +9229,13 @@ export function buildDetourResumptionPrompt(
       : isEng
       ? `\n\n👉 <b>Moving forward</b> — what is the Carpet or Built-up Area of your property? 📏`
       : `\n\n👉 <b>Ab aage badhte hain</b> — property ka Carpet ya Built-up Area kitna hai? 📏`;
+  }
+  if (targetState === "OWNER_FLOOR_PENDING") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — tamari property kaya Floor par chhe? 🏢`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — which Floor is your property located on? 🏢`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — aapki property kaunse Floor par hai? 🏢`;
   }
   if (targetState === "OWNER_PRICE_PENDING") {
     return isGuj
