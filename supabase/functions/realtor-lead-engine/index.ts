@@ -1421,6 +1421,12 @@ function isLikelySocietyOrProjectName(name: string): boolean {
     return false;
   }
 
+  // Strict Guard: Pure city localities (e.g. Waghodia, Gotri, Alkapuri) without society keywords can NEVER be a society/project name!
+  const locMatch = extractLocationFromText(cleaned);
+  if (locMatch && (cleaned.toLowerCase() === locMatch.toLowerCase() || cleaned.toLowerCase() === locMatch.toLowerCase().replace(/\s+road|\s+area/i, "") || GUJARATI_HINDI_LOCATION_MAP[cleaned.toLowerCase()])) {
+    return false;
+  }
+
   const words = cleaned.toLowerCase().split(/[\s,.-]+/).filter(Boolean);
   if (words.length === 0) return false;
 
@@ -1525,11 +1531,12 @@ function parseRequirementFromText(text: string, lastQ?: string): string {
   }
   if (
     lower.includes("sell") || lower.includes("bechna") || lower.includes("bechni") ||
-    lower.includes("bechne") || lower.includes("vechvu") || lower.includes("vechva") ||
-    lower.includes("vechvo") || lower.includes("bikri") ||
+    lower.includes("bechne") || lower.includes("bechvano") || lower.includes("bechvani") ||
+    lower.includes("vechvu") || lower.includes("vechva") || lower.includes("vechvo") ||
+    lower.includes("vechvano") || lower.includes("vechvani") || lower.includes("bikri") ||
     /\b(?:deni|dena|dene)\s*(?:hai|he|h|chhe|che|chahte)?\b/i.test(lower) ||
-    lower.includes("વેચવું") || lower.includes("વેચવા") || lower.includes("બેચના") ||
-    lower.includes("बेचना") || lower.includes("बेचनी")
+    lower.includes("વેચવું") || lower.includes("વેચવા") || lower.includes("વેચવાનો") ||
+    lower.includes("વેચવાની") || lower.includes("બેચના") || lower.includes("बेचना") || lower.includes("बेचनी")
   ) {
     return "SELL";
   }
@@ -5276,10 +5283,32 @@ async function handleOwnerFlow({
   // Turn 2: Project / Complex Name
   if (lead.state === "OWNER_SOCIETY_PENDING" || (!draft.society_name && !draft.project_name)) {
     if (lead.state === "OWNER_SOCIETY_PENDING" && messageText.trim().length >= 2) {
+      const detectedLoc = extractLocationFromText(messageText);
+      const isKnownLocality = Boolean(detectedLoc);
       const extractedProj = extractProjectOrSocietyFromText(messageText, draft.property_type);
-      const cleaned = formatSocietyName(extractedProj || messageText);
-      draft.society_name = cleaned;
-      draft.project_name = cleaned;
+      const cleanedProj = formatSocietyName(extractedProj);
+
+      if (cleanedProj && isLikelySocietyOrProjectName(cleanedProj) && cleanedProj.toLowerCase() !== (detectedLoc || "").toLowerCase()) {
+        draft.society_name = cleanedProj;
+        draft.project_name = cleanedProj;
+        if (detectedLoc) {
+          draft.location = detectedLoc;
+        }
+      } else if (isKnownLocality) {
+        // User provided locality during society turn (e.g. "waghodia", "waghodia road", "gotri")
+        draft.location = detectedLoc;
+        draft.society_name = "Standalone / Independent";
+        draft.project_name = "Standalone / Independent";
+      } else {
+        const cleaned = formatSocietyName(messageText);
+        if (cleaned && isLikelySocietyOrProjectName(cleaned)) {
+          draft.society_name = cleaned;
+          draft.project_name = cleaned;
+        } else {
+          draft.society_name = "Standalone / Independent";
+          draft.project_name = "Standalone / Independent";
+        }
+      }
     } else {
       const propLabel = draft.configuration || draft.property_type || "property";
       const hasQueued = Array.isArray(draft.queued_properties) && draft.queued_properties.length > 0;
@@ -5310,10 +5339,10 @@ async function handleOwnerFlow({
       } else {
         replyText =
           lang === "GUJLISH"
-            ? `${prefixMulti ? prefixMulti : `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n`}Aa property kaya Project ke Society ma aaveli chhe? (e.g. Nilamber Bellissimo, Sun Crest) 🏢`
+            ? `${prefixMulti ? prefixMulti : `Bahuj saras! <b>${propLabel}</b> note kari lidhu chhe. 👍\n`}Aa property kaya <b>Project ke Society</b> ma aaveli chhe? (e.g. Nilamber Bellissimo, Sun Crest) 🏢`
             : lang === "ENGLISH"
-            ? `${prefixMulti ? prefixMulti : `Great! Noted <b>${propLabel}</b>. 👍\n`}Which Project or Society is this property located in? (e.g. Nilamber Bellissimo, Sun Crest) 🏢`
-            : `${prefixMulti ? prefixMulti : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n`}Project ya Society ka kya naam hai? (e.g. Nilamber Bellissimo, Sun Crest) 🏢`;
+            ? `${prefixMulti ? prefixMulti : `Great! We have noted your <b>${propLabel}</b>. 👍\n`}Which <b>Project or Society</b> is this property located in? (e.g. Nilamber Bellissimo, Sun Crest) 🏢`
+            : `${prefixMulti ? prefixMulti : `Bahut badhiya! <b>${propLabel}</b> note kar liya hai. 👍\n`}Ye property kaunse <b>Project ya Society</b> me hai? (e.g. Nilamber Bellissimo, Sun Crest) 🏢`;
       }
 
       await supabase.from("leads").update({
@@ -5334,15 +5363,24 @@ async function handleOwnerFlow({
   // Turn 3: Exact Locality / Landmark
   if (!draft.location) {
     if (lead.state === "OWNER_LOCATION_PENDING" && messageText.trim().length >= 2) {
-      draft.location = messageText.trim();
+      const locMatch = extractLocationFromText(messageText);
+      if (locMatch) {
+        draft.location = locMatch;
+      } else {
+        const rawLoc = messageText.trim().replace(/^['"]|['"]$/g, "");
+        draft.location = rawLoc.replace(/\b[a-z]/g, (c) => c.toUpperCase());
+      }
     } else {
-      const socLabel = draft.society_name || draft.project_name || "Society";
+      const socLabel = draft.society_name || draft.project_name || "";
+      const prefix = socLabel && socLabel !== "Society" && socLabel !== "Standalone / Independent"
+        ? `Noted <b>${socLabel}</b>! 🏢\n👉 `
+        : `👉 `;
       const replyText =
         lang === "GUJLISH"
-          ? `Noted <b>${socLabel}</b>! 🏢\n👉 <b>Aa property kaya exact Area ke Landmark pase aave chhe?</b> 📍`
+          ? `${prefix}<b>Aa property kaya exact Area ke Landmark pase aave chhe?</b> 📍`
           : lang === "ENGLISH"
-          ? `Noted <b>${socLabel}</b>! 🏢\n👉 <b>In which exact Area or near which Landmark is this located?</b> 📍`
-          : `Noted <b>${socLabel}</b>! 🏢\n👉 <b>Ye kaunse exact Area ya Landmark ke paas hai?</b> 📍`;
+          ? `${prefix}<b>In which exact Area or near which Landmark is this located?</b> 📍`
+          : `${prefix}<b>Ye kaunse exact Area ya Landmark ke paas hai?</b> 📍`;
 
       await supabase.from("leads").update({
         lead_type: effectiveOwnerLeadType,
@@ -7069,14 +7107,14 @@ export async function dispatchStateAction(
 
     // 3. Option 2: Owner / Seller / Landlord
     const detectedBuyerPropType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
-    const hasExplicitOwnerAction = /(?:bechna|bechni|bechne|vechvu|vechva|vechvo|sell|selling|bikri|deni|dena|dene|list|listing|chadani)/i.test(lower);
+    const hasExplicitOwnerAction = /(?:bechna|bechni|bechne|bechvano|bechvani|vechvu|vechva|vechvo|vechvano|vechvani|vechavo|sell|selling|bikri|deni|dena|dene|list|listing|chadani)/i.test(lower);
 
     const isPureOption2 =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
       /^(?:2|2️⃣|option\s*2|second|2nd)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim()) ||
-      /^(?:deni|dene|sell|bechna|vechvu|vechva|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim()) ||
-      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower) ||
-      /(?:bechna|bechni|vechvu|vechva|sell\s*(?:karna|karni|karvu|karva|kar))/i.test(lower);
+      /^(?:deni|dene|sell|bechna|vechvu|vechva|vechvo|vechvano|bechvano|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim()) ||
+      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+)?(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+)?(?:bechna|bechvani|bechvano|bechni|vechvu|vechva|vechvano|vechvani|sell|bikri|rent)/i.test(lower) ||
+      /(?:bechna|bechni|bechvano|bechvani|vechvu|vechva|vechvo|vechvano|vechvani|sell\s*(?:karna|karni|karvu|karva|kar))/i.test(lower);
 
     // CRITICAL GUARD: If user mentions a property type (e.g. "2 BHK", "Villa", "Shop") without explicit selling verbs,
     // it is strictly a buyer requirement and NEVER an owner choice!
@@ -8885,8 +8923,8 @@ export async function dispatchStateAction(
       actionResult.user_role === "OWNER" ||
       intent === "SUBMIT_LISTING" ||
       parseRequirementFromText(context.messageText) === "SELL" ||
-      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower) ||
-      /(?:bechna|bechni|vechvu|vechva|sell\s*(?:karna|karni|karvu|karva|kar))/i.test(lower);
+      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+)?(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+)?(?:bechna|bechvani|bechvano|bechni|vechvu|vechva|vechvano|vechvani|sell|bikri|rent)/i.test(lower) ||
+      /(?:bechna|bechni|bechvano|bechvani|vechvu|vechva|vechvo|vechvano|vechvani|vechavo|sell\s*(?:karna|karni|karvu|karva|kar))/i.test(lower);
 
     if (isFirstMessageOwner) {
       const ownerRes = await handleOwnerFlow({
