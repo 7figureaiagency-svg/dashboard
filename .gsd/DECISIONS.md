@@ -76,4 +76,31 @@
 - Local git commits only. No push to remote.
 - WABA safety: batch caps and inter-message delay jitter for sweeps.
 
+## Phase 27 Decisions: Dynamic Stage-Conditioned Intent Engine & Adaptive Real Estate LLM Agent
+
+**Date:** 2026-10-28
+
+### Scope
+- Elevate lead inquiry conversational intent accuracy to ~100% across all vernacular dialects (Hinglish, Gujlish, Gujarati script, English, colloquial slangs, and typos).
+- Solve intent amnesia and single-token ambiguity (e.g. "Villa", "Rent", "25", "2 BHK", "Gotri").
+- Implement Dynamic Stage-Conditioned Prompting: inject current dialog state, last bot question asked, already collected entities, and stage-specific few-shot exemplars into the LLM classifier.
+- Guarantee Dual-Redundant Accumulative Context Memory across database columns and `metadata.seeker_draft` / `metadata.owner_draft` with zero criteria wipes.
+- Support Conversational Detours (Side Questions & FAQs during intake): answer the user's specific query immediately (office address, RERA, brokerage) and smoothly resume the missing intake field in the same turn without resetting state.
+- Implement Zero-Regex Token Tree Fallback with strict word-boundary token trees preventing numeric option and BHK configuration collisions.
+
+### Approach
+- **Choice:** Option A (Dynamic Stage-Conditioned Prompting + State Memory)
+- **Rationale:**
+  - Token Efficiency: Reduces prompt tokens by ~55% (from ~2,150 tokens to ~850 tokens per turn) by modularizing state prompts instead of sending all exemplars on every turn.
+  - Cost & Speed: Keeps inference cost under ₹0.05 per turn on Groq Llama 3.3 70B with sub-650ms latency (Gemini 2.0 Flash as secondary fallback).
+  - Accuracy: Constrains LLM decision space to the active conversational stage while preserving Tier 1 Global Intent bypasses (Brochure, Call, FAQ, Opt-out).
+  - Determinism: Eliminates ping-pong loops and false role switching permanently.
+
+### Constraints
+- Strictly 100% Non-n8n architectural compliance.
+- Sub-750ms latency SLA for WhatsApp and Telegram webhooks.
+- Multi-tenant tenant-scoped inventory and client branding isolation.
+- 0 additional runtime JavaScript packages.
+
+
 

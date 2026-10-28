@@ -269,6 +269,18 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 26.3: Smart 3-Turn Compound Buyer Qualification & Multi-Search Lifecycle ([`26.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/26/26.3-PLAN.md))
 - [x] Verification: Empirical Verification Report ([`VERIFICATION.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/26/VERIFICATION.md))
 
+---
+
+### Phase 27: Dynamic Stage-Conditioned Intent Engine & Adaptive Real Estate LLM Agent
+**Status:** ⏳ Planned  
+**Objective:** Upgrade the real estate conversational agent to achieve 100% intent classification and entity extraction accuracy across all vernacular dialects, single-word replies, and conversational detours. Implement stage-conditioned micro-prompts injecting active turn goals and collected memory, resolve numeric ambiguities (Rent vs Buy vs Area), support in-flow side-question FAQs with seamless state resumption, and replace fragile fallback regexes with strict token trees.  
+**Depends on:** Phase 26  
+**Plans:**
+- [ ] Plan 27.1: Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation
+- [ ] Plan 27.2: Conversational Side-Question Interception, Seamless State Resumption & Zero-Regex Token Trees
+- [ ] Plan 27.3: Empirical Verification & Multi-Dialect Vernacular Simulation Matrix (Hinglish/Gujlish/Single-Token)
+
+
 
 
 
