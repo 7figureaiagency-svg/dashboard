@@ -304,11 +304,12 @@ updated: 2026-10-19T18:50:30+05:30
 ---
 
 ### Phase 30: Vernacular Entity Extraction Guard & Remaining-Question Recovery Protocol
-**Status:** ⏳ In Progress  
+**Status:** ✅ Complete  
 **Objective:** (1) Fix vernacular adjective and seller verb extraction leakages ("ek maro juno flat vechvano che" -> falsely extracted "Juno Vechvano" as society/location) by expanding `STOP_WORDS_SET` with Gujarati/Hindi/English real estate adjectives and seller verb conjugations, and upgrading `extractProjectOrSocietyFromText` and `isLikelySocietyOrProjectName`. (2) Enforce the strict conversational invariant: "ek sath do sawal puche and ek ka hi jawab mile to next me remaining question firse pucho" by implementing dedicated remaining-question recovery for Area + Floor (`OWNER_AREA_PENDING` -> `OWNER_FLOOR_PENDING`) and Price + Furnishing (`OWNER_PRICE_PENDING` -> `OWNER_FURNISHING_PENDING`), ensuring zero skipped attributes.  
 **Depends on:** Phase 29  
 **Plans:**
-- [ ] Plan 30.1: Vernacular Seller Entity Extraction & Adjective Stop-Word Guard ([30.1-PLAN.md](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/30/30.1-PLAN.md))
-- [ ] Plan 30.2: Compound Question Disambiguation & Remaining-Question Recovery Engine ([30.2-PLAN.md](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/30/30.2-PLAN.md))
+- [x] Plan 30.1: Vernacular Seller Entity Extraction & Adjective Stop-Word Guard ([30.1-PLAN.md](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/30/30.1-PLAN.md))
+- [x] Plan 30.2: Compound Question Disambiguation & Remaining-Question Recovery Engine ([30.2-PLAN.md](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/30/30.2-PLAN.md))
+
 
 
