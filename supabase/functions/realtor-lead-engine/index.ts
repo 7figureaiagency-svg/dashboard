@@ -4590,6 +4590,7 @@ async function handleOwnerFlow({
       has_seller_profile: true,
       ...(isDualLead || targetState === "QUALIFYING" ? { has_buyer_profile: true, ...(targetState === "QUALIFYING" ? { active_persona: "BUYER" } : {}) } : {}),
       owner_draft: customDraft,
+      ...(lead.metadata?.suspended_state ? { suspended_state: null } : {}),
       ...extraMeta,
     },
   });
@@ -5873,92 +5874,64 @@ export async function dispatchStateAction(
   const isOfficeAddressQuery =
     /(?:office\s*(?:address|location|kaha|kidhar|kya\s*hai|kya\s*he|kya\s*chhe|kya\s*che|no\s*address|nu\s*address|par\s*aavu|aavvu|milna|mil\s*sakte)|karyalay|branch\s*address|where\s*is\s*your\s*office|office\s*pin|address\s*bhejo|address\s*aapo|office\s*par\s*milna)\b/i.test(lower);
 
-  if (isOfficeAddressQuery && !isRealEstateTerm) {
-    const addr = botKnowledge.office_address || `402, Alkapuri Arcade, RC Dutt Road, Alkapuri, ${displayCity}`;
-    const hours = botKnowledge.operating_hours || "10:00 AM - 7:30 PM (Mon-Sat)";
-    const phone = botKnowledge.contact_phone || "";
-    const phoneSnippet = phone ? `\n📞 <b>Direct Support:</b> <code>${phone}</code>` : "";
-
-    const replyText =
-      lang === "GUJLISH"
-        ? `Amari agency <b>${agencyName}</b> nu main office <b>${addr}</b> par aavelo chhe! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Space</b>?`
-        : lang === "ENGLISH"
-        ? `Our main office for <b>${agencyName}</b> is located at <b>${addr}</b>! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, what type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Space</b>?`
-        : `Hamari agency <b>${agencyName}</b> ka main office <b>${addr}</b> par hai! 🏢\n\n🕒 <b>Visiting Hours:</b> ${hours}${phoneSnippet}\n\n👉 <b>${nameStr}</b>, aap kis type ki property search kar rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Space</b>?`;
-
-    return {
-      replyText,
-      nextState: currentState || "ROLE_SELECTION_PENDING",
-      ...(currentState ? {} : { leadUpdates: { state: "ROLE_SELECTION_PENDING" } }),
-    };
-  }
-
   // 2. Office Timings / Working Hours Interceptor
   const isOfficeTimingQuery =
     /(?:timing|timings|visiting\s*hours|kab\s*khula|kab\s*open|khulva\s*no\s*samay|office\s*time|working\s*hours|business\s*hours|opening\s*time|closing\s*time)\b/i.test(lower);
 
+  // 3. Agency / Company Identity Interceptor
+  const isAgencyIdentityQuery =
+    /(?:agency|company|firm|karyalay|tamari\s*company|tamaru\s*nam|aapki\s*agency|aapka\s*naam|aap\s*kaun|who\s*are\s*you|naam\s*kya|nam\s*su\s*che|nam\s*kya\s*he|nam\s*su|tamara\s*vishe|agency\s*name|company\s*name)\b/i.test(lower);
+
   if (isOfficeTimingQuery && !isRealEstateTerm) {
-    const hours = botKnowledge.operating_hours || "10:00 AM - 7:30 PM (Mon-Sat), Sunday: By Appointment";
-    const replyText =
-      lang === "GUJLISH"
-        ? `Amara office <b>${agencyName}</b> na regular visiting hours <b>${hours}</b> chhe. 🕒\n\nTame anukool samaye amara office aavi shako chho athva direct site par <b>VIP Site Visit 🚗</b> plan kari shako chho!\n\n👉 <b>${nameStr}</b>, tame kaya type ni property joiye chhe — <b>Flat, Villa ke Commercial?</b>`
-        : lang === "ENGLISH"
-        ? `Our office visiting hours for <b>${agencyName}</b> are <b>${hours}</b>. 🕒\n\nYou are welcome to visit our office or we can schedule a convenient <b>VIP Site Visit 🚗</b> directly at the property!\n\n👉 <b>${nameStr}</b>, what type of property are you searching for — <b>Flat, Villa, or Commercial?</b>`
-        : `Hamare office <b>${agencyName}</b> ke visiting hours <b>${hours}</b> hain. 🕒\n\nAap apni suvidha ke mutabiq office visit kar sakte hain ya direct site location par <b>VIP Site Visit 🚗</b> plan kar sakte hain!\n\n👉 <b>${nameStr}</b>, aap kis type ki property search kar rahe hain — <b>Flat, Villa ya Commercial?</b>`;
-
-    return {
-      replyText,
-      nextState: currentState || "ROLE_SELECTION_PENDING",
-      ...(currentState ? {} : { leadUpdates: { state: "ROLE_SELECTION_PENDING" } }),
-    };
-  }
-
-  // 3. Custom Client FAQ Knowledge Interceptor
-  if (Array.isArray(botKnowledge.custom_faqs) && botKnowledge.custom_faqs.length > 0 && !isRealEstateTerm) {
+    action = { intent: "ASK_FAQ", topic: "OFFICE_TIMINGS" } as AskFaqAction;
+    intent = "ASK_FAQ";
+  } else if (isOfficeAddressQuery && !isRealEstateTerm) {
+    action = { intent: "ASK_FAQ", topic: "OFFICE_ADDRESS" } as AskFaqAction;
+    intent = "ASK_FAQ";
+  } else if (isAgencyIdentityQuery && !isRealEstateTerm) {
+    action = { intent: "ASK_FAQ", topic: "AGENCY_INFO" } as AskFaqAction;
+    intent = "ASK_FAQ";
+  } else if (Array.isArray(botKnowledge.custom_faqs) && botKnowledge.custom_faqs.length > 0 && !isRealEstateTerm) {
     for (const faq of botKnowledge.custom_faqs) {
       const qLower = (faq.question || "").toLowerCase();
       const qWords = qLower.split(/\s+/).filter((w) => w.length >= 4);
       const matches = qWords.filter((w) => lower.includes(w));
       if (matches.length >= 2 || (qWords.length === 1 && matches.length === 1)) {
-        const customAns = faq.answer;
-        const replyText =
-          lang === "GUJLISH"
-            ? `${customAns}\n\n👉 <b>${nameStr}</b>, tame biji kai details janva mango chho athva shu ame tamari <b>VIP Site Visit 🚗</b> plan kariye?`
-            : lang === "ENGLISH"
-            ? `${customAns}\n\n👉 <b>${nameStr}</b>, would you like more details or should we schedule your <b>VIP Site Visit 🚗</b>?`
-            : `${customAns}\n\n👉 <b>${nameStr}</b>, kya aap aur details janna chahte hain ya hum aapki <b>VIP Site Visit 🚗</b> plan karein?`;
-
-        return {
-          replyText,
-          nextState: currentState,
-        };
+        action = {
+          intent: "ASK_FAQ",
+          topic: "CUSTOM_FAQ",
+          specific_query: faq.question,
+        } as AskFaqAction;
+        intent = "ASK_FAQ";
+        break;
       }
     }
   }
 
+  // Detour State Detection: Active intake workflows where side questions can occur
+  const isDetourState =
+    (currentState.startsWith("OWNER_") && currentState !== "OWNER_DETAILS_GATHERED") ||
+    currentState === "QUALIFYING" ||
+    currentState === "ROLE_SELECTION_PENDING" ||
+    currentState === "OPTIONS_SENT" ||
+    currentState === "VISIT_REQUESTED" ||
+    currentState === "SITE_VISIT_PROPOSED";
+
   // Global FAQ Dispatcher: Answer agency/client FAQs immediately with dynamic bot_knowledge at any stage!
   if (intent === "ASK_FAQ") {
-    const hasBookedVisit = currentState === "VISIT_BOOKED" || Boolean(lead?.visit_booked_at);
+    if (isDetourState) {
+      lead.metadata = {
+        ...(lead.metadata || {}),
+        suspended_state: {
+          previous_state: currentState,
+          suspended_at: new Date().toISOString(),
+          intake_type: currentState.startsWith("OWNER_") ? "OWNER" : "SEEKER",
+          pending_field: deriveBotQuestionType(currentState, ""),
+        },
+      };
+    }
+    const hasBookedVisit = currentState === "SITE_VISIT_BOOKED" || Boolean(lead?.site_visit_booked || lead?.visit_booked_at);
     return handleFaqResponse(lead, action as AskFaqAction, context, hasBookedVisit);
-  }
-
-    // 4. Agency / Company Identity Interceptor
-  const isAgencyIdentityQuery =
-    /(?:agency|company|firm|karyalay|tamari\s*company|tamaru\s*nam|aapki\s*agency|aapka\s*naam|aap\s*kaun|who\s*are\s*you|naam\s*kya|nam\s*su\s*che|nam\s*kya\s*he|nam\s*su|tamara\s*vishe|agency\s*name|company\s*name)\b/i.test(lower);
-
-  if (isAgencyIdentityQuery && !isRealEstateTerm) {
-    const replyText =
-      lang === "GUJLISH"
-        ? `Amari agency nu naam <b>${agencyName}</b> chhe! 🙏 Ame ${displayCity} ma verified residential (Flats, Villas) ane commercial properties ma deal kariye chhiye.\n\n👉 <b>${nameStr}</b>, tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Space</b>? 🏢`
-        : lang === "ENGLISH"
-        ? `We are <b>${agencyName}</b>! 🙏 We specialize in verified residential (Flats, Villas) and commercial properties across ${displayCity}.\n\n👉 <b>${nameStr}</b>, what type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Space</b>? 🏢`
-        : `Hamari agency ka naam <b>${agencyName}</b> hai! 🙏 Hum ${displayCity} me verified residential (Flats, Villas) aur commercial properties provide karte hain.\n\n👉 <b>${nameStr}</b>, aap kis type ki property search kar rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Space</b>? 🏢`;
-
-    return {
-      replyText,
-      nextState: currentState || "ROLE_SELECTION_PENDING",
-      ...(currentState ? {} : { leadUpdates: { state: "ROLE_SELECTION_PENDING" } }),
-    };
   }
 
   if (intent === "OFF_TOPIC" || isGibberish) {
@@ -8880,7 +8853,115 @@ export async function dispatchStateAction(
   };
 }
 
-async function handleFaqResponse(
+export function buildDetourResumptionPrompt(
+  targetState: string,
+  lead: any,
+  lang: string
+): string {
+  const isGuj = lang === "GUJLISH";
+  const isEng = lang === "ENGLISH";
+
+  if (targetState === "OWNER_CONFIG_PENDING") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — tamari property kaya type ni chhe (Flat, Villa, Shop, Office)? 🏢`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — what type of property do you have (Flat, Villa, Shop, Office)? 🏢`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — aapki property kis type ki hai (Flat, Villa, Shop, Office)? 🏢`;
+  }
+  if (targetState === "OWNER_SOCIETY_PENDING") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — tamari property kaya Society, Project ya Road par sthit hai? 📍`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — which Society, Project, or Road is your property located on? 📍`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — aapki property kis Society, Project ya Road par sthit hai? 📍`;
+  }
+  if (targetState === "OWNER_LOCATION_PENDING") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — tamari property kaya Area ya Locality me aati hai? 📍`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — which Area or Locality does your property belong to? 📍`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — aapki property kis Area ya Locality me aati hai? 📍`;
+  }
+  if (targetState === "OWNER_AREA_PENDING" || targetState === "OWNER_SIZE_PENDING") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — property nu Carpet ke Built-up Area ketlu chhe? 📏`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — what is the Carpet or Built-up Area of your property? 📏`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — property ka Carpet ya Built-up Area kitna hai? 📏`;
+  }
+  if (targetState === "OWNER_PRICE_PENDING") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — tamaro expected Selling Price ya Monthly Rent kitna hai? 💰`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — what is your expected Selling Price or Monthly Rent? 💰`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — aapka expected Selling Price ya Monthly Rent kitna hai? 💰`;
+  }
+  if (targetState === "OWNER_POSSESSION_PENDING") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — Possession status shu chhe (1 Ready to Move, 2 Under Construction)? 🔑`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — what is the Possession status (1 Ready to Move, 2 Under Construction)? 🔑`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — Possession status kya hai (1 Ready to Move, 2 Under Construction)? 🔑`;
+  }
+  if (targetState === "OWNER_FURNISHING_PENDING") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — Furnishing status shu chhe (1 Unfurnished, 2 Semi-Furnished, 3 Fully Furnished)? 🛋️`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — what is the Furnishing status (1 Unfurnished, 2 Semi-Furnished, 3 Fully Furnished)? 🛋️`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — Furnishing status kya hai (1 Unfurnished, 2 Semi-Furnished, 3 Fully Furnished)? 🛋️`;
+  }
+  if (targetState === "OWNER_PHONE_PENDING") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — direct verification ane buyer updates mate tamaro contact number share karsho? 📞`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — please share your contact number for direct buyer inquiries and verification? 📞`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — direct verification aur buyer updates ke liye apna contact number share karenge? 📞`;
+  }
+  if (targetState === "QUALIFYING") {
+    const hasProp = Boolean(lead?.property_type || lead?.metadata?.seeker_draft?.property_type);
+    const hasReq = Boolean(lead?.requirement || lead?.metadata?.seeker_draft?.requirement);
+    const hasLoc = Boolean(lead?.location || lead?.metadata?.seeker_draft?.location);
+    const hasBud = Boolean(lead?.budget || lead?.metadata?.seeker_draft?.budget);
+
+    if (!hasProp || !hasReq) {
+      return isGuj
+        ? `\n\n👉 <b>Ab aage badhte hain</b> — tame kaya type ni property joi rahya chho (Flat, Villa, Shop/Office) ane Buy karvi chhe ke Rent? 🏡`
+        : isEng
+        ? `\n\n👉 <b>Moving forward</b> — what type of property are you looking for (Flat, Villa, Shop/Office), and looking to Buy or Rent? 🏡`
+        : `\n\n👉 <b>Ab aage badhte hain</b> — aap kis type ki property dekh rahe hain (Flat, Villa, Shop/Office) aur Buy karna hai ya Rent? 🏡`;
+    }
+    if (!hasLoc || !hasBud) {
+      return isGuj
+        ? `\n\n👉 <b>Ab aage badhte hain</b> — kaya preferred Area ma joi rahya chho ane tamaro andaje Budget range ketlo chhe? 📍💰`
+        : isEng
+        ? `\n\n👉 <b>Moving forward</b> — which preferred Area are you looking in, and what is your approximate Budget range? 📍💰`
+        : `\n\n👉 <b>Ab aage badhte hain</b> — kaunse preferred Area me dekh rahe hain aur aapka approximate Budget range kitna hai? 📍💰`;
+    }
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — tamne Ready to Move joiye chhe ke Under Construction? Ane Self-use mate chhe ke Investment? 🔑`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — are you looking for Ready to Move or Under Construction? And is it for Self-use or Investment? 🔑`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — aapko Ready to Move chahiye ya Under Construction? Aur Self-use ke liye hai ya Investment? 🔑`;
+  }
+  if (targetState === "ROLE_SELECTION_PENDING") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — tame property Buy/Rent karva mango chho (1), Sell/Lease karva mango chho (2), ke Banne (3)? 🔄`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — are you looking to Buy/Rent (1), Sell/Lease (2), or Both (3)? 🔄`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — aap property Buy/Rent karna chahte hain (1), Sell/Lease karna chahte hain (2), ya Dono (3)? 🔄`;
+  }
+  if (targetState === "OPTIONS_SENT" || targetState === "VISIT_REQUESTED" || targetState === "SITE_VISIT_PROPOSED") {
+    return isGuj
+      ? `\n\n👉 <b>Ab aage badhte hain</b> — tame kaya date ya time par VIP Site Visit plan karva mangsho? 🚗`
+      : isEng
+      ? `\n\n👉 <b>Moving forward</b> — which date or time would you prefer to schedule your VIP Site Visit? 🚗`
+      : `\n\n👉 <b>Ab aage badhte hain</b> — aap kis date ya time par VIP Site Visit plan karna chahenge? 🚗`;
+  }
+
+  return "";
+}
+
+export async function handleFaqResponse(
   lead: any,
   faqAct: AskFaqAction,
   context: DialogContext,
@@ -8892,6 +8973,18 @@ async function handleFaqResponse(
   const agencyName = context.agencyName || "Nextgen Realty";
   const resolvedCity = context.resolvedCity;
   const activeTenantId = context.tenantId || defaultTenantId;
+
+  const currentState: DialogState = (lead?.state as DialogState) || "FRESH";
+  const suspendedState = lead?.metadata?.suspended_state;
+  const targetState: DialogState = (suspendedState?.previous_state as DialogState) || currentState;
+  const isDetourIntake =
+    Boolean(suspendedState) ||
+    (targetState.startsWith("OWNER_") && targetState !== "OWNER_DETAILS_GATHERED") ||
+    targetState === "QUALIFYING" ||
+    targetState === "ROLE_SELECTION_PENDING" ||
+    targetState === "OPTIONS_SENT" ||
+    targetState === "VISIT_REQUESTED" ||
+    targetState === "SITE_VISIT_PROPOSED";
 
   const { data: allProps } = await supabase
     .from("inventory")
@@ -8915,7 +9008,9 @@ async function handleFaqResponse(
   const projLoc = prop?.location || resolvedCity || "Prime Location";
 
   let bridgeCta = "";
-  if (hasBookedVisit) {
+  if (isDetourIntake) {
+    bridgeCta = ""; // Suppress site visit CTA during in-flight intake detours
+  } else if (hasBookedVisit) {
     bridgeCta =
       lang === "GUJLISH"
         ? `\n\n🤝 <b>Tamari VIP Site Visit already booked chhe!</b> Amara senior sales executive direct site location par tamne malshe ane aa badhi details personally samjavshe.`
@@ -9066,11 +9161,39 @@ async function handleFaqResponse(
         : `Ji ${nameStr}! <b>${projName}</b> (${projLoc}) ki verified specifications ye hain:\n\n• 🛗 <b>Lift:</b> ${liftText}\n• 🚗 <b>Parking:</b> ${parkText}\n• 📏 <b>Carpet Area:</b> ${carpet}\n• 🛋️ <b>Furnishing:</b> ${furn}${bridgeCta}`;
   }
 
+  let resumptionPrompt = "";
+  if (isDetourIntake) {
+    resumptionPrompt = buildDetourResumptionPrompt(targetState, lead, lang);
+  }
+  if (resumptionPrompt) {
+    replyText += resumptionPrompt;
+  }
+
+  const suspendedObj = suspendedState || (isDetourIntake ? {
+    previous_state: targetState,
+    suspended_at: new Date().toISOString(),
+    intake_type: targetState.startsWith("OWNER_") ? "OWNER" : "SEEKER",
+    pending_field: deriveBotQuestionType(targetState, ""),
+  } : null);
+
+  const nextStateResult: DialogState = isDetourIntake ? targetState : (lead?.state || "ROLE_SELECTION_PENDING");
+
+  const leadUpdates: Record<string, any> = {
+    state: nextStateResult,
+    lead_type: lead?.lead_type || (nextStateResult.startsWith("OWNER_") ? "PROVIDER" : "SEEKER"),
+    metadata: {
+      ...(lead?.metadata || {}),
+      ...(suspendedObj ? { suspended_state: suspendedObj } : {}),
+      ...(lead?.metadata?.owner_draft ? { owner_draft: lead.metadata.owner_draft } : {}),
+      ...(lead?.metadata?.seeker_draft ? { seeker_draft: lead.metadata.seeker_draft } : {}),
+    },
+  };
+
   return {
     replyText,
-    nextState: lead?.state || "OPTIONS_SENT",
+    nextState: nextStateResult,
+    leadUpdates,
   };
-}
 
 async function handleBrochureOrMapResponse(
   lead: any,
@@ -10479,6 +10602,18 @@ Deno.serve(async (req: Request) => {
     nextState = transitionResult.nextState;
     if (transitionResult.isSilent) {
       isSilent = true;
+    }
+
+    // Centralized post-detour suspended state cleanup:
+    if (lead?.metadata?.suspended_state && aiAnalysis?.action?.intent !== "ASK_FAQ") {
+      transitionResult.leadUpdates = {
+        ...(transitionResult.leadUpdates || {}),
+        metadata: {
+          ...(lead?.metadata || {}),
+          ...(transitionResult.leadUpdates?.metadata || {}),
+          suspended_state: null,
+        },
+      };
     }
 
     // Compute updated AI lead score and persist in metadata
