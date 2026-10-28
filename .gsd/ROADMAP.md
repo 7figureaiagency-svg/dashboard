@@ -197,7 +197,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 23: Vernacular Slot, Owner Intake & Hyperlinks | ✅ Complete | 2/2 | 100% |
 | 24: E2E QA Audit Bug Remediation & Role Governance | ✅ Complete | 2/2 | 100% |
 | 26: Universal Conversational Intake & Multi-Persona Engine | ✅ Complete | 3/3 | 100% |
-| 27: Dynamic Stage-Conditioned Intent Engine | ⏳ Planned | 0/3 | 0% |
+| 27: Dynamic Stage-Conditioned Intent Engine | 🔄 In Progress | 1/3 | 33% |
 
 ---
 
@@ -272,11 +272,11 @@ updated: 2026-10-19T18:50:30+05:30
 ---
 
 ### Phase 27: Dynamic Stage-Conditioned Intent Engine & Adaptive Real Estate LLM Agent
-**Status:** ⏳ Planned  
+**Status:** 🔄 In Progress  
 **Objective:** Upgrade the real estate conversational agent to achieve 100% intent classification and entity extraction accuracy across all vernacular dialects, single-word replies, and conversational detours. Implement stage-conditioned micro-prompts injecting active turn goals and collected memory, resolve numeric ambiguities (Rent vs Buy vs Area), support in-flow side-question FAQs with seamless state resumption, and replace fragile fallback regexes with strict token trees.  
 **Depends on:** Phase 26  
 **Plans:**
-- [ ] Plan 27.1: Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation ([`27.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.1-PLAN.md))
+- [x] Plan 27.1: Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation ([`27.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.1-PLAN.md))
 - [ ] Plan 27.2: Conversational Side-Question Interception, Seamless State Resumption & Multi-Entity Draft Archival ([`27.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.2-PLAN.md))
 - [ ] Plan 27.3: Empirical Verification & Multi-Dialect Vernacular Simulation Matrix ([`27.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.3-PLAN.md))
 
