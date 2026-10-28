@@ -102,5 +102,35 @@
 - Multi-tenant tenant-scoped inventory and client branding isolation.
 - 0 additional runtime JavaScript packages.
 
+## Phase 28 Decisions: Comprehensive Multi-Dialect & Persona E2E QA Audit
+
+**Date:** 2026-10-28
+
+### Scope
+- Execute end-to-end quality assurance and reliability auditing across all Phase 27 conversational upgrades.
+- **4 Dialects Tested:** Gujlish (colloquial Roman Gujarati), Hinglish (conversational Roman Hindi), Gujarati Script (શુદ્ધ લિપિ with Indic numeral normalization), and English (NRI/Corporate).
+- **5 Real-World User Personas Tested:**
+  1. *The 1-Word Texter:* Single-token replies ("2", "Gotri", "Rent", "Office", "Sunday") verifying zero context loss.
+  2. *The Compound Storyteller:* Multi-entity single-turn messages capturing configuration, budget, location, and timeline in 1 turn without repetitive questions.
+  3. *The Ambiguous Typo & Slang User:* Broken spelling ("flt", "makan", "bhadu", "2bhk levo che") ensuring zero role misclassification.
+  4. *The Skeptical Detour Asker:* In-flight FAQ questions (office address, brokerage, RERA) verifying single-turn dual response and seamless intake resumption.
+  5. *The Dual-Role Switcher:* Concurrent buyer and seller transactions (Property 1 ➔ Property 2 archival, buyer search with active booked visit preservation).
+- **Full Property Spectrum:** Residential (Flats, Duplex, Villa), Commercial (Office, Shop, Showroom, Commercial Lease), Plots/Land (Var/Gaj, Vigha), and Transactions (Buy, Rent, Sell, Rent Out, Lease).
+- **Live Production Endpoint:** Test live deployed Edge Function `v76-conversational-intelligence-engine` and assert PostgreSQL database state consistency.
+
+### Approach
+- **Choice:** Option C (Hybrid Automated Simulation Harness + Interactive Device Verification)
+- **Rationale:**
+  - Automated harness executes 25+ diverse conversational permutations against the live edge function in under 45 seconds, asserting database integrity after each turn.
+  - Generates an empirical QA Dossier detailing accuracy, token footprint per dialect, and edge-case boundaries.
+  - Provides a 2-minute interactive Telegram script for live mobile verification on `@GrihamRealtybot`.
+
+### Constraints
+- Strictly 100% Non-n8n architecture.
+- Multi-tenant WABA safety invariants.
+- Local git commits only. No push to remote.
+- Zero extra runtime JS packages.
+
+
 
 

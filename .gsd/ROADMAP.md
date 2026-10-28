@@ -198,6 +198,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 24: E2E QA Audit Bug Remediation & Role Governance | ✅ Complete | 2/2 | 100% |
 | 26: Universal Conversational Intake & Multi-Persona Engine | ✅ Complete | 3/3 | 100% |
 | 27: Dynamic Stage-Conditioned Intent Engine | ✅ Complete | 3/3 | 100% |
+| 28: Multi-Dialect & Persona E2E QA Audit | ⏳ Planned | 0/2 | 0% |
 
 ---
 
@@ -279,6 +280,17 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 27.1: Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation ([`27.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.1-PLAN.md))
 - [x] Plan 27.2: Conversational Side-Question Interception, Seamless State Resumption & Multi-Entity Draft Archival ([`27.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.2-PLAN.md))
 - [x] Plan 27.3: Empirical Verification & Multi-Dialect Vernacular Simulation Matrix ([`27.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.3-PLAN.md))
+
+---
+
+### Phase 28: Comprehensive Multi-Dialect & Persona E2E QA Audit
+**Status:** ⏳ Planned  
+**Objective:** Execute an exhaustive, production-grade Quality Assurance audit verifying 100% conversational intelligence reliability across 4 dialects (Gujlish, Hinglish, Gujarati script, English), 5 real-world user chatting personas (1-word replies, compound storytelling, typos/slang, in-flight FAQ detours, and dual-role switching), and full property types (Flats, Duplex, Villa, Commercial Office/Shop/Lease, Plots/Land with Var/Vigha). Deliver an automated E2E simulation harness, assert PostgreSQL database state consistency, and produce an actionable QA Audit Dossier.  
+**Depends on:** Phase 27  
+**Plans:**
+- [ ] Plan 28.1: Multi-Dialect & 5-Persona Automated E2E Simulation Harness ([`28.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/28/28.1-PLAN.md))
+- [ ] Plan 28.2: Live Production Webhook Audit, Multi-Property DB Integrity & QA Dossier Report ([`28.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/28/28.2-PLAN.md))
+
 
 
 
