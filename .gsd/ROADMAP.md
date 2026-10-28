@@ -197,7 +197,7 @@ updated: 2026-10-19T18:50:30+05:30
 | 23: Vernacular Slot, Owner Intake & Hyperlinks | ✅ Complete | 2/2 | 100% |
 | 24: E2E QA Audit Bug Remediation & Role Governance | ✅ Complete | 2/2 | 100% |
 | 26: Universal Conversational Intake & Multi-Persona Engine | ✅ Complete | 3/3 | 100% |
-| 27: Dynamic Stage-Conditioned Intent Engine | 🔄 In Progress | 1/3 | 33% |
+| 27: Dynamic Stage-Conditioned Intent Engine | 🔄 In Progress | 2/3 | 66% |
 
 ---
 
@@ -277,7 +277,7 @@ updated: 2026-10-19T18:50:30+05:30
 **Depends on:** Phase 26  
 **Plans:**
 - [x] Plan 27.1: Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation ([`27.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.1-PLAN.md))
-- [ ] Plan 27.2: Conversational Side-Question Interception, Seamless State Resumption & Multi-Entity Draft Archival ([`27.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.2-PLAN.md))
+- [x] Plan 27.2: Conversational Side-Question Interception, Seamless State Resumption & Multi-Entity Draft Archival ([`27.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.2-PLAN.md))
 - [ ] Plan 27.3: Empirical Verification & Multi-Dialect Vernacular Simulation Matrix ([`27.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/27/27.3-PLAN.md))
 
 

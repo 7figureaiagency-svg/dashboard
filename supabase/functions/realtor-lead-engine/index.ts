@@ -5022,6 +5022,9 @@ async function handleOwnerFlow({
 
     if (isSecondListing) {
       console.log(`[MULTI-PROPERTY OWNER] Lead ${lead.id} is registering a second property: "${messageText}"`);
+      const existingCompleted = Array.isArray(existingMeta.completed_submissions)
+        ? [...existingMeta.completed_submissions]
+        : [];
       const archived = Array.isArray(existingMeta.archived_submissions) ? [...existingMeta.archived_submissions] : [];
       if (existingMeta.owner_draft && Object.keys(existingMeta.owner_draft).length > 0) {
         archived.push({
@@ -5059,8 +5062,10 @@ async function handleOwnerFlow({
           has_seller_profile: true,
           ...(isDualLead ? { has_buyer_profile: true } : {}),
           owner_draft: draft,
+          completed_submissions: existingCompleted,
           archived_submissions: archived,
           submission_id: null,
+          declined_second_listing: false,
         },
       }).eq("id", lead.id);
 
@@ -5082,7 +5087,16 @@ async function handleOwnerFlow({
             ? `Great <b>${senderName || "Friend"}</b>! Noted your new property <b>${propLabel}</b>. 👍\n\n👉 <b>Which Project or Society is your property located in? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`
             : `Bahut badhiya <b>${senderName ? `${senderName} ji` : "ji"}</b>! Nayi property <b>${propLabel}</b> note kar li hai. 👍\n\n👉 <b>Ye property kis Project ya Society me sthit hai? (e.g. Nilamber Bellissimo, Sun Crest)</b> 🏢`);
 
-        return { replyText, nextState: "OWNER_SOCIETY_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_SOCIETY_PENDING", draft) };
+        return {
+          replyText,
+          nextState: "OWNER_SOCIETY_PENDING",
+          leadUpdates: buildOwnerLeadUpdates("OWNER_SOCIETY_PENDING", draft, {
+            completed_submissions: existingCompleted,
+            archived_submissions: archived,
+            submission_id: null,
+            declined_second_listing: false,
+          }),
+        };
       } else {
         const replyText =
           lang === "GUJLISH"
@@ -5091,7 +5105,16 @@ async function handleOwnerFlow({
             ? `Certainly <b>${senderName || "Friend"}</b>! Let's get your next property listed. 🏡✨\n\n👉 <b>What type of property is this — 2BHK / 3BHK Flat, Villa, or Commercial Shop/Office?</b> 🏢`
             : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Nayi property listing desk par swagat hai. 🏡✨\n\n👉 <b>Aapki nayi property kis type ki hai — 2BHK / 3BHK Flat, Villa, ya Commercial Shop/Office?</b> 🏢`;
 
-        return { replyText, nextState: "OWNER_CONFIG_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_CONFIG_PENDING", draft) };
+        return {
+          replyText,
+          nextState: "OWNER_CONFIG_PENDING",
+          leadUpdates: buildOwnerLeadUpdates("OWNER_CONFIG_PENDING", draft, {
+            completed_submissions: existingCompleted,
+            archived_submissions: archived,
+            submission_id: null,
+            declined_second_listing: false,
+          }),
+        };
       }
     }
 
@@ -5600,6 +5623,41 @@ async function handleOwnerFlow({
 
   const assignedAdminId = targetAdmin?.id || lead.assigned_executive_id;
 
+  const completedSnapshot = {
+    submission_id: sub?.id || existingMeta.submission_id || null,
+    completed_at: new Date().toISOString(),
+    transaction_type: draft.transaction_type || (isRent ? "RENT_OUT" : "SELL"),
+    property_type: draft.property_type || draft.configuration || null,
+    project_or_society: draft.society_name || draft.project_or_society || null,
+    location: draft.location || null,
+    price_or_rent: draft.expected_price || draft.expected_rent || null,
+    carpet_sqft: draft.carpet_area_sqft || null,
+    super_built_up_sqft: draft.super_built_up_sqft || null,
+    possession_status: draft.possession_status || null,
+    furnishing_status: draft.furnishing_status || null,
+    parking_status: draft.parking_status || null,
+    contact_phone: effectivePhone || draft.contact_phone || null,
+    status: "PENDING_VERIFICATION",
+  };
+
+  const existingCompleted = Array.isArray(existingMeta.completed_submissions)
+    ? [...existingMeta.completed_submissions]
+    : [];
+  if (!existingCompleted.some((s: any) => s.submission_id === completedSnapshot.submission_id && s.submission_id)) {
+    existingCompleted.push(completedSnapshot);
+  }
+
+  const existingArchived = Array.isArray(existingMeta.archived_submissions)
+    ? [...existingMeta.archived_submissions]
+    : [];
+  if (!existingArchived.some((s: any) => s.submission_id === completedSnapshot.submission_id && s.submission_id)) {
+    existingArchived.push({
+      ...draft,
+      submission_id: sub?.id || existingMeta.submission_id || null,
+      archived_at: new Date().toISOString(),
+    });
+  }
+
   await supabase.from("leads").update({
     lead_type: effectiveOwnerLeadType,
     state: "OWNER_DETAILS_GATHERED",
@@ -5609,6 +5667,8 @@ async function handleOwnerFlow({
       ...existingMeta,
       owner_draft: draft,
       submission_id: sub?.id,
+      completed_submissions: existingCompleted,
+      archived_submissions: existingArchived,
       has_seller_profile: true,
       ...(isDualLead ? { has_buyer_profile: true } : {}),
     }
@@ -5701,12 +5761,12 @@ async function handleOwnerFlow({
     };
   }
 
-  const existingArchived = Array.isArray(existingMeta.archived_submissions) ? existingMeta.archived_submissions : [];
   return {
     replyText,
     nextState: "OWNER_DETAILS_GATHERED",
     leadUpdates: buildOwnerLeadUpdates("OWNER_DETAILS_GATHERED", draft, {
       submission_id: sub?.id || existingMeta.submission_id,
+      completed_submissions: existingCompleted,
       archived_submissions: existingArchived,
     }),
   };
@@ -7743,6 +7803,27 @@ export async function dispatchStateAction(
     // H. NEW PROPERTY INQUIRY FROM BOOKED VISIT (F-09: Secondary Search Active Visit Preservation)
     const parsedTypeInBooked = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
     if (intent === "CHANGE_REQUIREMENT" || parsedTypeInBooked) {
+      const existingSearches = Array.isArray(lead.metadata?.seeker_profile?.searches)
+        ? [...lead.metadata.seeker_profile.searches]
+        : [];
+      if (lead.property_type) {
+        const isAlreadyArchived = existingSearches.some(
+          (s: any) => s.property_type === lead.property_type && s.requirement === lead.requirement && s.location === lead.location
+        );
+        if (!isAlreadyArchived) {
+          existingSearches.push({
+            searched_at: new Date().toISOString(),
+            property_type: lead.property_type || null,
+            requirement: lead.requirement || null,
+            budget: lead.budget || null,
+            location: lead.location || null,
+            timeline: lead.timeline || null,
+            purpose: lead.purpose || null,
+            status: "VISIT_BOOKED",
+          });
+        }
+      }
+
       const cascadeRes = await handleQualificationCascade(lead, actionResult, context);
       return {
         ...cascadeRes,
@@ -7758,6 +7839,12 @@ export async function dispatchStateAction(
             ...(cascadeRes.leadUpdates?.metadata || {}),
             secondary_search_active: true,
             primary_visit_preserved: true,
+            seeker_profile: {
+              ...(lead.metadata?.seeker_profile || {}),
+              ...(cascadeRes.leadUpdates?.metadata?.seeker_profile || {}),
+              searches: existingSearches,
+              has_active_booked_visit: true,
+            },
           },
         },
       };
@@ -9344,6 +9431,34 @@ async function handleQualificationCascade(
   const isDual = lead?.lead_type === "DUAL_ROLE" || Boolean(lead?.metadata?.has_seller_profile) || lead?.lead_type === "PROVIDER";
   const hasActiveBookedVisit = Boolean(lead?.site_visit_booked);
 
+  // Multi-search preservation: If lead already has previous search criteria and is starting or refining a new search
+  const isNewSecondarySearch = (hasActiveBookedVisit || lead?.state === "OPTIONS_SENT" || lead?.state === "SITE_VISIT_BOOKED") &&
+    (actionResult.raw_intent_name === "CHANGE_REQUIREMENT" || Boolean(actionResult.property_type && actionResult.property_type !== lead?.property_type));
+
+  const existingSearches = Array.isArray(lead?.metadata?.seeker_profile?.searches)
+    ? [...lead.metadata.seeker_profile.searches]
+    : [];
+
+  if (isNewSecondarySearch && lead?.property_type) {
+    const isAlreadyArchived = existingSearches.some((s: any) =>
+      s.property_type === lead.property_type &&
+      s.requirement === lead.requirement &&
+      s.location === lead.location
+    );
+    if (!isAlreadyArchived) {
+      existingSearches.push({
+        searched_at: new Date().toISOString(),
+        property_type: lead.property_type || null,
+        requirement: lead.requirement || null,
+        budget: lead.budget || null,
+        location: lead.location || null,
+        timeline: lead.timeline || null,
+        purpose: lead.purpose || null,
+        status: hasActiveBookedVisit ? "VISIT_BOOKED" : "COMPLETED",
+      });
+    }
+  }
+
   const seekerDraft = {
     ...(lead?.metadata?.seeker_draft || {}),
     ...(propType ? { property_type: propType } : {}),
@@ -9367,6 +9482,12 @@ async function handleQualificationCascade(
     metadata: {
       ...(lead?.metadata || {}),
       seeker_draft: seekerDraft,
+      seeker_profile: {
+        ...(lead?.metadata?.seeker_profile || {}),
+        searches: existingSearches,
+        has_active_booked_visit: hasActiveBookedVisit,
+        current_search: seekerDraft,
+      },
       ...(isDual ? {
         has_seller_profile: true,
         has_buyer_profile: true,
