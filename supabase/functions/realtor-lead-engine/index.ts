@@ -5632,7 +5632,53 @@ async function handleOwnerFlow({
     return { replyText, nextState: "OWNER_PRICE_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_PRICE_PENDING", draft) };
   }
 
-  // Gracefully default secondary furnishing if not mentioned
+  // Turn 5b: Furnishing Recovery Protocol (Compound Question Disambiguation)
+  if (lead.state === "OWNER_FURNISHING_PENDING") {
+    const parsedFurn = parseFurnishingFromText(messageText);
+    if (parsedFurn) {
+      draft.furnishing_status = parsedFurn;
+    } else {
+      if (lower === "1" || lower === "1️⃣" || lower.includes("unfurnished") || lower.includes("raw") || lower.includes("bare")) {
+        draft.furnishing_status = "UNFURNISHED";
+      } else if (lower === "2" || lower === "2️⃣" || lower.includes("semi")) {
+        draft.furnishing_status = "SEMI_FURNISHED";
+      } else if (lower === "3" || lower === "3️⃣" || lower.includes("full") || lower.includes("furnished")) {
+        draft.furnishing_status = "FURNISHED";
+      } else {
+        draft.furnishing_status = "SEMI_FURNISHED";
+      }
+    }
+  }
+
+  // Furnishing Recovery Protocol: If not a plot and furnishing is missing, ask furnishing before moving to Turn 6
+  const isFurnishingApplicable = !isPlotType;
+  if (isFurnishingApplicable && !draft.furnishing_status) {
+    const formattedPriceVal = isRent
+      ? `₹${Number(draft.expected_rent || 0).toLocaleString("en-IN")}/mo`
+      : formatPriceShort(Number(draft.expected_price || 0));
+
+    const replyText =
+      lang === "GUJLISH"
+        ? `Expected price <b>${formattedPriceVal}</b> note kari lidhi chhe! 👍 Property <b>Furnished</b> chhe, <b>Semi-Furnished</b> ke <b>Unfurnished</b>? 🛋️`
+        : lang === "ENGLISH"
+        ? `Noted expected price <b>${formattedPriceVal}</b>! 👍 Is the property <b>Furnished</b>, <b>Semi-Furnished</b>, or <b>Unfurnished</b>? 🛋️`
+        : `Expected price <b>${formattedPriceVal}</b> note kar li hai! 👍 Property <b>Furnished</b> hai, <b>Semi-Furnished</b> ya <b>Unfurnished</b>? 🛋️`;
+
+    await supabase.from("leads").update({
+      lead_type: effectiveOwnerLeadType,
+      state: "OWNER_FURNISHING_PENDING",
+      metadata: {
+        ...existingMeta,
+        has_seller_profile: true,
+        ...(isDualLead ? { has_buyer_profile: true } : {}),
+        owner_draft: draft,
+      },
+    }).eq("id", lead.id);
+
+    return { replyText, nextState: "OWNER_FURNISHING_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_FURNISHING_PENDING", draft) };
+  }
+
+  // Gracefully default secondary furnishing if not applicable (e.g. Plot)
   if (!draft.furnishing_status) {
     draft.furnishing_status = isPlotType ? "UNFURNISHED" : "SEMI_FURNISHED";
   }
@@ -5641,7 +5687,6 @@ async function handleOwnerFlow({
   const isTurn6State = [
     "OWNER_AMENITIES_PENDING",
     "OWNER_POSSESSION_PENDING",
-    "OWNER_FURNISHING_PENDING",
     "OWNER_PHONE_PENDING",
   ].includes(lead.state);
 
@@ -5708,7 +5753,12 @@ async function handleOwnerFlow({
 
   const resolvedCityVal = city || null;
 
-  const submissionPayload = {
+    const effectiveSociety = (draft.society_name && draft.society_name !== "Standalone / Independent" && draft.society_name !== "Society") ? draft.society_name : null;
+    const effectiveProject = (draft.project_name && draft.project_name !== "Standalone / Independent" && draft.project_name !== "Private Property") ? draft.project_name : null;
+    const displayProject = effectiveProject || effectiveSociety || `${draft.configuration || draft.property_type || "Property"} in ${draft.location || resolvedCityVal || "Prime Location"}`;
+    const displaySociety = effectiveSociety || effectiveProject || draft.location || "Standalone / Independent";
+
+    const submissionPayload = {
     client_id: tenantId,
     lead_id: lead.lead_id,
     owner_name: senderName || lead.first_name || "Property Owner",
@@ -5716,8 +5766,8 @@ async function handleOwnerFlow({
     property_category: draft.property_category || "RESIDENTIAL",
     property_type: draft.property_type || "Flat",
     transaction_type: normalizedTxType,
-    project_name: draft.project_name || draft.society_name || "Private Property",
-    society_name: draft.society_name || draft.project_name || "Society",
+    project_name: displayProject,
+    society_name: displaySociety,
     location: draft.location || resolvedCityVal || "Prime Location",
     city: resolvedCityVal,
     configuration: draft.configuration || (draft.property_type === "Flat" ? "2 BHK" : draft.property_type),
@@ -5792,7 +5842,7 @@ async function handleOwnerFlow({
     completed_at: new Date().toISOString(),
     transaction_type: draft.transaction_type || (isRent ? "RENT_OUT" : "SELL"),
     property_type: draft.property_type || draft.configuration || null,
-    project_or_society: draft.society_name || draft.project_or_society || null,
+    project_or_society: effectiveSociety || effectiveProject || `${draft.configuration || draft.property_type || "Property"} in ${draft.location || "Prime Location"}`,
     location: draft.location || null,
     price_or_rent: draft.expected_price || draft.expected_rent || null,
     carpet_sqft: draft.carpet_area_sqft || null,
@@ -5857,7 +5907,16 @@ async function handleOwnerFlow({
     ? `₹${Number(draft.expected_rent || 0).toLocaleString("en-IN")}/month`
     : `₹${Number(draft.expected_price || 0).toLocaleString("en-IN")}`;
 
-  const summary = `• 🏢 <b>Property:</b> ${draft.configuration || draft.property_type} in ${draft.society_name || draft.location}\n• 📏 <b>Area:</b> ${areaSummary}\n• 💰 <b>Expected ${isRent ? "Rent" : "Demand"}:</b> ${priceFormatted}\n• 🔑 <b>Status:</b> ${draft.possession_status?.replace(/_/g, " ")} | ${draft.furnishing_status?.replace(/_/g, " ")}`;
+  const hasSocName = draft.society_name && draft.society_name !== "Standalone / Independent" && draft.society_name !== "Society" && draft.society_name.toLowerCase() !== (draft.location || "").toLowerCase();
+  const locPart = draft.location || resolvedCityVal || "Prime Location";
+  const propertyTitle = hasSocName ? `${draft.society_name}, ${locPart}` : locPart;
+
+  const floorVal = draft.attributes?.floor_number;
+  const floorSuffix = (floorVal !== undefined && floorVal !== null && floorVal !== "Independent/NA")
+    ? ` (${typeof floorVal === "number" ? (floorVal === 0 ? "Ground Floor" : `${floorVal}${floorVal === 1 ? "st" : floorVal === 2 ? "nd" : floorVal === 3 ? "rd" : "th"} Floor`) : `${floorVal} Floor`})`
+    : "";
+
+  const summary = `• 🏢 <b>Property:</b> ${draft.configuration || draft.property_type} in ${propertyTitle}${floorSuffix}\n• 📏 <b>Area:</b> ${areaSummary}\n• 💰 <b>Expected ${isRent ? "Rent" : "Demand"}:</b> ${priceFormatted}\n• 🔑 <b>Status:</b> ${draft.possession_status?.replace(/_/g, " ")} | ${draft.furnishing_status?.replace(/_/g, " ")}`;
 
   const replyText =
     lang === "GUJLISH"
@@ -10333,7 +10392,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v81-site-visit-first-intake",
+        version: "v82-vernacular-entity-guard-and-remaining-questions",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -10453,7 +10512,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v81 Ready (Site Visit First Intake & Zero Direct Call Traps)", { status: 200 });
+    return new Response("Realtor Lead Engine v82 Ready (Vernacular Entity Guard & Remaining-Question Recovery)", { status: 200 });
   }
 
   try {
