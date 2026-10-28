@@ -9281,6 +9281,7 @@ export async function handleFaqResponse(
     nextState: nextStateResult,
     leadUpdates,
   };
+}
 
 async function handleBrochureOrMapResponse(
   lead: any,
@@ -9799,7 +9800,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v75-universal-conversational-intake",
+        version: "v76-conversational-intelligence-engine",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -9919,7 +9920,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v75 Ready (Universal Conversational Intake, Multi-Persona Triage & City-Agnostic Engine)", { status: 200 });
+    return new Response("Realtor Lead Engine v76 Ready (Dynamic Stage-Conditioned Intent Engine & Adaptive Real Estate LLM Agent)", { status: 200 });
   }
 
   try {
