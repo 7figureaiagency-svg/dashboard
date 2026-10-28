@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-27T09:24:00+05:30
+updated: 2026-10-28T11:42:00+05:30
 ---
 
 # Project State
@@ -7,19 +7,24 @@ updated: 2026-10-27T09:24:00+05:30
 ## Current Position
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
-**Phase:** 27 - Stage-Conditioned Intent Classification Engine & Indic Dialect Modules  
-**Status:** 🟡 In Progress  
+**Phase:** 28 - Comprehensive Multi-Dialect & Persona E2E QA Audit  
+**Status:** 🟢 Completed (100%)  
 **Plans:**
-- `.gsd/phases/27/27.1-PLAN.md` (Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation) — ✅ Completed
-- `.gsd/phases/27/27.2-PLAN.md` (Hybrid Intent Router Optimization, Negative Prompt Constraints & Dialect Telemetry) — ⏳ Pending
+- `.gsd/phases/28/28.1-PLAN.md` (Multi-Dialect & 5-Persona Automated E2E Simulation Harness) — ✅ Completed
+- `.gsd/phases/28/28.2-PLAN.md` (Live Production Webhook Audit, Multi-Property DB Integrity & QA Dossier Report) — ✅ Completed
 
 ## Last Action
 
-Completed Plan 27.1 (Stage-Conditioned Dynamic Micro-Prompts, State Dialect Modules & Ambiguity Disambiguation):
-- Monolithic 2,150+ token prompt refactored into lean `CORE_INTENT_SYSTEM_PROMPT` (~630 tokens, 2,520 chars) and dynamic `buildStageMicroPrompt` (~350-450 tokens), achieving a 53-64% reduction in per-turn prompt overhead.
-- Implemented `isBhkOrPropertyConfiguration` and `disambiguateNumericChoice` preventing numeric collision: "2 BHK" in `ROLE_SELECTION_PENDING` strictly routes to `CHANGE_REQUIREMENT` (SEEKER), while isolated single digits (1, 2, 3) map deterministically to active stage options across `OWNER_POSSESSION_PENDING`, `OWNER_FURNISHING_PENDING`, `SITE_VISIT_DONE`, `CRITERIA_CONFIRMATION_PENDING`, and `OPTIONS_SENT`.
-- Implemented `normalizeGujaratiDigits` and boundary-checked token trees `VERNACULAR_RENTAL_REGEX` and `VERNACULAR_SALE_REGEX`.
-- Verified 22/22 unit assertions passed in `scratch/test_numeric_guards.cjs` and prompt footprint reduction verified in `scratch/inspect_prompts.cjs`. Frontend compiled cleanly with `npm.cmd run build` (0 errors, 2.30s).
+Completed Phase 28 (Comprehensive Multi-Dialect & Persona E2E QA Audit):
+- Executed automated E2E simulation harness `scratch/e2e_multi_dialect_qa_harness.cjs` testing live Edge Function `v76-conversational-intelligence-engine`:
+  - 8/8 Journeys Passed (100% success rate across 17 live HTTP probes).
+  - Dialects Verified: Gujlish, Gujarati Script with Indic Numerals (`૫૦ લાખ` ➔ ₹50,00,000), Hinglish, English.
+  - Personas Verified: 1-word brief texter, compound storyteller, ambiguous typo/slang, Option 2 numeric collision guard, skeptical in-flight FAQ detour, and multi-property draft archival.
+- Validated PostgreSQL database integrity using administrative client (`scratch/verify_db_integrity_qa.cjs`):
+  - Multi-property owner listings confirmed: `completed_submissions[]` snapshot preserved and active `owner_draft` isolated with fresh schema.
+  - Detour state confirmed: `suspended_state` accurately handled without conversational amnesia.
+  - Production database hygiene: 46 `lead_events`, 2 `property_submissions`, and 38 `leads` test records cleanly purged. 0 orphaned test records remaining.
+- Compiled Formal Product QA Audit Dossier (`.gsd/phases/28/qa-audit-dossier.md`) with comprehensive scorecards and interactive Telegram runbook for `@GrihamRealtybot`.
 
 
 Completed Phase 25 (Owner Intake Stop-Word Guard & Entity Extraction Disambiguation):
