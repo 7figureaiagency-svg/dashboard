@@ -7,13 +7,42 @@ updated: 2026-10-28T11:42:00+05:30
 ## Current Position
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
-**Phase:** 28 - Comprehensive Multi-Dialect & Persona E2E QA Audit  
-**Status:** 🟢 Completed (100%)  
+**Phase:** 30 - Vernacular Entity Extraction Guard & Remaining-Question Recovery Protocol  
+**Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/28/28.1-PLAN.md` (Multi-Dialect & 5-Persona Automated E2E Simulation Harness) — ✅ Completed
-- `.gsd/phases/28/28.2-PLAN.md` (Live Production Webhook Audit, Multi-Property DB Integrity & QA Dossier Report) — ✅ Completed
+- `.gsd/phases/30/30.1-PLAN.md` (Vernacular Seller Entity Extraction & Adjective Stop-Word Guard) — ✅ Done
+- `.gsd/phases/30/30.2-PLAN.md` (Compound Question Disambiguation & Remaining-Question Recovery Engine) — ✅ Done
 
 ## Last Action
+
+Completed Phase 30 (Vernacular Entity Extraction Guard & Remaining-Question Recovery Protocol):
+- Plan 30.1:
+  - Created expanded `STOP_WORDS_SET` with vernacular adjectives (juno, juni, navo, purana) and seller verbs (vechvano, bechvano, vechvu, sell).
+  - Hardened `isLikelySocietyOrProjectName` to reject boilerplate and descriptive phrases (e.g. "Juno Vechvano").
+  - Upgraded society turn to disambiguate pure localities (e.g. "Waghodia") to location without hallucinating project names.
+- Plan 30.2:
+  - Introduced `OWNER_FLOOR_PENDING` dialog state.
+  - Implemented Turn 4b Floor Recovery Protocol: asking for floor when user provides only carpet area (e.g. "1250") on multi-story properties.
+  - Implemented Turn 5b Furnishing Recovery Protocol: asking for furnishing when user provides only price (e.g. "40 lakh ma").
+  - Cleaned property summary to display `Property: Flat in Waghodia Road (4th Floor)` and accurate furnishing status.
+  - Bumped version to `v82-vernacular-entity-guard-and-remaining-questions` and deployed to Supabase production (`yeiygfysijptjdepctnx`).
+  - Verified live production end-to-end 7-turn conversation (100% pass rate).
+
+Completed Phase 29 (Conversational Tone Elevation, Greeting Polish & Purpose-First Intake Redesign):
+- Plan 29.1:
+  - Upgraded entry triage greeting (`getGreetingTriageReply`) across Hinglish, Gujlish, and English, replacing colloquial 'Leni hai / Deni hai' with professional PropTech phrasing in <= 3 lines.
+  - Polished Option 3 response in `ROLE_SELECTION_PENDING` and `DUAL_ROLE_MENU_PENDING` with natural human text and pure Gujarati dialect buttons.
+  - Purged robotic confirmation prefixes ('Noted — [propType]!', 'Noted FLEXIBLE!').
+  - Introduced dynamic contextual acknowledgments matching the specific entity just provided.
+  - Added empathetic typo/unrecognized input clarification ('Maaf kijiye, main samajh nahi paya...').
+  - Enforced buy-only budget brackets for buyers (e.g. 50 Lakhs, 85 Lakhs ya 1.5 Cr) and strictly purged rental figures ('ya 25,000/mo').
+- Plan 29.2:
+  - Re-ordered qualification cascade to evaluate Purpose (Family/Self-Use vs Investment) BEFORE Location.
+  - Implemented Investment Zero-Location Fast-Path: when purpose is Investment, location questioning is automatically bypassed with `location = "FLEXIBLE"`.
+  - Structured Timeline (Ready to Move vs Under Construction) as a dedicated single-turn question to guarantee it is never skipped.
+  - Deployed Edge Function `v77-conversational-realtor-intelligence` to production Supabase project `yeiygfysijptjdepctnx`.
+  - Live health check verified: HTTP 200, `status: "ONLINE"`, `version: "v77-conversational-realtor-intelligence"`.
+  - Full Phase 29 verification test suite (8/8 checks) passed 100%.
 
 Completed Phase 28 (Comprehensive Multi-Dialect & Persona E2E QA Audit):
 - Executed automated E2E simulation harness `scratch/e2e_multi_dialect_qa_harness.cjs` testing live Edge Function `v76-conversational-intelligence-engine`:
