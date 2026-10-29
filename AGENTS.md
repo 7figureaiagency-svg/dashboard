@@ -72,4 +72,18 @@ This project is equipped with the specialized [`frontend-dashboard-designer`](fi
 * **Subagent**: [`frontend-designer`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/agents/frontend-designer.md)
 * **Slash Command**: `/design` (see [`.agent/workflows/design.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agent/workflows/design.md)) to audit and polish CRM dashboard UI/UX surfaces.
 
+---
+
+## 🤖 Enterprise Conversational Chatbot Design System (`cs-chatbot-design`)
+
+This project is governed by the specialized [`cs-chatbot-design`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/cs-chatbot-design/SKILL.md) skill for conversational engineering, anti-hallucination guardrails, and mobile messaging ergonomics across WhatsApp and Telegram.
+* **Skill**: [`cs-chatbot-design`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/cs-chatbot-design/SKILL.md)
+  * [Dialogue Patterns & WhatsApp Ergonomics](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/cs-chatbot-design/references/dialogue-patterns.md): Acknowledge First patterns, typography standards, scannable layouts, and 1-tap quick replies.
+  * [Slot Filling Rubric & Compound Ingestion](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/cs-chatbot-design/references/slot-filling-rubric.md): Buyer, Tenant, Seller, and Commercial slot matrices, compound utterance handling, and normalization rules.
+  * [Fallback & Escalation Matrix](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/cs-chatbot-design/references/fallback-escalation-matrix.md): Inaudible voice recovery, typo disambiguation, dynamic FAQ detour handshakes, and senior executive dispatch.
+* **The 3 Golden Response Principles (Canonical Invariants)**:
+  1. *Rule 1: Acknowledge First* — Explicitly validate and echo the user's input before posing the next question.
+  2. *Rule 2: Be Concise* — Restrict replies to <= 3-4 lines with clean bullet points for WhatsApp/Telegram mobile readability.
+  3. *Rule 3: Offer Next Steps* — Provide 1-tap numbered quick replies (`1️⃣`, `2️⃣`, `3️⃣`) to eliminate conversational friction.
+
 
