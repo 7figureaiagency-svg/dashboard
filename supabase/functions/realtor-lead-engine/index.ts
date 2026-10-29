@@ -4642,6 +4642,233 @@ export function computeUpdatedLanguageProfile(
   };
 }
 
+// =============================================================================
+// PHASE 33.3: UNIVERSAL MULTILINGUAL DYNAMIC SYNTHESIZER
+// =============================================================================
+
+export interface SynthesizeReplyParams {
+  goal: string;
+  lead?: any;
+  contextData?: {
+    matchedInventory?: any[];
+    availableSlots?: string[];
+    brochureUrl?: string;
+    mapUrl?: string;
+    propertySummary?: string;
+    options?: string[];
+    [key: string]: any;
+  };
+  languageProfile?: Partial<LanguageProfile> | null;
+  agencyBranding?: {
+    agencyName?: string;
+    city?: string;
+    contactNumber?: string;
+  };
+  fallbackTemplate?: string;
+  fetchFn?: typeof fetch;
+}
+
+export function buildSynthesizerPrompt(params: SynthesizeReplyParams): string {
+  const { goal, lead, contextData, languageProfile, agencyBranding } = params;
+  const agencyName = agencyBranding?.agencyName || "NextGen Realty";
+  const city = agencyBranding?.city || "Vadodara";
+  const primaryLang = languageProfile?.primary_language || "Hindi";
+  const dialect = languageProfile?.dialect || (primaryLang === "Gujarati" ? "Gujlish" : "Hinglish");
+  const script = languageProfile?.script || "Latin";
+  const formality = languageProfile?.formality || "POLITE_RESPECTFUL";
+  const userName = lead?.name && lead.name !== "Unknown" ? lead.name : "";
+
+  let contextSnippet = "";
+  if (contextData) {
+    if (contextData.propertySummary) {
+      contextSnippet += `\n- Property Details: ${contextData.propertySummary}`;
+    }
+    if (Array.isArray(contextData.options) && contextData.options.length > 0) {
+      contextSnippet += `\n- Numbered Options:\n${contextData.options.map((opt, i) => `  ${i + 1}. ${opt}`).join("\n")}`;
+    }
+    if (Array.isArray(contextData.availableSlots) && contextData.availableSlots.length > 0) {
+      contextSnippet += `\n- Available Visit Slots: ${contextData.availableSlots.join(", ")}`;
+    }
+    if (contextData.brochureUrl) {
+      contextSnippet += `\n- Brochure Link: ${contextData.brochureUrl}`;
+    }
+    if (contextData.mapUrl) {
+      contextSnippet += `\n- Location Map: ${contextData.mapUrl}`;
+    }
+  }
+
+  return `You are an elite, highly professional real estate advisor for ${agencyName} in ${city}.
+Generate a conversational, warm, and concise reply (strictly <= 4 lines, formatted for WhatsApp) fulfilling this exact goal:
+"${goal}"
+
+### RECIPIENT CONTEXT:
+- Recipient Name: ${userName ? userName : "Valued Client"}
+- Role: ${lead?.lead_type || lead?.metadata?.active_persona || "Client"}${contextSnippet}
+
+### LINGUISTIC & DIALECT SPECIFICATIONS:
+- Primary Language: Strictly write in ${primaryLang}.
+- Dialect: Strictly write in ${dialect}.
+- Script: Strictly use ${script} script.
+  * If script is "Gujarati", output genuine Gujarati text (ગુજરાતી લિપિ).
+  * If script is "Devanagari", output Devanagari text (देवनागरी लिपि) for Hindi or Marathi.
+  * If script is "Latin" and dialect is "Gujlish", write conversational phonetic Gujlish (e.g. "Namaste ji! Alkapuri ma 1BHK Tenement mate tamari expected price shu chhe?").
+  * If script is "Latin" and dialect is "Hinglish", write natural conversational Hinglish.
+  * If language is "English", write professional English.
+- Formality: ${formality === "POLITE_RESPECTFUL" ? "Respectful Indian hospitality (use respectful honorifics like 'ji', 'aap', 'tame')" : "Warm and courteous"}.
+- Formatting: Clean WhatsApp typography. Use <b>bolding</b> for key figures, project names, or options. Do NOT use markdown code blocks, backticks, or hashtags.
+
+### STRICT REAL ESTATE DOMAIN INVARIANTS:
+1. Never hallucinate prices, configurations, or inventory not provided in the goal or context data.
+2. Use standard Indian real estate conventions (BHK, Lakh, Crore, Carpet Area, Sq. Ft.).
+3. If numbered options are provided, keep them clearly numbered so the user can easily reply with 1, 2, or 3.
+4. Keep the response under 4 lines total. Be direct, helpful, and polite.`;
+}
+
+export function getCuratedRegionalFallback(
+  goal: string,
+  languageProfile?: Partial<LanguageProfile> | null,
+  agencyName = "NextGen Realty",
+  fallbackTemplate?: string
+): string {
+  if (fallbackTemplate && fallbackTemplate.trim()) {
+    return fallbackTemplate.trim();
+  }
+
+  const lang = (languageProfile?.primary_language || "").toLowerCase();
+  const dialect = (languageProfile?.dialect || "").toLowerCase();
+  const script = languageProfile?.script || "Latin";
+
+  if (lang.includes("guj") || dialect.includes("guj")) {
+    if (script === "Gujarati") {
+      return `નમસ્તે! ${agencyName} માં આપનું સ્વાગત છે. તમારી જરૂરિયાત નોંધી લીધી છે. વિગતો માટે અમારા એડવાઈઝર ટૂંક સમયમાં સંપર્ક કરશે. 🙏`;
+    }
+    return `Namaste! ${agencyName} ma aapnu swagat chhe. Tamari requirement nondhi lidhi chhe. Amari team jald thi aapse contact karshe. 🙏`;
+  }
+  if (lang.includes("marathi") || dialect.includes("marathi")) {
+    if (script === "Devanagari") {
+      return `नमस्कार! ${agencyName} मध्ये आपले स्वागत आहे. तुमची माहिती नोंदवून घेतली आहे. आमची टीम लवकरच आपल्याशी संपर्क करेल. 🙏`;
+    }
+    return `Namaskar! ${agencyName} madhye aple swagat aahe. Tumchi requirement nondavli aahe. Aamchi team lavkarach aapyashi sampark karel. 🙏`;
+  }
+  if (lang.includes("tamil") || dialect.includes("tamil")) {
+    return `Vanakkam! ${agencyName}-il ungalai varaverkirom. Ungal thevaigalai padivu seidhom. Engal kulu viraivil ungalai thodarbu kollum. 🙏`;
+  }
+  if (lang.includes("telugu") || dialect.includes("telugu")) {
+    return `Namaskaram! ${agencyName} ki swagatham. Mee requirement record chesam. Ma team tvaralo mimmalni contact chestundi. 🙏`;
+  }
+  if (lang.includes("eng") || dialect.includes("eng")) {
+    return `Hello! Welcome to ${agencyName}. We have noted your requirement and our real estate team will connect with you shortly. 🙏`;
+  }
+  // Default Hinglish / Hindi
+  if (script === "Devanagari") {
+    return `नमस्ते! ${agencyName} में आपका स्वागत है। आपकी आवश्यकता नोट कर ली गई है। हमारी टीम जल्द ही आपसे संपर्क करेगी। 🙏`;
+  }
+  return `Namaste! ${agencyName} me aapka swagat hai. Aapki requirement note kar li gayi hai. Hamari team jald hi aapse connect karegi. 🙏`;
+}
+
+function sanitizeGeneratedReply(text: string): string {
+  let clean = text.replace(/^```(?:markdown)?\n?/i, "").replace(/```$/g, "").trim();
+  clean = clean.replace(/^["']|["']$/g, "").trim();
+  return clean;
+}
+
+export async function synthesizeMultilingualReply(params: SynthesizeReplyParams): Promise<string> {
+  const fetchFn = params.fetchFn || fetch;
+  const agencyName = params.agencyBranding?.agencyName || "NextGen Realty";
+
+  // Clean / prepare API keys
+  let geminiKey = "";
+  let groqKey = "";
+  try {
+    if (typeof Deno !== "undefined" && Deno.env) {
+      geminiKey = Deno.env.get("GEMINI_API_KEY") || "";
+      groqKey = Deno.env.get("GROQ_API_KEY") || "";
+    }
+  } catch (_) {}
+  if (!geminiKey && typeof process !== "undefined" && process.env) {
+    geminiKey = process.env.GEMINI_API_KEY || "";
+  }
+  if (!groqKey && typeof process !== "undefined" && process.env) {
+    groqKey = process.env.GROQ_API_KEY || "";
+  }
+  geminiKey = geminiKey.trim().replace(/^["']|["']$/g, "");
+  groqKey = groqKey.trim().replace(/^["']|["']$/g, "");
+
+  const promptText = buildSynthesizerPrompt(params);
+
+  // 1. Google Gemini 2.5 Flash Primary (~150-300ms)
+  if (geminiKey) {
+    try {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+      const res = await fetchFn(geminiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 250,
+          },
+        }),
+        signal: AbortSignal.timeout(2000),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (generatedText && generatedText.length > 5) {
+          return sanitizeGeneratedReply(generatedText);
+        }
+      }
+    } catch (geminiErr: any) {
+      console.warn("[Synthesizer] Gemini 2.5 Flash call failed:", geminiErr.message);
+    }
+  }
+
+  // 2. Groq Llama-3.3-70b Fallback (~200ms)
+  if (groqKey) {
+    try {
+      const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
+      const groqRes = await fetchFn(groqUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${groqKey}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          temperature: 0.3,
+          max_tokens: 250,
+          messages: [
+            {
+              role: "system",
+              content: `You are an elite real estate advisor for ${agencyName}. Write concise WhatsApp replies under 4 lines adhering strictly to the user's language, dialect, and script.`,
+            },
+            {
+              role: "user",
+              content: promptText,
+            },
+          ],
+        }),
+        signal: AbortSignal.timeout(2000),
+      });
+
+      if (groqRes.ok) {
+        const groqData = await groqRes.json();
+        const text = groqData.choices?.[0]?.message?.content?.trim();
+        if (text && text.length > 5) {
+          return sanitizeGeneratedReply(text);
+        }
+      }
+    } catch (groqErr: any) {
+      console.warn("[Synthesizer] Groq fallback failed:", groqErr.message);
+    }
+  }
+
+  // 3. Curated Regional Fallback Template
+  return getCuratedRegionalFallback(params.goal, params.languageProfile, agencyName, params.fallbackTemplate);
+}
+
 async function classifyLeadIntent(
   messageText: string,
   lead: any
