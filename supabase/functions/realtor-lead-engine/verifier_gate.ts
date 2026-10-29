@@ -232,8 +232,70 @@ export function checkPolicyAndCompliance(params: OutboundVerificationParams): st
   return null;
 }
 
+/**
+ * Invariant 5: CS-Chatbot-Design Dialogue Governance & Mobile Ergonomics
+ * Enforces the 3 Golden Response Principles:
+ *  1. Conciseness check: Conversational replies must not exceed 7 lines on mobile WhatsApp/Telegram (excluding inventory cards & recap summaries).
+ *  2. Quick-reply format: Multi-choice prompts must use 1-tap numbered emojis (1️⃣, 2️⃣, 3️⃣) instead of plain numbers.
+ *  3. Acknowledge check: Bot must not abruptly ask questions without acknowledging user input or providing conversational grounding.
+ */
+export function checkDialogueGovernance(params: OutboundVerificationParams): string | null {
+  const replyText = (params.proposedReply || "").trim();
+  const userText = (params.userMessage || "").trim();
+
+  // A. Conciseness Check (max 7 lines for regular conversational turns, excluding property cards and recaps)
+  const isPropertyCardOrRecap =
+    replyText.includes("📍") ||
+    replyText.includes("💰") ||
+    replyText.includes("📋") ||
+    /carpet\s*area/i.test(replyText) ||
+    /brochure/i.test(replyText) ||
+    /options\s*matching/i.test(replyText) ||
+    /here\s*are\s*some\s*options/i.test(replyText);
+
+  const lines = replyText.split("\n").map(l => l.trim()).filter(Boolean);
+  if (!isPropertyCardOrRecap && lines.length > 7) {
+    return `CONCISENESS: Proposed reply has ${lines.length} lines, exceeding 7 lines maximum for conversational mobile messaging.`;
+  }
+
+  // B. Quick-Reply Format Check
+  // Check if reply presents numbered choices with ASCII digits (e.g. "1.", "1)", "Option 1:") without 1-tap emojis
+  const hasAsciiOptions = /(?:^|\n)\s*(?:option\s*)?[1-4][\.\)]\s+\S+/i.test(replyText);
+  const hasEmojiOptions = /(?:1️⃣|2️⃣|3️⃣|4️⃣)/u.test(replyText);
+  if (hasAsciiOptions && !hasEmojiOptions) {
+    return "QUICK_REPLY_FORMAT: Multi-choice prompt uses plain ASCII numbers instead of 1-tap quick reply emojis (1️⃣, 2️⃣).";
+  }
+
+  // C. Acknowledge First Check
+  // If user sent a substantive input (not a generic greeting or isolated option number)
+  const isSubstantiveUserMessage =
+    userText.length > 3 &&
+    !/^(?:hi|hello|hey|namaste|kem cho|pranam|namaskar|start|restart)$/i.test(userText.toLowerCase()) &&
+    !/^[1-4]$/.test(userText.trim());
+
+  if (isSubstantiveUserMessage) {
+    // Check if reply immediately starts with an abrupt question
+    const strippedReply = replyText.replace(/^(?:<b>.*?<\/b>|\s*)+/i, "").trim();
+    const startsAbruptlyWithQuestion =
+      /^(?:kis\s*type|kitne\s*bhk|aapka\s*budget|konsi\s*location|which\s*location|how\s*many\s*bhk|what\s*is\s*your\s*budget|where\s*are\s*you\s*looking|tamne\s*kaya|ketlu\s*budget|kaya\s*area)\b/i.test(
+        strippedReply
+      );
+
+    const hasAcknowledgment =
+      /\b(ji|noted|samajh|samji|nondhi|shukriya|dhanyawad|thank|thanks|certainly|sure|bilkul|saras|great|got\s*it|perfect|aapki|tamari|hello|namaste|kem\s*cho|pranam|vanakkam|namaskaram)\b/i.test(
+        replyText.slice(0, 80).toLowerCase()
+      ) || /[👍🙏🏡✨]/.test(replyText.slice(0, 50));
+
+    if (startsAbruptlyWithQuestion && !hasAcknowledgment) {
+      return "ACKNOWLEDGE_FIRST: Proposed reply abruptly fires a question without acknowledging user input.";
+    }
+  }
+
+  return null;
+}
+
 // -----------------------------------------------------------------------------
-// 2. HTML Auto-Fixer Utility
+// 2. HTML Auto-Fixer & Dialogue Sanitizer Utility
 // -----------------------------------------------------------------------------
 export function fixUnbalancedHtml(text: string): string {
   let fixed = text;
@@ -246,6 +308,65 @@ export function fixUnbalancedHtml(text: string): string {
     }
   }
   return fixed;
+}
+
+/**
+ * Auto-sanitizes replies to adhere strictly to cs-chatbot-design mobile ergonomics:
+ * 1. Converts ASCII option numbers (1., 1), Option 1:) into 1-tap emojis (1️⃣, 2️⃣, 3️⃣, 4️⃣)
+ * 2. Condenses multiple consecutive newlines (max 2)
+ * 3. Prepends polite acknowledgment if abruptly asking a question without greeting/ack
+ * 4. Ensures HTML tags are balanced
+ */
+export function autoSanitizeDialogue(text: string, dialect?: string): string {
+  if (!text) return "";
+  let sanitized = text;
+
+  // 1. Convert ASCII options to emoji buttons: "1. " or "1) " or "Option 1: " -> "1️⃣ "
+  const emojiMap: Record<string, string> = {
+    "1": "1️⃣",
+    "2": "2️⃣",
+    "3": "3️⃣",
+    "4": "4️⃣",
+  };
+  sanitized = sanitized.replace(
+    /(?:^|\n)\s*(?:option\s*)?([1-4])[\.\:\)]\s+/gim,
+    (match, num) => {
+      const emoji = emojiMap[num] || num;
+      const prefix = match.startsWith("\n") ? "\n" : "";
+      return `${prefix}${emoji} `;
+    }
+  );
+
+  // 2. Condense 3+ newlines to 2 newlines
+  sanitized = sanitized.replace(/\n{3,}/g, "\n\n");
+
+  // 3. If abruptly starting with a question, prepend acknowledgment
+  const trimmed = sanitized.trim();
+  const stripped = trimmed.replace(/^(?:<b>.*?<\/b>|\s*)+/i, "").trim();
+  const startsAbruptly =
+    /^(?:kis\s*type|kitne\s*bhk|aapka\s*budget|konsi\s*location|which\s*location|how\s*many\s*bhk|what\s*is\s*your\s*budget|where\s*are\s*you\s*looking|tamne\s*kaya|ketlu\s*budget|kaya\s*area)\b/i.test(
+      stripped
+    );
+  const hasAck =
+    /\b(ji|noted|samajh|samji|nondhi|shukriya|dhanyawad|thank|thanks|certainly|sure|bilkul|saras|great|got\s*it|perfect|aapki|tamari|hello|namaste|kem\s*cho|pranam|vanakkam|namaskaram)\b/i.test(
+      trimmed.slice(0, 80).toLowerCase()
+    ) || /[👍🙏🏡✨]/.test(trimmed.slice(0, 50));
+
+  if (startsAbruptly && !hasAck) {
+    const d = (dialect || "").toUpperCase();
+    if (d.includes("GUJ")) {
+      sanitized = `Ji noted! 👍\n${sanitized}`;
+    } else if (d.includes("ENG")) {
+      sanitized = `Noted! 👍\n${sanitized}`;
+    } else {
+      sanitized = `Ji noted! 👍\n${sanitized}`;
+    }
+  }
+
+  // 4. Balance HTML tags
+  sanitized = fixUnbalancedHtml(sanitized);
+
+  return sanitized.trim();
 }
 
 // -----------------------------------------------------------------------------
@@ -313,19 +434,31 @@ export function getDeterministicCorrection(
     return "Ji noted! Aapka budget dhyan me rakh liya hai. Aapko Ready to Move property chahiye ya Under Construction bhi chalega? 🏗️";
   }
 
-  // 6. HTML syntax errors
-  if (violationSummary.includes("HTML_SYNTAX")) {
-    return fixUnbalancedHtml(params.proposedReply);
+  // 6. Dialogue governance: Quick reply format or abrupt question
+  if (violationSummary.includes("QUICK_REPLY_FORMAT") || violationSummary.includes("ACKNOWLEDGE_FIRST")) {
+    return autoSanitizeDialogue(params.proposedReply, lang);
   }
 
-  // 7. Hallucinated guarantees: strip them cleanly
+  // 7. Conciseness: Trim rambling conversational replies beyond 7 lines
+  if (violationSummary.includes("CONCISENESS")) {
+    const lines = params.proposedReply.split("\n").map(l => l.trim()).filter(Boolean);
+    const concise = lines.slice(0, 6).join("\n");
+    return autoSanitizeDialogue(concise, lang);
+  }
+
+  // 8. HTML syntax errors
+  if (violationSummary.includes("HTML_SYNTAX")) {
+    return autoSanitizeDialogue(fixUnbalancedHtml(params.proposedReply), lang);
+  }
+
+  // 9. Hallucinated guarantees: strip them cleanly
   let cleaned = params.proposedReply
     .replace(/100%\s*guarantee/gi, "trusted quality")
     .replace(/guaranteed\s*(?:returns|roi|profit)/gi, "high potential returns")
     .replace(/double\s*your\s*money/gi, "attractive appreciation potential")
     .replace(/[!?]{4,}/g, "!");
 
-  return fixUnbalancedHtml(cleaned);
+  return autoSanitizeDialogue(cleaned, lang);
 }
 
 /**
@@ -364,7 +497,8 @@ Instructions:
 4. If the user already provided an entity (e.g. location or property type), acknowledge it and ask the next missing qualification question instead of re-asking.
 5. If the user cannot attend a visit, empathize and offer reschedule options.
 6. Ensure all HTML tags (<b>, <i>, <a>) are strictly balanced and properly closed.
-7. Return ONLY the corrected message text. No explanations or commentary.`;
+7. Strictly adhere to the 3 Golden Response Principles: 1) Acknowledge First, 2) Be Concise (<= 3-4 lines for mobile), 3) Offer Next Steps with numbered emojis (1️⃣, 2️⃣).
+8. Return ONLY the corrected message text. No explanations or commentary.`;
 
   // Try Gemini 2.0 Flash first (~150-300ms)
   if (cleanGeminiKey) {
@@ -433,7 +567,7 @@ Instructions:
 
 /**
  * Pre-Flight Outbound Reply Verification Gate
- * Runs all 4 invariant checks in parallel and self-corrects invalid replies.
+ * Runs all 5 invariant checks in parallel and self-corrects invalid replies.
  */
 export async function verifyOutboundReply(
   params: OutboundVerificationParams
@@ -456,17 +590,35 @@ export async function verifyOutboundReply(
   const policyViolation = checkPolicyAndCompliance(params);
   if (policyViolation) violations.push(policyViolation);
 
+  // Check 5: CS-Chatbot-Design Dialogue Governance & Mobile Readability
+  const dialogueViolation = checkDialogueGovernance(params);
+  if (dialogueViolation) violations.push(dialogueViolation);
+
   // If all invariants passed cleanly
   if (violations.length === 0) {
     return {
       isValid: true,
-      correctedReply: params.proposedReply,
+      correctedReply: autoSanitizeDialogue(params.proposedReply, params.languageProfile?.dialect),
       violations: [],
     };
   }
 
   // Violations detected: Trigger lightweight corrective synthesis
   const reason = violations.join("; ");
+
+  // Fast-path: If only dialogue formatting violations (QUICK_REPLY_FORMAT, ACKNOWLEDGE_FIRST, HTML_SYNTAX)
+  const isOnlyFormatting = violations.every(
+    v => v.includes("QUICK_REPLY_FORMAT") || v.includes("ACKNOWLEDGE_FIRST") || v.includes("HTML_SYNTAX")
+  );
+  if (isOnlyFormatting) {
+    const sanitized = autoSanitizeDialogue(params.proposedReply, params.languageProfile?.dialect);
+    return {
+      isValid: false,
+      correctedReply: sanitized,
+      reason,
+      violations,
+    };
+  }
 
   // 1. Try lightweight LLM re-synthesis
   let corrected: string | null = null;
@@ -483,7 +635,7 @@ export async function verifyOutboundReply(
 
   return {
     isValid: false,
-    correctedReply: corrected,
+    correctedReply: autoSanitizeDialogue(corrected, params.languageProfile?.dialect),
     reason,
     violations,
   };
