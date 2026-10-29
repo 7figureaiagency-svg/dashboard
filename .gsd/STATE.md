@@ -8,22 +8,24 @@ updated: 2026-10-29T18:05:00+05:30
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
 **Phase:** 33 - Autonomous Universal Multimodal Real Estate Agent & Bulletproof Cognitive Engine  
-**Status:** 🟢 Completed  
+**Status:** ✅ Completed Phase 33  
 **Plans:**
 - `.gsd/phases/33/33.1-PLAN.md` (Multimodal Voice Note Ingestion Engine) — ✅ Completed
 - `.gsd/phases/33/33.2-PLAN.md` (Zero-Regex Cognitive Intent & Entity Extractor) — ✅ Completed
 - `.gsd/phases/33/33.3-PLAN.md` (Universal Multilingual Dynamic Synthesizer) — ✅ Completed
 - `.gsd/phases/33/33.4-PLAN.md` (Pre-Flight Self-Correction Gate & Codebase Modularization) — ✅ Completed
+- `.gsd/phases/33/33.5-PLAN.md` (Context Recap Card, Visit Time Anchor & Voice Script Normalization) — ✅ Completed
 
 ## Last Action
 
-Completed Plan 33.4 (Pre-Flight Self-Correction Gate & Codebase Modularization):
-- Implemented `verifyOutboundReply` in `supabase/functions/realtor-lead-engine/verifier_gate.ts` enforcing 4 critical invariants: Contradiction Check, Redundancy Check, Hallucination Check, and Policy/HTML Tag Balance Check.
-- Modularized monolithic serverless edge function into clean Deno submodules under 500 lines each: `voice_decoder.ts`, `cognitive_extractor.ts`, `multilingual_synthesizer.ts`, and `verifier_gate.ts`.
-- Bumped edge function version to `v86-universal-multimodal-cognitive-agent` in `/health` and root GET handler.
-- Authored and verified `scratch/test_phase33_verifier_gate.cjs` and `scratch/test_phase33_e2e_multimodal.cjs` with 100% pass rates across all suites.
-- Deployed Edge Function `v86-universal-multimodal-cognitive-agent` live to Supabase production (`yeiygfysijptjdepctnx`) and verified HTTP 200 `ONLINE`.
-- Commits landed: `7a3be6a`, `b54ddff`, `e253b13`.
+Completed Plan 33.5 (Conversational Context Recap Card, Visit Time Anchor & Voice Script Normalization):
+- Decoupled option references (`option 1`, `opt 2`) from visit hours in `parseVisitSlot`, ensuring `"option 1 ke sath kal 10 baje ki visit book kar do"` books strictly at `10:00 AM IST` (`04:30 UTC`).
+- Added Perso-Arabic / Urdu script detector `containsPersoArabicScript` and fast sub-200ms transliteration bridge `transliterateArabicScriptToLatin` in `voice_decoder.ts` with strengthened Whisper prompt.
+- Fixed Gemini API model names from invalid `gemini-2.5-flash`/`gemini-2.5-pro` to `gemini-2.0-flash` and `gemini-1.5-pro` across all submodules.
+- Upgraded `LOCATION_CONFIRMATION` into a structured Context Recap Card (Location, Property Type, Budget, Timeline) with 2-choice fork and direct answer updating.
+- Verified 38/38 assertions in `scratch/test_phase33_bugfixes_and_recap.cjs` (100% pass rate) and compiled Vite frontend with 0 errors.
+- Deployed Edge Function `v87-recap-card-and-time-anchor-fix` live to Supabase production (`yeiygfysijptjdepctnx`) and verified live HTTP 200 `ONLINE`.
+- Commits landed: `e062f6d`, `c775907`, `7f2ca12`, `757d8ec`.
 
 Completed Plan 33.1 (Multimodal Voice Note Ingestion Engine):
 - Implemented `fetchTelegramAudioBuffer` and `fetchWhatsAppAudioBuffer` with resilient credential checks and error handling.
