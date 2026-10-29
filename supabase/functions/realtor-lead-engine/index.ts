@@ -1,5 +1,7 @@
 // JSR import removed to prevent bundler 10s fetch timeout
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifyOutboundReply } from "./verifier_gate.ts";
+export * from "./verifier_gate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13460,7 +13462,29 @@ Deno.serve(async (req: Request) => {
           : `Ji ${leadName}! Kripya batayein aap kis type ki property search kar rahe hain — Flat, Villa, ya Commercial Office/Shop? 🏡`;
     }
 
+    let preflightVerification: any = null;
     if (!isSilent && replyText) {
+      // PHASE 33.4: Pre-Flight Self-Correction Gate
+      try {
+        preflightVerification = await verifyOutboundReply({
+          userMessage: messageText,
+          proposedReply: replyText,
+          extractedIntent: aiAnalysis,
+          leadState: nextState,
+          lastBotPrompt: enrichedLeadMetadata?.last_bot_prompt,
+          languageProfile: enrichedLeadMetadata?.language_profile || updatedLanguageProfile,
+        });
+
+        if (!preflightVerification.isValid && preflightVerification.correctedReply) {
+          console.warn(
+            `[PreFlightGate] Invariant violation detected: "${preflightVerification.reason}". Corrected reply: "${preflightVerification.correctedReply.slice(0, 100)}..."`
+          );
+          replyText = preflightVerification.correctedReply;
+        }
+      } catch (gateErr: any) {
+        console.error("[PreFlightGate] Error during verification:", gateErr.message);
+      }
+
       if (platform === "TELEGRAM") {
         await sendTelegramMessage(botToken, senderId, replyText);
       } else if (platform === "WHATSAPP" && phoneNumberId) {
@@ -13482,6 +13506,9 @@ Deno.serve(async (req: Request) => {
         replySent: isSilent ? "[SILENT - 0 MSG DISPATCHED]" : replyText.slice(0, 500),
         state: nextState,
         ai_analysis: aiAnalysis,
+        preflight_verification: preflightVerification
+          ? { isValid: preflightVerification.isValid, reason: preflightVerification.reason }
+          : undefined,
       },
     });
 
@@ -13495,6 +13522,7 @@ Deno.serve(async (req: Request) => {
         silent: isSilent,
         reply_sent: isSilent ? null : replyText,
         ai_analysis: aiAnalysis,
+        verification: preflightVerification,
         voice_transcription: isVoice ? { text: messageText, ...voiceMetadata } : undefined,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
