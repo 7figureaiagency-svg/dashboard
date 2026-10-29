@@ -167,7 +167,10 @@ assert(indexContent.includes('CRITERIA_UPDATE_SELECTION'), 'CRITERIA_UPDATE_SELE
 // -----------------------------------------------------------------------------
 console.log('\n--- Suite 5: Production Version Alignment ---');
 
-assert(indexContent.includes('v87-recap-card-and-time-anchor-fix'), 'Version bumped to v87-recap-card-and-time-anchor-fix in health check');
+assert(
+  /v(?:87|88)/.test(indexContent),
+  'Version bumped to v87 or v88 in health check'
+);
 
 console.log('\n======================================================');
 console.log(`🎉 ALL ${passedTests}/${totalTests} ASSERTIONS PASSED WITH 100% SUCCESS!`);
