@@ -252,10 +252,15 @@ Generate a conversational, warm, and concise reply (strictly <= 4 lines, formatt
 - Formality: ${formality === "POLITE_RESPECTFUL" ? "Respectful Indian hospitality (use respectful honorifics like 'ji', 'aap', 'tame')" : "Warm and courteous"}.
 - Formatting: Clean WhatsApp typography. Use <b>bolding</b> for key figures, project names, or options. Do NOT use markdown code blocks, backticks, or hashtags.
 
+### 3 GOLDEN RESPONSE PRINCIPLES (MANDATORY CS-CHATBOT-DESIGN STANDARDS):
+1. Rule 1 (Acknowledge First): Always confirm the specific entity, budget, location, or request provided in the immediate turn (e.g. "Noted 3BHK Flat in Alkapuri! 👍" or "Samajh gaya Manthan ji!"). Never abruptly fire questions without acknowledging input.
+2. Rule 2 (Be Concise): Limit message body to strictly <= 3-4 lines with bullet points for effortless mobile WhatsApp/Telegram readability. No conversational filler or rambling.
+3. Rule 3 (Offer Next Steps): Whenever asking a choice question or presenting options, provide 1-tap numbered emojis (1️⃣, 2️⃣, 3️⃣) so the client can tap or reply with a single digit without friction.
+
 ### STRICT REAL ESTATE DOMAIN INVARIANTS:
 1. Never hallucinate prices, configurations, or inventory not provided in the goal or context data.
 2. Use standard Indian real estate conventions (BHK, Lakh, Crore, Carpet Area, Sq. Ft.).
-3. If numbered options are provided, keep them clearly numbered so the user can easily reply with 1, 2, or 3.
+3. Enforce the 3 Golden Response Principles: Acknowledge First, Be Concise (<= 3-4 lines total), and Offer Next Steps (1️⃣, 2️⃣, 3️⃣).
 4. Keep the response under 4 lines total. Be direct, helpful, and polite.`;
 }
 
@@ -275,30 +280,30 @@ export function getCuratedRegionalFallback(
 
   if (lang.includes("guj") || dialect.includes("guj")) {
     if (script === "Gujarati") {
-      return `નમસ્તે! ${agencyName} માં આપનું સ્વાગત છે. તમારી જરૂરિયાત નોંધી લીધી છે. વિગતો માટે અમારા એડવાઈઝર ટૂંક સમયમાં સંપર્ક કરશે. 🙏`;
+      return `નમસ્તે! આપની વિગત નોંધી લીધી છે. 👍\n${agencyName} માં આપનું સ્વાગત છે. અમારા એડવાઈઝર ટૂંક સમયમાં વિગતો મોકલશે. 🙏`;
     }
-    return `Namaste! ${agencyName} ma aapnu swagat chhe. Tamari requirement nondhi lidhi chhe. Amari team jald thi aapse contact karshe. 🙏`;
+    return `Namaste! Aapni requirement note kari lidhi chhe. 👍\n${agencyName} ma aapnu swagat chhe. Amara advisor jald j contact karshe. 🙏`;
   }
   if (lang.includes("marathi") || dialect.includes("marathi")) {
     if (script === "Devanagari") {
-      return `नमस्कार! ${agencyName} मध्ये आपले स्वागत आहे. तुमची माहिती नोंदवून घेतली आहे. आमची टीम लवकरच आपल्याशी संपर्क करेल. 🙏`;
+      return `नमस्कार! आपली माहिती नोंदवून घेतली आहे. 👍\n${agencyName} मध्ये आपले स्वागत आहे. आमचे सल्लागार लवकरच संपर्क करतील. 🙏`;
     }
-    return `Namaskar! ${agencyName} madhye aple swagat aahe. Tumchi requirement nondavli aahe. Aamchi team lavkarach aapyashi sampark karel. 🙏`;
+    return `Namaskar! Tumchi requirement note keli aahe. 👍\n${agencyName} madhye aple swagat aahe. Aamche advisor lavkarach contact kartil. 🙏`;
   }
   if (lang.includes("tamil") || dialect.includes("tamil")) {
-    return `Vanakkam! ${agencyName}-il ungalai varaverkirom. Ungal thevaigalai padivu seidhom. Engal kulu viraivil ungalai thodarbu kollum. 🙏`;
+    return `Vanakkam! Ungal thevaigalai padivu seidhom. 👍\n${agencyName}-il ungalai varaverkirom. Engal advisor viraivil thodarbu kolvar. 🙏`;
   }
   if (lang.includes("telugu") || dialect.includes("telugu")) {
-    return `Namaskaram! ${agencyName} ki swagatham. Mee requirement record chesam. Ma team tvaralo mimmalni contact chestundi. 🙏`;
+    return `Namaskaram! Mee requirement record chesam. 👍\n${agencyName} ki swagatham. Ma advisor tvaralo mimmalni contact chestaru. 🙏`;
   }
   if (lang.includes("eng") || dialect.includes("eng")) {
-    return `Hello! Welcome to ${agencyName}. We have noted your requirement and our real estate team will connect with you shortly. 🙏`;
+    return `Hello! Noted your requirement. 👍\nWelcome to ${agencyName}. Our real estate advisor will connect with you shortly. 🙏`;
   }
   // Default Hinglish / Hindi
   if (script === "Devanagari") {
-    return `नमस्ते! ${agencyName} में आपका स्वागत है। आपकी आवश्यकता नोट कर ली गई है। हमारी टीम जल्द ही आपसे संपर्क करेगी। 🙏`;
+    return `नमस्ते! आपकी आवश्यकता नोट कर ली गई है। 👍\n${agencyName} में आपका स्वागत है। हमारे सलाहकार जल्द ही आपसे संपर्क करेंगे। 🙏`;
   }
-  return `Namaste! ${agencyName} me aapka swagat hai. Aapki requirement note kar li gayi hai. Hamari team jald hi aapse connect karegi. 🙏`;
+  return `Namaste! Aapki requirement note kar li gayi hai. 👍\n${agencyName} me aapka swagat hai. Hamare advisor jald hi aapse connect karenge. 🙏`;
 }
 
 export function sanitizeGeneratedReply(text: string): string {
@@ -377,7 +382,7 @@ export async function synthesizeMultilingualReply(params: SynthesizeReplyParams)
           messages: [
             {
               role: "system",
-              content: `You are an elite real estate advisor for ${agencyName}. Write concise WhatsApp replies under 4 lines adhering strictly to the user's language, dialect, and script.`,
+              content: `You are an elite real estate advisor for ${agencyName}. Follow the 3 Golden Response Principles: 1. Acknowledge First, 2. Be Concise (<= 3-4 lines for mobile), 3. Offer Next Steps with numbered emojis (1️⃣, 2️⃣). Adhere strictly to the user's language, dialect, and script.`,
             },
             {
               role: "user",
