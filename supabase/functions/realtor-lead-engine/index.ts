@@ -12660,7 +12660,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v87-recap-card-and-time-anchor-fix",
+        version: "v88-cs-chatbot-design-governance",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
