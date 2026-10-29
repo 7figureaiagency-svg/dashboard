@@ -11934,12 +11934,13 @@ async function handleQualificationCascade(
   if (lastPromptQ === "LOCATION_CONFIRMATION") {
     const isBhkInput = isBhkOrPropertyConfiguration(context.messageText);
     const isKeepOld = !isBhkInput && (
-      /^\s*(?:1|1️⃣|option\s*1|first|1st|pichli|purani|pehle|pahla|pehli|wahi|same|keep|ha|yes|haan|haa|ha\s*wahi)\b/i.test(context.messageText.trim()) ||
+      /^\s*(?:1|1️⃣|option\s*1|first|1st|pichli|purani|pehle|pahla|pehli|wahi|same|keep|ha|yes|haan|haa|ha\s*wahi|continue|proceed|inhi\s*details|aage\s*badhein)\b/i.test(context.messageText.trim()) ||
       Boolean(staleLoc && lowerMsg.includes(staleLoc.toLowerCase()))
     );
+    const hasDirectCriteriaUpdate = Boolean(justBudget || (explicitLoc && explicitLoc !== staleLoc) || justPropType || justPurpose || justTimeline);
     const isChangeLoc = !isBhkInput && (
-      /^\s*(?:2|2️⃣|option\s*2|second|2nd|nayi|new|badalni|change|no|nahi|nhi)\b/i.test(context.messageText.trim()) ||
-      Boolean(explicitLoc && explicitLoc !== staleLoc)
+      /^\s*(?:2|2️⃣|option\s*2|second|2nd|nayi|new|badalni|change|no|nahi|nhi|update|badlo|change\s*karein|details\s*change)\b/i.test(context.messageText.trim()) ||
+      hasDirectCriteriaUpdate
     );
 
     if (isKeepOld && staleLoc) {
@@ -11947,20 +11948,130 @@ async function handleQualificationCascade(
       isLocationConfirmed = true;
       locationAck = lang === "GUJLISH" ? `Saras, <b>${staleLoc}</b> vistar lock karyo! 📍` : `Bahut badhiya, <b>${staleLoc}</b> area lock kar liya! 📍`;
     } else if (isChangeLoc) {
-      if (explicitLoc && explicitLoc !== staleLoc) {
-        location = explicitLoc;
-        isLocationConfirmed = true;
-        locationAck = lang === "GUJLISH" ? `Navi location <b>${explicitLoc}</b> note kari lidhi! 📍` : `Nayi location <b>${explicitLoc}</b> note kar li! 📍`;
-      } else {
-        location = null;
-        isLocationConfirmed = false;
-        if (lead) lead.location = null;
-        if (lead?.metadata?.seeker_draft) {
-          delete lead.metadata.seeker_draft.location;
-          lead.metadata.seeker_draft.location_confirmed = false;
+      if (hasDirectCriteriaUpdate) {
+        if (explicitLoc && explicitLoc !== staleLoc) {
+          location = explicitLoc;
+          isLocationConfirmed = true;
+          locationAck = lang === "GUJLISH" ? `Navi location <b>${explicitLoc}</b> note kari lidhi! 📍` : `Nayi location <b>${explicitLoc}</b> note kar li! 📍`;
+        } else if (staleLoc) {
+          location = staleLoc;
+          isLocationConfirmed = true;
         }
+        if (justBudget) budget = justBudget;
+        if (justPropType) propType = justPropType;
+        if (justPurpose) purpose = justPurpose;
+        if (justTimeline) timeline = justTimeline;
+      } else {
+        const updatePrompt =
+          lang === "GUJLISH"
+            ? `Tame kayi vigat update karva mango chho — <b>Location</b>, <b>Budget</b>, ke <b>Property Type</b>? ✏️`
+            : lang === "ENGLISH"
+            ? `Which detail would you like to update — <b>Location</b>, <b>Budget</b>, or <b>Property Type</b>? ✏️`
+            : `Aap kaunsi detail update karna chahte hain — <b>Location</b>, <b>Budget</b>, ya <b>Property Type</b>? ✏️`;
+
+        return {
+          replyText: updatePrompt,
+          nextState: "QUALIFYING",
+          leadUpdates: {
+            state: "QUALIFYING",
+            metadata: {
+              ...(lead?.metadata || {}),
+              seeker_draft: {
+                ...(lead?.metadata?.seeker_draft || {}),
+                criteria_update_in_progress: true,
+              },
+              last_bot_prompt: {
+                question_type: "CRITERIA_UPDATE_SELECTION",
+                sent_at: new Date().toISOString(),
+              },
+            },
+          },
+        };
       }
     }
+  } else if (lastPromptQ === "CRITERIA_UPDATE_SELECTION") {
+    if (/(?:location|area|vistar|jagah)/i.test(lowerMsg) && !explicitLoc) {
+      const askLoc =
+        lang === "GUJLISH"
+          ? `Tamari navi preferred <b>Location ke Area</b> janavjo? 📍`
+          : lang === "ENGLISH"
+          ? `Please specify your new preferred <b>Location or Area</b>? 📍`
+          : `Kripya apni nayi preferred <b>Location ya Area</b> batayein? 📍`;
+      return {
+        replyText: askLoc,
+        nextState: "QUALIFYING",
+        leadUpdates: {
+          state: "QUALIFYING",
+          location: null,
+          metadata: {
+            ...(lead?.metadata || {}),
+            seeker_draft: {
+              ...(lead?.metadata?.seeker_draft || {}),
+              location_confirmed: false,
+            },
+            last_bot_prompt: {
+              question_type: "LOCATION",
+              sent_at: new Date().toISOString(),
+            },
+          },
+        },
+      };
+    }
+    if (/(?:budget|price|range|kimat|paise)/i.test(lowerMsg) && (!justBudget || justBudget === 0)) {
+      const askBudget =
+        lang === "GUJLISH"
+          ? `Tamaro navo <b>Budget range</b> ketlo raheshe? 💰 (e.g. 50 Lakhs, 85 Lakhs ke 1.5 Cr)`
+          : lang === "ENGLISH"
+          ? `What is your new approximate <b>Budget range</b>? 💰 (e.g. 50 Lakhs, 85 Lakhs, or 1.5 Cr)`
+          : `Aapka naya approximate <b>Budget range</b> kitna rahega? 💰 (e.g. 50 Lakhs, 85 Lakhs ya 1.5 Cr)`;
+      return {
+        replyText: askBudget,
+        nextState: "QUALIFYING",
+        leadUpdates: {
+          state: "QUALIFYING",
+          budget: null,
+          metadata: {
+            ...(lead?.metadata || {}),
+            last_bot_prompt: {
+              question_type: "BUDGET",
+              sent_at: new Date().toISOString(),
+            },
+          },
+        },
+      };
+    }
+    if (/(?:property|flat|bhk|villa|plot|shop|office|type)/i.test(lowerMsg) && !justPropType) {
+      const askProp =
+        lang === "GUJLISH"
+          ? `Tamne kayi <b>Property type</b> joiye chhe — Flat, Duplex, Villa, ke Shop? 🏡`
+          : lang === "ENGLISH"
+          ? `Which <b>Property type</b> do you prefer — Flat, Duplex, Villa, or Shop? 🏡`
+          : `Aapko kaunsi <b>Property type</b> chahiye — Flat, Duplex, Villa, ya Shop? 🏡`;
+      return {
+        replyText: askProp,
+        nextState: "QUALIFYING",
+        leadUpdates: {
+          state: "QUALIFYING",
+          property_type: null,
+          metadata: {
+            ...(lead?.metadata || {}),
+            last_bot_prompt: {
+              question_type: "PROPERTY_TYPE",
+              sent_at: new Date().toISOString(),
+            },
+          },
+        },
+      };
+    }
+    if (explicitLoc) {
+      location = explicitLoc;
+      isLocationConfirmed = true;
+    } else if (staleLoc) {
+      location = staleLoc;
+      isLocationConfirmed = true;
+    }
+    if (justBudget) budget = justBudget;
+    if (justPropType) propType = justPropType;
   } else if (explicitLoc) {
     location = explicitLoc;
     isLocationConfirmed = true;
@@ -12285,12 +12396,20 @@ async function handleQualificationCascade(
           ? `👉 Are you looking for <b>Family living (Self-Use)</b> or for <b>Investment</b>? 🔑`
           : `👉 Yeh property aap <b>Family rehne (Self-Use)</b> ke liye dekh rahe hain ya <b>Investment</b> purpose se? 🔑`;
     } else if (missingStage === "LOCATION_CONFIRMATION") {
+      const savedLoc = staleLoc || lead?.location || lead?.metadata?.seeker_draft?.location || "Alkapuri";
+      const savedPropType = lead?.property_type || lead?.metadata?.seeker_draft?.property_type || propType || "Flat";
+      const rawSavedBudget = lead?.budget || lead?.metadata?.seeker_draft?.budget || budget;
+      const savedBudgetFormatted = (rawSavedBudget && Number(rawSavedBudget) > 0)
+        ? formatPriceShort(Number(rawSavedBudget))
+        : "Flexible";
+      const savedTimeline = lead?.timeline || lead?.metadata?.seeker_draft?.timeline || timeline || "Ready to Move";
+
       cleanQuestion =
         lang === "GUJLISH"
-          ? `Amari pase tamari pichli preferred location <b>${staleLoc}</b> saved chhe. 📍\n\nShu tame <b>${staleLoc}</b> ma j aagal vadharva mango chho ke navi location badalvi chhe?\n\n1️⃣ <b>Pichli location (${staleLoc})</b>\n2️⃣ <b>Navi location batavo</b>`
+          ? `📋 <b>Amari pase tamari pichli inquiry ni aa details saved chhe:</b>\n• 📍 Location: <b>${savedLoc}</b>\n• 🏡 Property: <b>${savedPropType}</b>\n• 💰 Budget: <b>${savedBudgetFormatted}</b>\n• 🔑 Timeline: <b>${savedTimeline}</b>\n\nShu tame aa j details sathe direct options jova mango chho, ke koi detail update karvi chhe?\n1️⃣ Inhi details ke sath aage badhein 👍\n2️⃣ Details change / update karein ✏️`
           : lang === "ENGLISH"
-          ? `We have your previous preferred location saved as <b>${staleLoc}</b>. 📍\n\nWould you like to continue with <b>${staleLoc}</b>, or specify a new location?\n\n1️⃣ <b>Keep previous location (${staleLoc})</b>\n2️⃣ <b>Change to new location</b>`
-          : `Humare paas aapki pichli preferred location <b>${staleLoc}</b> saved hai. 📍\n\nKya aap <b>${staleLoc}</b> me hi aage badhna chahte hain, ya koi nayi location batana chahte hain?\n\n1️⃣ <b>Pichli location (${staleLoc})</b>\n2️⃣ <b>Nayi location batayein</b>`;
+          ? `📋 <b>Here are the saved details from your previous inquiry:</b>\n• 📍 Location: <b>${savedLoc}</b>\n• 🏡 Property: <b>${savedPropType}</b>\n• 💰 Budget: <b>${savedBudgetFormatted}</b>\n• 🔑 Timeline: <b>${savedTimeline}</b>\n\nWould you like to explore matching options with these saved details, or update any criteria?\n1️⃣ Proceed with saved details 👍\n2️⃣ Change / update details ✏️`
+          : `📋 <b>Humare paas aapki pichli inquiry ki ye details saved hain:</b>\n• 📍 Location: <b>${savedLoc}</b>\n• 🏡 Property: <b>${savedPropType}</b>\n• 💰 Budget: <b>${savedBudgetFormatted}</b>\n• 🔑 Timeline: <b>${savedTimeline}</b>\n\nKya aap inhi details ke saath direct options dekhna chahte hain, ya koi detail update karni hai?\n1️⃣ Inhi details ke sath aage badhein 👍\n2️⃣ Details change / update karein ✏️`;
     } else if (missingStage === "LOCATION") {
       cleanQuestion =
         lang === "GUJLISH"
@@ -12346,6 +12465,8 @@ async function handleQualificationCascade(
           ? `Sorry, I did not quite catch that. 🙏\n`
           : `Maaf kijiye, main samajh nahi paya. 🙏\n`;
       replyText = `${clarifyPrefix}${cleanQuestion}`;
+    } else if (missingStage === "LOCATION_CONFIRMATION") {
+      replyText = cleanQuestion;
     } else {
       replyText = ack ? `${ack}\n\n${cleanQuestion}` : cleanQuestion;
     }
