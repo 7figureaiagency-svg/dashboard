@@ -3547,10 +3547,9 @@ async function classifyLeadIntentWithGemini(
 
   const candidates = [
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cleanKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${cleanKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${cleanKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${cleanKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${cleanKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${cleanKey}`,
+    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${cleanKey}`,
+    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${cleanKey}`,
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${cleanKey}`,
   ];
 
@@ -3568,7 +3567,7 @@ async function classifyLeadIntentWithGemini(
             responseMimeType: "application/json",
           },
         }),
-        signal: AbortSignal.timeout(1800),
+        signal: AbortSignal.timeout(4000),
       });
 
       if (res.ok) {
