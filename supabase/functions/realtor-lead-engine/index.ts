@@ -1051,11 +1051,29 @@ function parseVisitSlot(slotText = ""): { isoUtc: string; isValidTime: boolean; 
 
   let hours = 17; // Default 5 PM IST
   let minutes = 0;
-  const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje|vage|વાગે|બજે)?/i);
+
+  // Decouple option references and property configs to prevent numeric collisions (e.g. "option 1", "3 bhk")
+  const cleanForTime = text
+    .replace(/\b(?:option|opt|number|no|choice)\s*\d+\b/gi, " ")
+    .replace(/\b[1-9]\s*(?:bhk|rk|bed|bedroom)\b/gi, " ");
+
+  // 1. Explicit time pattern with anchor keywords (am/pm/baje/vage/o'clock)
+  const explicitTimeMatch = cleanForTime.match(
+    /(?:\b(?:at|around|ke|par)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje|vage|વાગે|બજે|o'?clock)\b)/i
+  );
+
+  // 2. Colon format fallback e.g. 10:30 or 17:00
+  const colonTimeMatch = !explicitTimeMatch ? cleanForTime.match(/\b(\d{1,2}):(\d{2})\s*(am|pm)?\b/i) : null;
+
+  // 3. Standalone digits (only if no explicit anchor or colon match)
+  const standaloneMatch = (!explicitTimeMatch && !colonTimeMatch) ? cleanForTime.match(/\b([1-9]|1[0-2])\b/) : null;
+
+  const timeMatch = explicitTimeMatch || colonTimeMatch || standaloneMatch;
   if (timeMatch) {
     let h = parseInt(timeMatch[1], 10);
-    const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-    const period = timeMatch[3]?.toLowerCase();
+    const rawMin = explicitTimeMatch ? timeMatch[2] : (colonTimeMatch ? timeMatch[2] : null);
+    const m = rawMin ? parseInt(rawMin, 10) : 0;
+    const period = (explicitTimeMatch ? timeMatch[3] : (colonTimeMatch ? timeMatch[3] : null))?.toLowerCase();
     let isPm = period === "pm";
     let isAm = period === "am";
     if (text.includes("sham") || text.includes("shaam") || text.includes("evening") || text.includes("sanje") || text.includes("સાંજે") || text.includes("dopahar") || text.includes("bapori") || text.includes("બપોરે")) {
@@ -2800,6 +2818,13 @@ export function validateUserAction(raw: any, leadOrState?: any, rawMessageText?:
         targetIdx = parseOptionIdx(src.target_property_index);
       } else if (src.selected_option_index !== undefined && src.selected_option_index !== null) {
         targetIdx = parseOptionIdx(src.selected_option_index);
+      } else {
+        const textToScan = cleanStr(src.text || src.messageText || src.raw_message || "");
+        const optMatch = textToScan.match(/\b(?:option|opt|choice|number|no\.?)\s*([1-4])\b/i) ||
+          textToScan.match(/\b([1-4])\s*(?:st|nd|rd|th)?\s*(?:option|number|project|property)\b/i);
+        if (optMatch && optMatch[1]) {
+          targetIdx = parseOptionIdx(optMatch[1]);
+        }
       }
 
       return {
@@ -10789,8 +10814,19 @@ export async function dispatchStateAction(
       let targetPropId = lead.selected_property_id;
       if (bookAct.target_property_index !== undefined && bookAct.target_property_index !== null && lead.last_option_ids?.[bookAct.target_property_index]) {
         targetPropId = lead.last_option_ids[bookAct.target_property_index];
-      } else if (!targetPropId && Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0) {
-        targetPropId = lead.last_option_ids[0];
+      } else {
+        const optMatch = lower.match(/\b(?:option|opt|choice|number|no\.?)\s*([1-4])\b/i) ||
+          lower.match(/\b([1-4])\s*(?:st|nd|rd|th)?\s*(?:option|number|project|property)\b/i);
+        if (optMatch && optMatch[1]) {
+          const optIdx = parseInt(optMatch[1], 10) - 1;
+          if (lead.last_option_ids?.[optIdx]) {
+            targetPropId = lead.last_option_ids[optIdx];
+            bookAct.target_property_index = optIdx;
+          }
+        }
+        if (!targetPropId && Array.isArray(lead.last_option_ids) && lead.last_option_ids.length > 0) {
+          targetPropId = lead.last_option_ids[0];
+        }
       }
 
       if (!targetPropId) {
