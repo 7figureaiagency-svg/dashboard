@@ -6286,13 +6286,15 @@ export function hasIncompleteSeekerDraft(lead: any): boolean {
     return false;
   }
   const draft = lead?.metadata?.seeker_draft || {};
-  const hasSomeData = Boolean(
-    draft.property_type || lead.property_type ||
-    draft.location || lead.location ||
-    draft.budget || lead.budget ||
-    draft.requirement || lead.requirement
-  );
-  const isMissingSomething = !draft.property_type || !draft.location || !draft.budget || !draft.timeline || !draft.purpose;
+  const locVal = draft.location || lead?.location;
+  const propVal = draft.property_type || lead?.property_type;
+  const budgetVal = draft.budget || lead?.budget;
+  const reqVal = draft.requirement || lead?.requirement;
+  const timelineVal = draft.timeline || lead?.timeline;
+  const purposeVal = draft.purpose || lead?.purpose;
+
+  const hasSomeData = Boolean(propVal || locVal || budgetVal || reqVal);
+  const isMissingSomething = !propVal || !locVal || !budgetVal || !timelineVal || !purposeVal;
   return hasSomeData && isMissingSomething;
 }
 
@@ -10383,10 +10385,15 @@ async function handleQualificationCascade(
   let locationAck = "";
 
   if (lastPromptQ === "LOCATION_CONFIRMATION") {
-    const isKeepOld = /^\s*(?:1|1️⃣|option\s*1|first|1st|pichli|purani|pehle|pahla|pehli|wahi|same|keep|ha|yes|haan|haa|ha\s*wahi)\b/i.test(context.messageText.trim()) ||
-                      Boolean(staleLoc && lowerMsg.includes(staleLoc.toLowerCase()));
-    const isChangeLoc = /^\s*(?:2|2️⃣|option\s*2|second|2nd|nayi|new|badalni|change|no|nahi|nhi)\b/i.test(context.messageText.trim()) ||
-                        Boolean(explicitLoc && explicitLoc !== staleLoc);
+    const isBhkInput = isBhkOrPropertyConfiguration(context.messageText);
+    const isKeepOld = !isBhkInput && (
+      /^\s*(?:1|1️⃣|option\s*1|first|1st|pichli|purani|pehle|pahla|pehli|wahi|same|keep|ha|yes|haan|haa|ha\s*wahi)\b/i.test(context.messageText.trim()) ||
+      Boolean(staleLoc && lowerMsg.includes(staleLoc.toLowerCase()))
+    );
+    const isChangeLoc = !isBhkInput && (
+      /^\s*(?:2|2️⃣|option\s*2|second|2nd|nayi|new|badalni|change|no|nahi|nhi)\b/i.test(context.messageText.trim()) ||
+      Boolean(explicitLoc && explicitLoc !== staleLoc)
+    );
 
     if (isKeepOld && staleLoc) {
       location = staleLoc;
@@ -10399,7 +10406,12 @@ async function handleQualificationCascade(
         locationAck = lang === "GUJLISH" ? `Navi location <b>${explicitLoc}</b> note kari lidhi! 📍` : `Nayi location <b>${explicitLoc}</b> note kar li! 📍`;
       } else {
         location = null;
-        isLocationConfirmed = true;
+        isLocationConfirmed = false;
+        if (lead) lead.location = null;
+        if (lead?.metadata?.seeker_draft) {
+          delete lead.metadata.seeker_draft.location;
+          lead.metadata.seeker_draft.location_confirmed = false;
+        }
       }
     }
   } else if (explicitLoc) {
@@ -10980,7 +10992,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v82-vernacular-entity-guard-and-remaining-questions",
+        version: "v83-commercial-seller-and-smart-resume",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
