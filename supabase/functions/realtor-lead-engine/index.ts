@@ -4837,10 +4837,10 @@ export async function synthesizeMultilingualReply(params: SynthesizeReplyParams)
 
   const promptText = buildSynthesizerPrompt(params);
 
-  // 1. Google Gemini 2.5 Flash Primary (~150-300ms)
+  // 1. Google Gemini 2.0 Flash Primary (~150-300ms)
   if (geminiKey) {
     try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
       const res = await fetchFn(geminiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -12660,7 +12660,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v86-universal-multimodal-cognitive-agent",
+        version: "v87-recap-card-and-time-anchor-fix",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
