@@ -3668,12 +3668,746 @@ Respond ONLY with valid JSON:
   return null;
 }
 
+// =============================================================================
+// ZERO-REGEX COGNITIVE INTENT & ENTITY EXTRACTOR ENGINE (PHASE 33.2)
+// =============================================================================
+
+export function buildCognitivePrompt(context: {
+  messageText: string;
+  currentLead: any;
+  lastPrompt?: any;
+  recentMessages?: any[];
+}): string {
+  const { messageText, currentLead, lastPrompt, recentMessages } = context;
+  const leadState = currentLead?.state || "FRESH";
+  const leadType = currentLead?.lead_type || currentLead?.metadata?.active_persona || "UNKNOWN";
+  const lastBotPromptText =
+    lastPrompt?.text_preview || currentLead?.metadata?.last_bot_prompt?.text_preview || "None";
+  const lastBotQuestionType =
+    lastPrompt?.question_type || currentLead?.metadata?.last_bot_prompt?.question_type || "None";
+
+  // Build last 6 conversation turns if provided
+  let historySection = "No previous turns recorded.";
+  if (Array.isArray(recentMessages) && recentMessages.length > 0) {
+    const turns = recentMessages.slice(-6).map((m: any, idx: number) => {
+      const speaker = m.sender || (m.role === "assistant" || m.event_type?.includes("BOT") ? "BOT" : "USER");
+      const text = m.text || m.payload?.userText || m.payload?.reply_sent || m.content || "";
+      return `Turn ${idx + 1} [${speaker}]: ${text}`;
+    });
+    historySection = turns.join("\n");
+  } else if (currentLead?.metadata?.recent_turns && Array.isArray(currentLead.metadata.recent_turns)) {
+    historySection = currentLead.metadata.recent_turns.slice(-6).join("\n");
+  }
+
+  return `You are an expert Real Estate Cognitive Intent & Entity Extractor for Indian real estate dialogs across Hinglish, Gujlish, Gujarati, Hindi, and English.
+Analyze the user's message in the full context of the dialog state, pending bot question, and recent conversation turns.
+
+### CURRENT CONVERSATION CONTEXT:
+- Active Lead State: ${leadState}
+- Lead Persona/Role: ${leadType}
+- Pending Question Type: ${lastBotQuestionType}
+- Last Bot Prompt: "${lastBotPromptText}"
+
+### RECENT DIALOG TURNS:
+${historySection}
+
+### CRITICAL DISAMBIGUATION RULES:
+1. PROPERTY TYPE vs SOCIETY/PROJECT NAME:
+   - "ternament", "tenament", "tenaments", "ternaments", "row house", "ટેનામેન્ટ" is property_type: "TENEMENT" (Tenement/Row house). It is NEVER a project or society name, and NEVER a location!
+   - "shop", "office", "flat", "apartment", "duplex", "villa", "penthouse", "plot" are property types. NEVER put them into location_name!
+
+2. SELLER vs SEEKER NEGATION:
+   - "shop bechni he lena nahi", "muje shop bechni hai", "flat vechvano chhe", "bechvu che": lead_role is strictly "SELLER", budget_type is "OUTRIGHT_BUY" (expected price), NOT a commercial lease or rent seeker!
+   - "chahiye nahi, bechni hai", "lena nahi hai", "nahi lena": user_negated_assumptions MUST BE TRUE, lead_role is "SELLER", primary_intent is "NEGATION_CORRECTION".
+
+3. NUMERIC MENU SELECTIONS & DISAMBIGUATION:
+   - If user responds with a single isolated digit like "1", "2", "3" or "option 2":
+     - Map to selected_menu_option as 1-based integer (1, 2, 3, etc.).
+     - In post-visit attendance (SITE_VISIT_DONE, VISIT_ATTENDANCE), "1" = attended (CONFIRM_VISIT), "2" = did not attend / reschedule (RESCHEDULE_VISIT). NEVER confuse "2" with "Option 3: search new properties"!
+     - In ROLE_SELECTION_PENDING, "1" = BUYER, "2" = SELLER, "3" = HUMAN_ESCALATION.
+     - In DUAL_ROLE_MENU_PENDING, "1" = SELECT_OPTION, "2" = CHECK_STATUS, "3" = HUMAN_ESCALATION.
+     - However, "2bhk", "2 bhk", "3 bed" is property configuration (unit_bhk), NOT a menu selection!
+
+4. VERNACULAR ADJECTIVES vs LOCALITIES:
+   - "purana", "purani", "juno", "juni" mean OLD/RESALE. They are condition descriptors, NEVER locations!
+   - "navo", "nava", "naya", "nayi" mean NEW. NEVER locations!
+   - location_name must be a pure geographical area or locality (e.g. "Alkapuri", "Waghodia Road", "Gotri", "Vasna"). If no real locality is mentioned, location_name MUST BE NULL!
+
+5. BUDGET & CURRENCY NORMALIZATION:
+   - "1 cr", "1 crore", "૧ કરોડ" = 10000000 INR
+   - "50 lakh", "50L", "૫૦ લાખ", "50 lac" = 5000000 INR
+   - "40 lakh ma" = 4000000 INR
+   - "25 hazar", "25k" = 25000 INR
+
+6. LANGUAGE & DIALECT DETECTION:
+   - Detect script ("Latin", "Devanagari", "Gujarati", "Other").
+   - Detect dialect ("Gujlish", "Hinglish", "Pure Gujarati", "English").
+   - Detect code ("gu-IN", "hi-IN", "en-IN", "mr-IN").
+
+USER MESSAGE TO EXTRACT:
+"${messageText}"`;
+}
+
+export function runDeterministicCognitiveExtractor(
+  messageText: string,
+  currentLead?: any,
+  lastPrompt?: any
+): CognitiveExtractionResult {
+  const normalized = normalizeIndicDigits(normalizeGujaratiDigits(messageText || ""));
+  const lower = normalized.toLowerCase().trim();
+
+  // 1. Script & Language Detection
+  let script: "Latin" | "Devanagari" | "Gujarati" | "Other" = "Latin";
+  if (/[\u0A80-\u0AFF]/.test(normalized)) {
+    script = "Gujarati";
+  } else if (/[\u0900-\u097F]/.test(normalized)) {
+    script = "Devanagari";
+  }
+
+  let code = "hi-IN";
+  let dialect = "Hinglish";
+  if (
+    script === "Gujarati" ||
+    /\b(kem|cho|chhe|che|nathi|joiye|joyiye|joie|mane|aapo|aapjo|batavo|shu|bhai|ben|tamare|amare|vechvu|vechvano|bhade|bhadu|kale|aaje)\b/i.test(lower)
+  ) {
+    code = "gu-IN";
+    dialect = script === "Gujarati" ? "Pure Gujarati" : "Gujlish";
+  } else if (
+    /\b(i am looking|i want|please show|please send|can you|interested in|looking for|under construction|ready to move|reschedule|cancel|call me)\b/i.test(lower) &&
+    !/\b(hai|hain|nahi|nhi|chahiye|mera|meri|karna|dekhna|batao|apna)\b/i.test(lower)
+  ) {
+    code = "en-IN";
+    dialect = "English";
+  }
+
+  // 2. Negation Check (e.g. "muje chahiye nahi, bechni hai", "lena nahi hai", "nahi lena")
+  const hasNegationOfTaking =
+    /(?:nahi|nhi|na|nathi|not)\s*(?:chahiye|chahye|chahie|chaiye|leni|lena|lene|joiye|leva|kharidvu|kharidna|buy)/i.test(lower) ||
+    /(?:chahiye|chahye|chahie|chaiye|leni|lena|joiye|leva)\s*(?:nahi|nhi|na|nathi|not)/i.test(lower);
+  const hasSellingAction =
+    /(?:bechni|bechna|bechne|vechvu|vechvo|vechva|vechvano|vechvani|sell|resale|bikri|વેચવું|વેચવા|વેચવાનો|बेचना|बेचनी)\b/i.test(lower);
+  const userNegatedAssumptions = Boolean(
+    hasNegationOfTaking && (hasSellingAction || lower.includes("bech") || lower.includes("vech"))
+  );
+
+  // 3. Lead Role & Budget Type
+  let leadRole: "BUYER" | "TENANT" | "SELLER" | "LANDLORD" | "BROKER" | "UNKNOWN" = "UNKNOWN";
+  let budgetType: "OUTRIGHT_BUY" | "MONTHLY_RENT" | "COMMERCIAL_LEASE" | "UNKNOWN" = "OUTRIGHT_BUY";
+
+  if (hasSellingAction || userNegatedAssumptions) {
+    leadRole = "SELLER";
+    budgetType = "OUTRIGHT_BUY";
+  } else if (/\b(rent\s*out|bhade\s*aapvu|kiraye\s*pe\s*deni|kiraye\s*pe\s*dena)\b/i.test(lower)) {
+    leadRole = "LANDLORD";
+    budgetType = "MONTHLY_RENT";
+  } else if (/\b(rent|kiraya|kiraye|bhadu|bhade|bhaade|reva\s*mate)\b/i.test(lower)) {
+    leadRole = "TENANT";
+    budgetType = "MONTHLY_RENT";
+  } else if (/\b(lease|corporate\s*lease|commercial\s*lease)\b/i.test(lower)) {
+    leadRole = "TENANT";
+    budgetType = "COMMERCIAL_LEASE";
+  } else if (/\b(buy|purchase|kharid|khareed|leni|lena|chahiye|joiye)\b/i.test(lower)) {
+    leadRole = "BUYER";
+    budgetType = "OUTRIGHT_BUY";
+  } else if (currentLead?.lead_type === "PROVIDER") {
+    leadRole = "SELLER";
+  } else if (currentLead?.lead_type === "SEEKER") {
+    leadRole = "BUYER";
+  }
+
+  // 4. Property Type & Category
+  let propertyType: "FLAT" | "TENEMENT" | "DUPLEX" | "VILLA" | "SHOP" | "OFFICE" | "PLOT" | "UNKNOWN" = "UNKNOWN";
+  let propertyCategory: "RESIDENTIAL" | "COMMERCIAL" | "PLOT_LAND" | "UNKNOWN" = "UNKNOWN";
+  let unitBhk: number | null = null;
+
+  const bhkMatch = lower.match(/(?:^|\b)([1-5])\s*(?:bhk|rk|bed|bedroom|bedrooms)\b/i);
+  if (bhkMatch) {
+    unitBhk = parseInt(bhkMatch[1], 10);
+  }
+
+  if (
+    /(?:^|\b)(?:ternament|ternaments|tenament|tenaments|tenement|tenements|row\s*house|rowhouse|rowhouses|ટેનામેન્ટ|ટેનામેંટ|टेनामेंट|टेनमेंट)\b/i.test(lower)
+  ) {
+    propertyType = "TENEMENT";
+    propertyCategory = "RESIDENTIAL";
+  } else if (/(?:^|\b)(?:shop|shops|dukan|dukaan|દુકાન|दुकान)\b/i.test(lower)) {
+    propertyType = "SHOP";
+    propertyCategory = "COMMERCIAL";
+  } else if (/(?:^|\b)(?:office|offices|corporate\s*space|ઓફિસ|ऑफिस)\b/i.test(lower)) {
+    propertyType = "OFFICE";
+    propertyCategory = "COMMERCIAL";
+  } else if (/(?:^|\b)(?:duplex|ડુપ્લેક્સ|डुप्लेक्स)\b/i.test(lower)) {
+    propertyType = "DUPLEX";
+    propertyCategory = "RESIDENTIAL";
+  } else if (/(?:^|\b)(?:villa|villas|bungalow|bungalows|બંગલો|बंगला)\b/i.test(lower)) {
+    propertyType = "VILLA";
+    propertyCategory = "RESIDENTIAL";
+  } else if (/(?:^|\b)(?:plot|plots|land|jamin|zameen|પ્લોટ|जमीन)\b/i.test(lower)) {
+    propertyType = "PLOT";
+    propertyCategory = "PLOT_LAND";
+  } else if (
+    /(?:^|\b)(?:flat|flats|apartment|apartments|એપાર્ટમેન્ટ|ફ્લેટ|फ्लैट)\b/i.test(lower) ||
+    unitBhk !== null
+  ) {
+    propertyType = "FLAT";
+    propertyCategory = "RESIDENTIAL";
+  }
+
+  // 5. Budget In INR
+  let budgetInr: number | null = null;
+  const crMatch = lower.match(/(?:^|\b)(\d+(?:\.\d+)?)\s*(?:cr|crore|crores|કરોડ|करोड़)\b/i);
+  const lakhMatch = lower.match(/(?:^|\b)(\d+(?:\.\d+)?)\s*(?:l|lac|lacs|lakh|lakhs|લાખ|लाख)\b/i);
+  const kMatch = lower.match(/(?:^|\b)(\d+(?:\.\d+)?)\s*(?:k|hazar|thousand|હજાર|हजार)\b/i);
+
+  if (crMatch) {
+    budgetInr = Math.round(parseFloat(crMatch[1]) * 10000000);
+  } else if (lakhMatch) {
+    budgetInr = Math.round(parseFloat(lakhMatch[1]) * 100000);
+  } else if (kMatch) {
+    budgetInr = Math.round(parseFloat(kMatch[1]) * 1000);
+  } else {
+    const rawNumMatch = lower.match(/(?:^|\b)(\d{5,9})\b/);
+    if (rawNumMatch) {
+      budgetInr = parseInt(rawNumMatch[1], 10);
+    }
+  }
+
+  // 6. Location Name (Clean Locality, STRICTLY EXCLUDING property types and adjectives)
+  let locationName: string | null = null;
+  const knownLocalities = [
+    "Alkapuri",
+    "Waghodia Road",
+    "Waghodia",
+    "Gotri",
+    "Vasna",
+    "Akota",
+    "Karelibaug",
+    "Manjalpur",
+    "Fatehgunj",
+    "Harni",
+    "Bhayli",
+    "Sama",
+    "Subhanpura",
+    "Atladra",
+    "Sayajigunj",
+    "Gorwa",
+    "Chhani",
+    "Sevasi",
+    "Bill",
+    "Kalali",
+    "Tarsali",
+    "Tandalja",
+    "Makarpura",
+    "Nizampura",
+    "Ellora Park",
+    "Sun Pharma Road",
+    "Ajwa Road",
+    "Dabhoi Road",
+    "Old Padra Road",
+    "New VIP Road",
+    "VIP Road",
+  ];
+
+  for (const loc of knownLocalities) {
+    const locLower = loc.toLowerCase();
+    const regex = new RegExp(
+      `(?:^|\\b)${locLower}(?:\\s*(?:road|area|circle|cross\\s*roads?))?(?:\\s*(?:ma|me|mein|pase|paas))?(?:\\b|$)`,
+      "i"
+    );
+    if (regex.test(lower)) {
+      locationName = loc;
+      break;
+    }
+  }
+
+  // 7. Selected Menu Option & Primary Intent
+  let selectedMenuOption: number | null = null;
+  let primaryIntent: CognitiveExtractionResult["primary_intent"] = "NEW_INQUIRY";
+
+  const isolatedDigitMatch = lower.match(
+    /^(?:option\s*)?([1-5]|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|wala|vala))?$/i
+  );
+  if (isolatedDigitMatch && !unitBhk) {
+    const digitChar = isolatedDigitMatch[1]
+      .replace("1️⃣", "1")
+      .replace("2️⃣", "2")
+      .replace("3️⃣", "3")
+      .replace("4️⃣", "4")
+      .replace("5️⃣", "5");
+    selectedMenuOption = parseInt(digitChar, 10);
+  }
+
+  const isVisitAttendanceTurn =
+    currentLead?.state === "SITE_VISIT_DONE" ||
+    Boolean(currentLead?.post_visit_feedback_sent) ||
+    lastPrompt?.question_type === "VISIT_ATTENDANCE" ||
+    currentLead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE";
+
+  if (userNegatedAssumptions) {
+    primaryIntent = "NEGATION_CORRECTION";
+  } else if (selectedMenuOption !== null) {
+    if (isVisitAttendanceTurn) {
+      if (selectedMenuOption === 1) primaryIntent = "CONFIRM_VISIT";
+      else if (selectedMenuOption === 2) primaryIntent = "RESCHEDULE_VISIT";
+      else primaryIntent = "SELECT_OPTION";
+    } else {
+      primaryIntent = "SELECT_OPTION";
+    }
+  } else if (isVisitAttendanceTurn) {
+    if (/(?:nahi|nhi|na|nathi|miss|missed|cancel|attend\s*nahi)/i.test(lower)) {
+      primaryIntent = "RESCHEDULE_VISIT";
+      selectedMenuOption = 2;
+    } else if (/(?:ha|haan|yes|yep|done|attended|gaya|gaye)/i.test(lower)) {
+      primaryIntent = "CONFIRM_VISIT";
+      selectedMenuOption = 1;
+    }
+  } else if (/(?:call|talk|contact|agent|human|baat\s*karni|fon|phone)/i.test(lower)) {
+    primaryIntent = "HUMAN_ESCALATION";
+  } else if (/(?:reschedule|change\s*time|badalna|dusra\s*time)/i.test(lower)) {
+    primaryIntent = "RESCHEDULE_VISIT";
+  } else if (/(?:cancel|drop)/i.test(lower)) {
+    primaryIntent = "CANCEL_VISIT";
+  } else if (/(?:hi|hello|hey|namaste|kem\s*cho|pranam)/i.test(lower) && lower.split(/\s+/).length <= 3) {
+    primaryIntent = "GREETING_ONLY";
+  } else if (/(?:loan|rera|brokerage|amenities|distance|possession)/i.test(lower)) {
+    primaryIntent = "SIDE_FAQ";
+  }
+
+  // Purpose & Timeline & Furnishing
+  let purpose: "END_USE" | "INVESTMENT" | "UNKNOWN" = "UNKNOWN";
+  if (/(?:invest|investment|roi|rental\s*yield|retire)/i.test(lower)) purpose = "INVESTMENT";
+  else if (/(?:reva|rehna|family|self\s*use|own\s*use|living)/i.test(lower)) purpose = "END_USE";
+
+  let timeline: "READY_TO_MOVE" | "UNDER_CONSTRUCTION" | "UNKNOWN" = "UNKNOWN";
+  if (/(?:ready|immediate|turant|ready\s*to\s*move)/i.test(lower)) timeline = "READY_TO_MOVE";
+  else if (/(?:under\s*construction|construction|new\s*booking|launch)/i.test(lower)) timeline = "UNDER_CONSTRUCTION";
+
+  let furnishing: "UNFURNISHED" | "SEMI_FURNISHED" | "FULLY_FURNISHED" | "UNKNOWN" = "UNKNOWN";
+  if (/(?:full|fully\s*furnished)/i.test(lower)) furnishing = "FULLY_FURNISHED";
+  else if (/(?:semi|semi\s*furnished)/i.test(lower)) furnishing = "SEMI_FURNISHED";
+  else if (/(?:raw|unfurnished|koro|kora)/i.test(lower)) furnishing = "UNFURNISHED";
+
+  return {
+    lead_role: leadRole,
+    primary_intent: primaryIntent,
+    direct_answer_to_last_question:
+      selectedMenuOption !== null || userNegatedAssumptions || Boolean(budgetInr || propertyType !== "UNKNOWN"),
+    user_negated_assumptions: userNegatedAssumptions,
+    negation_explanation: userNegatedAssumptions ? "User explicitly negated taking/buying and clarified selling" : null,
+    selected_menu_option: selectedMenuOption,
+    entities: {
+      property_category: propertyCategory,
+      property_type: propertyType,
+      unit_bhk: unitBhk,
+      budget_inr: budgetInr,
+      budget_type: budgetType,
+      location_name: locationName,
+      purpose,
+      timeline,
+      carpet_area_sqft: null,
+      floor: null,
+      furnishing,
+    },
+    user_side_question: primaryIntent === "SIDE_FAQ" ? messageText : null,
+    detected_language: {
+      code,
+      dialect,
+      script,
+    },
+  };
+}
+
+export async function extractCognitiveIntentWithAI(context: {
+  messageText: string;
+  currentLead: any;
+  lastPrompt?: any;
+  recentMessages?: any[];
+  options?: {
+    geminiApiKey?: string;
+    groqApiKey?: string;
+    forceProEscalation?: boolean;
+    fetchImpl?: typeof fetch;
+  };
+}): Promise<{
+  extracted: CognitiveExtractionResult;
+  provider_used: "GEMINI_FLASH" | "GEMINI_PRO" | "GROQ_LLAMA" | "DETERMINISTIC_FALLBACK";
+  latency_ms: number;
+  escalated_to_pro: boolean;
+}> {
+  const start = Date.now();
+  const fetchFn = context.options?.fetchImpl || fetch;
+
+  const geminiKey = (
+    context.options?.geminiApiKey ||
+    Deno.env.get("GEMINI_API_KEY") ||
+    ""
+  ).trim().replace(/^["']|["']$/g, "");
+
+  const groqKey = (
+    context.options?.groqApiKey ||
+    Deno.env.get("GROQ_API_KEY") ||
+    ""
+  ).trim().replace(/^["']|["']$/g, "");
+
+  const promptText = buildCognitivePrompt(context);
+
+  // 1. Google Gemini 2.5 Flash / Pro with responseSchema
+  if (geminiKey) {
+    try {
+      const isForcePro = Boolean(context.options?.forceProEscalation);
+      const flashUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+      const proUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${geminiKey}`;
+
+      const targetUrl = isForcePro ? proUrl : flashUrl;
+
+      const res = await fetchFn(targetUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 600,
+            responseMimeType: "application/json",
+            responseSchema: REAL_ESTATE_EXTRACTION_SCHEMA,
+          },
+        }),
+        signal: AbortSignal.timeout(isForcePro ? 4000 : 2500),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const rawJsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawJsonText) {
+          const parsed = parseJsonSafely(rawJsonText);
+          if (parsed && parsed.lead_role && parsed.primary_intent && parsed.entities) {
+            // Check Auto-Escalation Gate:
+            // If user_negated_assumptions === true and not already Pro, escalate to Gemini 2.5 Pro!
+            if (parsed.user_negated_assumptions && !isForcePro) {
+              try {
+                const proRes = await fetchFn(proUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    contents: [
+                      {
+                        parts: [
+                          {
+                            text:
+                              "USER ASSUMPTION NEGATION / ROLE CORRECTION DETECTED. Re-evaluate this user turn with maximum reasoning depth:\n" +
+                              promptText,
+                          },
+                        ],
+                      },
+                    ],
+                    generationConfig: {
+                      temperature: 0.1,
+                      maxOutputTokens: 600,
+                      responseMimeType: "application/json",
+                      responseSchema: REAL_ESTATE_EXTRACTION_SCHEMA,
+                    },
+                  }),
+                  signal: AbortSignal.timeout(3500),
+                });
+                if (proRes.ok) {
+                  const proData = await proRes.json();
+                  const proJsonText = proData.candidates?.[0]?.content?.parts?.[0]?.text;
+                  const proParsed = parseJsonSafely(proJsonText);
+                  if (proParsed && proParsed.lead_role && proParsed.entities) {
+                    return {
+                      extracted: proParsed as CognitiveExtractionResult,
+                      provider_used: "GEMINI_PRO",
+                      latency_ms: Date.now() - start,
+                      escalated_to_pro: true,
+                    };
+                  }
+                }
+              } catch (proErr: any) {
+                console.warn("[Cognitive AI] Pro escalation timed out/failed; using Flash result:", proErr.message);
+              }
+            }
+
+            return {
+              extracted: parsed as CognitiveExtractionResult,
+              provider_used: isForcePro ? "GEMINI_PRO" : "GEMINI_FLASH",
+              latency_ms: Date.now() - start,
+              escalated_to_pro: isForcePro,
+            };
+          }
+        }
+      }
+    } catch (gErr: any) {
+      console.warn("[Cognitive AI] Gemini failed (falling back to Groq Llama):", gErr.message);
+    }
+  }
+
+  // 2. Groq Llama-3.3-70b High-Speed Fallback (Structured JSON Mode)
+  if (groqKey) {
+    try {
+      const groqRes = await fetchFn("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${groqKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are an expert Real Estate Cognitive Intent & Entity Extractor. Output strictly valid JSON conforming to this schema: " +
+                JSON.stringify(REAL_ESTATE_EXTRACTION_SCHEMA),
+            },
+            {
+              role: "user",
+              content: promptText,
+            },
+          ],
+          temperature: 0.1,
+          max_tokens: 600,
+          response_format: { type: "json_object" },
+        }),
+        signal: AbortSignal.timeout(3000),
+      });
+
+      if (groqRes.ok) {
+        const groqData = await groqRes.json();
+        const contentStr = groqData.choices?.[0]?.message?.content;
+        if (contentStr) {
+          const parsed = parseJsonSafely(contentStr);
+          if (parsed && parsed.lead_role && parsed.primary_intent && parsed.entities) {
+            return {
+              extracted: parsed as CognitiveExtractionResult,
+              provider_used: "GROQ_LLAMA",
+              latency_ms: Date.now() - start,
+              escalated_to_pro: false,
+            };
+          }
+        }
+      }
+    } catch (groqErr: any) {
+      console.warn("[Cognitive AI] Groq Llama failed (falling back to deterministic engine):", groqErr.message);
+    }
+  }
+
+  // 3. Resilient Deterministic Cognitive Fallback Engine
+  const fallbackExtracted = runDeterministicCognitiveExtractor(
+    context.messageText,
+    context.currentLead,
+    context.lastPrompt
+  );
+
+  return {
+    extracted: fallbackExtracted,
+    provider_used: "DETERMINISTIC_FALLBACK",
+    latency_ms: Date.now() - start,
+    escalated_to_pro: false,
+  };
+}
+
+export function mapCognitiveResultToActionResult(
+  extracted: CognitiveExtractionResult,
+  lead: any,
+  messageText: string,
+  latencyMs: number,
+  providerUsed: "GEMINI" | "GROQ" | "DETERMINISTIC_FALLBACK" = "GEMINI"
+): ClassifiedActionResult {
+  // Role Mapping
+  let userRole: "OWNER" | "SEEKER" | "UNKNOWN" = "UNKNOWN";
+  if (extracted.lead_role === "SELLER" || extracted.lead_role === "LANDLORD") {
+    userRole = "OWNER";
+  } else if (extracted.lead_role === "BUYER" || extracted.lead_role === "TENANT") {
+    userRole = "SEEKER";
+  } else if (lead?.lead_type === "PROVIDER") {
+    userRole = "OWNER";
+  } else if (lead?.lead_type === "SEEKER") {
+    userRole = "SEEKER";
+  }
+
+  // Language Mapping
+  let language: "HINGLISH" | "GUJLISH" | "ENGLISH" | "GUJARATI_SCRIPT" = "HINGLISH";
+  if (extracted.detected_language.script === "Gujarati") {
+    language = "GUJARATI_SCRIPT";
+  } else if (extracted.detected_language.dialect?.toLowerCase().includes("guj")) {
+    language = "GUJLISH";
+  } else if (
+    extracted.detected_language.code === "en-IN" ||
+    extracted.detected_language.dialect?.toLowerCase().includes("eng")
+  ) {
+    language = "ENGLISH";
+  } else {
+    language = "HINGLISH";
+  }
+
+  // Formatted Property Type string
+  let formattedPropType: string | null = null;
+  if (extracted.entities.property_type && extracted.entities.property_type !== "UNKNOWN") {
+    if (extracted.entities.unit_bhk && extracted.entities.property_type === "FLAT") {
+      formattedPropType = `${extracted.entities.unit_bhk}BHK Flat`;
+    } else if (extracted.entities.unit_bhk && extracted.entities.property_type === "TENEMENT") {
+      formattedPropType = `${extracted.entities.unit_bhk}BHK Tenement`;
+    } else {
+      formattedPropType = extracted.entities.property_type;
+    }
+  } else if (extracted.entities.unit_bhk) {
+    formattedPropType = `${extracted.entities.unit_bhk}BHK`;
+  }
+
+  // Action Assembly
+  let action: UserAction;
+  const state = lead?.state;
+  const isPostVisit =
+    state === "SITE_VISIT_DONE" ||
+    Boolean(lead?.post_visit_feedback_sent) ||
+    lead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE";
+
+  if (extracted.user_negated_assumptions) {
+    if (extracted.lead_role === "SELLER" || userRole === "OWNER") {
+      action = {
+        intent: "SUBMIT_LISTING",
+        transaction_type: extracted.entities.budget_type === "MONTHLY_RENT" ? "RENT_OUT" : "SELL",
+        property_type: formattedPropType || undefined,
+        price_or_rent: extracted.entities.budget_inr || undefined,
+        location: extracted.entities.location_name || undefined,
+      };
+    } else {
+      action = {
+        intent: "CHANGE_REQUIREMENT",
+        requirement:
+          extracted.entities.budget_type === "MONTHLY_RENT"
+            ? "RENT"
+            : extracted.entities.budget_type === "COMMERCIAL_LEASE"
+            ? "LEASE"
+            : "BUY",
+        property_type: formattedPropType || undefined,
+        budget: extracted.entities.budget_inr || undefined,
+        location: extracted.entities.location_name || undefined,
+      };
+    }
+  } else if (
+    isPostVisit &&
+    (extracted.selected_menu_option !== null ||
+      extracted.primary_intent === "RESCHEDULE_VISIT" ||
+      extracted.primary_intent === "CONFIRM_VISIT")
+  ) {
+    if (extracted.selected_menu_option === 1 || extracted.primary_intent === "CONFIRM_VISIT") {
+      action = {
+        intent: "CONFIRM_VISIT_ATTENDANCE",
+        attended: true,
+        feedback: messageText,
+      };
+    } else {
+      action = {
+        intent: "RESCHEDULE_VISIT",
+        new_slot_raw: messageText,
+      };
+    }
+  } else if (extracted.selected_menu_option !== null) {
+    if (state === "ROLE_SELECTION_PENDING") {
+      if (extracted.selected_menu_option === 1) {
+        action = { intent: "CHANGE_REQUIREMENT", requirement: "BUY" };
+      } else if (extracted.selected_menu_option === 2) {
+        action = { intent: "SUBMIT_LISTING", transaction_type: "SELL" };
+      } else {
+        action = { intent: "REQUEST_HUMAN_CALL", reason: "Role menu option 3" };
+      }
+    } else if (state === "CRITERIA_CONFIRMATION_PENDING") {
+      if (extracted.selected_menu_option === 1) {
+        action = { intent: "CONFIRM_CRITERIA", confirm: true };
+      } else {
+        action = { intent: "CHANGE_REQUIREMENT" };
+      }
+    } else if (state === "OPTIONS_SENT") {
+      action = { intent: "SELECT_OPTION", option_index: extracted.selected_menu_option };
+    } else {
+      action = { intent: "SELECT_OPTION", option_index: extracted.selected_menu_option };
+    }
+  } else if (extracted.primary_intent === "CONFIRM_VISIT") {
+    action = { intent: "BOOK_VISIT", preferred_date_raw: messageText };
+  } else if (extracted.primary_intent === "RESCHEDULE_VISIT") {
+    action = { intent: "RESCHEDULE_VISIT", new_slot_raw: messageText };
+  } else if (extracted.primary_intent === "CANCEL_VISIT") {
+    action = { intent: "CANCEL_VISIT", reason: messageText };
+  } else if (extracted.primary_intent === "SIDE_FAQ") {
+    action = {
+      intent: "ASK_FAQ",
+      topic: "CUSTOM_FAQ",
+      specific_query: extracted.user_side_question || messageText,
+    };
+  } else if (extracted.primary_intent === "HUMAN_ESCALATION") {
+    action = { intent: "REQUEST_HUMAN_CALL", reason: messageText };
+  } else if (extracted.primary_intent === "GREETING_ONLY") {
+    action = { intent: "GREETING", token: messageText };
+  } else if (userRole === "OWNER" || extracted.lead_role === "SELLER") {
+    action = {
+      intent: "SUBMIT_LISTING",
+      transaction_type: extracted.entities.budget_type === "MONTHLY_RENT" ? "RENT_OUT" : "SELL",
+      property_type: formattedPropType || undefined,
+      location: extracted.entities.location_name || undefined,
+      price_or_rent: extracted.entities.budget_inr || undefined,
+      carpet_sqft: extracted.entities.carpet_area_sqft || undefined,
+      possession_status:
+        extracted.entities.timeline === "READY_TO_MOVE"
+          ? "READY_TO_MOVE"
+          : extracted.entities.timeline === "UNDER_CONSTRUCTION"
+          ? "UNDER_CONSTRUCTION"
+          : null,
+      furnishing_status:
+        extracted.entities.furnishing === "FULLY_FURNISHED"
+          ? "FURNISHED"
+          : extracted.entities.furnishing === "SEMI_FURNISHED"
+          ? "SEMI_FURNISHED"
+          : extracted.entities.furnishing === "UNFURNISHED"
+          ? "UNFURNISHED"
+          : null,
+    };
+  } else {
+    action = {
+      intent: "CHANGE_REQUIREMENT",
+      requirement:
+        extracted.entities.budget_type === "MONTHLY_RENT"
+          ? "RENT"
+          : extracted.entities.budget_type === "COMMERCIAL_LEASE"
+          ? "LEASE"
+          : "BUY",
+      property_type: formattedPropType || undefined,
+      budget: extracted.entities.budget_inr || undefined,
+      location: extracted.entities.location_name || undefined,
+      is_flexible_location: extracted.entities.location_name === "FLEXIBLE",
+    };
+  }
+
+  const rawPayload = {
+    action,
+    user_role: userRole,
+    language,
+    extracted,
+    transaction_type:
+      (action as any).transaction_type ||
+      (action as any).requirement ||
+      (userRole === "OWNER" ? "SELL" : "BUY"),
+    property_category:
+      extracted.entities.property_category !== "UNKNOWN"
+        ? extracted.entities.property_category === "PLOT_LAND"
+          ? "PLOT"
+          : extracted.entities.property_category
+        : null,
+    property_type: formattedPropType,
+    location: extracted.entities.location_name,
+    is_flexible_location: extracted.entities.location_name === "FLEXIBLE",
+    price_or_budget: extracted.entities.budget_inr,
+    carpet_sqft: extracted.entities.carpet_area_sqft,
+    selected_option_index: extracted.selected_menu_option,
+  };
+
+  return buildClassifiedActionResult(action, userRole, language, providerUsed, latencyMs, rawPayload);
+}
+
 async function classifyLeadIntent(
   messageText: string,
   lead: any
 ): Promise<ClassifiedIntent> {
-  const start = Date.now();
-
   // 0. Deterministic Gibberish / Keystroke Mash Guard
   if (isGibberishOrInvalidInput(messageText)) {
     console.log(`[classifyLeadIntent] Intercepted gibberish input: "${messageText}" -> Returning OFF_TOPIC`);
@@ -3688,266 +4422,25 @@ async function classifyLeadIntent(
     );
   }
 
-  const geminiKey = Deno.env.get("GEMINI_API_KEY") || "";
-  const groqKey = Deno.env.get("GROQ_API_KEY") || "";
+  // 1. Invoke Zero-Regex Cognitive Extractor
+  const cognitiveResult = await extractCognitiveIntentWithAI({
+    messageText,
+    currentLead: lead,
+    lastPrompt: lead?.metadata?.last_bot_prompt,
+  });
 
-  // 1. Primary: Groq Llama 3.3 (Sub-second latency ~600-700ms)
-  if (groqKey) {
-    try {
-      const result = await classifyLeadIntentWithGroq(groqKey, messageText, lead);
-      if (result && result.action) {
-        return {
-          ...result,
-          latency_ms: Date.now() - start,
-          provider_used: "GROQ",
-        };
-      }
-    } catch (err: any) {
-      console.warn("Groq intent classifier warning (falling back to Gemini):", err.message);
-    }
-  }
+  const providerUsed = cognitiveResult.provider_used.includes("GEMINI")
+    ? "GEMINI"
+    : cognitiveResult.provider_used.includes("GROQ")
+    ? "GROQ"
+    : "DETERMINISTIC_FALLBACK";
 
-  // 2. Secondary Fallback: Google Gemini
-  if (geminiKey) {
-    try {
-      const result = await classifyLeadIntentWithGemini(geminiKey, messageText, lead);
-      if (result && result.action) {
-        return {
-          ...result,
-          latency_ms: Date.now() - start,
-          provider_used: "GEMINI",
-        };
-      }
-    } catch (err: any) {
-      console.warn("Gemini intent classifier warning (falling back to deterministic):", err.message);
-    }
-  }
-
-  // 3. Tier 3: Deterministic Fallback Circuit Breaker
-  const normalizedMsg = normalizeGujaratiDigits(messageText);
-  const lower = normalizedMsg.toLowerCase();
-  let fallbackIntent: ClassifiedIntent["intent"] = "UNKNOWN";
-
-  // Deterministic single-digit disambiguation across states
-  const digitChoice = parseSingleDigitChoice(normalizedMsg);
-  if (digitChoice !== null && lead?.state) {
-    const disambiguated = disambiguateNumericChoice(digitChoice, lead.state, lead, normalizedMsg);
-    if (disambiguated) {
-      return buildClassifiedActionResult(
-        disambiguated.action,
-        disambiguated.userRole,
-        detectLanguage(normalizedMsg, lead?.user_language),
-        "DETERMINISTIC_FALLBACK",
-        Date.now() - start,
-        { action: disambiguated.action }
-      );
-    }
-  }
-
-  // BHK Configuration vs Role Option 2 Collision Guard in ROLE_SELECTION_PENDING
-  if (lead?.state === "ROLE_SELECTION_PENDING" && isBhkOrPropertyConfiguration(normalizedMsg)) {
-    const propType = parsePropertyTypeFromText(normalizedMsg) || "2BHK";
-    const action: UserAction = {
-      intent: "CHANGE_REQUIREMENT",
-      property_type: propType,
-      requirement: VERNACULAR_RENTAL_REGEX.test(lower) ? "RENT" : "BUY",
-    };
-    return buildClassifiedActionResult(
-      action,
-      "SEEKER",
-      detectLanguage(normalizedMsg, lead?.user_language),
-      "DETERMINISTIC_FALLBACK",
-      Date.now() - start,
-      { action }
-    );
-  }
-
-  if (lower === "stop" || lower.includes("unsubscribe") || lower.includes("not interested")) {
-    fallbackIntent = "OPT_OUT";
-  } else if (lead?.post_visit_feedback_sent) {
-    if (
-      /(?:^|\b)(?:2|2️⃣|two|option\s*2)\b/i.test(lower) ||
-      /(?:nahi|nhi|na|no|nope|nathi|miss|missed|couldn't|cancel)/i.test(lower) ||
-      /(?:site\s*visit|visit).*?(?:nahi|nhi|nathi|not|nai)\s*(?:kar|kiya|ki|karyo|attend)?/i.test(lower)
-    ) {
-      fallbackIntent = "CANNOT_ATTEND_VISIT";
-    } else if (
-      /(?:^|\b)(?:1|1️⃣|one|option\s*1)\b/i.test(lower) ||
-      /(?:ha|haan|ji\s*haan|yes|yep|yeah|attended|gaya|gaye|kari|kiya|karyo|thayo)/i.test(lower)
-    ) {
-      fallbackIntent = "CONFIRM_VISIT_ATTENDANCE";
-    }
-  } else if (lead?.state === "CRITERIA_CONFIRMATION_PENDING") {
-    if (/^(1|1️⃣|first|1st|ha|haan|ha ji|yes|same|isi me|yahi|yahi criteria|dikhao|sure|chalo|done|ok|okay|sahi hai|barobar|saras)$/i.test(lower) || lower.includes("isi criteria") || lower.includes("same criteria") || lower.includes("yahi")) {
-      fallbackIntent = "CONFIRM_CRITERIA";
-    } else if (/^(2|2️⃣|second|2nd|nahi|no|change|badalna|dusra|naya|different|modify)$/i.test(lower) || lower.includes("change") || lower.includes("badal") || lower.includes("dusra")) {
-      fallbackIntent = "CHANGE_REQUIREMENT";
-    }
-  } else if (
-    /(?:^|\b)(?:ha\s+|haan\s+|ji\s+)?(?:me\s+|hum\s+|mai\s+|hu\s+|ame\s+)?(?:nai|nahi|nhi|na|nathi)\s*(?:aa\s*sakta|aa\s*sakti|aa\s*paunga|aa\s*paungi|aa\s*payenge|aa\s*paenge|aa\s*raha|aa\s*rahe|aana|aunga|aungi|ja\s*sakta|ja\s*paunga|pahunch\s*sakta|pahunch\s*paunga|ho\s*payega|hoga\s*aaj|possible\s*nahi|aavi\s*saku|aavi\s*shaku|aavi\s*sakyo|aavi\s*shakay|aavay|aavish|aa\s*saku)/i.test(lower) ||
-    /(nahi\s*aa\s*paya|nahi\s*aa\s*paye|miss\s*ho\s*gaya|emergency|couldn't\s*come|cannot\s*make\s*it|won't\s*be\s*able\s*to\s*come)/i.test(lower) ||
-    /(nathi\s*aavi\s*sakyo|nathi\s*aavi\s*saku|nai\s*aavi\s*saku|aaje\s*nahi\s*aavay|aaje\s*nai\s*aavay|aaje\s*nathi\s*aavay)/i.test(lower) ||
-    /(?:mene|maine|hu|ame|hum|hamne)?\s*(?:site\s*visit|visit)\s*(?:nahi|nhi|nathi|nai)\s*(?:kiya|ki|kari|karyo|attend|gaya)/i.test(lower) ||
-    (/(?:site\s*visit|visit).*?(?:nai|nahi|nathi|not|cannot|can't|miss)/i.test(lower) && !lower.includes("reschedule") && !lower.includes("cancel"))
-  ) {
-    fallbackIntent = "CANNOT_ATTEND_VISIT";
-  } else if (/(kuch\s*kam\s*hoga|discount|bhav\s*ochho|rate\s*kam|final\s*price|negotiat)/i.test(lower)) {
-    fallbackIntent = "PRICE_NEGOTIATION";
-  } else if (lower.includes("reschedule") || lower.includes("change time") || lower.includes("badalna") || lower.includes("badlo") || (lead?.state === "VISIT_MISSED" && /\b(kal|kale|tomorrow|sunday|monday|today|aaj|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i.test(lower))) {
-    fallbackIntent = "RESCHEDULE_VISIT";
-  } else if (lower.includes("cancel")) {
-    fallbackIntent = "CANCEL_VISIT";
-  } else if (
-    /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|kuch\s*naya\s*dekhna|nayi\s*chahiye|navi\s*joiye)/i.test(lower)
-  ) {
-    fallbackIntent = "CHANGE_CRITERIA";
-  } else if (
-    /(?:mera|meri|maro|mari|mere|mara|amaro|apna|own|paas)\s+(?:flat|makan|ghar|house|villa|plot|zameen|jamin|shop|dukan|office|showroom|shed|godown|warehouse|property)\s+(?:bechna|bechni|vechvu|vechvo|vechva|sell|bikri|rent\s*par|bhadu|bhaade|kiraya|kiraye|lease)/i.test(lower) ||
-    /(?:dusri|biji|ek\s*aur|nayi|navi)\s*(?:property|flat|office|shop|plot)\s*(?:sell|bech|list|rent\s*par\s*den|bhade\s*pe|chadani)/i.test(lower) ||
-    /(?:bechna|bechni|vechvu|vechva|bikri|sell\s+my|sell\s+property|want\s+to\s+sell|property\s+sell|rent\s+par\s+den|bhaade\s+aap|kiraye\s+par\s+den|lease\s+par\s+den|list\s+karvi|list\s+karna|owner\s+listing)/i.test(lower) ||
-    /(?:property\s+deni\s+hai|shop\s+deni\s+hai|flat\s+dena\s+hai|office\s+dena\s+hai|office\s+deni\s+hai|ghar\s+bechna|bhade\s+pe\s+chadani|bhade\s+chadani)/i.test(lower)
-  ) {
-    fallbackIntent = "OWNER_LISTING";
-  } else if (
-    /(?:qur|aur|biji|more|other)\s*(?:property|flat|option|options)\b/i.test(lower) ||
-    /(?:dusri\s*property|aur\s*option|aur\s*flat|kuch\s*aur|kuch\s*naya|biji\s*property|more\s*options|other\s*options|different\s*property)/i.test(lower) ||
-    /(?:options?\s*(?:dikhao|dikhavo|batao|batavo|aapo))/i.test(lower)
-  ) {
-    fallbackIntent = "ASK_MORE_OPTIONS";
-  } else if (
-    /(nayi\s*requirement|navi\s*requirement|nayi\s*property|navi\s*property|naya\s*property|naya\s*search|nayi\s*search|navi\s*search|nava\s*criteria|naya\s*criteria|change\s*criteria|criteria\s*badal|fresh\s*search|fresh\s*requirement|start\s*fresh|reset\s*criteria|naya\s*dekhna|nayi\s*dekhni|kuch\s*naya\s*dekhna|nayi\s*chahiye|navi\s*joiye)/i.test(lower)
-  ) {
-    fallbackIntent = "CHANGE_CRITERIA";
-  } else if (/\b(hi|hello|hey|kem cho|namaste)\b/i.test(lower)) {
-    fallbackIntent = "GREETING";
-  }
-
-  // Robust Slot Detection for OPTIONS_SENT, VISIT_REQUESTED or SITE_VISIT_PROPOSED in deterministic fallback
-  const slotRegex = /\b(aaj|kal|kale|kaale|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage))\b/i;
-  if ((lead?.state === "OPTIONS_SENT" || lead?.state === "VISIT_REQUESTED" || lead?.state === "SITE_VISIT_PROPOSED") && slotRegex.test(lower)) {
-    fallbackIntent = "BOOK_VISIT";
-  } else if (lead?.state === "SITE_VISIT_PROPOSED" && /^(haan|ha|yes|yep|sure|done|theek hai|chalse|chalshe|ok|okay|ha ji|haanji)\b/i.test(lower)) {
-    fallbackIntent = "BOOK_VISIT";
-  }
-
-  // Pure Property Type mention Guard (e.g. "2 BHK", "Villa", "Commercial Shop")
-  // If user mentions a property type without explicit owner selling keywords, it is strictly SEEKER criteria!
-  const hasDetectedPropType = Boolean(parsePropertyTypeFromText(messageText));
-  const hasExplicitOwnerAction = /(?:bechna|bechni|bechne|vechvu|vechva|vechvo|sell|selling|bikri|deni|dena|dene|list|listing|chadani)/i.test(lower);
-
-  // Handle explicit 1 vs 2 in ROLE_SELECTION_PENDING
-  if (lead?.state === "ROLE_SELECTION_PENDING") {
-    const isPureOption2 =
-      /^(?:2|2️⃣|option\s*2|second|2nd)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim()) ||
-      /^(?:deni|dene|sell|bechna|vechvu|vechva|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim());
-    const isPureOption1 =
-      /^(?:1|1️⃣|option\s*1|first|1st)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim()) ||
-      /^(?:leni|lena|lene|kharidna|kharidvu|buy|rent\s*pe\s*chahiye|search)\b/i.test(lower.trim());
-
-    if (isPureOption2 && !isBhkOrPropertyConfiguration(normalizedMsg) && !hasDetectedPropType) {
-      fallbackIntent = "OWNER_LISTING";
-    } else if (isPureOption1 || hasDetectedPropType || isBhkOrPropertyConfiguration(normalizedMsg)) {
-      fallbackIntent = "SEEKER_QUALIFICATION";
-    }
-  }
-
-  // Handle returning completed owner choices in RETURNING_OWNER_MENU_PENDING
-  if (lead?.state === "RETURNING_OWNER_MENU_PENDING") {
-    if (/^(1|1️⃣|option\s*1|first|1st|leni|lene|kharidna|buy|rent\s*pe\s*chahiye|search|flat\s*chahiye)\b/i.test(lower.trim())) {
-      fallbackIntent = "SEEKER_QUALIFICATION";
-    } else if (/^(2|2️⃣|option\s*2|second|2nd|dusri|biji|deni|dene|sell|bechna|list)\b/i.test(lower.trim())) {
-      fallbackIntent = "OWNER_LISTING";
-    } else if (/^(3|3️⃣|option\s*3|third|3rd|status|update|check)\b/i.test(lower.trim())) {
-      fallbackIntent = "UNKNOWN";
-    }
-  }
-
-  // Handle previous visit cancellation confirmation in CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING
-  if (lead?.state === "CANCEL_PREVIOUS_VISIT_CONFIRMATION_PENDING") {
-    if (/^(1|1️⃣|option\s*1|first|1st|ha|haan|yes|yep|sure|cancel)\b/i.test(lower.trim()) || lower.includes("cancel") || lower.includes("nayi book")) {
-      fallbackIntent = "CONFIRM_VISIT";
-    } else if (/^(2|2️⃣|option\s*2|second|2nd|nahi|no|nope|purani|continue|mat\s*karo)\b/i.test(lower.trim()) || lower.includes("mat karo") || lower.includes("purani")) {
-      fallbackIntent = "CONFIRM_SAME_CRITERIA";
-    }
-  }
-
-  const isInOwnerIntake = [
-    "OWNER_CONFIG_PENDING",
-    "OWNER_SOCIETY_PENDING",
-    "OWNER_LOCATION_PENDING",
-    "OWNER_AREA_PENDING",
-    "OWNER_FLOOR_PENDING",
-    "OWNER_PRICE_PENDING",
-    "OWNER_AMENITIES_PENDING",
-    "OWNER_POSSESSION_PENDING",
-    "OWNER_FURNISHING_PENDING",
-    "OWNER_PHONE_PENDING",
-  ].includes(lead?.state);
-
-  if (isInOwnerIntake && fallbackIntent === "UNKNOWN") {
-    fallbackIntent = "OWNER_LISTING";
-  }
-
-  // Dual-role seeker detection for completed providers
-  const isCompletedOwner = lead?.state === "OWNER_DETAILS_GATHERED";
-  const hasSeekerKeywords =
-    fallbackIntent === "SEEKER_QUALIFICATION" ||
-    fallbackIntent === "ASK_MORE_OPTIONS" ||
-    /(?:chahiye|chahye|chahie|chaiye|joiye|joyiye|joie|buy|kharid|khareed|purchase|dekhna|dekhni|levu\s*chhe|dikhao|dikhavo|batavo|batao|options)/i.test(lower) ||
-    (/\b([1-5]\s*bhk|flat|villa|office|shop|plot)\b/i.test(lower) && /\b(chahiye|joiye|buy|kharid|dekhna|budget|me|mein)\b/i.test(lower));
-
-  if (isCompletedOwner && hasSeekerKeywords && fallbackIntent === "UNKNOWN") {
-    fallbackIntent = "SEEKER_QUALIFICATION";
-  }
-
-  if (hasDetectedPropType && !hasExplicitOwnerAction && !isInOwnerIntake) {
-    if (fallbackIntent === "UNKNOWN" || fallbackIntent === "OWNER_LISTING") {
-      fallbackIntent = "CHANGE_CRITERIA";
-    }
-  }
-
-  let isOwnerMsg = false;
-  if (isInOwnerIntake) {
-    isOwnerMsg = true;
-  } else if (fallbackIntent === "OWNER_LISTING" && (!hasDetectedPropType || hasExplicitOwnerAction)) {
-    isOwnerMsg = true;
-  } else if (lead?.lead_type === "PROVIDER" && !isCompletedOwner && !hasDetectedPropType) {
-    isOwnerMsg = true;
-  } else if (isCompletedOwner && !hasSeekerKeywords && fallbackIntent !== "GREETING" && fallbackIntent !== "OPT_OUT") {
-    // If completed owner without seeker keywords or greeting, preserve owner context
-    isOwnerMsg = true;
-  }
-
-  const userRole: "OWNER" | "SEEKER" | "UNKNOWN" = isOwnerMsg
-    ? "OWNER"
-    : (fallbackIntent === "GREETING" || fallbackIntent === "OPT_OUT" ? "UNKNOWN" : "SEEKER");
-  const parsedPrice = parseBudgetFromText(messageText);
-  const parsedArea = parseAreaFromText(messageText);
-  const isFlexLoc = /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|kahi\s*pan|koi\s*pan|gamete|any\s*location|any\s*area|anywhere|all\s*over|no\s*preference|flexible|kuch\s*bhi|koi\s*fix\s*nathi|koi\s*fix\s*nahi|chalegi|chalega|chalse)\b/i.test(lower);
-
-  const fallbackPayload = {
-    intent: fallbackIntent,
-    user_role: userRole,
-    language: detectLanguage(normalizedMsg, lead?.user_language),
-    transaction_type: VERNACULAR_RENTAL_REGEX.test(lower) ? "RENT" : /(?:buy|kharid|purchase)/i.test(lower) ? "BUY" : VERNACULAR_SALE_REGEX.test(lower) ? "SELL" : null,
-    property_type: parsePropertyTypeFromText(normalizedMsg) || null,
-    location: isFlexLoc ? "FLEXIBLE" : null,
-    is_flexible_location: isFlexLoc,
-    price_or_budget: parsedPrice > 0 ? parsedPrice : null,
-    carpet_sqft: parsedArea.carpet_sqft,
-    super_built_up_sqft: parsedArea.super_built_up_sqft,
-    plot_area_sqft: parsedArea.plot_area_sqft,
-    preferred_date_raw: fallbackIntent === "BOOK_VISIT" ? normalizedMsg : null,
-  };
-
-  const action = validateUserAction(fallbackPayload, lead, normalizedMsg);
-  return buildClassifiedActionResult(
-    action,
-    userRole,
-    fallbackPayload.language,
-    "DETERMINISTIC_FALLBACK",
-    Date.now() - start,
-    fallbackPayload
+  return mapCognitiveResultToActionResult(
+    cognitiveResult.extracted,
+    lead,
+    messageText,
+    cognitiveResult.latency_ms,
+    providerUsed
   );
 }
 
