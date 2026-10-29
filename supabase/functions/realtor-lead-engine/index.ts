@@ -197,6 +197,145 @@ async function fetchWhatsAppAudioBuffer(
   }
 }
 
+// 2c. Dual-Engine Speech-to-Text Transcriber (Groq Whisper-large-v3 + Gemini 2.5 Flash Fallback)
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
+  }
+  return btoa(binary);
+}
+
+function getVoiceInaudibleReply(userLanguage?: string): string {
+  if (userLanguage === "GUJLISH" || userLanguage === "GUJARATI") {
+    return "Tamaro voice note barabar sambhadayo nathi. Kripya shant jagyae thi fari record karo athva tamari requirement text ma lakhi ne moklo. 🙏";
+  } else if (userLanguage === "ENGLISH") {
+    return "We couldn't clearly hear your voice note due to background noise. Please re-record in a quiet place or type your requirement as text. 🙏";
+  }
+  return "Aapka voice note theek se sunai nahi diya. Kripya shant jagah se dubara record karein ya apna requirement text me likh kar bhej dein. 🙏";
+}
+
+async function transcribeAudioBuffer(
+  buffer: Uint8Array,
+  mimeType: string,
+  options?: { groqApiKey?: string; geminiApiKey?: string }
+): Promise<{ text: string; detectedLanguage: string; durationSec: number; provider: string }> {
+  if (!buffer || buffer.length === 0) {
+    return { text: "", detectedLanguage: "unknown", durationSec: 0, provider: "NONE" };
+  }
+
+  const groqKey = (options?.groqApiKey || Deno.env.get("GROQ_API_KEY") || "").trim().replace(/^["']|["']$/g, "");
+  const geminiKey = (options?.geminiApiKey || Deno.env.get("GEMINI_API_KEY") || "").trim().replace(/^["']|["']$/g, "");
+
+  // 1. Primary Engine: Groq Whisper-large-v3 (~180ms - 400ms ultra-low latency)
+  if (groqKey) {
+    try {
+      let filename = "audio.ogg";
+      const cleanMime = mimeType.split(";")[0].trim().toLowerCase();
+      if (cleanMime.includes("mpeg") || cleanMime.includes("mp3")) filename = "audio.mp3";
+      else if (cleanMime.includes("wav")) filename = "audio.wav";
+      else if (cleanMime.includes("mp4") || cleanMime.includes("m4a")) filename = "audio.m4a";
+
+      const formData = new FormData();
+      const blob = new Blob([buffer], { type: cleanMime || "audio/ogg" });
+      formData.append("file", blob, filename);
+      formData.append("model", "whisper-large-v3");
+      formData.append(
+        "prompt",
+        "Real estate inquiry in India - Hindi, Gujarati, English, Marathi, flats, shops, budget, crore, lakh, visit"
+      );
+      formData.append("response_format", "verbose_json");
+      formData.append("temperature", "0.2");
+
+      const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${groqKey}`,
+        },
+        body: formData,
+        signal: AbortSignal.timeout(4000), // Strict 4000ms cap
+      });
+
+      if (groqRes.ok) {
+        const data = await groqRes.json();
+        const transcribedText = (data.text || "").trim();
+        if (transcribedText) {
+          return {
+            text: transcribedText,
+            detectedLanguage: data.language || "unknown",
+            durationSec: Number(data.duration) || 0,
+            provider: "GROQ_WHISPER",
+          };
+        }
+      } else {
+        const errText = await groqRes.text();
+        console.warn(`[Voice Ingestion] Groq Whisper HTTP ${groqRes.status}:`, errText);
+      }
+    } catch (err: any) {
+      console.warn("[Voice Ingestion] Groq Whisper failed or timed out (falling back to Gemini):", err.message);
+    }
+  }
+
+  // 2. Fallback Engine: Google Gemini 2.5 Flash Audio API
+  if (geminiKey) {
+    try {
+      const cleanMime = mimeType.split(";")[0].trim().toLowerCase() || "audio/ogg";
+      const base64Data = uint8ArrayToBase64(buffer);
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+
+      const geminiRes = await fetch(geminiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: cleanMime,
+                    data: base64Data,
+                  },
+                },
+                {
+                  text: "Transcribe this real estate voice message accurately in original language/script and translate to Latin text if spoken in vernacular. Return ONLY the transcribed text without any conversational preamble or markdown formatting.",
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 500,
+          },
+        }),
+        signal: AbortSignal.timeout(6000),
+      });
+
+      if (geminiRes.ok) {
+        const gData = await geminiRes.json();
+        const rawText = gData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const cleanText = rawText.trim().replace(/^["']|["']$/g, "").trim();
+        if (cleanText) {
+          return {
+            text: cleanText,
+            detectedLanguage: "multilingual",
+            durationSec: 0,
+            provider: "GEMINI_AUDIO",
+          };
+        }
+      } else {
+        const errText = await geminiRes.text();
+        console.warn(`[Voice Ingestion] Gemini Flash HTTP ${geminiRes.status}:`, errText);
+      }
+    } catch (err: any) {
+      console.warn("[Voice Ingestion] Gemini Flash audio fallback failed:", err.message);
+    }
+  }
+
+  return { text: "", detectedLanguage: "unknown", durationSec: 0, provider: "NONE" };
+}
+
 // 3. Sales Alert Dispatcher (Workflow 2: WmhDkALbtmTVgsYQ)
 async function dispatchSalesAlert(
   tenantId: string,
@@ -11773,6 +11912,9 @@ Deno.serve(async (req: Request) => {
 
     // If voice note / audio message was received, download audio binary stream into memory buffer
     let audioBufferData: { buffer: Uint8Array; mimeType: string } | null = null;
+    let voiceTranscript = "";
+    let voiceMetadata: { durationSec: number; detectedLanguage: string; provider: string } | null = null;
+
     if (isVoice) {
       if (platform === "TELEGRAM" && telegramVoiceFileId) {
         audioBufferData = await fetchTelegramAudioBuffer(botToken, telegramVoiceFileId);
@@ -11790,9 +11932,63 @@ Deno.serve(async (req: Request) => {
           console.warn("[Voice Ingestion] Direct base64 audio decode error:", e.message);
         }
       }
+
+      // Transcribe audio using Dual-Engine Transcriber (Groq Whisper-large-v3 primary + Gemini Flash fallback)
+      if (audioBufferData?.buffer && audioBufferData.buffer.length > 0) {
+        const transcriptResult = await transcribeAudioBuffer(audioBufferData.buffer, audioBufferData.mimeType);
+        if (transcriptResult.text) {
+          voiceTranscript = transcriptResult.text;
+          messageText = transcriptResult.text;
+          voiceMetadata = {
+            durationSec: transcriptResult.durationSec || voiceDuration,
+            detectedLanguage: transcriptResult.detectedLanguage,
+            provider: transcriptResult.provider,
+          };
+          console.log(`[Voice Ingestion] Voice note transcribed via ${transcriptResult.provider}: "${messageText}"`);
+        }
+      }
+
+      // If voice message could not be transcribed or was completely inaudible:
+      if (!messageText) {
+        const { data: existingLead } = await supabase
+          .from("leads")
+          .select("user_language")
+          .eq("lead_id", senderId)
+          .eq("client_id", activeTenantId)
+          .maybeSingle();
+
+        const clarificationText = getVoiceInaudibleReply(existingLead?.user_language);
+        if (platform === "TELEGRAM") {
+          await sendTelegramMessage(botToken, senderId, clarificationText);
+        } else if (platform === "WHATSAPP" && phoneNumberId) {
+          await sendWhatsAppMessage(phoneNumberId, waAccessToken, senderId, clarificationText);
+        }
+
+        await supabase.from("lead_events").insert({
+          client_id: activeTenantId,
+          lead_id: senderId,
+          event_type: "VOICE_NOTE_INAUDIBLE",
+          payload: {
+            platform,
+            duration: voiceDuration,
+            file_id: telegramVoiceFileId || whatsAppMediaId,
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            status: "voice_inaudible_clarification_sent",
+            platform,
+            lead_id: senderId,
+            reply_sent: clarificationText,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
-    if (!messageText && !isVoice) {
+    if (!messageText) {
       return new Response(JSON.stringify({ status: "ignored", reason: "empty message" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -12022,6 +12218,11 @@ Deno.serve(async (req: Request) => {
     if (updateLeadMeta.owner_draft) {
       enrichedLeadMetadata.owner_draft = updateLeadMeta.owner_draft;
     }
+    if (isVoice && voiceTranscript) {
+      enrichedLeadMetadata.last_message_was_voice = true;
+      enrichedLeadMetadata.voice_transcript = voiceTranscript;
+      enrichedLeadMetadata.voice_metadata = voiceMetadata;
+    }
 
     // Centralized last_bot_prompt tracking across interactive turns
     if (!isSilent && replyText && replyText.trim()) {
@@ -12107,6 +12308,8 @@ Deno.serve(async (req: Request) => {
       payload: {
         platform,
         userText: messageText,
+        isVoice,
+        voiceMetadata: isVoice ? voiceMetadata : undefined,
         replySent: isSilent ? "[SILENT - 0 MSG DISPATCHED]" : replyText.slice(0, 500),
         state: nextState,
         ai_analysis: aiAnalysis,
@@ -12123,6 +12326,7 @@ Deno.serve(async (req: Request) => {
         silent: isSilent,
         reply_sent: isSilent ? null : replyText,
         ai_analysis: aiAnalysis,
+        voice_transcription: isVoice ? { text: messageText, ...voiceMetadata } : undefined,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
