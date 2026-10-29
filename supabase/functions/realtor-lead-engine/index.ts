@@ -1008,6 +1008,90 @@ function normalizePhoneticLocation(str: string): string {
     .trim();
 }
 
+const MAJOR_INDIAN_CITIES = [
+  "vadodara", "baroda", "વડોદરા", "वडोदरा",
+  "ahmedabad", "amdavad", "अहमदाबाद", "અમદાવાદ",
+  "surat", "સુરત", "सूरत",
+  "rajkot", "રાજકોટ", "राजकोट",
+  "gandhinagar", "ગાંધીનગર", "गांधीनगर",
+  "bhavnagar", "ભાવનગર", "भावनगर",
+  "jamnagar", "જામનગર", "जामनगर",
+  "anand", "આણંદ", "आनंद",
+  "nadiad", "નડિયાદ", "नडियाद",
+  "bharuch", "ભરૂચ", "भरूच",
+  "ankleshwar", "અંકલેશ્વર", "अंकलेश्वर",
+  "vapi", "વાપી", "वापी",
+  "valsad", "વલસાડ", "वलसाड",
+  "navsari", "નવસારી", "नवसारी",
+  "morbi", "મોરબી", "मोरबी",
+  "junagadh", "જૂનાગઢ", "जूनागढ़",
+  "porbandar", "પોરબંદર", "पोरबंदर",
+  "surendranagar", "સુરેન્દ્રનગર", "सुरेन्द्रनगर",
+  "godhra", "ગોધરા", "गोधरा",
+  "dahod", "દાહોદ", "दाहोद",
+  "palanpur", "પાલનપુર", "पालनपुर",
+  "mehsana", "મહેસાણા", "मेहसाणा",
+  "himatnagar", "હિંમતનગર", "हिम्मतनगर",
+  "mumbai", "bombay", "मुंबई",
+  "pune", "पुणे",
+  "delhi", "new delhi", "दिल्ली", "नई दिल्ली",
+  "noida", "greater noida", "नोएडा",
+  "gurgaon", "gurugram", "गुड़गांव", "गुरुग्राम",
+  "faridabad", "ghaziabad",
+  "bengaluru", "bangalore", "बेंगलुरु",
+  "hyderabad", "हैदराबाद",
+  "chennai", "madras", "चेन्नई",
+  "kolkata", "calcutta", "कोलकाता",
+  "jaipur", "जयपुर",
+  "lucknow", "लखनऊ",
+  "kanpur", "कानपुर",
+  "nagpur", "नागपुर",
+  "indore", "इंदौर",
+  "bhopal", "भोपाल",
+  "thane", "ठाणे",
+  "navi mumbai", "नवी मुंबई",
+  "patna", "पटना",
+  "chandigarh", "चंडीगढ़",
+  "coimbatore", "vijayawada", "visakhapatnam", "vizag",
+  "kochi", "cochin", "thiruvananthapuram", "trivandrum",
+  "dehradun", "varanasi", "benaras", "kashi",
+  "prayagraj", "allahabad", "agra", "meerut", "aligarh",
+  "nashik", "aurangabad", "chhatrapati sambhajinagar",
+  "solapur", "amravati", "kolhapur", "jodhpur", "udaipur",
+  "kota", "bikaner", "ajmer", "raipur", "bilaspur", "ranchi", "jamshedpur",
+  "gwalior", "jabalpur", "ujjain", "amritsar", "ludhiana", "jalandhar",
+  "guwahati", "bhubaneswar", "cuttack", "rourkela"
+];
+
+function isKnownIndianCity(name: string): boolean {
+  if (!name) return false;
+  const lower = name.toLowerCase().trim();
+  return MAJOR_INDIAN_CITIES.some((c) => lower === c || lower === `${c} city` || lower === `${c} shehar`);
+}
+
+function extractCityFromText(text: string): string | null {
+  if (!text) return null;
+  const lower = text.toLowerCase().trim();
+  for (const c of MAJOR_INDIAN_CITIES) {
+    const rx = new RegExp(`(?:^|\\b)${c}(?:\\b|$)`, "i");
+    if (rx.test(lower)) {
+      if (c.includes("vadodara") || c.includes("baroda") || c === "વડોદરા" || c === "वडोदरा") return "Vadodara";
+      if (c.includes("ahmedabad") || c.includes("amdavad") || c === "અમદાવાદ" || c === "अहमदाबाद") return "Ahmedabad";
+      if (c.includes("surat") || c === "સુરત" || c === "सूरत") return "Surat";
+      if (c.includes("rajkot") || c === "રાજકોટ" || c === "राजકોટ") return "Rajkot";
+      if (c.includes("gandhinagar") || c === "ગાંધીનગર" || c === "गांधीनगर") return "Gandhinagar";
+      if (c.includes("anand") || c === "આણંદ" || c === "आनंद") return "Anand";
+      if (c.includes("mumbai") || c.includes("bombay") || c === "मुंबई") return "Mumbai";
+      if (c.includes("delhi") || c === "दिल्ली") return "Delhi";
+      if (c.includes("pune") || c === "पुणे") return "Pune";
+      if (c.includes("bengaluru") || c.includes("bangalore") || c === "बेंगलुरु") return "Bengaluru";
+      if (c.includes("hyderabad") || c === "हैदराबाद") return "Hyderabad";
+      return c.charAt(0).toUpperCase() + c.slice(1);
+    }
+  }
+  return null;
+}
+
 const NON_LOCATION_BLACKLIST = /(?:^|\b)(?:kuch\s*bhi|koi\s*bhi|aap\s*batao|tame\s*kaho|nahi\s*pata|khabar\s*nathi|nathi\s*khabar|any|anywhere|kahi\s*bhi|best|sasta|achha|koi\s*pan|gamete|all|any\s*area|no\s*preference|flexible|badhiya|theek)\b/i;
 
 function extractLocationFromText(text: string, inventory: any[] = []): string {
@@ -1043,7 +1127,10 @@ function extractLocationFromText(text: string, inventory: any[] = []): string {
       if (Array.isArray(item.landmarks)) {
         for (const lm of item.landmarks) {
           const lmL = lm.toLowerCase().replace(/[-_]/g, " ");
-          const lmWords = lmL.split(/\s+/).filter((w: string) => w.length >= 4 && !["near", "opp", "road", "complex", "mall"].includes(w));
+          if (isKnownIndianCity(cleanLower)) {
+            continue; // Prevent city names like "Vadodara" from falsely matching landmarks like "Vadodara Central"
+          }
+          const lmWords = lmL.split(/\s+/).filter((w: string) => w.length >= 4 && !["near", "opp", "road", "complex", "mall", "central"].includes(w) && !isKnownIndianCity(w));
           if (lmL && (lmL.includes(cleanLower) || cleanLower.includes(lmL) || lmWords.some((w: string) => cleanLower.includes(w)))) {
             return item.location;
           }
@@ -1089,6 +1176,7 @@ function extractLocationFromText(text: string, inventory: any[] = []): string {
 
 function extractLocationsFromText(text: string, inventory: any[] = []): string[] {
   if (!text) return [];
+  if (isKnownIndianCity(text.trim())) return [];
   const raw = text.toLowerCase().trim();
   if (NON_LOCATION_BLACKLIST.test(raw)) return [];
 
@@ -2243,7 +2331,12 @@ export function validateUserAction(raw: any, leadOrState?: any, rawMessageText?:
         (src.location && String(src.location).toUpperCase() === "FLEXIBLE")
       );
 
-      const parsedBudget = parseBudgetVal(src.budget || src.price_or_budget || src.budget_str);
+      let rawParsed = parseBudgetVal(src.budget || src.price_or_budget || src.budget_str);
+      const rawUserMsg = String(src.query || raw.messageText || raw.text || raw.userText || "");
+      if (rawParsed === 100000000 && /(?:^|\b)1\s*(?:cr|crore|karod)\b/i.test(rawUserMsg)) {
+        rawParsed = 10000000;
+      }
+      const parsedBudget = rawParsed;
 
       // SANITY GUARD: If residential/flat with monthly budget < 50,000, it cannot be BUY. In Indian real estate, ₹1,000 - ₹50,000 is strictly RENT!
       if (parsedBudget && parsedBudget >= 1000 && parsedBudget < 50000 && req !== "LEASE") {
@@ -9866,18 +9959,51 @@ async function handleQualificationCascade(
     .eq("client_id", activeTenantId)
     .eq("status", "AVAILABLE");
 
+  const detectedCity = extractCityFromText(context.messageText);
   const matchedLocs = extractLocationsFromText(context.messageText, allTenantInventory || []);
   const extractedLoc = matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(context.messageText, allTenantInventory || []);
   const isMsgFlex = /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|any\s*location|flexible|gamete)\b/i.test(context.lower);
   const justLoc = (actionResult.is_flexible_location || isMsgFlex) ? "FLEXIBLE" : extractedLoc;
+  const primaryTenantCity = resolvedCity || "Vadodara";
+  const isPrimaryCity = Boolean(detectedCity && (
+    detectedCity.toLowerCase() === primaryTenantCity.toLowerCase() ||
+    (primaryTenantCity.toLowerCase() === "vadodara" && (detectedCity.toLowerCase() === "vadodara" || detectedCity.toLowerCase() === "baroda"))
+  ));
+  const isOutOfMarketCity = Boolean(detectedCity && !isPrimaryCity);
 
   // Cumulative values from this message or previous lead/draft state
   let propType = actionResult.property_type || justPropType || lead?.property_type || lead?.metadata?.seeker_draft?.property_type;
   let requirement = actionResult.transaction_type || justReq || lead?.requirement || lead?.metadata?.seeker_draft?.requirement;
   let purpose = justPurpose || lead?.purpose || lead?.metadata?.seeker_draft?.purpose;
-  let budget = actionResult.price_or_budget || justBudget || (lead?.budget ? Number(lead.budget) : 0) || (lead?.metadata?.seeker_draft?.budget ? Number(lead.metadata.seeker_draft.budget) : 0);
+  let budget = (justBudget && justBudget > 0) ? justBudget : (actionResult.price_or_budget || (lead?.budget ? Number(lead.budget) : 0) || (lead?.metadata?.seeker_draft?.budget ? Number(lead.metadata.seeker_draft.budget) : 0));
   let timeline = actionResult.timeline || justTimeline || lead?.timeline || lead?.metadata?.seeker_draft?.timeline;
   let location = actionResult.location || (justLoc ? justLoc : (lead?.location || lead?.metadata?.seeker_draft?.location));
+
+  if (isOutOfMarketCity && !justLoc) {
+    const outOfMarketReply = lang === "GUJLISH"
+      ? `Griham Realty hal ma mukhyatve <b>${primaryTenantCity}</b> na prime vistaro ma specialize kare chhe. 🏡✨\n\nShu tame <b>${primaryTenantCity}</b> ma investment ke property explore karva mango chho?`
+      : lang === "ENGLISH"
+      ? `Currently, Griham Realty specializes exclusively in prime properties across <b>${primaryTenantCity}</b>. 🏡✨\n\nAre you looking to explore high-ROI investments or residential properties in <b>${primaryTenantCity}</b>?`
+      : `Griham Realty filhal mukhyatva <b>${primaryTenantCity}</b> ke prime locations me specialize karta hai. 🏡✨\n\nKya aap <b>${primaryTenantCity}</b> me property ya high-ROI investment explore karna chahte hain?`;
+    return {
+      replyText: outOfMarketReply,
+      nextState: "QUALIFYING",
+      leadUpdates: {
+        state: "QUALIFYING",
+        metadata: {
+          ...(lead?.metadata || {}),
+          seeker_draft: {
+            ...(lead?.metadata?.seeker_draft || {}),
+            target_city: detectedCity,
+          },
+          last_bot_prompt: {
+            question_type: "OUT_OF_MARKET_CITY",
+            sent_at: new Date().toISOString(),
+          },
+        },
+      },
+    };
+  }
 
   // F-05: Commercial Lease Seeker Disambiguation & Sub-50k Budget Protection
   const lowerMsg = (context.messageText || "").toLowerCase();
@@ -10075,6 +10201,12 @@ async function handleQualificationCascade(
           ? `Great, for family living! 🏡`
           : `Bahut badhiya, family ke rehne ke liye! 🏡`;
       }
+    } else if (isPrimaryCity && !justLoc) {
+      ack = lang === "GUJLISH"
+        ? `Khub saras, <b>${primaryTenantCity}</b> ma! 📍`
+        : lang === "ENGLISH"
+        ? `Great, in <b>${primaryTenantCity}</b>! 📍`
+        : `Bahut badhiya, <b>${primaryTenantCity}</b> me! 📍`;
     } else if (justLoc) {
       if (justLoc === "FLEXIBLE") {
         ack = lang === "GUJLISH"
@@ -10091,10 +10223,10 @@ async function handleQualificationCascade(
       }
     } else if (justBudget) {
       ack = lang === "GUJLISH"
-        ? `Budget note kari lidho — <b>₹${formatPriceShort(budget)}</b>! 💰`
+        ? `Budget note kari lidho — <b>${formatPriceShort(budget)}</b>! 💰`
         : lang === "ENGLISH"
-        ? `Budget noted — <b>₹${formatPriceShort(budget)}</b>! 💰`
-        : `Budget note kar liya — <b>₹${formatPriceShort(budget)}</b>! 💰`;
+        ? `Budget noted — <b>${formatPriceShort(budget)}</b>! 💰`
+        : `Budget note kar liya — <b>${formatPriceShort(budget)}</b>! 💰`;
     } else if (justTimeline) {
       ack = lang === "GUJLISH"
         ? `Timeline note kari lidhi! 👍`
@@ -10280,7 +10412,7 @@ async function handleQualificationCascade(
           ? `👉 <b>Which property would you like to schedule a VIP Site Visit 🚗 for — Option 1 or Option 2?</b> (Tomorrow 5:00 PM or Sunday 11:00 AM?)`
           : `👉 <b>Kis property ki VIP Site Visit 🚗 schedule karein — Option 1 ya Option 2?</b> (Kal shaam 5:00 baje ya Sunday subah 11:00 baje?)`);
 
-    const budgetStr = leadBudget > 0 ? `₹${formatPriceShort(leadBudget)} budget` : "aapke budget";
+    const budgetStr = leadBudget > 0 ? `${formatPriceShort(leadBudget)} budget` : "aapke budget";
     const heading =
       lang === "GUJLISH"
         ? `🌟 <b>Tamari Requirement Mujab Top Options</b>\n\n${nameStr}, tamara <b>${budgetStr}</b> ane <b>${propType} requirement</b> mujab aa best options chhe:`
