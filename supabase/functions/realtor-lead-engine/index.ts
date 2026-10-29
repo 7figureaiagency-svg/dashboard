@@ -3736,13 +3736,14 @@ async function resolveLeadProjectName(
     l?.metadata?.selected_property_name ||
     l?.metadata?.owner_draft?.project_name;
 
-  // 4. Fallback to tenant default available inventory ONLY if neither prop nor rawMetaName is known
-  if (!prop && !rawMetaName && effectiveTenantId) {
+  // 4. Fallback to tenant default available inventory ONLY if category matches and neither prop nor rawMetaName is known
+  if (!prop && !rawMetaName && effectiveTenantId && l?.property_category) {
     const { data: p } = await supabase
       .from("inventory")
       .select("*")
       .eq("client_id", effectiveTenantId)
       .eq("status", "AVAILABLE")
+      .eq("property_category", l.property_category)
       .limit(1)
       .maybeSingle();
     if (p) prop = p;
@@ -4325,15 +4326,29 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
               if (l.state === "OPTIONS_SENT") {
                 const leadTenantId = l.client_id || defaultTenantId;
-                const { projectName } = await resolveLeadProjectName(l, supabase, leadTenantId);
-                const topProject = projectName && projectName !== "VIP Property" ? projectName : "selected property";
+                const hasRealOptions = Array.isArray(l.last_option_ids) && l.last_option_ids.length > 0;
+                const isNoMatchLead = l.metadata?.sales_alert_reason === "NO_PROPERTY_MATCH" || !hasRealOptions;
 
-                if (lang === "GUJLISH") {
-                  nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Ame je properties share kari hati (jaise <b>${topProject}</b>), shu tame check kari? Developer taraf thi limited units par <b>exclusive price sheet ane spot token booking benefits</b> chali rahya chhe. Jo tame direct inspection karva mangta ho, to ame <b>kaale sanje 5 vage</b> VIP Site Visit arrange kari shakie chhiye. 🚗`;
-                } else if (lang === "ENGLISH") {
-                  nudgeMsg = `Hello <b>${name}</b>! 👋 Did you get a chance to review the shortlisted properties (such as <b>${topProject}</b>)? The developer is currently offering <b>exclusive price sheet & spot token booking benefits</b> on select units. Shall we schedule a VIP Site Visit <b>tomorrow at 5:00 PM</b>? 🚗`;
+                if (isNoMatchLead) {
+                  const propDesc = l.property_type ? `<b>${l.property_type}</b>` : "property";
+                  if (lang === "GUJLISH") {
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Tamari ${propDesc} requirement mujab amari team specialized off-market options verify kari rahi chhe. Shu tame timing ke criteria ma koi update karva mango chho? 📞`;
+                  } else if (lang === "ENGLISH") {
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 Based on your requirement for ${propDesc}, our team is verifying exclusive off-market options. Would you like to refine your criteria or timeline? 📞`;
+                  } else {
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Aapki ${propDesc} requirement ke mutabiq hamari team specialized off-market options verify kar rahi hai. Kya aap timing ya criteria me koi update karna chahte hain? 📞`;
+                  }
                 } else {
-                  nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Jo properties humne share ki thin (jaise <b>${topProject}</b>), kya aapne review keen? Developer ki taraf se limited units par <b>exclusive price sheet aur spot token booking benefits</b> chal rahe hain. Kya hum <b>kal shaam 5 baje</b> VIP Site Visit plan karein? 🚗`;
+                  const { projectName } = await resolveLeadProjectName(l, supabase, leadTenantId);
+                  const topProject = projectName && projectName !== "VIP Property" ? projectName : "selected property";
+
+                  if (lang === "GUJLISH") {
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Ame je properties share kari hati (jaise <b>${topProject}</b>), shu tame check kari? Developer taraf thi limited units par <b>exclusive price sheet ane spot token booking benefits</b> chali rahya chhe. Jo tame direct inspection karva mangta ho, to ame <b>kaale sanje 5 vage</b> VIP Site Visit arrange kari shakie chhiye. 🚗`;
+                  } else if (lang === "ENGLISH") {
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 Did you get a chance to review the shortlisted properties (such as <b>${topProject}</b>)? The developer is currently offering <b>exclusive price sheet & spot token booking benefits</b> on select units. Shall we schedule a VIP Site Visit <b>tomorrow at 5:00 PM</b>? 🚗`;
+                  } else {
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Jo properties humne share ki thin (jaise <b>${topProject}</b>), kya aapne review keen? Developer ki taraf se limited units par <b>exclusive price sheet aur spot token booking benefits</b> chal rahe hain. Kya hum <b>kal shaam 5 baje</b> VIP Site Visit plan karein? 🚗`;
+                  }
                 }
               } else if (l.state === "VISIT_REQUESTED") {
                 if (lang === "GUJLISH") {
@@ -6994,9 +7009,7 @@ export async function dispatchStateAction(
       const hasBuyerCriteriaInMenu = Boolean(
         detectedTypeInMenu ||
         actionResult.location ||
-        actionResult.price_or_budget ||
-        intent === "CHANGE_REQUIREMENT" ||
-        intent === "SEEKER_QUALIFICATION"
+        actionResult.price_or_budget
       );
 
       const updatedMeta = { ...(lead.metadata || {}) };
@@ -7469,22 +7482,23 @@ export async function dispatchStateAction(
     const bVal = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
     const locVal = actionResult.location || extractLocationFromText(context.messageText);
     const parsedReq = parseRequirementFromText(context.messageText);
-    const hasBuyerDirectCriteria = Boolean(
-      pType ||
-      bVal ||
-      locVal ||
-      parsedReq === "BUY" ||
-      parsedReq === "RENT" ||
-      intent === "CHANGE_REQUIREMENT" ||
-      intent === "SEEKER_QUALIFICATION"
-    );
 
+    const isPureOption1 = /^(?:1|1️⃣|option\s*1|first|1st)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim());
     const isSeekerChoice =
+      isPureOption1 ||
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
       /^(1|1️⃣|option\s*1|first|1st|leni|lena|kharidna|kharidvu|buy|rent)\b/i.test(lower.trim());
 
-    if (isSeekerChoice || hasBuyerDirectCriteria) {
-      if (hasBuyerDirectCriteria) {
+    // Concrete buyer entities: only consider direct criteria if actual fields were provided
+    const hasConcreteBuyerEntities = Boolean(
+      pType ||
+      bVal ||
+      locVal ||
+      (!isPureOption1 && (parsedReq === "BUY" || parsedReq === "RENT"))
+    );
+
+    if (isSeekerChoice || hasConcreteBuyerEntities) {
+      if (hasConcreteBuyerEntities) {
         return handleQualificationCascade(lead, actionResult, context);
       }
 
@@ -7503,14 +7517,18 @@ export async function dispatchStateAction(
         leadUpdates: {
           lead_type: isDualFromRoleSelection ? "DUAL_ROLE" : "SEEKER",
           state: "QUALIFYING",
-          ...(isDualFromRoleSelection ? {
-            metadata: {
-              ...(lead.metadata || {}),
+          metadata: {
+            ...(lead.metadata || {}),
+            last_bot_prompt: {
+              question_type: "TURN_1_COMPOUND",
+              sent_at: new Date().toISOString(),
+            },
+            ...(isDualFromRoleSelection ? {
               has_seller_profile: true,
               has_buyer_profile: true,
               active_persona: "BUYER",
-            }
-          } : {}),
+            } : {}),
+          },
         },
       };
     }
@@ -7778,6 +7796,64 @@ export async function dispatchStateAction(
       return {
         replyText,
         nextState: currentState,
+      };
+    }
+
+    // =========================================================================
+    // A0. UPCOMING / TODAY'S VISIT CONFIRMATION GUARD
+    // (Handles "Ha", "Haan", "Yes", "Sure", "Ok" confirming upcoming or today's visit)
+    // =========================================================================
+    let scheduledTimeForConfirm = lead.site_visit_at || lead.site_visit_datetime;
+    const { data: activeVisitRow } = await supabase
+      .from("site_visits")
+      .select("*, inventory(*)")
+      .eq("client_id", activeTenantId)
+      .eq("lead_id", lead.id)
+      .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activeVisitRow?.scheduled_at) {
+      scheduledTimeForConfirm = activeVisitRow.scheduled_at;
+    }
+
+    const scheduledTimeMs = scheduledTimeForConfirm ? new Date(scheduledTimeForConfirm).getTime() : 0;
+    const isVisitUpcomingOrToday = scheduledTimeMs > (Date.now() - 2 * 3600 * 1000);
+
+    const isAffirmativeConfirmation =
+      (intent === "CONFIRM_VISIT" || /^(?:ha|haa|haan|haji|yes|yep|yeah|sure|confirm|bilkul|ok|okay|aavishu|aavish|pochish|aavu\s*chhu|pohchi\s*jaish|confirm\s*che|confirm\s*hai)\b/i.test(lower.trim())) &&
+      !/(?:gaya|gaye|kiya|kari|dekh\s*li|dekh\s*aaya|miss|nahi|nhi|nathi|cancel|reschedule)/i.test(lower);
+
+    if (isVisitUpcomingOrToday && isAffirmativeConfirmation && !lead.post_visit_feedback_sent) {
+      if (activeVisitRow?.id) {
+        await supabase
+          .from("site_visits")
+          .update({ status: "CONFIRMED" })
+          .eq("id", activeVisitRow.id);
+      }
+
+      const propName = activeVisitRow?.inventory?.project_name || lead.metadata?.selected_property_name || "VIP Property";
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Khub saras <b>${nameStr}</b>! 🚗 Aaje tamari <b>${propName}</b> mate VIP Site Visit confirmed chhe. Amara senior sales executive time par direct site location par tamne malshe. (Site par maliye chhiye)! 🤝📍`
+          : lang === "ENGLISH"
+          ? `Wonderful <b>${nameStr}</b>! 🚗 Your VIP Site Visit for <b>${propName}</b> is confirmed. Our senior sales executive will meet you directly at the site location on time! 🤝📍`
+          : `Bahut badhiya <b>${nameStr}</b>! 🚗 Aaj aapki <b>${propName}</b> ke liye VIP Site Visit confirmed hai. Hamare senior sales executive time par direct site location par aapse milenge. (Milte hain site par)! 🤝📍`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_BOOKED",
+        leadUpdates: {
+          state: "SITE_VISIT_BOOKED",
+          site_visit_booked: true,
+          metadata: {
+            ...(lead.metadata || {}),
+            visit_confirmed_by_user: true,
+            visit_confirmed_at: new Date().toISOString(),
+          },
+        },
       };
     }
 
@@ -8808,8 +8884,21 @@ export async function dispatchStateAction(
       const isChoice3 = /^(?:3|3️⃣|option\s*3|third|3rd|change|badal|badlo|badalvi|nayi|navi|refine|criteria|budget)\b/i.test(lower.trim());
 
       if (isChoice1) {
-        // Option 1: Top property options dekhein
-        return handleQualificationCascade(lead, { ...actionResult, action: { intent: "SEEKER_QUALIFICATION", token: null } }, context);
+        // Option 1: Top property options dekhein (directly render matching options from known criteria)
+        return handleQualificationCascade(
+          lead,
+          {
+            ...actionResult,
+            property_type: lead.property_type || actionResult.property_type,
+            transaction_type: lead.requirement || actionResult.transaction_type || "BUY",
+            purpose: lead.purpose || "SELF_USE",
+            timeline: lead.timeline || "READY_TO_MOVE",
+            location: (lead.location && lead.location !== "UNKNOWN") ? lead.location : (actionResult.location || "FLEXIBLE"),
+            price_or_budget: lead.budget || actionResult.price_or_budget || 0,
+            action: { intent: "SEEKER_QUALIFICATION", token: null },
+          },
+          context
+        );
       }
 
       if (isChoice2) {
@@ -10195,7 +10284,9 @@ async function handleQualificationCascade(
     );
 
     // If user's message didn't provide any recognized entity and bot was expecting something specific, trigger polite clarification
-    const isTypoOrUnrecognized = !hasAnyEntityInThisTurn && Boolean(lastPromptQ);
+    // GUARD: Option numbers (1, 2, 3) or affirmative words are intentional navigation, NEVER typos!
+    const isNavigationOrAffirmation = /^\s*(?:1|1️⃣|2|2️⃣|3|3️⃣|option\s*[1-3]|ha|haa|haan|yes|ok|sure)\s*$/i.test(context.messageText || "");
+    const isTypoOrUnrecognized = !hasAnyEntityInThisTurn && Boolean(lastPromptQ) && !isNavigationOrAffirmation;
 
     let ack = "";
     if (justReq) {

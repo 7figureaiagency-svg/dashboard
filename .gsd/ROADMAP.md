@@ -311,5 +311,17 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 30.1: Vernacular Seller Entity Extraction & Adjective Stop-Word Guard ([30.1-PLAN.md](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/30/30.1-PLAN.md))
 - [x] Plan 30.2: Compound Question Disambiguation & Remaining-Question Recovery Engine ([30.2-PLAN.md](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/30/30.2-PLAN.md))
 
+---
+
+### Phase 31: India-Wide City Handling, Live Inventory Synchronization & Conversational Quality Enforcement
+**Status:** ✅ Complete  
+**Objective:** (1) Implement pan-India city intelligence (`MAJOR_INDIAN_CITIES` and landmark city guards) so user city inputs are never confused with local areas or false landmarks (like "Vadodara Central" -> Alkapuri), prompt for specific localities within the tenant's city, and handle out-of-market inquiries gracefully. (2) Establish real-time synchronization between Owner Submissions and `inventory` so any approved or edited submission instantly reflects in live inventory and property searches, repair existing submission inventory discrepancies (Ramnath Complex & Saraswati Bungalows). (3) Fix number/currency parsing (`1 cr` = 10,000,000 and eradicate `₹₹` double rupee), eliminate Menu Option 1 apology loops, prevent Owner Intake numeric location and rent-per-month loops, ensure Category-matched follow-up drips without phantom project claims, and prevent duplicate visit booking prompts upon morning visit confirmation.  
+**Depends on:** Phase 30  
+**Plans:**
+- [x] Plan 31.1: India-Wide City Disambiguation & Currency/Number Parsing Fix ([`31.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/31/31.1-PLAN.md))
+- [x] Plan 31.2: Live Inventory Synchronization & Owner Intake Safeguards ([`31.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/31/31.2-PLAN.md))
+- [x] Plan 31.3: Conversational Menus, Drip Integrity & Visit Confirmation ([`31.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/31/31.3-PLAN.md))
+
+
 
 
