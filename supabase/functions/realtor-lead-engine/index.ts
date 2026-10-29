@@ -2313,10 +2313,21 @@ export interface CognitiveExtractionEntities {
   furnishing: "UNFURNISHED" | "SEMI_FURNISHED" | "FULLY_FURNISHED" | "UNKNOWN";
 }
 
+export interface LanguageProfile {
+  primary_language: string;
+  language_code: string;
+  dialect: string;
+  script: string;
+  formality: "POLITE_RESPECTFUL" | "CASUAL" | "FORMAL";
+  detected_at: string;
+}
+
 export interface CognitiveExtractionLanguage {
   code: string;
   dialect: string;
-  script: "Latin" | "Devanagari" | "Gujarati" | "Other";
+  script: "Latin" | "Devanagari" | "Gujarati" | "Tamil" | "Telugu" | "Kannada" | "Bengali" | "Gurmukhi" | "Other" | string;
+  primary_language?: string;
+  formality?: "POLITE_RESPECTFUL" | "CASUAL" | "FORMAL";
 }
 
 export interface CognitiveExtractionResult {
@@ -2461,16 +2472,25 @@ export const REAL_ESTATE_EXTRACTION_SCHEMA = {
       properties: {
         code: {
           type: "STRING",
-          description: "Language code (e.g. hi-IN, gu-IN, en-IN, mr-IN)",
+          description: "Language code (e.g. hi-IN, gu-IN, en-IN, mr-IN, ta-IN, te-IN, kn-IN, bn-IN, pa-IN)",
         },
         dialect: {
           type: "STRING",
-          description: "Dialect description (e.g. Gujlish, Hinglish, Pure Gujarati, English)",
+          description: "Dialect description (e.g. Gujlish, Hinglish, Pure Gujarati, Marathi, Tamil, Telugu, English)",
         },
         script: {
           type: "STRING",
           enum: ["Latin", "Devanagari", "Gujarati", "Other"],
           description: "Primary script used in message",
+        },
+        primary_language: {
+          type: "STRING",
+          description: "Primary language name (e.g. Gujarati, Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Punjabi, English)",
+        },
+        formality: {
+          type: "STRING",
+          enum: ["POLITE_RESPECTFUL", "CASUAL", "FORMAL"],
+          description: "Formality level of the user's message",
         },
       },
       required: ["code", "dialect", "script"],
@@ -3740,9 +3760,12 @@ ${historySection}
    - "25 hazar", "25k" = 25000 INR
 
 6. LANGUAGE & DIALECT DETECTION:
+   - Accurately detect all 22 scheduled Indian languages and vernacular regional dialects (Hindi, Gujarati, Marathi, Tamil, Telugu, Kannada, Bengali, Punjabi, Malayalam, Odia, Marwari, Kathiyawadi, Hinglish, Gujlish, English).
    - Detect script ("Latin", "Devanagari", "Gujarati", "Other").
-   - Detect dialect ("Gujlish", "Hinglish", "Pure Gujarati", "English").
-   - Detect code ("gu-IN", "hi-IN", "en-IN", "mr-IN").
+   - Detect dialect ("Gujlish", "Hinglish", "Pure Gujarati", "Marathi", "Tamil", "Telugu", "English").
+   - Detect code ("gu-IN", "hi-IN", "en-IN", "mr-IN", "ta-IN", "te-IN", "kn-IN", "bn-IN", "pa-IN").
+   - Detect primary_language (e.g. "Gujarati", "Hindi", "Marathi", "Tamil", "English").
+   - Detect formality ("POLITE_RESPECTFUL", "CASUAL", "FORMAL").
 
 USER MESSAGE TO EXTRACT:
 "${messageText}"`;
@@ -3758,26 +3781,100 @@ export function runDeterministicCognitiveExtractor(
 
   // 1. Script & Language Detection
   let script: "Latin" | "Devanagari" | "Gujarati" | "Other" = "Latin";
-  if (/[\u0A80-\u0AFF]/.test(normalized)) {
-    script = "Gujarati";
-  } else if (/[\u0900-\u097F]/.test(normalized)) {
-    script = "Devanagari";
-  }
-
+  let primaryLang = "Hindi";
   let code = "hi-IN";
   let dialect = "Hinglish";
-  if (
-    script === "Gujarati" ||
-    /\b(ma|kem|cho|chhe|che|nathi|joiye|joyiye|joie|mane|aapo|aapjo|batavo|shu|bhai|ben|tamare|amare|vechvu|vechvano|bhade|bhadu|kale|aaje)\b/i.test(lower)
-  ) {
+  let formality: "POLITE_RESPECTFUL" | "CASUAL" | "FORMAL" = "POLITE_RESPECTFUL";
+
+  if (/[\u0A80-\u0AFF]/.test(normalized)) {
+    script = "Gujarati";
+    primaryLang = "Gujarati";
     code = "gu-IN";
-    dialect = script === "Gujarati" ? "Pure Gujarati" : "Gujlish";
-  } else if (
-    /\b(i am looking|i want|please show|please send|can you|interested in|looking for|under construction|ready to move|reschedule|cancel|call me)\b/i.test(lower) &&
-    !/\b(hai|hain|nahi|nhi|chahiye|mera|meri|karna|dekhna|batao|apna)\b/i.test(lower)
-  ) {
-    code = "en-IN";
-    dialect = "English";
+    dialect = "Pure Gujarati";
+  } else if (/[\u0900-\u097F]/.test(normalized)) {
+    script = "Devanagari";
+    if (/\b(mala|pahije|aahe|vikayche|vikne|kiti|dakhva)\b/i.test(lower)) {
+      primaryLang = "Marathi";
+      code = "mr-IN";
+      dialect = "Marathi";
+    } else {
+      primaryLang = "Hindi";
+      code = "hi-IN";
+      dialect = "Devanagari Hindi";
+    }
+  } else if (/[\u0B80-\u0BFF]/.test(normalized)) {
+    script = "Other";
+    primaryLang = "Tamil";
+    code = "ta-IN";
+    dialect = "Tamil";
+  } else if (/[\u0C00-\u0C7F]/.test(normalized)) {
+    script = "Other";
+    primaryLang = "Telugu";
+    code = "te-IN";
+    dialect = "Telugu";
+  } else if (/[\u0C80-\u0CFF]/.test(normalized)) {
+    script = "Other";
+    primaryLang = "Kannada";
+    code = "kn-IN";
+    dialect = "Kannada";
+  } else if (/[\u0980-\u09FF]/.test(normalized)) {
+    script = "Other";
+    primaryLang = "Bengali";
+    code = "bn-IN";
+    dialect = "Bengali";
+  } else if (/[\u0A00-\u0A7F]/.test(normalized)) {
+    script = "Other";
+    primaryLang = "Punjabi";
+    code = "pa-IN";
+    dialect = "Punjabi";
+  } else {
+    // Latin Script
+    script = "Latin";
+    const hasGujLex = /\b(kem|cho|chho|chhe|che|nathi|joiye|joyiye|joie|mane|aapo|aapjo|batavo|shu|bhai|ben|tamare|amare|vechvu|vechvano|bhade|bhadu|kale|aaje)\b/i.test(lower);
+    const hasMarLex = /\b(mala|pahije|aahe|vikaycha|vikayche|vikne|kiti|dakhva|bhadane|ghyaye)\b/i.test(lower);
+    const hasTamLex = /\b(enakku|vendum|kaatunga|vaanga|enna|irukku|illai)\b/i.test(lower);
+    const hasTelLex = /\b(naaku|kaavaali|chupinchandi|undi|ledu|kavalenu)\b/i.test(lower);
+    const hasPunLex = /\b(mainu|chahida|kithe|daso|vechna|kidaan)\b/i.test(lower);
+    const hasExplicitEnglish = lower.includes("in english") || lower.includes("speak english") || lower.includes("english please") || lower === "english";
+    const hasEnglishGrammar = /\b(can you|could you|would you|please send|please show|please share|i am looking|i want to|i need to|we are looking|we want to|what is the|what are the|tell me about|could we|how much is|where is it|show me some|looking for|interested in|share with me|under construction|ready to move|reschedule|cancel|call me)\b/i.test(lower);
+    const hasHinLex = /\b(hai|hain|nahi|nhi|nai|chahiye|chahye|chahie|chaiye|karna|karni|dekhna|dikhao|batao|bhejo|kitna|kitne|kaunsa|kahan|kidhar|milega|mujhe|mera|meri|apna)\b/i.test(lower);
+
+    if (hasGujLex) {
+      primaryLang = "Gujarati";
+      code = "gu-IN";
+      dialect = "Gujlish";
+    } else if (hasMarLex) {
+      primaryLang = "Marathi";
+      code = "mr-IN";
+      dialect = "Marathi";
+    } else if (hasTamLex) {
+      primaryLang = "Tamil";
+      code = "ta-IN";
+      dialect = "Tamil";
+    } else if (hasTelLex) {
+      primaryLang = "Telugu";
+      code = "te-IN";
+      dialect = "Telugu";
+    } else if (hasPunLex) {
+      primaryLang = "Punjabi";
+      code = "pa-IN";
+      dialect = "Punjabi";
+    } else if (hasExplicitEnglish || (hasEnglishGrammar && !hasHinLex && !hasGujLex)) {
+      primaryLang = "English";
+      code = "en-IN";
+      dialect = "English";
+    } else {
+      primaryLang = "Hindi";
+      code = "hi-IN";
+      dialect = "Hinglish";
+    }
+  }
+
+  // Formality detection
+  if (/\b(ji|aap|tamare|kripya|please|namaste|pranam|sir|madam|saheb)\b/i.test(lower)) {
+    formality = "POLITE_RESPECTFUL";
+  } else if (/\b(yaar|bhai|re|tu|tare|tere)\b/i.test(lower)) {
+    formality = "CASUAL";
   }
 
   // 2. Negation Check (e.g. "muje chahiye nahi, bechni hai", "lena nahi hai", "nahi lena")
@@ -4013,6 +4110,8 @@ export function runDeterministicCognitiveExtractor(
       code,
       dialect,
       script,
+      primary_language: primaryLang,
+      formality,
     },
   };
 }
@@ -4401,7 +4500,146 @@ export function mapCognitiveResultToActionResult(
     selected_option_index: extracted.selected_menu_option,
   };
 
-  return buildClassifiedActionResult(action, userRole, language, providerUsed, latencyMs, rawPayload);
+  const actionResult = buildClassifiedActionResult(action, userRole, language, providerUsed, latencyMs, rawPayload);
+  (actionResult as any).extracted = extracted;
+  (actionResult as any).detected_language = extracted.detected_language;
+  return actionResult;
+}
+
+/**
+ * PHASE 33.3: Persistent Multilingual Language Profile Engine
+ * Maintains lead dialect and script preferences across 22 scheduled Indian languages.
+ * Handles seamless dynamic language switching while preserving continuity on short tokens.
+ */
+export function computeUpdatedLanguageProfile(
+  detectedLanguage: Partial<CognitiveExtractionLanguage> | undefined,
+  currentLead: any,
+  messageText: string
+): LanguageProfile {
+  const existingProfile: LanguageProfile | undefined = currentLead?.metadata?.language_profile;
+  const normalized = normalizeIndicDigits(normalizeGujaratiDigits(messageText || ""));
+  const lower = normalized.toLowerCase().trim();
+
+  // Guard against flipping on isolated numbers ("1", "2", "3", "1bhk") or universal short tokens/greetings
+  const isGreetingOrShortToken =
+    /^(?:hi|hello|hey|namaste|kem cho|pranam|namaskar|start|restart|fresh|naya|ok|okay|k|1|2|3|4|5|done|yes|ha|haan|theek|saras)$/i.test(lower) ||
+    lower.split(/\s+/).length <= 1;
+
+  if (existingProfile && isGreetingOrShortToken) {
+    return existingProfile;
+  }
+
+  // Derive primary_language, code, dialect, script, and formality
+  let primaryLang = detectedLanguage?.primary_language || "";
+  let code = detectedLanguage?.code || "";
+  let dialect = detectedLanguage?.dialect || "";
+  let script = detectedLanguage?.script || "Latin";
+  let formality: "POLITE_RESPECTFUL" | "CASUAL" | "FORMAL" = detectedLanguage?.formality || "POLITE_RESPECTFUL";
+
+  // Vernacular heuristics & normalization
+  if (/[\u0A80-\u0AFF]/.test(normalized)) {
+    script = "Gujarati";
+    primaryLang = "Gujarati";
+    code = "gu-IN";
+    dialect = "Pure Gujarati";
+  } else if (/[\u0B80-\u0BFF]/.test(normalized)) {
+    script = "Other";
+    primaryLang = "Tamil";
+    code = "ta-IN";
+    dialect = "Tamil";
+  } else if (/[\u0C00-\u0C7F]/.test(normalized)) {
+    script = "Other";
+    primaryLang = "Telugu";
+    code = "te-IN";
+    dialect = "Telugu";
+  } else if (/[\u0C80-\u0CFF]/.test(normalized)) {
+    script = "Other";
+    primaryLang = "Kannada";
+    code = "kn-IN";
+    dialect = "Kannada";
+  } else if (/[\u0980-\u09FF]/.test(normalized)) {
+    script = "Other";
+    primaryLang = "Bengali";
+    code = "bn-IN";
+    dialect = "Bengali";
+  } else if (/[\u0A00-\u0A7F]/.test(normalized)) {
+    script = "Other";
+    primaryLang = "Punjabi";
+    code = "pa-IN";
+    dialect = "Punjabi";
+  } else if (/[\u0900-\u097F]/.test(normalized)) {
+    script = "Devanagari";
+    if (/\b(mala|pahije|aahe|vikayche|vikne|kiti|dakhva)\b/i.test(lower)) {
+      primaryLang = "Marathi";
+      code = "mr-IN";
+      dialect = "Marathi";
+    } else {
+      primaryLang = "Hindi";
+      code = "hi-IN";
+      dialect = "Devanagari Hindi";
+    }
+  } else {
+    // Latin Script
+    script = "Latin";
+    const hasGujLex = /\b(kem|cho|chho|chhe|che|nathi|joiye|joyiye|joie|mane|aapo|aapjo|batavo|shu|bhai|ben|tamare|amare|vechvu|vechvano|bhade|bhadu|kale|aaje)\b/i.test(lower);
+    const hasMarLex = /\b(mala|pahije|aahe|vikaycha|vikayche|vikne|kiti|dakhva|bhadane|ghyaye)\b/i.test(lower);
+    const hasTamLex = /\b(enakku|vendum|kaatunga|vaanga|enna|irukku|illai)\b/i.test(lower);
+    const hasTelLex = /\b(naaku|kaavaali|chupinchandi|undi|ledu|kavalenu)\b/i.test(lower);
+    const hasPunLex = /\b(mainu|chahida|kithe|daso|vechna|kidaan)\b/i.test(lower);
+    const hasExplicitEnglish = lower.includes("in english") || lower.includes("speak english") || lower.includes("english please") || lower === "english";
+    const hasEnglishGrammar = /\b(can you|could you|would you|please send|please show|please share|i am looking|i want to|i need to|we are looking|we want to|what is the|what are the|tell me about|could we|how much is|where is it|show me some|looking for|interested in|share with me|under construction|ready to move|reschedule|cancel|call me)\b/i.test(lower);
+    const hasHinLex = /\b(hai|hain|nahi|nhi|nai|chahiye|chahye|chahie|chaiye|karna|karni|dekhna|dikhao|batao|bhejo|kitna|kitne|kaunsa|kahan|kidhar|milega|mujhe|mera|meri|apna)\b/i.test(lower);
+
+    if (hasGujLex) {
+      primaryLang = "Gujarati";
+      code = "gu-IN";
+      dialect = "Gujlish";
+    } else if (hasMarLex) {
+      primaryLang = "Marathi";
+      code = "mr-IN";
+      dialect = "Marathi";
+    } else if (hasTamLex) {
+      primaryLang = "Tamil";
+      code = "ta-IN";
+      dialect = "Tamil";
+    } else if (hasTelLex) {
+      primaryLang = "Telugu";
+      code = "te-IN";
+      dialect = "Telugu";
+    } else if (hasPunLex) {
+      primaryLang = "Punjabi";
+      code = "pa-IN";
+      dialect = "Punjabi";
+    } else if (hasExplicitEnglish || (hasEnglishGrammar && !hasHinLex && !hasGujLex)) {
+      primaryLang = "English";
+      code = "en-IN";
+      dialect = "English";
+    } else if (primaryLang) {
+      // Keep existing primaryLang if set
+    } else if (existingProfile?.primary_language && !hasHinLex) {
+      return existingProfile;
+    } else {
+      primaryLang = "Hindi";
+      code = "hi-IN";
+      dialect = "Hinglish";
+    }
+  }
+
+  // Formality detection
+  if (/\b(ji|aap|tamare|kripya|please|namaste|pranam|sir|madam|saheb)\b/i.test(lower)) {
+    formality = "POLITE_RESPECTFUL";
+  } else if (/\b(yaar|bhai|re|tu|tare|tere)\b/i.test(lower)) {
+    formality = "CASUAL";
+  }
+
+  return {
+    primary_language: primaryLang || "Hindi",
+    language_code: code || "hi-IN",
+    dialect: dialect || "Hinglish",
+    script: script || "Latin",
+    formality: formality,
+    detected_at: new Date().toISOString(),
+  };
 }
 
 async function classifyLeadIntent(
@@ -7216,6 +7454,7 @@ export interface DialogContext {
   resolvedCity: string | null;
   displayCity: string;
   lang: "HINGLISH" | "GUJLISH" | "ENGLISH" | "GUJARATI_SCRIPT";
+  languageProfile?: LanguageProfile;
   availableInventory?: any[];
   botKnowledge?: Record<string, any>;
 }
@@ -12802,6 +13041,13 @@ Deno.serve(async (req: Request) => {
     const aiAnalysis = await classifyLeadIntent(normalizedMessage, lead);
     console.log(`[AI INTENT] Classified: "${aiAnalysis.intent}" via ${aiAnalysis.provider_used} in ${aiAnalysis.latency_ms}ms`);
 
+    // Maintain Persistent Multilingual Language Profile (Phase 33.3)
+    const updatedLanguageProfile = computeUpdatedLanguageProfile(
+      aiAnalysis.extracted?.detected_language || (aiAnalysis as any).detected_language,
+      lead,
+      normalizedMessage
+    );
+
     // Override language if AI semantic classifier detected high-confidence user dialect
     // STRICT GUARD: Do not allow greetings ("Hi", "Hello", "Hey", "Namaste") or short tokens to flip language to English!
     const isGreetingOrShortToken =
@@ -12863,6 +13109,7 @@ Deno.serve(async (req: Request) => {
       resolvedCity,
       displayCity,
       lang: (lang === "GUJLISH" || lang === "HINGLISH" || lang === "ENGLISH" || lang === "GUJARATI_SCRIPT") ? lang : "HINGLISH",
+      languageProfile: updatedLanguageProfile,
       botKnowledge,
     };
 
@@ -12893,12 +13140,19 @@ Deno.serve(async (req: Request) => {
     const enrichedLeadMetadata = {
       ...existingLeadMeta,
       ...updateLeadMeta,
+      language_profile: updatedLanguageProfile,
       lead_score: leadScoreResult.score,
       lead_temperature: leadScoreResult.temperature,
       score_breakdown: leadScoreResult.breakdown,
       score_reasons: leadScoreResult.reasons,
       score_updated_at: new Date().toISOString(),
     };
+    if (transitionResult.leadUpdates) {
+      transitionResult.leadUpdates.metadata = {
+        ...(transitionResult.leadUpdates.metadata || {}),
+        language_profile: updatedLanguageProfile,
+      };
+    }
     if (updateLeadMeta.owner_draft) {
       enrichedLeadMetadata.owner_draft = updateLeadMeta.owner_draft;
     }
