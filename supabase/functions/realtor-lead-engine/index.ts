@@ -18,6 +18,32 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+export function safeSlice(str: string | null | undefined, maxChars: number): string {
+  if (!str) return "";
+  return Array.from(str).slice(0, maxChars).join("");
+}
+
+export function sanitizeJsonForPostgrest(val: any): any {
+  if (val === null || val === undefined) return val;
+  if (typeof val === "string") {
+    if (typeof (val as any).toWellFormed === "function") {
+      return (val as any).toWellFormed();
+    }
+    return val.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+  }
+  if (Array.isArray(val)) {
+    return val.map(sanitizeJsonForPostgrest);
+  }
+  if (typeof val === "object") {
+    const res: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val)) {
+      res[k] = sanitizeJsonForPostgrest(v);
+    }
+    return res;
+  }
+  return val;
+}
+
 // 1. Supabase Initialization
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "https://yeiygfysijptjdepctnx.supabase.co";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -3520,10 +3546,11 @@ async function classifyLeadIntentWithGemini(
   const fullPrompt = `${CORE_INTENT_SYSTEM_PROMPT}\n\n${userContent}`;
 
   const candidates = [
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${cleanKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cleanKey}`,
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${cleanKey}`,
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${cleanKey}`,
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${cleanKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${cleanKey}`,
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${cleanKey}`,
   ];
 
@@ -3578,11 +3605,11 @@ async function classifyLeadIntentWithGroq(
   const userContent = buildLeadContextForClassifier(lead, messageText);
 
   const models = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
     "qwen/qwen3.8-27b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
   ];
 
   const groqErrors: string[] = [];
@@ -5416,7 +5443,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                   morning_briefing_at: new Date().toISOString(),
                   last_bot_prompt: {
                     question_type: "VISIT_REMINDER",
-                    text_preview: briefingMsg.slice(0, 150),
+                    text_preview: safeSlice(briefingMsg, 150),
                     asked_at: new Date().toISOString(),
                   },
                 },
@@ -5509,7 +5536,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 ...(l.metadata || {}),
                 last_bot_prompt: {
                   question_type: "VISIT_TIMING_CHECK",
-                  text_preview: reminderMsg.slice(0, 150),
+                  text_preview: safeSlice(reminderMsg, 150),
                   asked_at: new Date().toISOString(),
                 },
               },
@@ -5597,7 +5624,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 ...(l.metadata || {}),
                 last_bot_prompt: {
                   question_type: "VISIT_ATTENDANCE",
-                  text_preview: feedbackMsg.slice(0, 150),
+                  text_preview: safeSlice(feedbackMsg, 150),
                   asked_at: new Date().toISOString(),
                 },
               },
@@ -8292,6 +8319,18 @@ export async function dispatchStateAction(
     // ── Site-visit intent guard: DUAL_ROLE leads can be in OWNER_DETAILS_GATHERED
     //    while still having an active site visit. Catch visit intents here so they
     //    are never swallowed by the owner-flow handlers. ───────────────────────────
+    const hasActiveVisit = Boolean(
+      lead.site_visit_booked ||
+      (latestVisit && ["SCHEDULED", "CONFIRMED", "RESCHEDULED"].includes(latestVisit.status)) ||
+      lead.state === "SITE_VISIT_BOOKED" ||
+      lead.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE"
+    );
+
+    const isVisitMenuPrompt = Boolean(
+      lead.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE" ||
+      /1️⃣.*?Visit|2️⃣.*?Reschedule|Scheduled\s*Visit/i.test(lead.metadata?.last_bot_prompt?.text_preview || "")
+    );
+
     const isUnableToAttendVisit =
       intent === "CANNOT_ATTEND_VISIT" ||
       (/(?:site\s*visit|visit).*?(?:nai|nahi|nathi|cannot|can't|not\s*possible|miss|late|aaje)/i.test(lower) && /(?:nai|nahi|nathi|cannot|can't|miss)/i.test(lower)) ||
@@ -8300,17 +8339,87 @@ export async function dispatchStateAction(
     const isRescheduleVisit =
       intent === "RESCHEDULE_VISIT" ||
       (/(?:site\s*visit|visit).*?(?:reschedule|change\s*time|badal|timing)/i.test(lower) && !isUnableToAttendVisit) ||
-      /(?:reschedule|timing\s*change|time\s*badlo)/i.test(lower);
+      /(?:reschedule|timing\s*change|time\s*badlo)/i.test(lower) ||
+      ((hasActiveVisit || isVisitMenuPrompt) && (
+        /^(?:2|2️⃣|second|2nd|option\s*2)\b/i.test(lower) ||
+        (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1)
+      ));
 
     const isCancelVisit =
       intent === "CANCEL_VISIT" ||
       (/(?:site\s*visit|visit).*?(?:cancel|cancel\s*kar)/i.test(lower) && !isUnableToAttendVisit) ||
       /^(?:cancel|visit\s*cancel)\b/i.test(lower);
 
+    const isVisitDetails =
+      (hasActiveVisit || isVisitMenuPrompt) && (
+        /^(?:1|1️⃣|first|1st|option\s*1)\b/i.test(lower) ||
+        (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+        /(?:visit\s*details|view\s*details)/i.test(lower)
+      );
+
+    const isSecondarySearchChoice =
+      (hasActiveVisit || isVisitMenuPrompt) && (
+        /^(?:3|3️⃣|third|3rd|option\s*3|biji\s*property|dusri\s*property|other\s*propert|nayi\s*property|aur\s*options|kuch\s*aur\s*options)\b/i.test(lower) ||
+        (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2)
+      );
+
     if (
-      lead.site_visit_booked &&
-      (isUnableToAttendVisit || isRescheduleVisit || isCancelVisit)
+      (lead.site_visit_booked || hasActiveVisit || isVisitMenuPrompt) &&
+      (isUnableToAttendVisit || isRescheduleVisit || isCancelVisit || isVisitDetails || isSecondarySearchChoice)
     ) {
+      if (isVisitDetails) {
+        let scheduledTime = lead.site_visit_at || lead.site_visit_datetime || latestVisit?.scheduled_at;
+        let propDetails = latestVisit?.inventory;
+        if (!propDetails && lead.selected_property_id) {
+          const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("property_id", lead.selected_property_id).maybeSingle();
+          propDetails = p;
+        }
+
+        const visitTime = scheduledTime
+          ? new Date(scheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
+          : "Scheduled Time";
+        const propInfo = propDetails ? `\n🏢 <b>Property:</b> ${propDetails.project_name} (${propDetails.location})` : "";
+        const mapInfo = propDetails?.map_url ? `\n${formatMapHyperlink(propDetails.map_url, "View on Google Maps")}` : "";
+
+        const replyText =
+          lang === "GUJLISH"
+            ? `Tamari VIP Site Visit Details: 🚗${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Jo timing reschedule karvo hoy to batavjo!`
+            : lang === "ENGLISH"
+            ? `Your VIP Site Visit Details: 🚗${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the location. Let us know if you need to reschedule!`
+            : `Aapki VIP Site Visit Details: 🚗${propInfo}\n⏰ <b>Scheduled Time:</b> ${visitTime}${mapInfo}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par milenge. Agar timing reschedule karni ho to batayein!`;
+
+        return {
+          replyText,
+          nextState: "SITE_VISIT_BOOKED",
+          leadUpdates: {
+            state: "SITE_VISIT_BOOKED",
+            site_visit_booked: true,
+          },
+        };
+      }
+
+      if (isSecondarySearchChoice) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Bilkul <b>${nameStr}</b>! Tamari scheduled visit safe chhe. Navi property kaya type ni joi rahya chho? 🏢`
+            : lang === "ENGLISH"
+            ? `Certainly <b>${nameStr}</b>! Your scheduled visit remains confirmed. What type of new property are you looking for? 🏢`
+            : `Bilkul <b>${nameStr}</b>! Aapki scheduled visit safe hai. Nayi property kis type ki search kar rahe hain? 🏢`;
+
+        return {
+          replyText,
+          nextState: "SITE_VISIT_BOOKED",
+          leadUpdates: {
+            site_visit_booked: true,
+            metadata: {
+              ...(lead.metadata || {}),
+              secondary_search_in_progress: true,
+              active_persona: "BUYER",
+            },
+          },
+        };
+      }
+
       if (isUnableToAttendVisit) {
         await supabase
           .from("site_visits")
@@ -8378,12 +8487,29 @@ export async function dispatchStateAction(
         // No parseable slot provided — ask for it
         const replyText =
           lang === "GUJLISH"
-            ? `Ji bilkul <b>${nameStr}</b>! Tame kaya divase ane timing par visit reschedule karva mango chho? (e.g. <b>Kaale sanje 5 vage</b> ke <b>Sunday subah 11 baje</b>). 🙏`
+            ? `Ji bilkul <b>${nameStr}</b>! Tame kaya divase ane timing par visit reschedule karva mango chho? (e.g. <b>Kaale sanje 5 vage</b> ke <b>Sunday subah 11 baje</b>). Jo cancel karvi hoy to 'Cancel' lakhi shako chho. 🙏`
             : lang === "ENGLISH"
-            ? `Certainly <b>${nameStr}</b>! Which day and time would you like to reschedule your visit to? (e.g. <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>). 🙏`
-            : `Ji bilkul <b>${nameStr}</b>! Aap kis din aur timing par visit reschedule karna chahte hain? (e.g. <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>). 🙏`;
+            ? `Certainly <b>${nameStr}</b>! Which day and time would you like to reschedule your visit to? (e.g. <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>). If you wish to cancel, you can reply 'Cancel'. 🙏`
+            : `Ji bilkul <b>${nameStr}</b>! Aap kis din aur timing par visit reschedule karna chahte hain? (e.g. <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>). Agar cancel karni ho to 'Cancel' likh sakte hain. 🙏`;
 
-        return { replyText, nextState: "SITE_VISIT_BOOKED" };
+        return {
+          replyText,
+          nextState: "VISIT_MISSED",
+          leadUpdates: {
+            state: "VISIT_MISSED",
+            site_visit_booked: false,
+            drip_stage: "MISSED_RESCHEDULE_PROMPTED",
+            metadata: {
+              ...(lead.metadata || {}),
+              active_persona: "BUYER",
+              last_bot_prompt: {
+                question_type: "RESCHEDULE_SLOT",
+                asked_at: new Date().toISOString(),
+                text_preview: "Aap kis din aur timing par visit reschedule karna chahte hain?",
+              },
+            },
+          },
+        };
       }
 
       if (isCancelVisit) {
@@ -10032,7 +10158,7 @@ export async function dispatchStateAction(
   // 8. VISIT MISSED (State: VISIT_MISSED)
   // ---------------------------------------------------------------------------
   if (currentState === "VISIT_MISSED") {
-    if (intent === "RESCHEDULE_VISIT" || intent === "BOOK_VISIT") {
+    if (intent === "RESCHEDULE_VISIT" || intent === "BOOK_VISIT" || parseVisitSlot(context.messageText).isValidTime) {
       const reschedAct = action as RescheduleVisitAction;
       const bookAct = action as BookVisitAction;
       const combinedSlot = [

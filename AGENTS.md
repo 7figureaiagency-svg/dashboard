@@ -87,3 +87,20 @@ This project is governed by the specialized [`cs-chatbot-design`](file:///c:/Use
   3. *Rule 3: Offer Next Steps* — Provide 1-tap numbered quick replies (`1️⃣`, `2️⃣`, `3️⃣`) to eliminate conversational friction.
 
 
+
+
+---
+
+## 🛡️ Adversarial Edge-Case Hunter & Product Robustness Engine
+
+This project is equipped with the specialized [`adversarial-edge-case-hunter`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/adversarial-edge-case-hunter/SKILL.md) skill and [`adversarial-bug-hunter`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/agents/adversarial-bug-hunter.md) subagent for proactive loophole detection, edge-case probing, and conversational robustness verification.
+* **Skill**: [`adversarial-edge-case-hunter`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/adversarial-edge-case-hunter/SKILL.md)
+  * [Adversarial Attack Vectors](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/adversarial-edge-case-hunter/references/adversarial-attack-vectors.md): 15+ real estate attack vectors (geographical collisions, number parsing, owner intake traps, drip hallucinations).
+  * [FSM Stress Matrix](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/adversarial-edge-case-hunter/references/fsm-stress-matrix.md): State-by-state stress testing guide across all 18+ dialog states.
+  * [Hunter-Skeptic-Referee Protocol](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/skills/adversarial-edge-case-hunter/references/hunter-skeptic-referee-protocol.md): 3-stage bug validation pipeline eliminating false positives.
+* **Subagent**: [`adversarial-bug-hunter`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agents/agents/adversarial-bug-hunter.md)
+* **Slash Command**: `/adversarial-audit` (see [`.agent/workflows/adversarial-audit.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.agent/workflows/adversarial-audit.md)) to audit and stress-test the product.
+* **Automated Runner**:
+  ```powershell
+  node .agents/skills/adversarial-edge-case-hunter/scripts/run-edge-case-audit.cjs
+  ```

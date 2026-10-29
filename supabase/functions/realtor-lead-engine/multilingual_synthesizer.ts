@@ -336,72 +336,83 @@ export async function synthesizeMultilingualReply(params: SynthesizeReplyParams)
 
   const promptText = buildSynthesizerPrompt(params);
 
-  // 1. Google Gemini 2.0 Flash Primary (~150-300ms)
+  // 1. Google Gemini 2.5 Flash / 1.5 Flash Primary (~150-300ms)
   if (geminiKey) {
-    try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
-      const res = await fetchFn(geminiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 250,
-          },
-        }),
-        signal: AbortSignal.timeout(2000),
-      });
+    const geminiModels = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"];
+    for (const gemModel of geminiModels) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${gemModel}:generateContent?key=${geminiKey}`;
+        const res = await fetchFn(geminiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: 250,
+            },
+          }),
+          signal: AbortSignal.timeout(2000),
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (generatedText && generatedText.length > 5) {
-          return sanitizeGeneratedReply(generatedText);
+        if (res.ok) {
+          const data = await res.json();
+          const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (generatedText && generatedText.length > 5) {
+            return sanitizeGeneratedReply(generatedText);
+          }
         }
+      } catch (geminiErr: any) {
+        console.warn(`[Synthesizer] Gemini ${gemModel} call failed:`, geminiErr.message);
       }
-    } catch (geminiErr: any) {
-      console.warn("[Synthesizer] Gemini 2.0 Flash call failed:", geminiErr.message);
     }
   }
 
-  // 2. Groq Llama-3.3-70b Fallback (~200ms)
+  // 2. Groq Fallback (~200ms)
   if (groqKey) {
-    try {
-      const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
-      const groqRes = await fetchFn(groqUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${groqKey}`,
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          temperature: 0.3,
-          max_tokens: 250,
-          messages: [
-            {
-              role: "system",
-              content: `You are an elite real estate advisor for ${agencyName}. Follow the 3 Golden Response Principles: 1. Acknowledge First, 2. Be Concise (<= 3-4 lines for mobile), 3. Offer Next Steps with numbered emojis (1️⃣, 2️⃣). Adhere strictly to the user's language, dialect, and script.`,
-            },
-            {
-              role: "user",
-              content: promptText,
-            },
-          ],
-        }),
-        signal: AbortSignal.timeout(2000),
-      });
+    const groqCandidateModels = [
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
+      "qwen/qwen3.8-27b",
+      "llama-3.3-70b-versatile",
+    ];
+    for (const groqModel of groqCandidateModels) {
+      try {
+        const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
+        const groqRes = await fetchFn(groqUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${groqKey}`,
+          },
+          body: JSON.stringify({
+            model: groqModel,
+            temperature: 0.3,
+            max_tokens: 250,
+            messages: [
+              {
+                role: "system",
+                content: `You are an elite real estate advisor for ${agencyName}. Follow the 3 Golden Response Principles: 1. Acknowledge First, 2. Be Concise (<= 3-4 lines for mobile), 3. Offer Next Steps with numbered emojis (1️⃣, 2️⃣). Adhere strictly to the user's language, dialect, and script.`,
+              },
+              {
+                role: "user",
+                content: promptText,
+              },
+            ],
+          }),
+          signal: AbortSignal.timeout(2000),
+        });
 
-      if (groqRes.ok) {
-        const groqData = await groqRes.json();
-        const text = groqData.choices?.[0]?.message?.content?.trim();
-        if (text && text.length > 5) {
-          return sanitizeGeneratedReply(text);
+        if (groqRes.ok) {
+          const groqData = await groqRes.json();
+          const text = groqData.choices?.[0]?.message?.content?.trim();
+          if (text && text.length > 5) {
+            return sanitizeGeneratedReply(text);
+          }
         }
+      } catch (groqErr: any) {
+        console.warn(`[Synthesizer] Groq model ${groqModel} failed:`, groqErr.message);
       }
-    } catch (groqErr: any) {
-      console.warn("[Synthesizer] Groq fallback failed:", groqErr.message);
     }
   }
 

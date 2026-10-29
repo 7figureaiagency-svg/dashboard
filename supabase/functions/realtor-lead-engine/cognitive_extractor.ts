@@ -656,31 +656,43 @@ export async function extractCognitiveIntentWithAI(context: {
 
   const promptText = buildCognitivePrompt(context);
 
-  // 1. Google Gemini 2.0 Flash / 1.5 Pro with responseSchema
+  // 1. Google Gemini 2.5 Flash / 1.5 Pro with responseSchema
   if (geminiKey) {
     try {
       const isForcePro = Boolean(context.options?.forceProEscalation);
-      const flashUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
-      const proUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiKey}`;
+      const geminiCandidateModels = isForcePro
+        ? ["gemini-1.5-pro", "gemini-2.5-flash", "gemini-1.5-flash"]
+        : ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro", "gemini-2.0-flash"];
 
-      const targetUrl = isForcePro ? proUrl : flashUrl;
+      let res: Response | null = null;
+      let usedGeminiModel = geminiCandidateModels[0];
 
-      const res = await fetchFn(targetUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 600,
-            responseMimeType: "application/json",
-            responseSchema: REAL_ESTATE_EXTRACTION_SCHEMA,
-          },
-        }),
-        signal: AbortSignal.timeout(isForcePro ? 4000 : 2500),
-      });
+      for (const modelName of geminiCandidateModels) {
+        try {
+          const targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
+          const candidateRes = await fetchFn(targetUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptText }] }],
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 600,
+                responseMimeType: "application/json",
+                responseSchema: REAL_ESTATE_EXTRACTION_SCHEMA,
+              },
+            }),
+            signal: AbortSignal.timeout(isForcePro ? 4000 : 2500),
+          });
+          if (candidateRes.ok) {
+            res = candidateRes;
+            usedGeminiModel = modelName;
+            break;
+          }
+        } catch (_) {}
+      }
 
-      if (res.ok) {
+      if (res && res.ok) {
         const data = await res.json();
         const rawJsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (rawJsonText) {
@@ -688,6 +700,7 @@ export async function extractCognitiveIntentWithAI(context: {
           if (parsed && parsed.lead_role && parsed.primary_intent && parsed.entities) {
             if (parsed.user_negated_assumptions && !isForcePro) {
               try {
+                const proUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiKey}`;
                 const proRes = await fetchFn(proUrl, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -734,7 +747,7 @@ export async function extractCognitiveIntentWithAI(context: {
 
             return {
               extracted: parsed,
-              provider_used: isForcePro ? "GEMINI_PRO" : "GEMINI_FLASH",
+              provider_used: isForcePro || usedGeminiModel.includes("pro") ? "GEMINI_PRO" : "GEMINI_FLASH",
               latency_ms: Date.now() - start,
               escalated_to_pro: isForcePro,
             };
@@ -746,55 +759,64 @@ export async function extractCognitiveIntentWithAI(context: {
     }
   }
 
-  // 2. Groq Llama-3.3-70b Fallback
+  // 2. Groq Fallback (verified live models: openai/gpt-oss-120b, openai/gpt-oss-20b, qwen/qwen3.8-27b)
   if (groqKey) {
-    try {
-      const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
-      const groqRes = await fetchFn(groqUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${groqKey}`,
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          temperature: 0.1,
-          max_tokens: 600,
-          response_format: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an expert Real Estate Cognitive Intent & Entity Extractor. Output strict JSON matching the requested schema.",
-            },
-            {
-              role: "user",
-              content:
-                promptText +
-                "\n\nOutput a valid JSON object matching the REAL_ESTATE_EXTRACTION_SCHEMA format.",
-            },
-          ],
-        }),
-        signal: AbortSignal.timeout(2500),
-      });
+    const groqCandidateModels = [
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
+      "qwen/qwen3.8-27b",
+      "llama-3.3-70b-versatile",
+      "llama-3.1-8b-instant",
+    ];
+    for (const groqModel of groqCandidateModels) {
+      try {
+        const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
+        const groqRes = await fetchFn(groqUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${groqKey}`,
+          },
+          body: JSON.stringify({
+            model: groqModel,
+            temperature: 0.1,
+            max_tokens: 600,
+            response_format: { type: "json_object" },
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are an expert Real Estate Cognitive Intent & Entity Extractor. Output strict JSON matching the requested schema.",
+              },
+              {
+                role: "user",
+                content:
+                  promptText +
+                  "\n\nOutput a valid JSON object matching the REAL_ESTATE_EXTRACTION_SCHEMA format.",
+              },
+            ],
+          }),
+          signal: AbortSignal.timeout(2500),
+        });
 
-      if (groqRes.ok) {
-        const groqData = await groqRes.json();
-        const rawJsonText = groqData.choices?.[0]?.message?.content;
-        if (rawJsonText) {
-          const parsed = parseJsonSafely(rawJsonText);
-          if (parsed && parsed.lead_role && parsed.primary_intent && parsed.entities) {
-            return {
-              extracted: parsed,
-              provider_used: "GROQ_LLAMA",
-              latency_ms: Date.now() - start,
-              escalated_to_pro: false,
-            };
+        if (groqRes.ok) {
+          const groqData = await groqRes.json();
+          const rawJsonText = groqData.choices?.[0]?.message?.content;
+          if (rawJsonText) {
+            const parsed = parseJsonSafely(rawJsonText);
+            if (parsed && parsed.lead_role && parsed.primary_intent && parsed.entities) {
+              return {
+                extracted: parsed,
+                provider_used: "GROQ_LLAMA",
+                latency_ms: Date.now() - start,
+                escalated_to_pro: false,
+              };
+            }
           }
         }
+      } catch (groqErr: any) {
+        console.warn(`[CognitiveExtractor] Groq model ${groqModel} failed:`, groqErr.message);
       }
-    } catch (groqErr: any) {
-      console.warn("[CognitiveExtractor] Groq Llama fallback failed:", groqErr.message);
     }
   }
 

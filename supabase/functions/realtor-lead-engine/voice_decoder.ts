@@ -212,30 +212,33 @@ Urdu / Arabic text:
     }
   }
 
-  // Fallback: Gemini 2.0 Flash
+  // Fallback: Gemini 2.5 Flash / 1.5 Flash
   const geminiKey = options?.geminiApiKey || (typeof Deno !== "undefined" ? Deno.env.get("GEMINI_API_KEY") : process.env.GEMINI_API_KEY);
   if (geminiKey) {
-    try {
-      const gRes = await fetchFn(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
-          }),
-          signal: AbortSignal.timeout(2000),
+    const candidateModels = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"];
+    for (const model of candidateModels) {
+      try {
+        const gRes = await fetchFn(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
+            }),
+            signal: AbortSignal.timeout(2000),
+          }
+        );
+        if (gRes.ok) {
+          const gData = await gRes.json();
+          const gText = gData.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.replace(/^["']|["']$/g, "").trim();
+          if (gText && !containsPersoArabicScript(gText)) {
+            return gText;
+          }
         }
-      );
-      if (gRes.ok) {
-        const gData = await gRes.json();
-        const gText = gData.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.replace(/^["']|["']$/g, "").trim();
-        if (gText && !containsPersoArabicScript(gText)) {
-          return gText;
-        }
-      }
-    } catch (_err) {}
+      } catch (_err) {}
+    }
   }
 
   return text;
@@ -320,64 +323,68 @@ export async function transcribeAudioBuffer(
     }
   }
 
-  // 2. Fallback Engine: Google Gemini 2.0 Flash Audio API
+  // 2. Fallback Engine: Google Gemini 2.5 Flash / 1.5 Flash Audio API
   if (geminiKey) {
-    try {
-      const cleanMime = mimeType.split(";")[0].trim().toLowerCase() || "audio/ogg";
-      const base64Data = uint8ArrayToBase64(buffer);
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
+    const audioCandidates = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"];
+    const cleanMime = mimeType.split(";")[0].trim().toLowerCase() || "audio/ogg";
+    const base64Data = uint8ArrayToBase64(buffer);
 
-      const geminiRes = await fetch(geminiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType: cleanMime,
-                    data: base64Data,
+    for (const audioModel of audioCandidates) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${audioModel}:generateContent?key=${geminiKey}`;
+
+        const geminiRes = await fetch(geminiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: cleanMime,
+                      data: base64Data,
+                    },
                   },
-                },
-                {
-                  text: "Transcribe this real estate voice message accurately in original language/script and translate to Latin text if spoken in vernacular. Return ONLY the transcribed text without any conversational preamble or markdown formatting.",
-                },
-              ],
+                  {
+                    text: "Transcribe this real estate voice message accurately in original language/script and translate to Latin text if spoken in vernacular. Return ONLY the transcribed text without any conversational preamble or markdown formatting.",
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 500,
             },
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 500,
-          },
-        }),
-        signal: AbortSignal.timeout(6000),
-      });
+          }),
+          signal: AbortSignal.timeout(6000),
+        });
 
-      if (geminiRes.ok) {
-        const gData = await geminiRes.json();
-        const rawText = gData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        const cleanText = rawText.trim().replace(/^["']|["']$/g, "").trim();
-        if (cleanText) {
-          let finalText = cleanText;
-          if (containsPersoArabicScript(cleanText)) {
-            finalText = await transliterateArabicScriptToLatin(cleanText, groqKey, {
-              geminiApiKey: geminiKey,
-            });
+        if (geminiRes.ok) {
+          const gData = await geminiRes.json();
+          const rawText = gData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const cleanText = rawText.trim().replace(/^["']|["']$/g, "").trim();
+          if (cleanText) {
+            let finalText = cleanText;
+            if (containsPersoArabicScript(cleanText)) {
+              finalText = await transliterateArabicScriptToLatin(cleanText, groqKey, {
+                geminiApiKey: geminiKey,
+              });
+            }
+            return {
+              text: finalText,
+              detectedLanguage: "multilingual",
+              durationSec: 0,
+              provider: "GEMINI_AUDIO",
+            };
           }
-          return {
-            text: finalText,
-            detectedLanguage: "multilingual",
-            durationSec: 0,
-            provider: "GEMINI_AUDIO",
-          };
+        } else {
+          const errText = await geminiRes.text();
+          console.warn(`[Voice Ingestion] Gemini ${audioModel} HTTP ${geminiRes.status}:`, errText);
         }
-      } else {
-        const errText = await geminiRes.text();
-        console.warn(`[Voice Ingestion] Gemini Flash HTTP ${geminiRes.status}:`, errText);
+      } catch (err: any) {
+        console.warn(`[Voice Ingestion] Gemini ${audioModel} audio fallback failed:`, err.message);
       }
-    } catch (err: any) {
-      console.warn("[Voice Ingestion] Gemini Flash audio fallback failed:", err.message);
     }
   }
 
