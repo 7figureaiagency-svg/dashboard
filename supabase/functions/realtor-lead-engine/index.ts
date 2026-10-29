@@ -5713,7 +5713,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 post_visit_nudge_at: new Date().toISOString(),
                 last_bot_prompt: {
                   question_type: "VISIT_ATTENDANCE",
-                  text_preview: nudgeMsg.slice(0, 150),
+                  text_preview: safeSlice(nudgeMsg, 150),
                   asked_at: new Date().toISOString(),
                 },
               };
@@ -13694,7 +13694,7 @@ Deno.serve(async (req: Request) => {
       if (derivedQType) {
         enrichedLeadMetadata.last_bot_prompt = {
           question_type: derivedQType,
-          text_preview: replyText.slice(0, 150),
+          text_preview: safeSlice(replyText, 150),
           asked_at: new Date().toISOString(),
         };
       }
@@ -13704,27 +13704,30 @@ Deno.serve(async (req: Request) => {
     if (transitionResult.leadUpdates && Object.keys(transitionResult.leadUpdates).length > 0) {
       const sanitizedUpdates = { ...transitionResult.leadUpdates };
       delete (sanitizedUpdates as any).status;
+      delete (sanitizedUpdates as any).metadata;
+      const payload = sanitizeJsonForPostgrest({
+        ...sanitizedUpdates,
+        state: nextState,
+        last_active_at: new Date().toISOString(),
+        metadata: enrichedLeadMetadata,
+      });
       const { error: updateErr } = await supabase
         .from("leads")
-        .update({
-          ...sanitizedUpdates,
-          state: nextState,
-          last_active_at: new Date().toISOString(),
-          metadata: enrichedLeadMetadata,
-        })
+        .update(payload)
         .eq("id", lead.id);
 
       if (updateErr) {
         console.error(`[CRITICAL] Lead update failed for id ${lead.id}:`, updateErr.message, updateErr.details);
       }
     } else {
+      const payload = sanitizeJsonForPostgrest({
+        state: nextState,
+        last_active_at: new Date().toISOString(),
+        metadata: enrichedLeadMetadata,
+      });
       const { error: updateErr } = await supabase
         .from("leads")
-        .update({
-          state: nextState,
-          last_active_at: new Date().toISOString(),
-          metadata: enrichedLeadMetadata,
-        })
+        .update(payload)
         .eq("id", lead.id);
 
       if (updateErr) {
