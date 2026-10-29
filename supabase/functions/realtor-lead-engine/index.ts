@@ -1415,9 +1415,20 @@ function parsePropertyTypeFromText(text: string): string {
   if (bhkMatch) {
     if (
       lower.includes("villa") || lower.includes("bungalow") || lower.includes("banglow") ||
-      lower.includes("row house") || lower.includes("tenament") || lower.includes("tenement") ||
-      lower.includes("વિલા") || lower.includes("બંગલો") || lower.includes("રો હાઉસ") || lower.includes("ટેનામેન્ટ")
+      lower.includes("row house") || lower.includes("rowhouse") ||
+      lower.includes("tenament") || lower.includes("tenement") || lower.includes("ternament") || lower.includes("ternamanet") ||
+      lower.includes("વિલા") || lower.includes("બંગલો") || lower.includes("રો હાઉસ") ||
+      lower.includes("ટેનામેન્ટ") || lower.includes("ટેનામેંટ") || lower.includes("टेनामेंट") || lower.includes("टेनमेंट")
     ) {
+      if (
+        lower.includes("tenament") || lower.includes("tenement") || lower.includes("ternament") || lower.includes("ternamanet") ||
+        lower.includes("ટેનામેન્ટ") || lower.includes("ટેનામેંટ") || lower.includes("टेनामेंट") || lower.includes("टेनमेंट")
+      ) {
+        return `${bhkMatch[1]}BHK Tenement`;
+      }
+      if (lower.includes("row house") || lower.includes("rowhouse") || lower.includes("રો હાઉસ")) {
+        return `${bhkMatch[1]}BHK Row House`;
+      }
       return `${bhkMatch[1]}BHK Villa`;
     }
     if (lower.includes("duplex") || lower.includes("ડુપ્લેક્સ")) {
@@ -1443,7 +1454,13 @@ function parsePropertyTypeFromText(text: string): string {
   if (lower.includes("duplex") || lower.includes("ડુપ્લેક્સ")) return "Duplex";
   if (lower.includes("penthouse") || lower.includes("પેન્ટહાઉસ")) return "Penthouse";
   if (lower.includes("farmhouse") || lower.includes("farm house") || lower.includes("ફાર્મહાઉસ") || lower.includes("ફાર્મ હાઉસ")) return "Farmhouse";
-  if (lower.includes("row house") || lower.includes("rowhouse") || lower.includes("tenament") || lower.includes("tenement") || lower.includes("રો હાઉસ") || lower.includes("ટેનામેન્ટ")) return "Row House";
+  if (
+    lower.includes("tenament") || lower.includes("tenement") || lower.includes("ternament") || lower.includes("ternamanet") ||
+    lower.includes("ટેનામેન્ટ") || lower.includes("ટેનામેંટ") || lower.includes("टेनामेंट") || lower.includes("टेनमेंट")
+  ) {
+    return "Tenement";
+  }
+  if (lower.includes("row house") || lower.includes("rowhouse") || lower.includes("રો હાઉસ")) return "Row House";
   if (
     lower.includes("villa") || lower.includes("bungalow") || lower.includes("banglow") ||
     lower.includes("makan") || lower.includes("ghar") || lower.includes("વિલા") ||
@@ -1510,7 +1527,7 @@ function isLikelySocietyOrProjectName(name: string): boolean {
   if (/^\d+$/.test(cleaned)) return false;
 
   // Strict Guard: Pure property configurations and unit types can NEVER be a society/project name!
-  if (/^(?:[1-5]\s*bhk|[1-5]\s*rk|bhk|rk|flat|flats|apartment|villa|plot|land|shop|office|commercial|residential|house|bungalow|duplex|penthouse)$/i.test(cleaned)) {
+  if (/^(?:[1-5]\s*bhk|[1-5]\s*rk|bhk|rk|flat|flats|apartment|apartments|villa|villas|plot|plots|land|shop|shops|office|offices|commercial|residential|house|houses|bungalow|bungalows|duplex|penthouse|penthouses|tenement|tenements|tenament|tenaments|ternament|ternaments|ternamanet|row\s*house|row\s*houses|rowhouse|rowhouses|ટેનામેન્ટ|ટેનામેંટ|टेनामेंट|टेनमेंट)$/i.test(cleaned)) {
     return false;
   }
 
@@ -1573,12 +1590,15 @@ function extractProjectOrSocietyFromText(text: string, parsedPropType?: string):
   }
 
   // 5. Strip parsedPropType, property subtype tokens and conversational filler words to see if a clean society name remains
-  if (parsedPropType || /\b(?:[1-5]\s*bhk|flat|villa|shop|office|plot)\b/i.test(trimmed)) {
+  if (parsedPropType || /\b(?:[1-5]\s*bhk|flat|villa|shop|office|plot|tenement|ternament|tenament|row\s*house)\b/i.test(trimmed)) {
     const propTokens = [
       parsedPropType,
       "commercial", "residential", "flat", "apartment", "duplex", "penthouse",
       "villa", "bungalow", "house", "ghar", "makan", "makaan", "plot", "land", "zamin",
       "shop", "showroom", "office", "warehouse", "godown", "dukan", "dukaan",
+      "tenement", "tenements", "tenament", "tenaments", "ternament", "ternaments", "ternamanet",
+      "row house", "row houses", "rowhouse", "rowhouses",
+      "ટેનામેન્ટ", "ટેનામેંટ", "टेनामेंट", "टेनमेंट",
       "[1-5]?\\s*bhk", "[1-5]?\\s*rk", "bhk", "rk"
     ].filter(Boolean).join("|");
 
@@ -2069,7 +2089,7 @@ export function normalizeGujaratiDigits(text: string): string {
 export function isBhkOrPropertyConfiguration(text: string): boolean {
   if (!text) return false;
   const normalized = normalizeGujaratiDigits(text);
-  return /(?:^|\b)(?:[1-5]\s*bhk|[1-5]\s*rk|[1-5]\s*bed|flat|apartment|villa|bungalow|duplex|penthouse|office|shop|plot)\b/i.test(normalized);
+  return /(?:^|\b)(?:[1-5]\s*bhk|[1-5]\s*rk|[1-5]\s*bed|flat|apartment|villa|bungalow|duplex|penthouse|office|shop|plot|tenement|tenements|tenament|tenaments|ternament|ternaments|ternamanet|row\s*house|row\s*houses|rowhouse|rowhouses|ટેનામેન્ટ|ટેનામેંટ|टेनामेंट|टेनमेंट)\b/i.test(normalized);
 }
 
 /** Strict boundary-checked vernacular rental token tree */
@@ -2457,13 +2477,39 @@ export function validateUserAction(raw: any, leadOrState?: any, rawMessageText?:
         else if (uFurn.includes("FURNISHED") || uFurn === "3") furnStatus = "FURNISHED";
       }
 
+      let cleanProj = cleanStr(src.project_or_society);
+      if (cleanProj && !isLikelySocietyOrProjectName(cleanProj)) {
+        cleanProj = null;
+      }
+
+      let cleanProp = cleanStr(src.property_type);
+      if (rawMessageText && (!cleanProp || cleanProp === "1BHK" || cleanProp === "2BHK" || cleanProp === "3BHK")) {
+        const directProp = parsePropertyTypeFromText(rawMessageText);
+        if (directProp) cleanProp = directProp;
+      }
+
+      let cleanLocation = cleanStr(src.location);
+      const leadLoc = typeof leadOrState === "object" ? leadOrState?.location : null;
+      if (cleanLocation && leadLoc && cleanLocation.toLowerCase().includes(leadLoc.toLowerCase()) && !String(rawMessageText || "").toLowerCase().includes(leadLoc.toLowerCase())) {
+        cleanLocation = cleanLocation.replace(new RegExp(`(?:,\\s*)?${leadLoc.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}`, "gi"), "").trim();
+        if (cleanLocation.length < 2) cleanLocation = null;
+      }
+
+      let rawPrice = parseBudgetVal(src.price_or_rent || src.price_or_budget || src.expected_price || src.expected_rent);
+      const hasPriceInText = Boolean(parseBudgetFromText(rawMessageText || "")) || /(?:cr|crore|karod|lakh|lac|k\b|thousand|hazar|rupees|rs|inr|₹|\b\d{5,9}\b)/i.test(rawMessageText || "");
+      const isPriceStage = leadState === "OWNER_PRICE_PENDING";
+      const seekerBudget = typeof leadOrState === "object" ? Number(leadOrState?.budget || 0) : 0;
+      if (rawPrice && ((!isPriceStage && !hasPriceInText) || (seekerBudget > 0 && rawPrice === seekerBudget && !hasPriceInText))) {
+        rawPrice = null;
+      }
+
       return {
         intent: "SUBMIT_LISTING",
         transaction_type: txType,
-        property_type: cleanStr(src.property_type),
-        location: cleanStr(src.location),
-        project_or_society: cleanStr(src.project_or_society),
-        price_or_rent: parseBudgetVal(src.price_or_rent || src.price_or_budget || src.expected_price || src.expected_rent),
+        property_type: cleanProp,
+        location: cleanLocation,
+        project_or_society: cleanProj,
+        price_or_rent: rawPrice,
         carpet_sqft: cleanInt(src.carpet_sqft),
         super_built_up_sqft: cleanInt(src.super_built_up_sqft),
         plot_area_sqft: cleanInt(src.plot_area_sqft),
@@ -2738,10 +2784,15 @@ export function buildStageMicroPrompt(lead: any, currentState?: string): string 
 - In OWNER_PHONE_PENDING: extract 10-digit number into contact_phone. NEVER price or budget!
 - Area units: 1 Var (વાર) / Gaj = 9 sqft (e.g. 500var = 4500 sqft). 1 Vigha = 17,424 sqft.
 - If user provides both society/project name and property type, extract BOTH project_or_society and property_type.
+- CRITICAL PROPERTY TYPES: "Tenement" / "Ternament" / "Tenament" / "ટેનામેન્ટ" / "ટેનામેંટ" / "टेनामेंट" / "Row House" / "Villa" / "Duplex" / "Flat" / "Shop" / "Office" are PROPERTY CONFIGURATIONS / TYPES, NEVER society or project names!
+- NEVER copy or hallucinate previous buyer location or budget into owner listing! Price or rent must only be extracted if the user explicitly provided a price in the current message.
+- If user message does not contain a price or currency amount, price_or_rent MUST be null!
+- If user message does not contain an area/locality, location MUST be null!
 
 ### STAGE EXEMPLARS:
-1. "Plot 500var flat 1200sqft" -> {"action": {"intent": "SUBMIT_LISTING", "plot_area_sqft": 4500, "super_built_up_sqft": 1200}, "language": "GUJLISH", "user_role": "OWNER"}
-2. "'Ananta astha' 3bhk duplex" -> {"action": {"intent": "SUBMIT_LISTING", "project_or_society": "Ananta Astha", "property_type": "3BHK Duplex", "transaction_type": "SELL"}, "language": "HINGLISH", "user_role": "OWNER"}`;
+1. "1bhk ternament" -> {"action": {"intent": "SUBMIT_LISTING", "property_type": "1BHK Tenement", "transaction_type": "SELL"}, "language": "HINGLISH", "user_role": "OWNER"}
+2. "Plot 500var flat 1200sqft" -> {"action": {"intent": "SUBMIT_LISTING", "plot_area_sqft": 4500, "super_built_up_sqft": 1200}, "language": "GUJLISH", "user_role": "OWNER"}
+3. "'Ananta astha' 3bhk duplex" -> {"action": {"intent": "SUBMIT_LISTING", "project_or_society": "Ananta Astha", "property_type": "3BHK Duplex", "transaction_type": "SELL"}, "language": "HINGLISH", "user_role": "OWNER"}`;
   }
 
   if (state === "QUALIFYING") {
@@ -2920,6 +2971,18 @@ export function buildLeadContextForClassifier(lead: any, messageText: string): s
 
   const stageMicroPrompt = buildStageMicroPrompt(lead, lead?.state);
 
+  const knownPropType = isInProgressOwner
+    ? (lead?.metadata?.owner_draft?.property_type || "None")
+    : (lead?.metadata?.seeker_draft?.property_type || lead?.property_type || "None");
+
+  const knownLocation = isInProgressOwner
+    ? (lead?.metadata?.owner_draft?.location || "None")
+    : (lead?.metadata?.seeker_draft?.location || lead?.location || "None");
+
+  const knownBudgetOrPrice = isInProgressOwner
+    ? (lead?.metadata?.owner_draft?.expected_price ? `₹${Number(lead.metadata.owner_draft.expected_price).toLocaleString("en-IN")}` : lead?.metadata?.owner_draft?.expected_rent ? `₹${Number(lead.metadata.owner_draft.expected_rent).toLocaleString("en-IN")}/mo` : "None")
+    : (lead?.metadata?.seeker_draft?.budget ? `₹${Number(lead.metadata.seeker_draft.budget).toLocaleString("en-IN")}` : lead?.budget ? `₹${Number(lead.budget).toLocaleString("en-IN")}` : "None");
+
   return `LEAD STATUS:
 - Active Persona: ${lead?.lead_type || "UNKNOWN"}
 - State: ${lead?.state || "FRESH"}
@@ -2929,9 +2992,9 @@ export function buildLeadContextForClassifier(lead: any, messageText: string): s
 - Known User Phone: ${knownPhone || "None"}
 - Bot Question Waiting For: ${currentPendingQuestion}
 - LAST BOT PROMPT: "${lastBotPromptText}"${isPromptStale ? " (Note: This prompt is stale >72h and should not constrain unprompted queries)" : ""}
-- Known Property Type: ${lead?.property_type || lead?.metadata?.owner_draft?.property_type || "None"}
-- Known Location: ${lead?.location || lead?.metadata?.owner_draft?.location || "None"}
-- Known Budget/Price: ${lead?.budget || lead?.metadata?.owner_draft?.expected_price || lead?.metadata?.owner_draft?.expected_rent || "None"}
+- Known Property Type: ${knownPropType}
+- Known Location: ${knownLocation}
+- Known Budget/Price: ${knownBudgetOrPrice}
 - Known Carpet Area: ${lead?.metadata?.owner_draft?.carpet_area_sqft ? `${lead.metadata.owner_draft.carpet_area_sqft} sq.ft` : "None"}
 - Known Built-up Area: ${lead?.metadata?.owner_draft?.super_built_up_sqft ? `${lead.metadata.owner_draft.super_built_up_sqft} sq.ft` : "None"}
 - Has Active Site Visit: ${lead?.site_visit_booked ? "YES" : "NO"}
@@ -4893,8 +4956,12 @@ async function handleOwnerFlow({
 
     // D. Location:
     if (aiAnalysis.location && aiAnalysis.location !== "FLEXIBLE") {
-      const cleanLoc = aiAnalysis.location.trim();
-      if (isLikelySocietyOrProjectName(cleanLoc)) {
+      let cleanLoc = aiAnalysis.location.trim();
+      // Anti-contamination guard: If cleanLoc contains the old seeker location from lead.location, but user never typed it in messageText
+      if (lead.location && cleanLoc.toLowerCase().includes(lead.location.toLowerCase()) && !messageText.toLowerCase().includes(lead.location.toLowerCase())) {
+        cleanLoc = cleanLoc.replace(new RegExp(`(?:,\\s*)?${lead.location.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}`, "gi"), "").trim();
+      }
+      if (cleanLoc && isLikelySocietyOrProjectName(cleanLoc)) {
         draft.location = cleanLoc;
       }
     }
@@ -4941,11 +5008,19 @@ async function handleOwnerFlow({
 
     // F. Expected Price / Demand / Monthly Rent:
     const isAnsweringPhone = lead.state === "OWNER_PHONE_PENDING" || !!aiAnalysis.contact_phone;
-    const resolvedPrice = aiAnalysis.price_or_budget || (!isAnsweringPhone ? parseBudgetFromText(messageText) : null);
+    const isPriceTurn = lead.state === "OWNER_PRICE_PENDING";
+    const hasPriceMentionInText = Boolean(parseBudgetFromText(messageText)) || /(?:cr|crore|karod|lakh|lac|k\b|thousand|hazar|rupees|rs|inr|₹|\b\d{5,9}\b)/i.test(messageText);
+    const directTextBudget = !isAnsweringPhone ? parseBudgetFromText(messageText) : null;
+    const isSeekerBudgetLeak = Boolean(lead.budget && aiAnalysis?.price_or_budget === Number(lead.budget) && !directTextBudget);
+
+    const resolvedPrice = (!isSeekerBudgetLeak && (isPriceTurn || hasPriceMentionInText))
+      ? (directTextBudget || (hasPriceMentionInText ? aiAnalysis?.price_or_budget : (isPriceTurn ? (aiAnalysis?.price_or_budget || parseBudgetFromText(messageText)) : null)))
+      : null;
+
     if (resolvedPrice && !isAnsweringPhone) {
       const isRentTx = draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT";
       const hasValidPrice = (!isRentTx && (draft.expected_price || 0) >= 100000) || (isRentTx && (draft.expected_rent || 0) >= 3000);
-      if (!hasValidPrice || lead.state === "OWNER_PRICE_PENDING") {
+      if (!hasValidPrice || isPriceTurn) {
         if (isRentTx) {
           // Sanity check: In Indian real estate, residential rent rarely exceeds ₹15 Lakhs/month.
           // Amounts >= ₹15 Lakhs without explicit /month are selling prices or demands.
@@ -10992,7 +11067,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v83-commercial-seller-and-smart-resume",
+        version: "v84-tenement-owner-intake-and-anti-leak-guard",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
