@@ -5487,12 +5487,42 @@ async function handleOwnerFlow({
   // Turn 3: Exact Locality / Landmark
   if (!draft.location) {
     if (lead.state === "OWNER_LOCATION_PENDING" && messageText.trim().length >= 2) {
+      const rawTrim = messageText.trim().replace(/^['"]|['"]$/g, "");
+      const isPureDigits = /^\d{2,6}$/.test(rawTrim);
+      const isAreaString = /^\d{2,6}\s*(?:sq\.?\s*ft|sqft|feet|square\s*feet|foot|var|vigha)$/i.test(rawTrim);
+
+      if (isPureDigits || isAreaString) {
+        const parsedVal = parseInt(rawTrim.replace(/\D/g, ""), 10);
+        if (parsedVal >= 50 && parsedVal <= 50000) {
+          draft.carpet_area_sqft = parsedVal;
+        }
+        // Do NOT set draft.location to pure numbers! Re-prompt for the actual physical area/locality
+        const replyText =
+          lang === "GUJLISH"
+            ? `Noted <b>${parsedVal || rawTrim} sq.ft</b>! 👍 Pan aa property kaya exact <b>Area ke Landmark</b> pase aave chhe? 📍`
+            : lang === "ENGLISH"
+            ? `Noted <b>${parsedVal || rawTrim} sq.ft</b>! 👍 But which exact <b>Area or Landmark</b> is this property located in? 📍`
+            : `Noted <b>${parsedVal || rawTrim} sq.ft</b>! 👍 Lekin ye property kaunse exact <b>Area ya Landmark</b> ke paas hai? 📍`;
+
+        await supabase.from("leads").update({
+          lead_type: effectiveOwnerLeadType,
+          state: "OWNER_LOCATION_PENDING",
+          metadata: {
+            ...existingMeta,
+            has_seller_profile: true,
+            ...(isDualLead ? { has_buyer_profile: true } : {}),
+            owner_draft: draft,
+          },
+        }).eq("id", lead.id);
+
+        return { replyText, nextState: "OWNER_LOCATION_PENDING", leadUpdates: buildOwnerLeadUpdates("OWNER_LOCATION_PENDING", draft) };
+      }
+
       const locMatch = extractLocationFromText(messageText);
       if (locMatch) {
         draft.location = locMatch;
       } else {
-        const rawLoc = messageText.trim().replace(/^['"]|['"]$/g, "");
-        draft.location = rawLoc.replace(/\b[a-z]/g, (c) => c.toUpperCase());
+        draft.location = rawTrim.replace(/\b[a-z]/g, (c) => c.toUpperCase());
       }
     } else {
       const socLabel = draft.society_name || draft.project_name || "";
@@ -5650,11 +5680,18 @@ async function handleOwnerFlow({
   }
 
   // Turn 5: Price/Rent + Furnishing Compound Question (F-03 Fix)
-  const isRent = draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT";
+  let isRent = draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT";
+  const hasRentalCue = /(?:per\s*month|\/month|\/mo|month|mahina|mahine|bhadu|bhade|bhada|rent|kiraya|lease)/i.test(lower);
 
   if (lead.state === "OWNER_PRICE_PENDING") {
     const directPrice = parseBudgetFromText(messageText);
-    if (directPrice > 0) {
+    if (hasRentalCue || (directPrice > 0 && directPrice < 100000 && !/(?:lakh|lac|cr|crore)/i.test(lower))) {
+      draft.transaction_type = "RENT_OUT";
+      isRent = true;
+      if (directPrice > 0) {
+        draft.expected_rent = directPrice;
+      }
+    } else if (directPrice > 0) {
       if (isRent) {
         if (directPrice < 1500000) {
           draft.expected_rent = directPrice;

@@ -551,6 +551,7 @@ export function useApprovePropertySubmission() {
 
 export function useUpdatePropertySubmission() {
   const qc = useQueryClient();
+  const { data: me } = useCurrentUser();
   return useMutation({
     mutationFn: async ({
       id,
@@ -559,15 +560,122 @@ export function useUpdatePropertySubmission() {
       id: string;
       values: Partial<PropertySubmission>;
     }) => {
-      const { error } = await supabase
+      // 1. Update the property_submissions row
+      const { data: updatedSub, error: updateError } = await supabase
         .from("property_submissions")
         .update({ ...values, updated_at: new Date().toISOString() } as never)
-        .eq("id", id);
-      if (error) throw error;
+        .eq("id", id)
+        .select("*")
+        .single();
+
+      if (updateError) throw updateError;
+
+      // 2. If status is CONVERTED_TO_INVENTORY, sync directly to live inventory table
+      if (updatedSub && (updatedSub.status === "CONVERTED_TO_INVENTORY" || values.status === "CONVERTED_TO_INVENTORY")) {
+        const sub = updatedSub as PropertySubmission;
+        const txType = sub.transaction_type?.toUpperCase() || "SELL";
+        const listingType = txType === "RENT" || txType === "LEASE" ? "RENT" : "SALE";
+        const price = Number(
+          listingType === "RENT"
+            ? (sub.expected_rent || sub.expected_price || 0)
+            : (sub.expected_price || sub.expected_rent || 0)
+        );
+        const bhkMatch = (sub.configuration || "").match(/\b([1-5])\s*bhk\b/i);
+        const bhk_num = bhkMatch ? Number(bhkMatch[1]) : null;
+        const rawAttrs = typeof sub.attributes === "object" && sub.attributes !== null
+          ? (sub.attributes as Record<string, unknown>)
+          : {};
+        const resolvedClientId = sub.client_id || me?.clientId;
+        const landmarksList = Array.isArray(rawAttrs.landmarks)
+          ? (rawAttrs.landmarks as string[])
+          : typeof rawAttrs.landmarks_input === "string"
+          ? (rawAttrs.landmarks_input as string).split(",").map((s) => s.trim()).filter(Boolean)
+          : [];
+
+        const areaVal = sub.carpet_area_sqft
+          ? Number(sub.carpet_area_sqft)
+          : sub.super_built_up_sqft
+          ? Number(sub.super_built_up_sqft)
+          : rawAttrs.area_sqft
+          ? Number(rawAttrs.area_sqft)
+          : null;
+
+        // Check if inventory already exists for this submission
+        const { data: existingInv } = await supabase
+          .from("inventory")
+          .select("property_id")
+          .contains("attributes", { submission_id: id })
+          .maybeSingle();
+
+        if (existingInv?.property_id) {
+          // Update existing inventory
+          await supabase
+            .from("inventory")
+            .update({
+              project_name: sub.project_name || sub.society_name || "Direct Owner Property",
+              property_category: sub.property_category || "RESIDENTIAL",
+              configuration: sub.configuration || "2BHK",
+              bhk_num,
+              location: sub.location || "Vadodara",
+              city: sub.city || (rawAttrs.city as string) || "Vadodara",
+              price,
+              area_sqft: areaVal,
+              carpet_area_sqft: sub.carpet_area_sqft ? Number(sub.carpet_area_sqft) : null,
+              super_built_up_area_sqft: sub.super_built_up_sqft ? Number(sub.super_built_up_sqft) : null,
+              status: "AVAILABLE",
+              stock_type: (rawAttrs.stock_type as string) || "REGULAR",
+              listing_type: (rawAttrs.listing_type as string) || listingType,
+              transaction_type: listingType === "RENT" ? "RENTAL" : "RESALE",
+              furnished_status: sub.furnishing_status || (rawAttrs.furnished_status as string) || "UNFURNISHED",
+              possession_status: sub.possession_status || "READY_TO_MOVE",
+              landmarks: landmarksList,
+              amenities: Array.isArray(rawAttrs.amenities) ? (rawAttrs.amenities as string[]) : [],
+              image_urls: sub.images ?? (Array.isArray(rawAttrs.image_urls) ? (rawAttrs.image_urls as string[]) : []),
+              updated_at: new Date().toISOString(),
+            } as never)
+            .eq("property_id", existingInv.property_id);
+        } else if (resolvedClientId) {
+          // Insert new live inventory row
+          const newPropertyId = `OWNER-PROP-${id.slice(0, 8).toUpperCase()}`;
+          await supabase.from("inventory").insert({
+            property_id: newPropertyId,
+            client_id: resolvedClientId,
+            project_name: sub.project_name || sub.society_name || "Direct Owner Property",
+            property_category: sub.property_category || "RESIDENTIAL",
+            configuration: sub.configuration || "2BHK",
+            bhk_num,
+            location: sub.location || "Vadodara",
+            city: sub.city || (rawAttrs.city as string) || "Vadodara",
+            price,
+            area_sqft: areaVal,
+            carpet_area_sqft: sub.carpet_area_sqft ? Number(sub.carpet_area_sqft) : null,
+            super_built_up_area_sqft: sub.super_built_up_sqft ? Number(sub.super_built_up_sqft) : null,
+            status: "AVAILABLE",
+            stock_type: (rawAttrs.stock_type as string) || "REGULAR",
+            listing_type: (rawAttrs.listing_type as string) || listingType,
+            transaction_type: listingType === "RENT" ? "RENTAL" : "RESALE",
+            furnished_status: sub.furnishing_status || (rawAttrs.furnished_status as string) || "UNFURNISHED",
+            possession_status: sub.possession_status || "READY_TO_MOVE",
+            landmarks: landmarksList,
+            amenities: Array.isArray(rawAttrs.amenities) ? (rawAttrs.amenities as string[]) : [],
+            image_urls: sub.images ?? (Array.isArray(rawAttrs.image_urls) ? (rawAttrs.image_urls as string[]) : []),
+            attributes: {
+              ...rawAttrs,
+              bhk_num,
+              owner_name: sub.owner_name,
+              owner_phone: sub.owner_phone,
+              lead_id: sub.lead_id,
+              submission_id: sub.id,
+              verified_source: "OWNER_SUBMISSION",
+            },
+          } as never);
+        }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["property_submissions"] });
-      toast.success("Submission updated");
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      toast.success("Submission updated and synchronized to Live Inventory!");
     },
     onError: (e: Error) => toast.error(e.message),
   });
