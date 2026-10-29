@@ -3768,7 +3768,7 @@ export function runDeterministicCognitiveExtractor(
   let dialect = "Hinglish";
   if (
     script === "Gujarati" ||
-    /\b(kem|cho|chhe|che|nathi|joiye|joyiye|joie|mane|aapo|aapjo|batavo|shu|bhai|ben|tamare|amare|vechvu|vechvano|bhade|bhadu|kale|aaje)\b/i.test(lower)
+    /\b(ma|kem|cho|chhe|che|nathi|joiye|joyiye|joie|mane|aapo|aapjo|batavo|shu|bhai|ben|tamare|amare|vechvu|vechvano|bhade|bhadu|kale|aaje)\b/i.test(lower)
   ) {
     code = "gu-IN";
     dialect = script === "Gujarati" ? "Pure Gujarati" : "Gujlish";
