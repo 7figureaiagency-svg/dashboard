@@ -345,6 +345,17 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 33.4: Pre-Flight Self-Correction Gate & Codebase Modularization ([`33.4-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/33/33.4-PLAN.md))
 - [x] Plan 33.5: Conversational Context Recap Card, Visit Time Anchor & Voice Script Normalization ([`33.5-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/33/33.5-PLAN.md))
 
+---
+
+### Phase 34: Enterprise Conversational Chatbot Design System (`cs-chatbot-design`) & Dialogue Governance
+**Status:** 🟡 In Progress  
+**Objective:** Install and tailor the open-source `cs-chatbot-design` agent skill for Nextgn Realtors CRM, enforcing structured-guided conversation architecture, slot filling rubrics, response design principles (Acknowledge First, Be Concise, Offer Next Steps), and graceful fallback/human escalation across all bot dialogs.  
+**Depends on:** Phase 33  
+**Plans:**
+- [x] Plan 34.1: Install & Tailor the `cs-chatbot-design` Domain Skill ([`34.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/34/34.1-PLAN.md))
+- [ ] Plan 34.2: Dialogue Governance Implementation & Production Deployment ([`34.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/34/34.2-PLAN.md))
+
+
 
 
 
