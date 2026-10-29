@@ -105,6 +105,98 @@ async function sendWhatsAppMessage(phoneNumberId: string, accessToken: string, t
   }
 }
 
+// 2b. Inbound Audio / Voice Buffer Downloaders
+async function fetchTelegramAudioBuffer(
+  botToken: string,
+  fileId: string
+): Promise<{ buffer: Uint8Array; mimeType: string } | null> {
+  if (!botToken || !fileId || botToken.startsWith("bot_token_")) {
+    console.warn("[Voice Ingestion] Telegram bot token or fileId missing/mocked.");
+    return null;
+  }
+  try {
+    const fileRes = await fetch(
+      `https://api.telegram.org/bot${botToken}/getFile?file_id=${encodeURIComponent(fileId)}`,
+      { signal: AbortSignal.timeout(6000) }
+    );
+    if (!fileRes.ok) {
+      console.warn(`[Voice Ingestion] Telegram getFile HTTP ${fileRes.status}`);
+      return null;
+    }
+    const fileData = await fileRes.json();
+    const filePath = fileData.result?.file_path;
+    if (!filePath) {
+      console.warn("[Voice Ingestion] No file_path returned by Telegram getFile:", fileData);
+      return null;
+    }
+
+    const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+    const audioRes = await fetch(downloadUrl, { signal: AbortSignal.timeout(8000) });
+    if (!audioRes.ok) {
+      console.warn(`[Voice Ingestion] Telegram audio download HTTP ${audioRes.status}`);
+      return null;
+    }
+    const arrayBuf = await audioRes.arrayBuffer();
+    const ext = filePath.split(".").pop()?.toLowerCase();
+    let mimeType = "audio/ogg";
+    if (ext === "oga" || ext === "ogg") mimeType = "audio/ogg";
+    else if (ext === "mp3") mimeType = "audio/mpeg";
+    else if (ext === "m4a") mimeType = "audio/mp4";
+    else if (ext === "wav") mimeType = "audio/wav";
+
+    return { buffer: new Uint8Array(arrayBuf), mimeType };
+  } catch (err: any) {
+    console.error("[Voice Ingestion] Telegram audio download failed:", err.message);
+    return null;
+  }
+}
+
+async function fetchWhatsAppAudioBuffer(
+  mediaId: string,
+  whatsappToken: string
+): Promise<{ buffer: Uint8Array; mimeType: string } | null> {
+  if (!mediaId || !whatsappToken) {
+    console.warn("[Voice Ingestion] WhatsApp mediaId or token missing.");
+    return null;
+  }
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/v20.0/${encodeURIComponent(mediaId)}`, {
+      headers: {
+        Authorization: `Bearer ${whatsappToken}`,
+      },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!metaRes.ok) {
+      console.warn(`[Voice Ingestion] WhatsApp media query HTTP ${metaRes.status}`);
+      return null;
+    }
+    const metaData = await metaRes.json();
+    const mediaUrl = metaData.url;
+    if (!mediaUrl) {
+      console.warn("[Voice Ingestion] No url in WhatsApp media metadata:", metaData);
+      return null;
+    }
+
+    const audioRes = await fetch(mediaUrl, {
+      headers: {
+        Authorization: `Bearer ${whatsappToken}`,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!audioRes.ok) {
+      console.warn(`[Voice Ingestion] WhatsApp media download HTTP ${audioRes.status}`);
+      return null;
+    }
+    const arrayBuf = await audioRes.arrayBuffer();
+    const mimeType = metaData.mime_type || audioRes.headers.get("content-type") || "audio/ogg";
+    return { buffer: new Uint8Array(arrayBuf), mimeType };
+  } catch (err: any) {
+    console.error("[Voice Ingestion] WhatsApp audio download failed:", err.message);
+    return null;
+  }
+}
+
 // 3. Sales Alert Dispatcher (Workflow 2: WmhDkALbtmTVgsYQ)
 async function dispatchSalesAlert(
   tenantId: string,
@@ -11577,13 +11669,28 @@ Deno.serve(async (req: Request) => {
     let botToken = queryBotToken || defaultBotToken;
     let phoneNumberId = "";
 
+    let isVoice = false;
+    let telegramVoiceFileId = "";
+    let whatsAppMediaId = "";
+    let voiceMimeType = "audio/ogg";
+    let voiceDuration = 0;
+    let directAudioBase64 = "";
+
     // 1. Telegram
     if ((body.update_id || body.message?.chat?.id) && (body.message || body.edited_message || body.callback_query)) {
       platform = "TELEGRAM";
       const msg = body.message || body.edited_message || body.callback_query?.message;
       senderId = String(msg.chat?.id || msg.from?.id);
       senderName = msg.from?.first_name || "Customer";
-      messageText = msg.text || "";
+      messageText = msg.text || msg.caption || "";
+
+      const tgVoice = msg.voice || msg.audio;
+      if (tgVoice?.file_id) {
+        isVoice = true;
+        telegramVoiceFileId = tgVoice.file_id;
+        voiceDuration = tgVoice.duration || 0;
+        voiceMimeType = tgVoice.mime_type || (msg.voice ? "audio/ogg" : "audio/mpeg");
+      }
     }
     // 2. WhatsApp
     else if (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
@@ -11592,8 +11699,15 @@ Deno.serve(async (req: Request) => {
       const msg = value.messages[0];
       senderId = msg.from;
       senderName = value.contacts?.[0]?.profile?.name || "Customer";
-      messageText = msg.text?.body || "";
+      messageText = msg.text?.body || msg.caption || "";
       phoneNumberId = value.metadata?.phone_number_id || "";
+
+      const isWaAudio = (msg.type === "audio" && msg.audio?.id) || (msg.type === "voice" && (msg.voice?.id || msg.audio?.id));
+      if (isWaAudio) {
+        isVoice = true;
+        whatsAppMediaId = msg.audio?.id || msg.voice?.id || "";
+        voiceMimeType = msg.audio?.mime_type || msg.voice?.mime_type || "audio/ogg; codecs=opus";
+      }
     }
     // 3. Direct JSON
     else {
@@ -11602,16 +11716,14 @@ Deno.serve(async (req: Request) => {
       senderName = body.name || "Customer";
       messageText = typeof body.message === "string" ? body.message : (body.message?.text || body.text || "");
       if (body.bot_token) botToken = body.bot_token;
-    }
 
-    if (!messageText) {
-      return new Response(JSON.stringify({ status: "ignored", reason: "empty message" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (body.audio_base64 || body.voice_base64 || body.audio?.base64) {
+        isVoice = true;
+        directAudioBase64 = body.audio_base64 || body.voice_base64 || body.audio?.base64 || "";
+        voiceMimeType = body.audio_mime || body.mime_type || "audio/ogg";
+        voiceDuration = body.duration || 0;
+      }
     }
-
-    const normalizedMessage = normalizeIndicDigits(messageText);
-    const lower = normalizedMessage.toLowerCase().trim();
 
     // Resolve Tenant Scope dynamically
     let activeTenantId = queryClientId || (body.client_id || body.tenant_id || "").trim();
@@ -11657,6 +11769,35 @@ Deno.serve(async (req: Request) => {
       .eq("id", activeTenantId)
       .maybeSingle();
 
+    const waAccessToken = tenantClient?.access_token || Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
+
+    // If voice note / audio message was received, download audio binary stream into memory buffer
+    let audioBufferData: { buffer: Uint8Array; mimeType: string } | null = null;
+    if (isVoice) {
+      if (platform === "TELEGRAM" && telegramVoiceFileId) {
+        audioBufferData = await fetchTelegramAudioBuffer(botToken, telegramVoiceFileId);
+      } else if (platform === "WHATSAPP" && whatsAppMediaId) {
+        audioBufferData = await fetchWhatsAppAudioBuffer(whatsAppMediaId, waAccessToken);
+      } else if (platform === "DIRECT" && directAudioBase64) {
+        try {
+          const binaryStr = atob(directAudioBase64);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          audioBufferData = { buffer: bytes, mimeType: voiceMimeType };
+        } catch (e: any) {
+          console.warn("[Voice Ingestion] Direct base64 audio decode error:", e.message);
+        }
+      }
+    }
+
+    if (!messageText && !isVoice) {
+      return new Response(JSON.stringify({ status: "ignored", reason: "empty message" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const botKnowledge = (tenantClient?.bot_knowledge as Record<string, any>) || {};
     const agencyName = tenantClient?.name?.trim() || "NextGen Realty";
     let resolvedCity = tenantClient?.city?.trim() || null;
@@ -11671,6 +11812,9 @@ Deno.serve(async (req: Request) => {
       resolvedCity = sampleProp?.city?.trim() || null;
     }
     const displayCity = resolvedCity || "aapke shehar";
+
+    const normalizedMessage = normalizeIndicDigits(messageText);
+    const lower = normalizedMessage.toLowerCase().trim();
 
     // Fetch or create lead record in Supabase
     let { data: lead } = await supabase
