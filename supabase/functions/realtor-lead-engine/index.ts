@@ -1,7 +1,17 @@
 // JSR import removed to prevent bundler 10s fetch timeout
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyOutboundReply } from "./verifier_gate.ts";
+import * as VoiceDecoder from "./voice_decoder.ts";
+import * as CognitiveExtractor from "./cognitive_extractor.ts";
+import * as MultilingualSynthesizer from "./multilingual_synthesizer.ts";
+import * as VerifierGate from "./verifier_gate.ts";
+
+export * from "./voice_decoder.ts";
+export * from "./cognitive_extractor.ts";
+export * from "./multilingual_synthesizer.ts";
 export * from "./verifier_gate.ts";
+
+export { VoiceDecoder, CognitiveExtractor, MultilingualSynthesizer, VerifierGate };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12493,7 +12503,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v85-fix-site-visit-reschedule-option-routing",
+        version: "v86-universal-multimodal-cognitive-agent",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -12613,7 +12623,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const challenge = url.searchParams.get("hub.challenge");
     if (challenge) return new Response(challenge, { status: 200 });
-    return new Response("Realtor Lead Engine v82 Ready (Vernacular Entity Guard & Remaining-Question Recovery)", { status: 200 });
+    return new Response("Realtor Lead Engine v86 Ready (Universal Multimodal Cognitive Agent)", { status: 200 });
   }
 
   try {
