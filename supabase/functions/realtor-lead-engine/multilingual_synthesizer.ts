@@ -331,10 +331,10 @@ export async function synthesizeMultilingualReply(params: SynthesizeReplyParams)
 
   const promptText = buildSynthesizerPrompt(params);
 
-  // 1. Google Gemini 2.5 Flash Primary (~150-300ms)
+  // 1. Google Gemini 2.0 Flash Primary (~150-300ms)
   if (geminiKey) {
     try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
       const res = await fetchFn(geminiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -356,7 +356,7 @@ export async function synthesizeMultilingualReply(params: SynthesizeReplyParams)
         }
       }
     } catch (geminiErr: any) {
-      console.warn("[Synthesizer] Gemini 2.5 Flash call failed:", geminiErr.message);
+      console.warn("[Synthesizer] Gemini 2.0 Flash call failed:", geminiErr.message);
     }
   }
 

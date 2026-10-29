@@ -366,11 +366,11 @@ Instructions:
 6. Ensure all HTML tags (<b>, <i>, <a>) are strictly balanced and properly closed.
 7. Return ONLY the corrected message text. No explanations or commentary.`;
 
-  // Try Gemini 2.5 Flash first (~150-300ms)
+  // Try Gemini 2.0 Flash first (~150-300ms)
   if (cleanGeminiKey) {
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cleanGeminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${cleanGeminiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -141,7 +141,108 @@ export function getVoiceInaudibleReply(userLanguage?: string): string {
 }
 
 /**
- * Dual-Engine Speech-to-Text Transcriber (Groq Whisper-large-v3 + Gemini 2.5 Flash Fallback)
+ * Detects Persian, Arabic, or Urdu script in a text string.
+ * Unicode ranges:
+ * - 0600-06FF: Arabic
+ * - 0750-077F: Arabic Supplement
+ * - 08A0-08FF: Arabic Extended-A
+ * - FB50-FDFF: Arabic Presentation Forms-A
+ * - FE70-FEFF: Arabic Presentation Forms-B
+ */
+export function containsPersoArabicScript(text: string): boolean {
+  if (!text) return false;
+  return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+}
+
+/**
+ * Fast sub-200ms bridge converting phonetic Urdu/Arabic script transcription to Latin / Hinglish text
+ * e.g. "مجھے 3 بیج کے فلیٹ چاہیے 1 کروڑ کے بجیٹ میں الکاپوری ایریا میں" -> "Mujhe 3 BHK flat chahiye 1 crore ke budget mein Alkapuri area mein"
+ */
+export async function transliterateArabicScriptToLatin(
+  text: string,
+  groqKey?: string,
+  options?: { geminiApiKey?: string; fetchImpl?: typeof fetch }
+): Promise<string> {
+  if (!text || !containsPersoArabicScript(text)) return text;
+  const fetchFn = options?.fetchImpl || fetch;
+
+  const prompt = `You are a real estate phonetic transliterator.
+Convert the following Urdu / Perso-Arabic script inquiry into clean Latin / Hinglish phonetic text.
+Rules:
+1. Preserve real estate terminology: convert "بیج کے" or "بی ایچ کے" to "BHK", "فلیٹ" to "flat", "کروڑ" to "crore", "لاکھ" to "lakh", "بجیٹ" to "budget", "الکاپوری" to "Alkapuri".
+2. Preserve all numerals and numbers.
+3. Return ONLY the transliterated Latin / Hinglish text with NO explanations, quotes, or conversational preamble.
+
+Urdu / Arabic text:
+"${text}"`;
+
+  // Try Groq Llama 3.3 70b (~150ms)
+  if (groqKey) {
+    try {
+      const res = await fetchFn("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${groqKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            {
+              role: "system",
+              content: "You are a fast phonetic transliterator converting Urdu/Arabic script Indian inquiries into Latin script Hinglish.",
+            },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.1,
+          max_tokens: 200,
+        }),
+        signal: AbortSignal.timeout(2000),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const transliterated = data.choices?.[0]?.message?.content?.trim()?.replace(/^["']|["']$/g, "").trim();
+        if (transliterated && !containsPersoArabicScript(transliterated)) {
+          return transliterated;
+        }
+      }
+    } catch (_err) {
+      // Fallback to Gemini
+    }
+  }
+
+  // Fallback: Gemini 2.0 Flash
+  const geminiKey = options?.geminiApiKey || (typeof Deno !== "undefined" ? Deno.env.get("GEMINI_API_KEY") : process.env.GEMINI_API_KEY);
+  if (geminiKey) {
+    try {
+      const gRes = await fetchFn(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
+          }),
+          signal: AbortSignal.timeout(2000),
+        }
+      );
+      if (gRes.ok) {
+        const gData = await gRes.json();
+        const gText = gData.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.replace(/^["']|["']$/g, "").trim();
+        if (gText && !containsPersoArabicScript(gText)) {
+          return gText;
+        }
+      }
+    } catch (_err) {}
+  }
+
+  return text;
+}
+
+/**
+ * Dual-Engine Speech-to-Text Transcriber (Groq Whisper-large-v3 + Gemini 2.0 Flash Fallback)
  */
 export async function transcribeAudioBuffer(
   buffer: Uint8Array,
@@ -179,7 +280,7 @@ export async function transcribeAudioBuffer(
       formData.append("model", "whisper-large-v3");
       formData.append(
         "prompt",
-        "Real estate inquiry in India - Hindi, Gujarati, English, Marathi, flats, shops, budget, crore, lakh, visit"
+        "Real estate property inquiry in India (Vadodara, Gujarat). Transcribe in Latin script (Hinglish/Gujlish) or Devanagari Hindi or Gujarati script. Do not output in Arabic or Urdu script."
       );
       formData.append("response_format", "verbose_json");
       formData.append("temperature", "0.2");
@@ -197,8 +298,14 @@ export async function transcribeAudioBuffer(
         const data = await groqRes.json();
         const transcribedText = (data.text || "").trim();
         if (transcribedText) {
+          let finalText = transcribedText;
+          if (containsPersoArabicScript(transcribedText)) {
+            finalText = await transliterateArabicScriptToLatin(transcribedText, groqKey, {
+              geminiApiKey: geminiKey,
+            });
+          }
           return {
-            text: transcribedText,
+            text: finalText,
             detectedLanguage: data.language || "unknown",
             durationSec: Number(data.duration) || 0,
             provider: "GROQ_WHISPER",
@@ -213,12 +320,12 @@ export async function transcribeAudioBuffer(
     }
   }
 
-  // 2. Fallback Engine: Google Gemini 2.5 Flash Audio API
+  // 2. Fallback Engine: Google Gemini 2.0 Flash Audio API
   if (geminiKey) {
     try {
       const cleanMime = mimeType.split(";")[0].trim().toLowerCase() || "audio/ogg";
       const base64Data = uint8ArrayToBase64(buffer);
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
 
       const geminiRes = await fetch(geminiUrl, {
         method: "POST",
@@ -252,8 +359,14 @@ export async function transcribeAudioBuffer(
         const rawText = gData.candidates?.[0]?.content?.parts?.[0]?.text || "";
         const cleanText = rawText.trim().replace(/^["']|["']$/g, "").trim();
         if (cleanText) {
+          let finalText = cleanText;
+          if (containsPersoArabicScript(cleanText)) {
+            finalText = await transliterateArabicScriptToLatin(cleanText, groqKey, {
+              geminiApiKey: geminiKey,
+            });
+          }
           return {
-            text: cleanText,
+            text: finalText,
             detectedLanguage: "multilingual",
             durationSec: 0,
             provider: "GEMINI_AUDIO",

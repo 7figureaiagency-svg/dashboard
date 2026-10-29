@@ -656,12 +656,12 @@ export async function extractCognitiveIntentWithAI(context: {
 
   const promptText = buildCognitivePrompt(context);
 
-  // 1. Google Gemini 2.5 Flash / Pro with responseSchema
+  // 1. Google Gemini 2.0 Flash / 1.5 Pro with responseSchema
   if (geminiKey) {
     try {
       const isForcePro = Boolean(context.options?.forceProEscalation);
-      const flashUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
-      const proUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${geminiKey}`;
+      const flashUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
+      const proUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiKey}`;
 
       const targetUrl = isForcePro ? proUrl : flashUrl;
 

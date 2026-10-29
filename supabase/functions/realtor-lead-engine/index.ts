@@ -295,7 +295,7 @@ async function transcribeAudioBuffer(
     try {
       const cleanMime = mimeType.split(";")[0].trim().toLowerCase() || "audio/ogg";
       const base64Data = uint8ArrayToBase64(buffer);
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
 
       const geminiRes = await fetch(geminiUrl, {
         method: "POST",
@@ -3678,8 +3678,8 @@ Respond ONLY with valid JSON:
 {"adjacent_location": "ExactNameFromList" | null, "distance_context": "distance string" | null}`;
 
   const candidates = [
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${geminiKey}`,
   ];
 
@@ -4187,12 +4187,12 @@ export async function extractCognitiveIntentWithAI(context: {
 
   const promptText = buildCognitivePrompt(context);
 
-  // 1. Google Gemini 2.5 Flash / Pro with responseSchema
+  // 1. Google Gemini 2.0 Flash / 1.5 Pro with responseSchema
   if (geminiKey) {
     try {
       const isForcePro = Boolean(context.options?.forceProEscalation);
-      const flashUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
-      const proUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${geminiKey}`;
+      const flashUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
+      const proUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiKey}`;
 
       const targetUrl = isForcePro ? proUrl : flashUrl;
 
