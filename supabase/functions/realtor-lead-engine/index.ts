@@ -2295,6 +2295,197 @@ export interface ClassifiedActionResult {
 
 export type ClassifiedIntent = ClassifiedActionResult;
 
+// =============================================================================
+// PHASE 33.2: ZERO-REGEX COGNITIVE INTENT & ENTITY EXTRACTOR SCHEMA
+// =============================================================================
+
+export interface CognitiveExtractionEntities {
+  property_category: "RESIDENTIAL" | "COMMERCIAL" | "PLOT_LAND" | "UNKNOWN";
+  property_type: "FLAT" | "TENEMENT" | "DUPLEX" | "VILLA" | "SHOP" | "OFFICE" | "PLOT" | "UNKNOWN";
+  unit_bhk: number | null;
+  budget_inr: number | null;
+  budget_type: "OUTRIGHT_BUY" | "MONTHLY_RENT" | "COMMERCIAL_LEASE" | "UNKNOWN";
+  location_name: string | null;
+  purpose: "END_USE" | "INVESTMENT" | "UNKNOWN";
+  timeline: "READY_TO_MOVE" | "UNDER_CONSTRUCTION" | "UNKNOWN";
+  carpet_area_sqft: number | null;
+  floor: number | null;
+  furnishing: "UNFURNISHED" | "SEMI_FURNISHED" | "FULLY_FURNISHED" | "UNKNOWN";
+}
+
+export interface CognitiveExtractionLanguage {
+  code: string;
+  dialect: string;
+  script: "Latin" | "Devanagari" | "Gujarati" | "Other";
+}
+
+export interface CognitiveExtractionResult {
+  lead_role: "BUYER" | "TENANT" | "SELLER" | "LANDLORD" | "BROKER" | "UNKNOWN";
+  primary_intent:
+    | "NEW_INQUIRY"
+    | "SELECT_OPTION"
+    | "CONFIRM_VISIT"
+    | "RESCHEDULE_VISIT"
+    | "CANCEL_VISIT"
+    | "CHANGE_CRITERIA"
+    | "SIDE_FAQ"
+    | "GREETING_ONLY"
+    | "NEGATION_CORRECTION"
+    | "HUMAN_ESCALATION";
+  direct_answer_to_last_question: boolean;
+  user_negated_assumptions: boolean;
+  negation_explanation: string | null;
+  selected_menu_option: number | null;
+  entities: CognitiveExtractionEntities;
+  user_side_question: string | null;
+  detected_language: CognitiveExtractionLanguage;
+}
+
+export const REAL_ESTATE_EXTRACTION_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    lead_role: {
+      type: "STRING",
+      enum: ["BUYER", "TENANT", "SELLER", "LANDLORD", "BROKER", "UNKNOWN"],
+      description: "Role of the user in this real estate transaction context",
+    },
+    primary_intent: {
+      type: "STRING",
+      enum: [
+        "NEW_INQUIRY",
+        "SELECT_OPTION",
+        "CONFIRM_VISIT",
+        "RESCHEDULE_VISIT",
+        "CANCEL_VISIT",
+        "CHANGE_CRITERIA",
+        "SIDE_FAQ",
+        "GREETING_ONLY",
+        "NEGATION_CORRECTION",
+        "HUMAN_ESCALATION",
+      ],
+      description: "Primary intent expressed in the user's message",
+    },
+    direct_answer_to_last_question: {
+      type: "BOOLEAN",
+      description: "True if the user's message is a direct answer to the bot's pending question",
+    },
+    user_negated_assumptions: {
+      type: "BOOLEAN",
+      description: "True if user negated an assumption or premise (e.g. 'lena nahi, bechni hai', 'chahiye nahi')",
+    },
+    negation_explanation: {
+      type: "STRING",
+      nullable: true,
+      description: "Explanation of what premise or assumption the user negated",
+    },
+    selected_menu_option: {
+      type: "INTEGER",
+      nullable: true,
+      description: "Strictly 1-based numeric option index chosen by the user from recent menu/prompt (1, 2, 3, 4)",
+    },
+    entities: {
+      type: "OBJECT",
+      properties: {
+        property_category: {
+          type: "STRING",
+          enum: ["RESIDENTIAL", "COMMERCIAL", "PLOT_LAND", "UNKNOWN"],
+          description: "Category of property asset",
+        },
+        property_type: {
+          type: "STRING",
+          enum: ["FLAT", "TENEMENT", "DUPLEX", "VILLA", "SHOP", "OFFICE", "PLOT", "UNKNOWN"],
+          description: "Specific property type. Note: Tenement (ternament, tenament, row house) is TENEMENT, NEVER project name!",
+        },
+        unit_bhk: {
+          type: "INTEGER",
+          nullable: true,
+          description: "Bedroom count (1, 2, 3, 4, 5)",
+        },
+        budget_inr: {
+          type: "INTEGER",
+          nullable: true,
+          description: "Price or budget normalized to Indian Rupees (e.g. 50L -> 5000000, 1 Cr -> 10000000, 25k -> 25000)",
+        },
+        budget_type: {
+          type: "STRING",
+          enum: ["OUTRIGHT_BUY", "MONTHLY_RENT", "COMMERCIAL_LEASE", "UNKNOWN"],
+          description: "Transaction budget type: outright purchase/sale, monthly rental, or commercial lease",
+        },
+        location_name: {
+          type: "STRING",
+          nullable: true,
+          description: "Clean geographic locality name. Strictly exclude property subtypes (ternament, shop) or adjectives (juno, purana, navo)!",
+        },
+        purpose: {
+          type: "STRING",
+          enum: ["END_USE", "INVESTMENT", "UNKNOWN"],
+          description: "End use / family self-use vs investment",
+        },
+        timeline: {
+          type: "STRING",
+          enum: ["READY_TO_MOVE", "UNDER_CONSTRUCTION", "UNKNOWN"],
+          description: "Possession readiness",
+        },
+        carpet_area_sqft: {
+          type: "INTEGER",
+          nullable: true,
+          description: "Carpet area in square feet",
+        },
+        floor: {
+          type: "INTEGER",
+          nullable: true,
+          description: "Floor number if specified",
+        },
+        furnishing: {
+          type: "STRING",
+          enum: ["UNFURNISHED", "SEMI_FURNISHED", "FULLY_FURNISHED", "UNKNOWN"],
+          description: "Furnishing condition",
+        },
+      },
+      required: [
+        "property_category",
+        "property_type",
+        "budget_type",
+        "purpose",
+        "timeline",
+        "furnishing",
+      ],
+    },
+    user_side_question: {
+      type: "STRING",
+      nullable: true,
+      description: "Any detour query regarding loans, RERA, brokerage, office hours, etc.",
+    },
+    detected_language: {
+      type: "OBJECT",
+      properties: {
+        code: {
+          type: "STRING",
+          description: "Language code (e.g. hi-IN, gu-IN, en-IN, mr-IN)",
+        },
+        dialect: {
+          type: "STRING",
+          description: "Dialect description (e.g. Gujlish, Hinglish, Pure Gujarati, English)",
+        },
+        script: {
+          type: "STRING",
+          enum: ["Latin", "Devanagari", "Gujarati", "Other"],
+          description: "Primary script used in message",
+        },
+      },
+      required: ["code", "dialect", "script"],
+    },
+  },
+  required: [
+    "lead_role",
+    "primary_intent",
+    "direct_answer_to_last_question",
+    "user_negated_assumptions",
+    "entities",
+    "detected_language",
+  ],
+};
+
 /**
  * Normalizes Indic Gujarati numeral script (૧, ૨, ૩...) to standard ASCII digits.
  */
