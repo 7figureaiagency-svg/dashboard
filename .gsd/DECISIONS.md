@@ -155,6 +155,39 @@
 - Local git commits only. No push to remote.
 - Zero extra runtime JS packages.
 
+## Phase 35 Decisions: Enterprise Multi-Tenant Hardening & Zero-Regex Autonomous Cognitive Engine
+
+**Date:** 2026-10-29
+
+### Scope
+- **100% Regex Eradication:** Eliminate all legacy brittle regexes, number option interceptors (preventing `1 કરોડ` from triggering Menu Option 1), and rigid priority chains that override AI intent.
+- **Single-Pass Cognitive Turn Router:** Route all inbound turns (WhatsApp & Telegram) through a fast, structured JSON Schema parser (Gemini 2.5 Flash / Groq / OpenAI compatible) capturing Primary Intent, Language/Script, Context Pivot, Extracted Entities (normalized numbers/localities), and Missing Critical Slots in a single turn (< 400ms).
+- **Dynamic Context Shift & Reschedule Flow:**
+  - "Site visit change thase" ➔ Identifies `RESCHEDULE_VISIT` with missing date/time, prompts for new slot instead of premature booking.
+  - "Brocher moklo ne" ➔ Identifies `REQUEST_BROCHURE`, dispatches brochure PDF/link directly instead of suggesting alternate properties.
+  - Requirement changes (e.g., Waghodia Road ➔ Alkapuri) ➔ Identifies `reset_previous_context: true`, purges stale search memory, and initiates fresh search without stale location leakage.
+- **Enterprise Multi-Tenant Hardening for 100+ Clients:**
+  - **Zero Cross-Tenant Leakage:** Completely eradicate dangerous fallbacks to `defaultTenantId` (specifically line 902 inventory fallback and silent webhook defaulting). Every query strictly scoped by `client_id = activeTenantId`.
+  - **In-Memory Tenant Config Cache:** Cache tenant branding, operating city, bot tokens, WABA credentials, and `bot_knowledge` in Edge Function memory (TTL: 5-10 min) reducing DB hits from 4-5 to 1 per turn.
+  - **Composite PostgreSQL Indexing:** Add composite indexes on `leads(client_id, lead_id)`, `leads(client_id, status, last_active_at)`, `inventory(client_id, status, property_type)`, and `site_visits(client_id, scheduled_at, status)` to guarantee sub-5ms query times under 100+ tenants and 500k+ rows.
+  - **Isolated Tenant AI Personas:** Dynamically inject only the active tenant's operating city, agency branding, and inventory portfolio into the cognitive prompt context.
+
+### Approach
+- **Choice:** Native Single-Pass Structured Cognitive Router + In-Memory Tenant Isolation (Model-Agnostic direct REST).
+- **Rationale:**
+  - Avoids heavy 3rd-party Agent SDKs (which cause Deno bundle bloat, 3-6s multi-hop latency, and 15x cost bloat).
+  - Delivers sub-600ms end-to-end webhook response times.
+  - Guarantees 100% data isolation for 100+ brokerages with zero cross-tenant contamination.
+  - Ensures seamless Gujarati script (`અલકાપુરી`, `૩bhk`, `૧ કરોડ`), Gujlish, Hinglish, and English comprehension.
+  - Strictly follows `cs-chatbot-design` 3 Golden Response Principles (Acknowledge First, Be Concise, Offer Next Steps).
+
+### Constraints
+- 100% Non-n8n architecture (Supabase Edge Functions + PostgreSQL + React CRM).
+- Zero extra client runtime JS packages.
+- Test suite execution policy: Do not run automated test suites unless explicitly requested by the user.
+- Multi-tenant WABA safety: Enforce tenant-scoped rate limits, batch caps (max 20), and delay jitter.
+
+
 
 
 

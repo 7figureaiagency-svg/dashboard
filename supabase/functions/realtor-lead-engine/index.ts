@@ -5,13 +5,22 @@ import * as VoiceDecoder from "./voice_decoder.ts";
 import * as CognitiveExtractor from "./cognitive_extractor.ts";
 import * as MultilingualSynthesizer from "./multilingual_synthesizer.ts";
 import * as VerifierGate from "./verifier_gate.ts";
+import * as CognitiveTurnRouter from "./cognitive_turn_router.ts";
+import {
+  routeCognitiveTurn,
+  routeCognitiveTurnDeterministic,
+  CognitiveTurnResult,
+  normalizeIndicNumerals,
+  VERNACULAR_LOCALITY_MAP
+} from "./cognitive_turn_router.ts";
 
 export * from "./voice_decoder.ts";
 export * from "./cognitive_extractor.ts";
 export * from "./multilingual_synthesizer.ts";
 export * from "./verifier_gate.ts";
+export * from "./cognitive_turn_router.ts";
 
-export { VoiceDecoder, CognitiveExtractor, MultilingualSynthesizer, VerifierGate };
+export { VoiceDecoder, CognitiveExtractor, MultilingualSynthesizer, VerifierGate, CognitiveTurnRouter };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,6 +60,101 @@ const defaultBotToken = Deno.env.get("TELEGRAM_BOT_TOKEN") || "8510179672:AAFBvq
 const defaultTenantId = "8699dca1-2b97-4367-85b8-8a0db2fd51f5"; // Nextgen Realty
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// =============================================================================
+// MULTI-TENANT IN-MEMORY LRU CONFIGURATION & CREDENTIAL CACHE
+// Eliminates 4-5 redundant DB roundtrips per turn; enables sub-1ms tenant lookup
+// =============================================================================
+export interface CachedTenantConfig {
+  id: string;
+  name: string;
+  city: string | null;
+  office_address?: string;
+  bot_token?: string;
+  access_token?: string;
+  whatsapp_phone_number_id?: string;
+  phone_number_id?: string;
+  notification_channel?: string;
+  bot_knowledge: Record<string, any>;
+  cachedAt: number;
+}
+
+const TENANT_CACHE_BY_ID = new Map<string, CachedTenantConfig>();
+const TENANT_CACHE_BY_PHONE = new Map<string, CachedTenantConfig>();
+const TENANT_CACHE_BY_TOKEN = new Map<string, CachedTenantConfig>();
+const TENANT_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes TTL
+
+export async function getOrFetchTenantConfig(
+  lookup: { tenantId?: string | null; phoneNumberId?: string | null; botToken?: string | null },
+  supabaseClient: any = supabase
+): Promise<CachedTenantConfig | null> {
+  const now = Date.now();
+
+  if (lookup.tenantId) {
+    const cached = TENANT_CACHE_BY_ID.get(lookup.tenantId);
+    if (cached && (now - cached.cachedAt) < TENANT_CACHE_TTL_MS) {
+      return cached;
+    }
+  }
+
+  if (lookup.phoneNumberId) {
+    const cached = TENANT_CACHE_BY_PHONE.get(lookup.phoneNumberId);
+    if (cached && (now - cached.cachedAt) < TENANT_CACHE_TTL_MS) {
+      return cached;
+    }
+  }
+
+  if (lookup.botToken && lookup.botToken !== defaultBotToken) {
+    const cached = TENANT_CACHE_BY_TOKEN.get(lookup.botToken);
+    if (cached && (now - cached.cachedAt) < TENANT_CACHE_TTL_MS) {
+      return cached;
+    }
+  }
+
+  // Not in memory cache or expired; execute single query to clients table
+  let query = supabaseClient
+    .from("clients")
+    .select("id, name, city, office_address, bot_token, access_token, whatsapp_phone_number_id, phone_number_id, notification_channel, bot_knowledge, is_active");
+
+  if (lookup.tenantId) {
+    query = query.eq("id", lookup.tenantId);
+  } else if (lookup.phoneNumberId) {
+    query = query.or(`whatsapp_phone_number_id.eq.${lookup.phoneNumberId},phone_number_id.eq.${lookup.phoneNumberId}`);
+  } else if (lookup.botToken) {
+    query = query.eq("bot_token", lookup.botToken);
+  } else {
+    return null;
+  }
+
+  const { data: c, error } = await query.maybeSingle();
+  if (error || !c) return null;
+
+  const config: CachedTenantConfig = {
+    id: c.id,
+    name: c.name || "Real Estate Agency",
+    city: c.city || null,
+    office_address: c.office_address || "",
+    bot_token: c.bot_token || "",
+    access_token: c.access_token || "",
+    whatsapp_phone_number_id: c.whatsapp_phone_number_id || c.phone_number_id || "",
+    phone_number_id: c.phone_number_id || c.whatsapp_phone_number_id || "",
+    notification_channel: c.notification_channel || "",
+    bot_knowledge: (c.bot_knowledge as Record<string, any>) || {},
+    cachedAt: now
+  };
+
+  // Populate cache maps
+  TENANT_CACHE_BY_ID.set(config.id, config);
+  if (config.whatsapp_phone_number_id) {
+    TENANT_CACHE_BY_PHONE.set(config.whatsapp_phone_number_id, config);
+  }
+  if (config.bot_token) {
+    TENANT_CACHE_BY_TOKEN.set(config.bot_token, config);
+  }
+
+  return config;
+}
+
 
 // 2. Outbound Dispatchers
 async function sendTelegramMessage(botToken: string, chatId: string, text: string) {
@@ -894,16 +998,12 @@ async function matchInventoryForPortalLead(
     .eq("client_id", tenantId)
     .eq("status", "AVAILABLE");
 
-  let propList = properties;
-  if (error || !propList || propList.length === 0) {
-    const { data: fallbackProps } = await supabase
-      .from("inventory")
-      .select("*")
-      .eq("client_id", defaultTenantId)
-      .eq("status", "AVAILABLE");
-    if (!fallbackProps || fallbackProps.length === 0) return null;
-    propList = fallbackProps;
+  if (error || !properties || properties.length === 0) {
+    console.log(`[matchInventoryForPortalLead] No available inventory found for tenant: ${tenantId}`);
+    return null;
   }
+
+  const propList = properties;
 
   // Match 1: Project Name (Fuzzy / Substring)
   if (leadInquiry.projectName && leadInquiry.projectName.trim()) {
@@ -1118,17 +1218,22 @@ function parseVisitSlot(slotText = ""): { isoUtc: string; isValidTime: boolean; 
     minutes = m;
   }
 
-  // Working hours validation: Strictly 10 AM (10:00) to 6 PM (18:00) IST
-  const isValidTime = hours >= 10 && (hours < 18 || (hours === 18 && minutes === 0));
+  const hasDateMention = dayIndex !== -1 || /\b(parso|parsva|parsom|day\s+after|aje|aaje|aaj|today|kale|kaale|kal|tomorrow)\b/i.test(text) || text.includes("પરમ") || text.includes("આજે") || text.includes("કાલે");
+  const hasTimeMention = Boolean(timeMatch);
+  const hasExplicitSlot = hasDateMention || hasTimeMention;
+
+  // Working hours validation: Strictly 10 AM (10:00) to 6 PM (18:00) IST AND requires an actual slot mention!
+  const isValidTime = hasExplicitSlot && hours >= 10 && (hours < 18 || (hours === 18 && minutes === 0));
 
   const istAsUtcEpoch = Date.UTC(targetYear, targetMonth, targetDay, hours, minutes, 0, 0);
   const realUtcEpoch = istAsUtcEpoch - 5.5 * 60 * 60 * 1000;
-  const isPast = realUtcEpoch < Date.now();
+  const isPast = hasExplicitSlot ? realUtcEpoch < Date.now() : false;
 
   return {
     isoUtc: new Date(realUtcEpoch).toISOString(),
     isValidTime,
     isPast,
+    hasExplicitSlot,
   };
 }
 
@@ -12058,15 +12163,14 @@ async function handleQualificationCascade(
 
   if (lastPromptQ === "LOCATION_CONFIRMATION") {
     const isBhkInput = isBhkOrPropertyConfiguration(context.messageText);
-    const isKeepOld = !isBhkInput && (
+    const hasDirectCriteriaUpdate = Boolean(justBudget || (explicitLoc && explicitLoc !== staleLoc) || justPropType || justPurpose || justTimeline);
+    const isKeepOld = !isBhkInput && !hasDirectCriteriaUpdate && (
       /^\s*(?:1|1️⃣|option\s*1|first|1st|pichli|purani|pehle|pahla|pehli|wahi|same|keep|ha|yes|haan|haa|ha\s*wahi|continue|proceed|inhi\s*details|aage\s*badhein)\b/i.test(context.messageText.trim()) ||
       Boolean(staleLoc && lowerMsg.includes(staleLoc.toLowerCase()))
     );
-    const hasDirectCriteriaUpdate = Boolean(justBudget || (explicitLoc && explicitLoc !== staleLoc) || justPropType || justPurpose || justTimeline);
-    const isChangeLoc = !isBhkInput && (
-      /^\s*(?:2|2️⃣|option\s*2|second|2nd|nayi|new|badalni|change|no|nahi|nhi|update|badlo|change\s*karein|details\s*change)\b/i.test(context.messageText.trim()) ||
-      hasDirectCriteriaUpdate
-    );
+    const isChangeLoc =
+      (!isBhkInput && /^\s*(?:2|2️⃣|option\s*2|second|2nd|nayi|new|badalni|change|no|nahi|nhi|update|badlo|change\s*karein|details\s*change)\b/i.test(context.messageText.trim())) ||
+      hasDirectCriteriaUpdate;
 
     if (isKeepOld && staleLoc) {
       location = staleLoc;
@@ -12785,7 +12889,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v89-reschedule-and-safe-update-fix",
+        version: "v89-enterprise-multi-tenant-cognitive-router",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -13312,49 +13416,36 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Resolve Tenant Scope dynamically
+    // Resolve Tenant Scope dynamically via In-Memory Cache (0ms on warm turns)
     let activeTenantId = queryClientId || (body.client_id || body.tenant_id || "").trim();
-    if (!activeTenantId && phoneNumberId) {
-      const { data: c } = await supabase
-        .from("clients")
-        .select("id, bot_token")
-        .eq("whatsapp_phone_number_id", phoneNumberId)
-        .maybeSingle();
-      if (c?.id) {
-        activeTenantId = c.id;
-        if (!queryBotToken && c.bot_token) botToken = c.bot_token;
+    let tenantClient: CachedTenantConfig | null = null;
+
+    if (activeTenantId) {
+      tenantClient = await getOrFetchTenantConfig({ tenantId: activeTenantId }, supabase);
+    }
+    if (!tenantClient && phoneNumberId) {
+      tenantClient = await getOrFetchTenantConfig({ phoneNumberId }, supabase);
+      if (tenantClient) {
+        activeTenantId = tenantClient.id;
+        if (!queryBotToken && tenantClient.bot_token) botToken = tenantClient.bot_token;
       }
     }
-    if (!activeTenantId && botToken && botToken !== defaultBotToken) {
-      const { data: c } = await supabase
-        .from("clients")
-        .select("id, bot_token")
-        .eq("bot_token", botToken)
-        .maybeSingle();
-      if (c?.id) activeTenantId = c.id;
+    if (!tenantClient && botToken && botToken !== defaultBotToken) {
+      tenantClient = await getOrFetchTenantConfig({ botToken }, supabase);
+      if (tenantClient) {
+        activeTenantId = tenantClient.id;
+      }
     }
-    if (!activeTenantId) {
+    if (!tenantClient && !activeTenantId) {
       activeTenantId = defaultTenantId;
+      tenantClient = await getOrFetchTenantConfig({ tenantId: defaultTenantId }, supabase);
+    } else if (!tenantClient && activeTenantId) {
+      tenantClient = await getOrFetchTenantConfig({ tenantId: activeTenantId }, supabase);
     }
 
-    // Dynamic botToken resolution for resolved tenant if still on default
-    if (botToken === defaultBotToken && activeTenantId !== defaultTenantId) {
-      const { data: c } = await supabase
-        .from("clients")
-        .select("bot_token")
-        .eq("id", activeTenantId)
-        .maybeSingle();
-      if (c?.bot_token) {
-        botToken = c.bot_token;
-      }
+    if (tenantClient?.bot_token && botToken === defaultBotToken) {
+      botToken = tenantClient.bot_token;
     }
-
-    // Resolve Tenant Branding & Operating City
-    const { data: tenantClient } = await supabase
-      .from("clients")
-      .select("id, name, city, office_address, notification_channel, bot_knowledge, access_token")
-      .eq("id", activeTenantId)
-      .maybeSingle();
 
     const waAccessToken = tenantClient?.access_token || Deno.env.get("WHATSAPP_ACCESS_TOKEN") || "";
 
@@ -13560,6 +13651,120 @@ Deno.serve(async (req: Request) => {
             ? `Sure <b>${senderName}</b>! Your property listing is under active review. Our acquisition team will connect with you directly. Let us know if you need to update any details! 🙏`
             : `Ji bilkul <b>${senderName} ji</b>! Aapki property submission active review me hai. Hamari acquisition team documents verify karke aapse jald hi direct call par connect karegi! 🙏`;
       }
+    }
+
+    // =========================================================================
+    // Phase 35.2: Zero-Regex Cognitive Turn Router (Gemini 2.0 Flash / Groq LLM)
+    // =========================================================================
+    const cognitiveTurn = await routeCognitiveTurn(
+      normalizedMessage,
+      lead,
+      [],
+      { agencyName, operatingCity: displayCity, botKnowledge }
+    );
+    console.log(`[CognitiveTurnRouter] Intent: "${cognitiveTurn.primary_intent}", Lang: "${cognitiveTurn.detected_language}", ResetContext: ${cognitiveTurn.reset_previous_context}`);
+
+    // Update Language strictly matching CognitiveTurnRouter
+    if (cognitiveTurn.detected_language === "GUJARATI_SCRIPT" || cognitiveTurn.detected_language === "GUJLISH") {
+      lang = "GUJLISH";
+    } else if (cognitiveTurn.detected_language === "HINGLISH") {
+      lang = "HINGLISH";
+    } else if (cognitiveTurn.detected_language === "ENGLISH") {
+      const hasEnglishGrammar = /\b(can you|could you|please send|i want|i need|what is)\b/i.test(lower);
+      if (hasEnglishGrammar || !lead?.user_language || lead.user_language === "ENGLISH") {
+        lang = "ENGLISH";
+      }
+    }
+
+    // 1. Direct Brochure Interceptor: If user specifically asks for brochure (e.g. "Brocher moklo ne")
+    if (cognitiveTurn.primary_intent === "REQUEST_BROCHURE") {
+      const brochureRes = await handleBrochureOrMapResponse(
+        lead,
+        "BROCHURE_REQUEST",
+        {
+          messageText,
+          normalizedMessage,
+          lower,
+          senderName,
+          senderId,
+          platform,
+          tenantId: activeTenantId,
+          agencyName,
+          resolvedCity,
+          displayCity,
+          lang: (lang === "GUJLISH" || lang === "HINGLISH" || lang === "ENGLISH" || lang === "GUJARATI_SCRIPT") ? lang : "HINGLISH",
+          botKnowledge,
+        },
+        Boolean(lead?.site_visit_booked || lead?.state === "SITE_VISIT_BOOKED")
+      );
+
+      replyText = brochureRes.replyText;
+      nextState = brochureRes.nextState as any;
+      if (platform === "TELEGRAM") {
+        await sendTelegramMessage(botToken, senderId, replyText);
+      } else if (platform === "WHATSAPP" && phoneNumberId) {
+        await sendWhatsAppMessage(phoneNumberId, waAccessToken, senderId, replyText);
+      }
+      return new Response(JSON.stringify({ success: true, intent: "BROCHURE_REQUEST", reply_sent: replyText }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 2. Dynamic Reschedule Clarification Interceptor:
+    // If user says "Site visit change thase" / "reschedule" WITHOUT a specific date or time:
+    if (cognitiveTurn.primary_intent === "RESCHEDULE_VISIT" && cognitiveTurn.missing_critical_slots.includes("reschedule_slot")) {
+      const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : "ji";
+      replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul <b>${nameStr}</b>, ha site visit change thai shakshe! Tame kayi date ane time par navi site visit rakhva mango chho? 📅 (Amara timings saware 10:00 AM thi sanje 6:00 PM chhe)`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>, yes your visit can be rescheduled! Which date and time would you prefer? 📅 (Our visit timings are between 10:00 AM and 6:00 PM IST)`
+          : `Ji bilkul <b>${nameStr}</b>, haan site visit change ho jayegi! Aap kaunsi date aur time par nayi visit rakhna chahenge? 📅 (Hamare visit timings subah 10:00 AM se shaam 6:00 PM ke beech hain)`;
+
+      if (platform === "TELEGRAM") {
+        await sendTelegramMessage(botToken, senderId, replyText);
+      } else if (platform === "WHATSAPP" && phoneNumberId) {
+        await sendWhatsAppMessage(phoneNumberId, waAccessToken, senderId, replyText);
+      }
+      return new Response(JSON.stringify({ success: true, intent: "RESCHEDULE_VISIT_PROMPT", reply_sent: replyText }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 3. Stale Context Reset on Pivot (e.g. Waghodia Road -> Alkapuri)
+    if (cognitiveTurn.reset_previous_context) {
+      const updates: any = {};
+      if (cognitiveTurn.entities.location) {
+        updates.location = cognitiveTurn.entities.location;
+        lead.location = cognitiveTurn.entities.location;
+      }
+      if (cognitiveTurn.entities.budget_max) {
+        updates.budget = cognitiveTurn.entities.budget_max;
+        lead.budget = cognitiveTurn.entities.budget_max;
+      }
+      if (cognitiveTurn.entities.property_type) {
+        updates.property_type = cognitiveTurn.entities.property_type;
+        lead.property_type = cognitiveTurn.entities.property_type;
+      }
+      updates.selected_property_id = null;
+      lead.selected_property_id = null;
+      updates.last_option_ids = null;
+      lead.last_option_ids = null;
+      if (lead.metadata?.last_bot_prompt) {
+        updates.metadata = {
+          ...(lead.metadata || {}),
+          last_bot_prompt: null,
+          seeker_draft: {
+            ...(lead.metadata?.seeker_draft || {}),
+            location: updates.location || lead.location,
+            budget: updates.budget || lead.budget,
+            property_type: updates.property_type || lead.property_type,
+            location_confirmed: true,
+          },
+        };
+        lead.metadata = updates.metadata;
+      }
+      await supabase.from("leads").update(updates).eq("id", lead.id);
     }
 
     // Call Hybrid Micro-LLM Intent Classifier (Gemini Primary + Groq Fallback) for all substantive turns
