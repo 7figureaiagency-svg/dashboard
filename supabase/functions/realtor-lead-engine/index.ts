@@ -3793,7 +3793,7 @@ export function runDeterministicCognitiveExtractor(
     dialect = "Pure Gujarati";
   } else if (/[\u0900-\u097F]/.test(normalized)) {
     script = "Devanagari";
-    if (/\b(mala|pahije|aahe|vikayche|vikne|kiti|dakhva)\b/i.test(lower)) {
+    if (/(?:मला|पाहिजे|आहे|विकायचे|विकणे|किती|दाखवा|भाड्याने|माला|mala|pahije|aahe|vikayche|vikne|kiti|dakhva)/i.test(lower)) {
       primaryLang = "Marathi";
       code = "mr-IN";
       dialect = "Marathi";
@@ -4569,7 +4569,11 @@ export function computeUpdatedLanguageProfile(
     dialect = "Punjabi";
   } else if (/[\u0900-\u097F]/.test(normalized)) {
     script = "Devanagari";
-    if (/\b(mala|pahije|aahe|vikayche|vikne|kiti|dakhva)\b/i.test(lower)) {
+    if (
+      detectedLanguage?.primary_language === "Marathi" ||
+      detectedLanguage?.dialect?.toLowerCase().includes("marathi") ||
+      /(?:मला|पाहिजे|आहे|विकायचे|विकणे|किती|दाखवा|भाड्याने|माला|mala|pahije|aahe|vikayche|vikne|kiti|dakhva)/i.test(lower)
+    ) {
       primaryLang = "Marathi";
       code = "mr-IN";
       dialect = "Marathi";
