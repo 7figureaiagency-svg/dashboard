@@ -12786,7 +12786,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v88-cs-chatbot-design-governance",
+        version: "v89-reschedule-and-safe-update-fix",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
