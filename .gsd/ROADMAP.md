@@ -322,6 +322,17 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 31.2: Live Inventory Synchronization & Owner Intake Safeguards ([`31.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/31/31.2-PLAN.md))
 - [x] Plan 31.3: Conversational Menus, Drip Integrity & Visit Confirmation ([`31.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/31/31.3-PLAN.md))
 
+---
+
+### Phase 32: Commercial Seller Flow, Dynamic Role Handoff & Smart Contextual Resume Engine
+**Status:** ✅ Complete  
+**Objective:** (1) Fix Commercial Seller classification so Devanagari Hindi phrases like "मुझे शॉप बेचनी है मेरी" route to Owner/Seller intake instead of Seeker Commercial Lease, eliminating the false "लीज़ बजट कितना है?" prompt. (2) Implement a Commercial Pricing Matrix separating Sale (Expected Selling Price), Rent (Monthly Rent), and Lease (Commercial Lease Terms) with appropriate owner vs seeker phrasing. (3) Enable dynamic mid-conversation role switching from `QUALIFYING` to `handleOwnerFlow`, and eliminate deadlock repetition when user negates buyer intent ("मुझे चाहिए नहीं, मुझे शॉप बेचनी है"). (4) Implement interactive Stale Location Confirmation & Switching so cached locations (like "Vasna-Bhayli Road") are never silently assumed, prompting user to keep or change location. (5) Build a Smart Contextual Resume Engine that displays a concise Recap Card when a returning user sends a greeting after an incomplete inquiry, offering a dual-fork resume (1 = Continue previous search, 2 = Start fresh) while allowing direct answers to auto-bypass without friction.  
+**Depends on:** Phase 31  
+**Plans:**
+- [x] Plan 32.1: Commercial Seller Flow, Dynamic Role Handoff & Negation Safeguards ([`32.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/32/32.1-PLAN.md))
+- [x] Plan 32.2: Stale Location Confirmation & Smart Contextual Resume Engine ([`32.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/32/32.2-PLAN.md))
+
+
 
 
 

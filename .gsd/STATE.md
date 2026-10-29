@@ -7,11 +7,22 @@ updated: 2026-10-28T11:42:00+05:30
 ## Current Position
 
 **Milestone:** Multi-Tenant Onboarding, Data Isolation & Dynamic AI Knowledge  
-**Phase:** 30 - Vernacular Entity Extraction Guard & Remaining-Question Recovery Protocol  
+**Phase:** 32 - Commercial Seller Flow, Dynamic Role Handoff & Smart Contextual Resume Engine  
 **Status:** ✅ Complete  
 **Plans:**
-- `.gsd/phases/30/30.1-PLAN.md` (Vernacular Seller Entity Extraction & Adjective Stop-Word Guard) — ✅ Done
-- `.gsd/phases/30/30.2-PLAN.md` (Compound Question Disambiguation & Remaining-Question Recovery Engine) — ✅ Done
+- `.gsd/phases/32/32.1-PLAN.md` (Commercial Seller Flow, Dynamic Role Handoff & Negation Safeguards) — ✅ Complete
+- `.gsd/phases/32/32.2-PLAN.md` (Stale Location Confirmation & Smart Contextual Resume Engine) — ✅ Complete
+
+## Last Action
+
+Completed Phase 32:
+- Normalized Devanagari Hindi, Gujarati, and Latin seller verbs in `parseRequirementFromText`, `isFirstMessageOwner`, and `isOwnerIntentUtterance`.
+- Added dynamic state handoff from `QUALIFYING` to `handleOwnerFlow`, eliminating seeker mode lock-in when seller intent is expressed.
+- Implemented Commercial Pricing Matrix separating Sale (Expected Selling Price / मांग), Rent (Monthly Rent), and Lease (Commercial Lease Terms) with owner vs seeker grammar.
+- Eliminated deadlocks by handling negation ("मुझे चाहिए नहीं, मुझे शॉप बेचनी है") and preventing `isTypoOrUnrecognized` loops.
+- Implemented Point 5 (Stale Location Confirmation & Switching): If historical location exists in metadata, user is prompted with Option 1 (keep) or Option 2 (change).
+- Built Smart Contextual Resume Engine: returning user greetings display a structured Recap Card with pending fields and dual-fork choice, with direct answer auto-bypass.
+- Verified 100% assertions in `scratch/test_phase32_commercial_seller_resume.cjs` and Vite build (0 errors).
 
 ## Last Action
 

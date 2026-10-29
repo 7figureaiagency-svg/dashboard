@@ -1447,23 +1447,28 @@ function parsePropertyTypeFromText(text: string): string {
   if (
     lower.includes("villa") || lower.includes("bungalow") || lower.includes("banglow") ||
     lower.includes("makan") || lower.includes("ghar") || lower.includes("વિલા") ||
-    lower.includes("બંગલો") || lower.includes("મકાન") || lower.includes("ઘર")
+    lower.includes("બંગલો") || lower.includes("મકાન") || lower.includes("ઘર") ||
+    lower.includes("विला") || lower.includes("बंगला") || lower.includes("मकान") || lower.includes("घर")
   ) {
     return "Villa";
   }
-  if (lower.includes("flat") || lower.includes("apartment") || lower.includes("ફ્લેટ") || lower.includes("ઍપાર્ટમેન્ટ") || lower.includes("એપાર્ટમેન્ટ")) return "Flat";
+  if (
+    lower.includes("flat") || lower.includes("apartment") || lower.includes("ફ્લેટ") ||
+    lower.includes("ઍપાર્ટમેન્ટ") || lower.includes("એપાર્ટમેન્ટ") ||
+    lower.includes("फ्लैट") || lower.includes("अपार्टमेंट")
+  ) return "Flat";
 
   // 4. Commercial Subtypes
   if (lower.includes("co-working") || lower.includes("coworking") || lower.includes("shared office") || lower.includes("managed office") || lower.includes("કો વર્કિંગ") || lower.includes("શેર્ડ ઓફિસ")) return "Commercial Co-Working";
-  if (lower.includes("showroom") || lower.includes("શોરૂમ")) return "Commercial Showroom";
-  if (lower.includes("shop") || lower.includes("dukaan") || lower.includes("dukan") || lower.includes("retail") || lower.includes("દુકાન") || lower.includes("સ્ટોર")) return "Commercial Shop";
-  if (lower.includes("office") || lower.includes("corporate") || lower.includes("ઓફિસ") || lower.includes("ઑફિસ") || lower.includes("કોર્પોરેટ")) return "Commercial Office";
-  if (lower.includes("warehouse") || lower.includes("godown") || lower.includes("logistics") || lower.includes("ગોડાઉન") || lower.includes("વેરહાઉસ")) return "Commercial Warehouse";
+  if (lower.includes("showroom") || lower.includes("શોરૂમ") || lower.includes("शोरूम")) return "Commercial Showroom";
+  if (lower.includes("shop") || lower.includes("dukaan") || lower.includes("dukan") || lower.includes("retail") || lower.includes("દુકાન") || lower.includes("સ્ટોર") || lower.includes("शॉप") || lower.includes("दुकान")) return "Commercial Shop";
+  if (lower.includes("office") || lower.includes("corporate") || lower.includes("ઓફિસ") || lower.includes("ઑફિસ") || lower.includes("કોર્પોરેટ") || lower.includes("ऑफिस") || lower.includes("ऑफ़िस")) return "Commercial Office";
+  if (lower.includes("warehouse") || lower.includes("godown") || lower.includes("logistics") || lower.includes("ગોડાઉન") || lower.includes("વેરહાઉસ") || lower.includes("गोदाम") || lower.includes("वेयरहाउस")) return "Commercial Warehouse";
   if (lower.includes("industrial shed") || lower.includes("factory") || /\bshed\b/i.test(lower) || lower.includes("workshop") || lower.includes("ફેક્ટરી") || lower.includes("શેડ")) return "Commercial Industrial Shed";
   if (lower.includes("pre-leased") || lower.includes("preleased") || lower.includes("પ્રી લીઝ્ડ") || lower.includes("પ્રીલીઝ્ડ")) return "Commercial Pre-Leased";
   if (lower.includes("restaurant") || lower.includes("cloud kitchen") || lower.includes("cafe") || lower.includes("food court") || lower.includes("રેસ્ટોરન્ટ") || lower.includes("કાફે")) return "Commercial Restaurant";
   if (lower.includes("hotel") || lower.includes("guest house") || lower.includes("guesthouse") || lower.includes("resort") || lower.includes("હોટેલ") || lower.includes("રિસોર્ટ")) return "Commercial Hotel";
-  if (lower.includes("commercial") || lower.includes("કોમર્શિયલ")) return "Commercial";
+  if (lower.includes("commercial") || lower.includes("કોમર્શિયલ") || lower.includes("कमर्शियल")) return "Commercial";
 
   return "";
 }
@@ -1609,30 +1614,44 @@ function parseRequirementFromText(text: string, lastQ?: string): string {
     if (/^(?:1|1️⃣|option\s*1|first|1st)\b/i.test(lower)) return "BUY";
     if (/^(?:2|2️⃣|option\s*2|second|2nd)\b/i.test(lower)) return "RENT";
   }
-  if (lower.includes("lease") || lower.includes("corporate lease") || lower.includes("long term lease") || lower.includes("લીઝ")) {
-    return "LEASE";
-  }
-  // RENT must precede BUY so that "rent pe leni hai" or "rent par lena" classifies as RENT
-  if (
-    lower.includes("rent") || lower.includes("kiraya") || lower.includes("kiraye") ||
-    lower.includes("bhadu") || lower.includes("bhaade") || lower.includes("bhade") ||
-    lower.includes("bhada") || lower.includes("rental") || lower.includes("reva mate") ||
-    lower.includes("ભાડે") || lower.includes("ભાડુ") || lower.includes("કિરાયા") ||
-    lower.includes("किરાયા") || lower.includes("किराया") || lower.includes("किराये")
-  ) {
-    return "RENT";
-  }
+
+  // 1. SELL / SELLER INTENT (Checked first so negation like "lease par nahi deni, bechni hai" or "rent nahi, bechna hai" classifies as SELL)
   if (
     lower.includes("sell") || lower.includes("bechna") || lower.includes("bechni") ||
     lower.includes("bechne") || lower.includes("bechvano") || lower.includes("bechvani") ||
     lower.includes("vechvu") || lower.includes("vechva") || lower.includes("vechvo") ||
     lower.includes("vechvano") || lower.includes("vechvani") || lower.includes("bikri") ||
+    lower.includes("resale") ||
     /\b(?:deni|dena|dene)\s*(?:hai|he|h|chhe|che|chahte)?\b/i.test(lower) ||
     lower.includes("વેચવું") || lower.includes("વેચવા") || lower.includes("વેચવાનો") ||
-    lower.includes("વેચવાની") || lower.includes("બેચના") || lower.includes("बेचना") || lower.includes("बेचनी")
+    lower.includes("વેચવાની") || lower.includes("બેચના") || lower.includes("बेचना") ||
+    lower.includes("बेचनी") || lower.includes("बेचने") || lower.includes("बिक्री") || lower.includes("सेल")
   ) {
     return "SELL";
   }
+
+  // 2. LEASE (Guarded against negation: e.g. "lease par nahi deni")
+  const hasLeaseNegation = /(?:nahi|nhi|na|nathi|not)\s*(?:deni|dena|karni|karvu|aapvi|leni|lena)?\s*(?:lease|pattay|લીઝ|लीज़)/i.test(lower) ||
+                           /(?:lease|pattay|લીઝ|लीज़)\s*(?:par|pe)?\s*(?:nahi|nhi|na|nathi|not)/i.test(lower);
+  if (!hasLeaseNegation && (lower.includes("lease") || lower.includes("corporate lease") || lower.includes("long term lease") || lower.includes("લીઝ") || lower.includes("लीज़"))) {
+    return "LEASE";
+  }
+
+  // 3. RENT must precede BUY so that "rent pe leni hai" or "rent par lena" classifies as RENT
+  const hasRentNegation = /(?:nahi|nhi|na|nathi|not)\s*(?:deni|dena|karni|karvu|aapvi|leni|lena)?\s*(?:rent|kiraya|bhadu)/i.test(lower) ||
+                          /(?:rent|kiraya|bhadu)\s*(?:par|pe)?\s*(?:nahi|nhi|na|nathi|not)/i.test(lower);
+  if (
+    !hasRentNegation && (
+      lower.includes("rent") || lower.includes("kiraya") || lower.includes("kiraye") ||
+      lower.includes("bhadu") || lower.includes("bhaade") || lower.includes("bhade") ||
+      lower.includes("bhada") || lower.includes("rental") || lower.includes("reva mate") ||
+      lower.includes("ભાડે") || lower.includes("ભાડુ") || lower.includes("કિરાયા") ||
+      lower.includes("किરાયા") || lower.includes("किराया") || lower.includes("किराये")
+    )
+  ) {
+    return "RENT";
+  }
+
   if (
     lower.includes("buy") || lower.includes("purchase") ||
     lower.includes("kharid") || lower.includes("khareed") ||
@@ -1648,6 +1667,19 @@ function parseRequirementFromText(text: string, lastQ?: string): string {
     return "BUY";
   }
   return "";
+}
+
+export function isOwnerIntentUtterance(text: string, lower?: string, actionResult?: any): boolean {
+  if (actionResult?.user_role === "OWNER" || actionResult?.raw_intent_name === "SUBMIT_LISTING") return true;
+  const l = (lower || text || "").toLowerCase().trim();
+  if (parseRequirementFromText(text) === "SELL") return true;
+
+  // Direct Devanagari, Gujarati & Hinglish seller cues
+  const SELLER_VERB_REGEX = /(?:bechna|bechni|bechne|bechvano|bechvani|vechvu|vechva|vechvo|vechvano|vechvani|vechavo|sell|selling|resale|bikri|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા|વેચવાનો|વેચવાની)/i;
+  const SELLER_PHRASE_REGEX = /(?:meri|mera|maro|mari|apna|apni|own|mujhe|mane|amari|mari|મારી|મારો|મને|मेरा|मेरी|अपनी|अपना|मुझे|हमारा|हमारी)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,3}(?:flat|makan|ghar|house|villa|plot|shop|office|showroom|commercial|property|दुकान|मकान|घर|प्रॉपर्टी|દુકાન|મકાન|ઘર|शॉप|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechna|bechni|bechne|vechvu|vechva|vechvano|vechvani|sell|bikri|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
+  const SELLER_DIRECT_INTENT_REGEX = /(?:shop|flat|villa|plot|office|commercial|दुकान|मकान|घर|દુકાન|शॉप|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechna|bechni|bechne|vechvu|vechva|vechvano|vechvani|sell|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
+
+  return SELLER_PHRASE_REGEX.test(l) || SELLER_DIRECT_INTENT_REGEX.test(l) || SELLER_VERB_REGEX.test(l);
 }
 
 function parsePurposeFromText(text: string, lastQ?: string): string {
@@ -4800,8 +4832,8 @@ async function handleOwnerFlow({
   if (aiAnalysis) {
     // A. Transaction Type Immutability & Commercial Lease:
     // Once locked (SELL, RENT_OUT, LEASE_OUT), single digits or detail replies must NEVER overwrite it!
-    const hasExplicitRoleReversal = /(?:bechna|bechni|sell|bikri|rent\s*out|bhadu|kiraye|rent\s*par|lease|pattay)/i.test(messageText);
-    const hasLeaseKeyword = /(?:lease|pattay|long\s*term\s*lease|corporate\s*lease)/i.test(messageText);
+    const hasExplicitRoleReversal = /(?:bechna|bechni|bechne|sell|bikri|rent\s*out|bhadu|kiraye|rent\s*par|lease|pattay|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા|ભાડે)/i.test(messageText);
+    const hasLeaseKeyword = /(?:lease|pattay|long\s*term\s*lease|corporate\s*lease|લીઝ|लीज़)/i.test(messageText);
     if (!draft.transaction_type || hasExplicitRoleReversal) {
       if (hasLeaseKeyword || aiAnalysis.transaction_type === "LEASE") {
         draft.transaction_type = "LEASE_OUT";
@@ -4810,9 +4842,9 @@ async function handleOwnerFlow({
         draft.transaction_type = "RENT_OUT";
       } else if (aiAnalysis.transaction_type === "SELL" || aiAnalysis.transaction_type === "SALE") {
         draft.transaction_type = "SELL";
-      } else if (/(?:rent|bhade|bhadu|kiraya|kiraye)/i.test(messageText)) {
+      } else if (/(?:rent|bhade|bhadu|kiraya|kiraye|ભાડે|કિરાયા|किराया|किराये)/i.test(messageText)) {
         draft.transaction_type = "RENT_OUT";
-      } else if (/(?:bechna|bechni|sell|vechvu|vechva)/i.test(messageText)) {
+      } else if (/(?:bechna|bechni|bechne|sell|vechvu|vechva|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i.test(messageText)) {
         draft.transaction_type = "SELL";
       }
     }
@@ -6170,7 +6202,8 @@ export type DialogState =
   | "OWNER_DETAILS_GATHERED"
   | "DROPPED"
   | "VISIT_CANCELLED"
-  | "RESCHEDULE_REQUESTED";
+  | "RESCHEDULE_REQUESTED"
+  | "RESUME_CONFIRMATION_PENDING";
 
 export interface DialogContext {
   messageText: string;
@@ -6204,6 +6237,63 @@ export function getGreetingTriageReply(lang: string, nameStr: string, agencyName
     return `Hello <b>${nameStr}</b>! Welcome to ${agencyName}. 🙏\n👉 1️⃣ <b>Looking to Buy / Rent</b> 🏡  2️⃣ <b>Looking to Sell / Lease</b> 📋  3️⃣ <b>Both / Upgrade</b> 🔄\n<i>(Reply with 1, 2, or 3, or share your requirement directly)</i>`;
   }
   return `Namaste <b>${nameStr}</b>! ${agencyName} me aapka swagat hai. 🙏\n👉 1️⃣ <b>Property Buy ya Rent karni hai</b> 🏡  2️⃣ <b>Apni property Sell ya Rent out karni hai</b> 📋  3️⃣ <b>Dono / Upgrade</b> 🔄\n<i>(1, 2 ya 3 reply karein, ya direct requirement likhein)</i>`;
+}
+
+export function buildContextualRecapCard(lead: any, lang: string, senderName: string, agencyName: string): string {
+  const draft = lead?.metadata?.seeker_draft || {};
+  const propType = draft.property_type || lead.property_type;
+  const req = draft.requirement || lead.requirement;
+  const loc = draft.location || lead.location;
+  const budget = draft.budget || lead.budget;
+  const purpose = draft.purpose || lead.purpose;
+  const timeline = draft.timeline || lead.timeline;
+
+  const lines: string[] = [];
+  if (propType) lines.push(`• <b>Property:</b> ${propType}${req ? ` (${req === "BUY" ? "Buy" : req === "RENT" ? "Rent" : "Lease"})` : ""}`);
+  if (loc && loc !== "UNKNOWN" && loc !== "FLEXIBLE") lines.push(`• <b>Location:</b> ${loc} 📍`);
+  else if (loc === "FLEXIBLE") lines.push(`• <b>Location:</b> Flexible (Across City) 📍`);
+  if (budget) lines.push(`• <b>Budget:</b> ${formatPriceShort(Number(budget))} 💰`);
+  if (purpose) lines.push(`• <b>Purpose:</b> ${purpose === "INVESTMENT" ? "Investment 📈" : "Family / Self-Use 🏡"}`);
+  if (timeline) lines.push(`• <b>Timeline:</b> ${timeline === "READY_TO_MOVE" ? "Ready to Move 🔑" : "Under Construction 🏗️"}`);
+
+  // Pending item
+  let pending = "";
+  if (!propType) pending = "Property Type";
+  else if (!req) pending = "Buy vs Rent";
+  else if (!purpose) pending = "Purpose (Self-Use vs Investment)";
+  else if (!loc) pending = "Preferred Location";
+  else if (!budget) pending = "Budget Range";
+  else if (!timeline) pending = "Possession Timeline";
+
+  const name = senderName ? `<b>${senderName}</b>` : "ji";
+  const header = lang === "GUJLISH"
+    ? `Namaste ${name}! 🙏 ${agencyName} ma swagat chhe.\n\nAmari pichli vaat-cheet ma tamari aa details note thai hati:`
+    : lang === "ENGLISH"
+    ? `Hello ${name}! 🙏 Welcome back to ${agencyName}.\n\nIn our previous conversation, these details were noted:`
+    : `Namaste ${name}! 🙏 ${agencyName} me aapka swagat hai.\n\nHamari pichli baat-cheet me aapki ye details note hui thi:`;
+
+  const footer = lang === "GUJLISH"
+    ? `\n<i>(Pending: ${pending})</i>\n\nTame kevi rite aagal vadharva mango chho?\n1️⃣ <b>Pichli inquiry yahin thi continue karo</b>\n2️⃣ <b>Navi inquiry shuru karo (New Search)</b>`
+    : lang === "ENGLISH"
+    ? `\n<i>(Pending: ${pending})</i>\n\nHow would you like to proceed?\n1️⃣ <b>Continue previous inquiry</b>\n2️⃣ <b>Start a new inquiry (New Search)</b>`
+    : `\n<i>(Pending: ${pending})</i>\n\nAap kaise aage badhna chahenge?\n1️⃣ <b>Pichli inquiry yahin se continue karein</b>\n2️⃣ <b>Nayi inquiry shuru karein (New Search)</b>`;
+
+  return `${header}\n${lines.join("\n")}${footer}`;
+}
+
+export function hasIncompleteSeekerDraft(lead: any): boolean {
+  if (lead?.state === "SITE_VISIT_BOOKED" || lead?.state === "OPTIONS_SENT" || lead?.site_visit_booked) {
+    return false;
+  }
+  const draft = lead?.metadata?.seeker_draft || {};
+  const hasSomeData = Boolean(
+    draft.property_type || lead.property_type ||
+    draft.location || lead.location ||
+    draft.budget || lead.budget ||
+    draft.requirement || lead.requirement
+  );
+  const isMissingSomething = !draft.property_type || !draft.location || !draft.budget || !draft.timeline || !draft.purpose;
+  return hasSomeData && isMissingSomething;
 }
 
 export async function dispatchStateAction(
@@ -7343,6 +7433,100 @@ export async function dispatchStateAction(
   }
 
   // ---------------------------------------------------------------------------
+  // 3b. RESUME CONFIRMATION PENDING (Phase 32 Contextual Session Resume)
+  // ---------------------------------------------------------------------------
+  if (currentState === "RESUME_CONFIRMATION_PENDING") {
+    const isOpt1 = /^\s*(?:1|1️⃣|option\s*1|first|1st|continue|yes|ha|haan|haa|pichli|purani|wahi)\b/i.test(context.messageText.trim());
+    const isOpt2 = /^\s*(?:2|2️⃣|option\s*2|second|2nd|new|nayi|naya|fresh|restart)\b/i.test(context.messageText.trim());
+
+    if (isOpt1) {
+      lead.state = "QUALIFYING";
+      return handleQualificationCascade(lead, actionResult, context);
+    }
+
+    if (isOpt2) {
+      const existingSearches = Array.isArray(lead?.metadata?.seeker_profile?.searches)
+        ? [...lead.metadata.seeker_profile.searches]
+        : [];
+      if (lead?.metadata?.seeker_draft && Object.keys(lead.metadata.seeker_draft).length > 0) {
+        existingSearches.push({
+          ...lead.metadata.seeker_draft,
+          archived_at: new Date().toISOString(),
+          status: "ARCHIVED",
+        });
+      }
+
+      return {
+        replyText: getGreetingTriageReply(lang, nameStr, agencyName),
+        nextState: "ROLE_SELECTION_PENDING",
+        leadUpdates: {
+          state: "ROLE_SELECTION_PENDING",
+          property_type: null,
+          requirement: null,
+          purpose: null,
+          location: null,
+          budget: null,
+          timeline: null,
+          metadata: {
+            ...(lead.metadata || {}),
+            seeker_draft: {},
+            seeker_profile: {
+              ...(lead.metadata?.seeker_profile || {}),
+              searches: existingSearches,
+            },
+            last_bot_prompt: null,
+          },
+        },
+      };
+    }
+
+    // Direct Intent Override: Owner utterance
+    if (isOwnerIntentUtterance(context.messageText, lower, actionResult)) {
+      const ownerRes = await handleOwnerFlow({
+        lead: {
+          ...lead,
+          lead_type: "PROVIDER",
+          state: "OWNER_FLOW" as DialogState,
+        },
+        messageText: context.messageText,
+        lower,
+        lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+        senderName,
+        senderId: context.senderId,
+        platform: context.platform,
+        tenantId: activeTenantId,
+        supabase,
+        aiAnalysis: actionResult,
+        city: resolvedCity,
+        agencyName,
+      });
+      return {
+        replyText: ownerRes.replyText,
+        nextState: ownerRes.nextState as DialogState,
+        leadUpdates: ownerRes.leadUpdates,
+      };
+    }
+
+    // Direct criteria typed -> auto-bypass into cascade
+    const hasAnyCriteria = Boolean(actionResult.property_type || actionResult.location || actionResult.price_or_budget || parsePropertyTypeFromText(context.messageText));
+    if (hasAnyCriteria) {
+      lead.state = "QUALIFYING";
+      return handleQualificationCascade(lead, actionResult, context);
+    }
+
+    const replyText = lang === "GUJLISH"
+      ? `Kripya 1️⃣ reply karo pichli inquiry continue karva mate, athva 2️⃣ reply karo navi inquiry shuru karva mate! 🙏`
+      : lang === "ENGLISH"
+      ? `Please reply 1️⃣ to continue your previous inquiry, or 2️⃣ to start a fresh search! 🙏`
+      : `Kripya 1️⃣ reply karein pichli inquiry continue karne ke liye, ya 2️⃣ reply karein nayi inquiry shuru karne ke liye! 🙏`;
+
+    return {
+      replyText,
+      nextState: "RESUME_CONFIRMATION_PENDING",
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // 4. ROLE SELECTION PENDING (State: ROLE_SELECTION_PENDING)
   // ---------------------------------------------------------------------------
   if (currentState === "ROLE_SELECTION_PENDING") {
@@ -7352,6 +7536,12 @@ export async function dispatchStateAction(
       /^(hi|hello|hey|namaste|kem\s*cho|pranam|namaskar|good\s*morning|good\s*afternoon|good\s*evening)\b/i.test(lower.trim());
 
     if (isGreetingInRole) {
+      if (hasIncompleteSeekerDraft(lead)) {
+        return {
+          replyText: buildContextualRecapCard(lead, lang, nameStr, agencyName),
+          nextState: "RESUME_CONFIRMATION_PENDING",
+        };
+      }
       return {
         replyText: getGreetingTriageReply(lang, nameStr, agencyName),
         nextState: "ROLE_SELECTION_PENDING",
@@ -9273,6 +9463,42 @@ export async function dispatchStateAction(
   // 11. QUALIFYING (State: QUALIFYING)
   // ---------------------------------------------------------------------------
   if (currentState === "QUALIFYING") {
+    // Phase 32: Dynamic Mid-Stream Role Switcher from QUALIFYING to OWNER
+    if (isOwnerIntentUtterance(context.messageText, lower, actionResult)) {
+      const ownerRes = await handleOwnerFlow({
+        lead: {
+          ...lead,
+          lead_type: lead.lead_type === "SEEKER" ? "DUAL_ROLE" : "PROVIDER",
+          state: "OWNER_FLOW" as DialogState,
+        },
+        messageText: context.messageText,
+        lower,
+        lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+        senderName,
+        senderId: context.senderId,
+        platform: context.platform,
+        tenantId: activeTenantId,
+        supabase,
+        aiAnalysis: actionResult,
+        city: resolvedCity,
+        agencyName,
+      });
+      return {
+        replyText: ownerRes.replyText,
+        nextState: ownerRes.nextState as DialogState,
+        leadUpdates: ownerRes.leadUpdates,
+      };
+    }
+
+    // Phase 32: Contextual Session Resume Recap on pure greeting
+    const isGreetingOnly = /^\s*(?:hi|hello|hey|namaste|kem\s*cho|halo|salam|pranam|ram\s*ram|radhe\s*radhe|jay\s*shree\s*krishna)\s*(!|\.|\?)*$/i.test(context.messageText.trim());
+    if (isGreetingOnly && hasIncompleteSeekerDraft(lead)) {
+      return {
+        replyText: buildContextualRecapCard(lead, lang, nameStr, agencyName),
+        nextState: "RESUME_CONFIRMATION_PENDING",
+      };
+    }
+
     return handleQualificationCascade(lead, actionResult, context);
   }
 
@@ -9281,12 +9507,7 @@ export async function dispatchStateAction(
   // ---------------------------------------------------------------------------
   if (currentState === "FRESH") {
     // If user expressed owner/seller intent right away (e.g. "muje meri shop bechni he", "flat bechna hai"):
-    const isFirstMessageOwner =
-      actionResult.user_role === "OWNER" ||
-      intent === "SUBMIT_LISTING" ||
-      parseRequirementFromText(context.messageText) === "SELL" ||
-      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+)?(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+)?(?:bechna|bechvani|bechvano|bechni|vechvu|vechva|vechvano|vechvani|sell|bikri|rent)/i.test(lower) ||
-      /(?:bechna|bechni|bechvano|bechvani|vechvu|vechva|vechvo|vechvano|vechvani|vechavo|sell\s*(?:karna|karni|karvu|karva|kar))/i.test(lower);
+    const isFirstMessageOwner = isOwnerIntentUtterance(context.messageText, lower, actionResult);
 
     if (isFirstMessageOwner) {
       const ownerRes = await handleOwnerFlow({
@@ -9310,6 +9531,15 @@ export async function dispatchStateAction(
         replyText: ownerRes.replyText,
         nextState: ownerRes.nextState as DialogState,
         leadUpdates: ownerRes.leadUpdates,
+      };
+    }
+
+    // Phase 32: Contextual Session Resume Recap on pure greeting
+    const isGreetingOnly = /^\s*(?:hi|hello|hey|namaste|kem\s*cho|halo|salam|pranam|ram\s*ram|radhe\s*radhe|jay\s*shree\s*krishna)\s*(!|\.|\?)*$/i.test(context.messageText.trim());
+    if (isGreetingOnly && hasIncompleteSeekerDraft(lead)) {
+      return {
+        replyText: buildContextualRecapCard(lead, lang, nameStr, agencyName),
+        nextState: "RESUME_CONFIRMATION_PENDING",
       };
     }
 
@@ -10068,6 +10298,46 @@ async function handleQualificationCascade(
   const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : "ji";
   const activeTenantId = context.tenantId || defaultTenantId;
   const resolvedCity = context.resolvedCity;
+  const lowerMsg = (context.messageText || "").toLowerCase();
+
+  // Phase 32: Instant Handoff to handleOwnerFlow if Owner Intent detected in cascade
+  if (isOwnerIntentUtterance(context.messageText, lowerMsg, actionResult)) {
+    return handleOwnerFlow({
+      lead: {
+        ...lead,
+        lead_type: lead.lead_type === "SEEKER" ? "DUAL_ROLE" : "PROVIDER",
+        state: "OWNER_FLOW" as DialogState,
+      },
+      messageText: context.messageText,
+      lower: lowerMsg,
+      lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
+      senderName,
+      senderId: context.senderId,
+      platform: context.platform,
+      tenantId: activeTenantId,
+      supabase,
+      aiAnalysis: actionResult,
+      city: resolvedCity,
+      agencyName: context.agencyName || "Nextgen Realty",
+    });
+  }
+
+  // Phase 32: Negation Handling (e.g. "mujhe chahiye nahi")
+  const isNegationOfSeeker = /(?:chahiye\s*nahi|nahi\s*chahiye|lena\s*nahi|nathi\s*joitu|not\s*looking\s*to\s*buy|not\s*needed|don'?t\s*need|चाहिए\s*नहीं|नहीं\s*चाहिए|लेना\s*नहीं)/i.test(context.messageText);
+  if (isNegationOfSeeker) {
+    const replyText = lang === "GUJLISH"
+      ? `Samji gayo, tamne property kharidvi nathi. 🙏\n\nShu tame potani koi property <b>Sell (vechva)</b> ke <b>Rent / Lease</b> par aapva mango chho? 🏡`
+      : lang === "ENGLISH"
+      ? `Understood, you are not looking to purchase property. 🙏\n\nAre you looking to <b>Sell</b> or <b>Rent/Lease out</b> a property you own? 🏡`
+      : `Samajh gaya, aapko property khareedni nahi hai. 🙏\n\nKya aap apni koi property <b>Sell (bechna)</b> ya <b>Rent / Lease</b> par dena chahte hain? 🏡`;
+    return {
+      replyText,
+      nextState: "ROLE_SELECTION_PENDING",
+      leadUpdates: {
+        state: "ROLE_SELECTION_PENDING",
+      },
+    };
+  }
 
   const lastBotPrompt = lead?.metadata?.last_bot_prompt;
   const lastPromptQ = lastBotPrompt?.question_type;
@@ -10103,7 +10373,43 @@ async function handleQualificationCascade(
   let purpose = justPurpose || lead?.purpose || lead?.metadata?.seeker_draft?.purpose;
   let budget = (justBudget && justBudget > 0) ? justBudget : (actionResult.price_or_budget || (lead?.budget ? Number(lead.budget) : 0) || (lead?.metadata?.seeker_draft?.budget ? Number(lead.metadata.seeker_draft.budget) : 0));
   let timeline = actionResult.timeline || justTimeline || lead?.timeline || lead?.metadata?.seeker_draft?.timeline;
-  let location = actionResult.location || (justLoc ? justLoc : (lead?.location || lead?.metadata?.seeker_draft?.location));
+
+  // Phase 32: Stale Location Guard & Interactive Confirmation
+  const explicitLoc = actionResult.location || justLoc;
+  const rawStaleLoc = lead?.location || lead?.metadata?.seeker_draft?.location;
+  const staleLoc = (!explicitLoc && rawStaleLoc && rawStaleLoc !== "UNKNOWN" && rawStaleLoc !== "FLEXIBLE") ? rawStaleLoc : null;
+  let isLocationConfirmed = Boolean(lead?.metadata?.seeker_draft?.location_confirmed);
+  let location: string | null = null;
+  let locationAck = "";
+
+  if (lastPromptQ === "LOCATION_CONFIRMATION") {
+    const isKeepOld = /^\s*(?:1|1️⃣|option\s*1|first|1st|pichli|purani|pehle|pahla|pehli|wahi|same|keep|ha|yes|haan|haa|ha\s*wahi)\b/i.test(context.messageText.trim()) ||
+                      Boolean(staleLoc && lowerMsg.includes(staleLoc.toLowerCase()));
+    const isChangeLoc = /^\s*(?:2|2️⃣|option\s*2|second|2nd|nayi|new|badalni|change|no|nahi|nhi)\b/i.test(context.messageText.trim()) ||
+                        Boolean(explicitLoc && explicitLoc !== staleLoc);
+
+    if (isKeepOld && staleLoc) {
+      location = staleLoc;
+      isLocationConfirmed = true;
+      locationAck = lang === "GUJLISH" ? `Saras, <b>${staleLoc}</b> vistar lock karyo! 📍` : `Bahut badhiya, <b>${staleLoc}</b> area lock kar liya! 📍`;
+    } else if (isChangeLoc) {
+      if (explicitLoc && explicitLoc !== staleLoc) {
+        location = explicitLoc;
+        isLocationConfirmed = true;
+        locationAck = lang === "GUJLISH" ? `Navi location <b>${explicitLoc}</b> note kari lidhi! 📍` : `Nayi location <b>${explicitLoc}</b> note kar li! 📍`;
+      } else {
+        location = null;
+        isLocationConfirmed = true;
+      }
+    }
+  } else if (explicitLoc) {
+    location = explicitLoc;
+    isLocationConfirmed = true;
+  } else if (isLocationConfirmed && staleLoc) {
+    location = staleLoc;
+  } else {
+    location = null;
+  }
 
   if (isOutOfMarketCity && !justLoc) {
     const outOfMarketReply = lang === "GUJLISH"
@@ -10132,12 +10438,13 @@ async function handleQualificationCascade(
   }
 
   // F-05: Commercial Lease Seeker Disambiguation & Sub-50k Budget Protection
-  const lowerMsg = (context.messageText || "").toLowerCase();
-  const isCommercialInquiry = /(?:commercial|office|shop|showroom|godown|warehouse|retail|co-working)/i.test(propType || context.messageText);
-  const hasRentalCue = /(?:bhade|bhadu|bhada|bhaade|kiraya|kiraye|rent\s*par|bhada\s*par|bhade\s*thi|reva\s*mate|pattay|lease)/i.test(lowerMsg);
-  const isSub50kMonthlyBudget = budget && Number(budget) >= 1000 && Number(budget) < 50000 && !/(?:lakh|lac|cr|crore)/i.test(lowerMsg);
+  const isCommercialInquiry = /(?:commercial|office|shop|showroom|godown|warehouse|retail|co-working|शॉप|दुकान|ऑफिस|શોપ|દુકાન|ઓફિસ)/i.test(propType || context.messageText);
+  const hasRentalCue = /(?:bhade|bhadu|bhada|bhaade|kiraya|kiraye|rent\s*par|bhada\s*par|bhade\s*thi|reva\s*mate|pattay|lease|ભાડે|કિરાયા|किराया|किराये|लीज़)/i.test(lowerMsg);
+  const hasLeaseNegation = /(?:nahi|nhi|na|nathi|not)\s*(?:deni|dena|karni|karvu|aapvi|leni|lena)?\s*(?:lease|pattay|લીઝ|लीज़)/i.test(lowerMsg) ||
+                           /(?:lease|pattay|લીઝ|लीज़)\s*(?:par|pe)?\s*(?:nahi|nhi|na|nathi|not)/i.test(lowerMsg);
+  const isSub50kMonthlyBudget = budget && Number(budget) >= 1000 && Number(budget) < 50000 && !/(?:lakh|lac|cr|crore|લાખ|करोड़)/i.test(lowerMsg);
 
-  if (isCommercialInquiry && (hasRentalCue || isSub50kMonthlyBudget || /(?:lease|pattay)/i.test(lowerMsg))) {
+  if (isCommercialInquiry && !hasLeaseNegation && (hasRentalCue || isSub50kMonthlyBudget || /(?:lease|pattay|લીઝ|लीज़)/i.test(lowerMsg))) {
     requirement = "LEASE";
     if (!purpose) purpose = "BUSINESS";
   } else if (hasRentalCue || isSub50kMonthlyBudget) {
@@ -10147,7 +10454,6 @@ async function handleQualificationCascade(
   }
 
   // PURPOSE-FIRST INVESTMENT FAST-PATH:
-  // If purpose is INVESTMENT, location is automatically set to "FLEXIBLE" (investor cares about yield/ROI across city)
   if (purpose === "INVESTMENT") {
     if (!location || location === "UNKNOWN") {
       location = "FLEXIBLE";
@@ -10187,7 +10493,11 @@ async function handleQualificationCascade(
   } else if (!hasPurpose) {
     missingStage = "PURPOSE";
   } else if (!hasLocation) {
-    missingStage = "LOCATION";
+    if (staleLoc && !isLocationConfirmed) {
+      missingStage = "LOCATION_CONFIRMATION";
+    } else {
+      missingStage = "LOCATION";
+    }
   } else if (!hasBudget) {
     missingStage = "BUDGET";
   } else if (!hasTimeline) {
@@ -10233,6 +10543,7 @@ async function handleQualificationCascade(
     ...(budget ? { budget } : {}),
     ...(purpose ? { purpose } : {}),
     ...(timeline ? { timeline } : {}),
+    ...(isLocationConfirmed ? { location_confirmed: true } : {}),
   };
 
   const isResidential = /(flat|villa|bhk|bungalow|penthouse|apartment|studio)/i.test(propType || "");
@@ -10285,10 +10596,13 @@ async function handleQualificationCascade(
 
     // If user's message didn't provide any recognized entity and bot was expecting something specific, trigger polite clarification
     // GUARD: Option numbers (1, 2, 3) or affirmative words are intentional navigation, NEVER typos!
-    const isNavigationOrAffirmation = /^\s*(?:1|1️⃣|2|2️⃣|3|3️⃣|option\s*[1-3]|ha|haa|haan|yes|ok|sure)\s*$/i.test(context.messageText || "");
-    const isTypoOrUnrecognized = !hasAnyEntityInThisTurn && Boolean(lastPromptQ) && !isNavigationOrAffirmation;
+    const isNavigationOrAffirmation = /^\s*(?:1|1️⃣|2|2️⃣|3|3️⃣|option\s*[1-3]|ha|haa|haan|yes|ok|sure|keep|change|purani|pichli|nayi|new)\s*$/i.test(context.messageText || "");
+    const isTypoOrUnrecognized = !hasAnyEntityInThisTurn && !locationAck && Boolean(lastPromptQ) && !isNavigationOrAffirmation;
 
     let ack = "";
+    if (locationAck) {
+      ack = locationAck;
+    }
     if (justReq) {
       if (justReq === "BUY") {
         ack = lang === "GUJLISH"
@@ -10411,6 +10725,13 @@ async function handleQualificationCascade(
           : lang === "ENGLISH"
           ? `👉 Are you looking for <b>Family living (Self-Use)</b> or for <b>Investment</b>? 🔑`
           : `👉 Yeh property aap <b>Family rehne (Self-Use)</b> ke liye dekh rahe hain ya <b>Investment</b> purpose se? 🔑`;
+    } else if (missingStage === "LOCATION_CONFIRMATION") {
+      cleanQuestion =
+        lang === "GUJLISH"
+          ? `Amari pase tamari pichli preferred location <b>${staleLoc}</b> saved chhe. 📍\n\nShu tame <b>${staleLoc}</b> ma j aagal vadharva mango chho ke navi location badalvi chhe?\n\n1️⃣ <b>Pichli location (${staleLoc})</b>\n2️⃣ <b>Navi location batavo</b>`
+          : lang === "ENGLISH"
+          ? `We have your previous preferred location saved as <b>${staleLoc}</b>. 📍\n\nWould you like to continue with <b>${staleLoc}</b>, or specify a new location?\n\n1️⃣ <b>Keep previous location (${staleLoc})</b>\n2️⃣ <b>Change to new location</b>`
+          : `Humare paas aapki pichli preferred location <b>${staleLoc}</b> saved hai. 📍\n\nKya aap <b>${staleLoc}</b> me hi aage badhna chahte hain, ya koi nayi location batana chahte hain?\n\n1️⃣ <b>Pichli location (${staleLoc})</b>\n2️⃣ <b>Nayi location batayein</b>`;
     } else if (missingStage === "LOCATION") {
       cleanQuestion =
         lang === "GUJLISH"
@@ -10433,13 +10754,20 @@ async function handleQualificationCascade(
             : lang === "ENGLISH"
             ? `👉 What is your approximate <b>Monthly rent budget</b>? 💰 (e.g. 15,000, 25,000, or 40,000/month)`
             : `👉 Aapka approximate <b>Monthly rent budget</b> kitna rahega? 💰 (e.g. 15,000, 25,000 ya 40,000/month)`;
-      } else {
+      } else if (requirement === "LEASE") {
         cleanQuestion =
           lang === "GUJLISH"
             ? `👉 Tamaro andaje <b>Commercial Lease budget</b> ketlo raheshe? 💰 (e.g. 35,000, 60,000 ke 1 Lakh/month)`
             : lang === "ENGLISH"
             ? `👉 What is your approximate <b>Commercial Lease budget</b>? 💰 (e.g. 35,000, 60,000, or 1 Lakh/month)`
             : `👉 Aapka approximate <b>Commercial Lease budget</b> kitna rahega? 💰 (e.g. 35,000, 60,000 ya 1 Lakh/month)`;
+      } else {
+        cleanQuestion =
+          lang === "GUJLISH"
+            ? `👉 Tamaro andaje <b>Budget range</b> ketlo raheshe? 💰 (e.g. 50 Lakhs, 85 Lakhs ke 1.5 Cr)`
+            : lang === "ENGLISH"
+            ? `👉 What is your approximate <b>Budget range</b>? 💰 (e.g. 50 Lakhs, 85 Lakhs, or 1.5 Cr)`
+            : `👉 Aapka approximate <b>Budget range</b> kitna rahega? 💰 (e.g. 50 Lakhs, 85 Lakhs ya 1.5 Cr)`;
       }
     } else if (missingStage === "TIMELINE") {
       cleanQuestion =
