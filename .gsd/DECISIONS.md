@@ -102,7 +102,31 @@
 - Multi-tenant tenant-scoped inventory and client branding isolation.
 - 0 additional runtime JavaScript packages.
 
-## Phase 28 Decisions: Comprehensive Multi-Dialect & Persona E2E QA Audit
+## Phase 33 Decisions: Autonomous Universal Multimodal Real Estate Agent & Bulletproof Cognitive Engine
+
+**Date:** 2026-10-29
+
+### Scope
+- Transform the conversational real estate agent into a 100% accurate, bulletproof, multimodal system that handles both text and voice notes.
+- Support all 22 scheduled Indian languages and vernacular regional dialects (Hindi, Gujarati, Marathi, Tamil, Telugu, Kannada, Bengali, Punjabi, Marwari, Kathiyawadi, Hinglish, Gujlish, English).
+- Full multimodal voice note ingestion for WhatsApp (`audio/ogg; codecs=opus`) and Telegram (`msg.voice` / `msg.audio`).
+- Total elimination of brittle regex cascades and substring matching; full adoption of Gemini 2.5 Flash / Pro Structured JSON Schema (`responseSchema`).
+- Pre-flight reflection and self-correction gate prior to dispatching outbound messages.
+- Modularization of the 12,000-line `realtor-lead-engine/index.ts` monolith into maintainable submodules.
+
+### Approach
+- **Voice Transcription:** Option A (Groq Whisper-Large-v3 primary with ~180ms latency and superhuman Indic accuracy + Gemini 2.5 Flash Audio API zero-downtime fallback).
+- **Cognitive Intent & Entity Extraction:** TypeChat-style Gemini 2.5 Flash with Thinking and strict `responseSchema` for 90% of turns; automated escalation to Gemini 2.5 Pro for complex turns (heavy negation, ambiguity, multi-property dispute).
+- **Multilingual Synthesis:** Dynamic native Indic prompt synthesis conditioned on the lead's stored `language_profile` in `leads.metadata`, replacing static hardcoded template strings.
+- **Verification Gate:** Sub-150ms pre-flight reflection pass verifying that the synthesized reply does not contradict user input, does not re-ask answered questions, does not hallucinate entities, and respects WABA batch caps.
+- **Phased Execution:** 4 atomic plans (33.1 Voice Engine, 33.2 Zero-Regex Cognitive Schema, 33.3 Universal Multilingual Synthesizer, 33.4 Self-Correction Gate & Modularization).
+
+### Constraints
+- 100% Non-n8n architecture: All logic exclusively within Supabase Edge Functions and the React CRM application.
+- WABA Safety Invariants: Max 20 leads per sweep, 350-550ms jitter delay, and transactional messaging guidelines preserved.
+- Zero extra client runtime JS packages.
+- Token budget is non-restrictive: accuracy, reliability, and precision are Priority #1.
+
 
 **Date:** 2026-10-28
 
