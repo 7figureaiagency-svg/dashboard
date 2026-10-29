@@ -2129,7 +2129,10 @@ export function disambiguateNumericChoice(
   const isPostVisit =
     currentState === "SITE_VISIT_DONE" ||
     (currentState === "SITE_VISIT_BOOKED" &&
-      (Boolean(lead?.post_visit_feedback_sent) || lead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE"));
+      (Boolean(lead?.post_visit_feedback_sent) ||
+       lead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE" ||
+       lead?.metadata?.last_bot_prompt?.question_type === "PAST_VISIT_ATTENDANCE" ||
+       (lead?.site_visit_at ? new Date(lead.site_visit_at).getTime() <= Date.now() : true)));
 
   if (isPostVisit) {
     if (digit === 1) {
@@ -2140,7 +2143,13 @@ export function disambiguateNumericChoice(
     }
     if (digit === 2) {
       return {
-        action: { intent: "CANNOT_ATTEND_VISIT", reason: "did_not_attend" },
+        action: { intent: "CANNOT_ATTEND_VISIT", reason: "reschedule_requested" },
+        userRole: "SEEKER",
+      };
+    }
+    if (digit === 3) {
+      return {
+        action: { intent: "SELECT_OPTION", option_index: 2 },
         userRole: "SEEKER",
       };
     }
@@ -2317,16 +2326,16 @@ export function validateUserAction(raw: any, leadOrState?: any, rawMessageText?:
   const parseOptionIdx = (val: any): number => {
     if (typeof val === "number" && !isNaN(val)) {
       if (val === 0) return 0;
-      if (val === 1 || val === 2) return val;
-      if (val >= 3) return Math.min(val - 1, 2);
+      if (val >= 1) return Math.min(val - 1, 3);
       return 0;
     }
     const s = String(val || "").trim().toLowerCase();
     if (/^(?:1|1️⃣|first|1st|option\s*1|pehla|pahla)$/i.test(s)) return 0;
     if (/^(?:2|2️⃣|second|2nd|option\s*2|dusra|doosra|biji)$/i.test(s)) return 1;
     if (/^(?:3|3️⃣|third|3rd|option\s*3|teesra|tisra)$/i.test(s)) return 2;
+    if (/^(?:4|4️⃣|fourth|4th|option\s*4|chautha)$/i.test(s)) return 3;
     const parsed = parseInt(s.replace(/\D/g, ""), 10);
-    if (!isNaN(parsed) && parsed >= 1) return Math.max(0, Math.min(parsed - 1, 2));
+    if (!isNaN(parsed) && parsed >= 1) return Math.max(0, Math.min(parsed - 1, 3));
     return 0;
   };
 
@@ -7337,6 +7346,11 @@ export async function dispatchStateAction(
             metadata: {
               ...(lead.metadata || {}),
               active_persona: "BUYER",
+              last_bot_prompt: {
+                question_type: "VISIT_ATTENDANCE",
+                asked_at: new Date().toISOString(),
+                text_preview: "Kya aap visit attend kar paaye the? 1 Haan, 2 Reschedule, 3 Nayi property"
+              }
             },
           },
         };
@@ -7377,6 +7391,11 @@ export async function dispatchStateAction(
             metadata: {
               ...(lead.metadata || {}),
               active_persona: "BUYER",
+              last_bot_prompt: {
+                question_type: "VISIT_ATTENDANCE",
+                asked_at: new Date().toISOString(),
+                text_preview: "Kya aap visit attend kar paaye the? 1 Haan, 2 Reschedule, 3 Nayi property"
+              }
             },
           },
         };
@@ -8138,9 +8157,9 @@ export async function dispatchStateAction(
     const isVisitMissed =
       (intent === "CONFIRM_VISIT_ATTENDANCE" && (action as ConfirmVisitAttendanceAction).attended === false) ||
       intent === "CANNOT_ATTEND_VISIT" ||
-      (Boolean(lead.post_visit_feedback_sent) && /^(?:2|2️⃣|second|2nd|option\s*2|nahi|nhi|na|no|nope|nathi|miss|missed|couldn't)\b/i.test(lower.trim())) ||
+      /^(?:2|2️⃣|second|2nd|option\s*2|nahi|nhi|na|no|nope|nathi|miss|missed|couldn't|reschedule|badalna|change)\b/i.test(lower.trim()) ||
       /(?:mene|maine|hu|ame|hum|hamne)?\s*(?:site\s*visit|visit)\s*(?:nahi|nhi|nathi|nai)\s*(?:kiya|ki|kari|karyo|attend|gaya)/i.test(lower) ||
-      (/(?:site\s*visit|visit).*?(?:nahi|nhi|nathi|miss)/i.test(lower) && !lower.includes("reschedule") && !lower.includes("cancel"));
+      (/(?:site\s*visit|visit).*?(?:nahi|nhi|nathi|miss)/i.test(lower) && !lower.includes("cancel"));
 
     if (isVisitAttended) {
       await supabase
@@ -8210,8 +8229,9 @@ export async function dispatchStateAction(
 
     // A2. SUB-CHOICES FROM DUAL-ROLE SITE VISIT CONFIRMATION (1, 2, or 3)
     const isSearchNewChoice =
-      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
-      /^(?:3|3️⃣|third|3rd|option\s*3|search|nayi|naya|new\s*property|property\s*search)\b/i.test(lower);
+      !/^(?:2|2️⃣|second|2nd|option\s*2|reschedule)\b/i.test(lower.trim()) &&
+      ((intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
+      /^(?:3|3️⃣|third|3rd|option\s*3|search|nayi|naya|new\s*property|property\s*search)\b/i.test(lower));
 
     if (isSearchNewChoice) {
       const pType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
@@ -8294,6 +8314,12 @@ export async function dispatchStateAction(
       /^(?:2|2️⃣|second|2nd|option\s*2)\b/i.test(lower);
 
     if (isReschedulePromptChoice) {
+      await supabase
+        .from("site_visits")
+        .update({ status: "MISSED", feedback_notes: `Reschedule requested: ${context.messageText}` })
+        .eq("lead_id", lead.id)
+        .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"]);
+
       const replyText =
         lang === "GUJLISH"
           ? `Ji bilkul <b>${nameStr}</b>! Tame kaya divase ane timing par visit reschedule karva mango chho? (e.g. <b>Kaale sanje 5 vage</b> ke <b>Sunday subah 11 baje</b>). Jo cancel karvi hoy to 'Cancel' lakhi shako chho. 🙏`
@@ -8303,7 +8329,20 @@ export async function dispatchStateAction(
 
       return {
         replyText,
-        nextState: "SITE_VISIT_BOOKED",
+        nextState: "VISIT_MISSED",
+        leadUpdates: {
+          state: "VISIT_MISSED",
+          site_visit_booked: false,
+          drip_stage: "MISSED_RESCHEDULE_PROMPTED",
+          metadata: {
+            ...(lead.metadata || {}),
+            last_bot_prompt: {
+              question_type: "RESCHEDULE_SLOT",
+              asked_at: new Date().toISOString(),
+              text_preview: "Aap kis din aur timing par visit reschedule karna chahte hain?"
+            }
+          }
+        },
       };
     }
 
@@ -11067,7 +11106,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v84-tenement-owner-intake-and-anti-leak-guard",
+        version: "v85-fix-site-visit-reschedule-option-routing",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
