@@ -456,6 +456,8 @@ export function useApprovePropertySubmission() {
         ? Number(submission.carpet_area_sqft)
         : submission.super_built_up_sqft
         ? Number(submission.super_built_up_sqft)
+        : submission.plot_area_sqft
+        ? Number(submission.plot_area_sqft)
         : rawAttrs.area_sqft
         ? Number(rawAttrs.area_sqft)
         : null;
@@ -495,6 +497,7 @@ export function useApprovePropertySubmission() {
         attributes: {
           ...rawAttrs,
           bhk_num,
+          plot_area_sqft: submission.plot_area_sqft ? Number(submission.plot_area_sqft) : (rawAttrs.plot_area_sqft ? Number(rawAttrs.plot_area_sqft) : null),
           floor_number: rawAttrs.floor_number ?? null,
           total_floors: rawAttrs.total_floors ?? null,
           bathrooms: rawAttrs.bathrooms ?? null,

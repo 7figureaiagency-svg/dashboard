@@ -2215,10 +2215,10 @@ function OwnerSubmissionsView({
                         <MapPin className="size-3 text-primary" />
                         Location & Society
                       </span>
-                      <span className="font-semibold block text-foreground text-sm truncate" title={detailsSubmission.society_name || detailsSubmission.project_name || "—"}>
+                      <span className="font-semibold block text-foreground text-sm break-words line-clamp-1" title={detailsSubmission.society_name || detailsSubmission.project_name || "—"}>
                         {detailsSubmission.society_name || detailsSubmission.project_name || "—"}
                       </span>
-                      <span className="text-xs text-muted-foreground block truncate">
+                      <span className="text-xs text-muted-foreground block break-words line-clamp-2">
                         📍 {displayLoc}
                         {detailsSubmission.city && !displayLoc.toLowerCase().includes(detailsSubmission.city.toLowerCase()) ? `, ${detailsSubmission.city}` : ""}
                       </span>
@@ -2240,17 +2240,25 @@ function OwnerSubmissionsView({
                       </span>
                     </div>
 
-                    {/* 4. Area & Sizing */}
+                    {/* 4. Area & Sizing (Plot & Flat Aware) */}
                     <div className="rounded-xl border border-border/50 bg-muted/30 dark:bg-muted/15 p-3.5 space-y-1 transition-colors hover:border-border">
                       <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase flex items-center gap-1.5">
                         <FileText className="size-3 text-primary" />
-                        Carpet & Built-up Area
+                        {detailsSubmission.property_category === "PLOT" || detailsSubmission.property_category === "LAND" ? "Plot / Land Area" : "Carpet & Built-up Area"}
                       </span>
                       <span className="font-semibold block text-foreground text-sm tabular-nums">
-                        {detailsSubmission.carpet_area_sqft ? `${Number(detailsSubmission.carpet_area_sqft).toLocaleString("en-IN")} sq.ft Carpet` : "—"}
+                        {detailsSubmission.property_category === "PLOT" || detailsSubmission.property_category === "LAND"
+                          ? `${Number(detailsSubmission.carpet_area_sqft || detailsSubmission.super_built_up_sqft || rawAttrs.area_sqft || rawAttrs.plot_area_sqft || 0).toLocaleString("en-IN")} sq.ft Plot Area`
+                          : detailsSubmission.carpet_area_sqft
+                          ? `${Number(detailsSubmission.carpet_area_sqft).toLocaleString("en-IN")} sq.ft Carpet`
+                          : rawAttrs.area_sqft
+                          ? `${Number(rawAttrs.area_sqft).toLocaleString("en-IN")} sq.ft Area`
+                          : "—"}
                       </span>
                       <span className="text-xs text-muted-foreground block tabular-nums">
-                        {detailsSubmission.super_built_up_sqft
+                        {detailsSubmission.property_category === "PLOT" || detailsSubmission.property_category === "LAND"
+                          ? rawAttrs.ownership_type ? `Ownership: ${String(rawAttrs.ownership_type).replaceAll("_", " ")}` : "Direct clear title plot"
+                          : detailsSubmission.super_built_up_sqft
                           ? `${Number(detailsSubmission.super_built_up_sqft).toLocaleString("en-IN")} sq.ft Super Built-up`
                           : rawAttrs.built_up_area || rawAttrs.area_sqft
                           ? `${Number(rawAttrs.built_up_area || rawAttrs.area_sqft).toLocaleString("en-IN")} sq.ft Built-up`
@@ -2378,49 +2386,59 @@ function OwnerSubmissionsView({
                 </span>
               </div>
 
-              <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="apple-button h-9 sm:h-8 rounded-xl text-xs gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold flex-1 sm:flex-none"
-                  onClick={() => {
-                    const toPitch = detailsSubmission;
-                    setDetailsSubmission(null);
-                    onOpenPitch?.(toPitch);
-                  }}
-                  title="Craft tailored WhatsApp pitch"
-                >
-                  <Sparkles className="size-3.5" />
-                  <span>Pitch Studio</span>
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="apple-button h-9 sm:h-8 rounded-xl text-xs gap-1.5 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 font-medium flex-1 sm:flex-none"
-                  onClick={() => {
-                    const toMatch = detailsSubmission;
-                    setDetailsSubmission(null);
-                    setSelectedMatchSubmission(toMatch);
-                  }}
-                  title="View matching in-house buyers"
-                >
-                  <Users className="size-3.5" />
-                  <span>Matching Buyers</span>
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="apple-button h-9 sm:h-8 rounded-xl text-xs gap-1.5 flex-1 sm:flex-none"
-                  onClick={() => {
-                    const toEdit = detailsSubmission;
-                    setDetailsSubmission(null);
-                    setEditSubmission(toEdit);
-                  }}
-                  title="Edit submission details"
-                >
-                  <Pencil className="size-3.5" />
-                  <span>Edit Details</span>
-                </Button>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 w-full sm:w-auto">
+                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="apple-button h-9 sm:h-8 rounded-xl text-xs gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold"
+                    onClick={() => {
+                      const toPitch = detailsSubmission;
+                      setDetailsSubmission(null);
+                      onOpenPitch?.(toPitch);
+                    }}
+                    title="Craft tailored WhatsApp pitch"
+                  >
+                    <Sparkles className="size-3.5" />
+                    <span>Pitch Studio</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="apple-button h-9 sm:h-8 rounded-xl text-xs gap-1.5 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 font-medium"
+                    onClick={() => {
+                      const toMatch = detailsSubmission;
+                      setDetailsSubmission(null);
+                      setSelectedMatchSubmission(toMatch);
+                    }}
+                    title="View matching in-house buyers"
+                  >
+                    <Users className="size-3.5" />
+                    <span>Matching Buyers</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="apple-button h-9 sm:h-8 rounded-xl text-xs gap-1.5"
+                    onClick={() => {
+                      const toEdit = detailsSubmission;
+                      setDetailsSubmission(null);
+                      setEditSubmission(toEdit);
+                    }}
+                    title="Edit submission details"
+                  >
+                    <Pencil className="size-3.5" />
+                    <span>Edit Details</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="apple-button h-9 sm:h-8 rounded-xl text-xs"
+                    onClick={() => setDetailsSubmission(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
                 {detailsSubmission.status !== "CONVERTED_TO_INVENTORY" && (
                   <Button
                     size="sm"
@@ -2444,14 +2462,6 @@ function OwnerSubmissionsView({
                     <span>Approve & Add to Live Inventory</span>
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="apple-button h-9 sm:h-8 rounded-xl text-xs flex-1 sm:flex-none"
-                  onClick={() => setDetailsSubmission(null)}
-                >
-                  Close
-                </Button>
               </div>
             </DialogFooter>
           </DialogContent>
@@ -2799,6 +2809,7 @@ function EditOwnerSubmissionDialog({
       price_negotiable: form.price_negotiable === "true",
       maintenance_charges: form.maintenance_charges.trim() ? Number(form.maintenance_charges) : null,
       area_sqft: form.area_sqft.trim() ? Number(form.area_sqft) : null,
+      plot_area_sqft: isPlot && form.area_sqft.trim() ? Number(form.area_sqft) : (rawAttrs.plot_area_sqft ? Number(rawAttrs.plot_area_sqft) : null),
       built_up_area: form.area_sqft.trim() ? Number(form.area_sqft) : null,
       floor_number: form.floor_number.trim() ? Number(form.floor_number) : null,
       total_floors: form.total_floors.trim() ? Number(form.total_floors) : null,
