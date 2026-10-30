@@ -515,6 +515,44 @@ function sanitizeCognitiveResult(res: any): MicroIntentResult {
   return res as MicroIntentResult;
 }
 
+export function buildCognitiveLeadContext(lead: any): string {
+  const isInOwnerMode = Boolean(
+    lead?.state?.startsWith("OWNER_") ||
+    lead?.lead_type === "PROVIDER" ||
+    lead?.metadata?.active_persona === "SELLER" ||
+    lead?.metadata?.awaiting_listing_initiation
+  );
+
+  const lastPrompt = lead?.metadata?.last_bot_prompt;
+  const lastPromptText = lastPrompt?.text_preview
+    ? `"${lastPrompt.text_preview}" (type: ${lastPrompt.question_type || "UNKNOWN"})`
+    : "None";
+
+  const knownPropType = isInOwnerMode
+    ? (lead?.metadata?.owner_draft?.property_type || lead?.property_type || "None")
+    : (lead?.metadata?.seeker_draft?.property_type || lead?.property_type || "None");
+
+  const knownLocation = isInOwnerMode
+    ? (lead?.metadata?.owner_draft?.location || lead?.location || "None")
+    : (lead?.metadata?.seeker_draft?.location || lead?.location || "None");
+
+  const knownBudgetOrPrice = isInOwnerMode
+    ? (lead?.metadata?.owner_draft?.expected_price ? `₹${Number(lead.metadata.owner_draft.expected_price).toLocaleString("en-IN")}` : "None")
+    : (lead?.metadata?.seeker_draft?.budget ? `₹${Number(lead.metadata.seeker_draft.budget).toLocaleString("en-IN")}` : lead?.budget ? `₹${Number(lead.budget).toLocaleString("en-IN")}` : "None");
+
+  return `CURRENT CONTEXT:
+- Lead Role: ${lead?.lead_type || "UNKNOWN"}
+- Active Persona: ${lead?.metadata?.active_persona || (isInOwnerMode ? "SELLER" : "BUYER")}
+- Lead State: ${lead?.state || "FRESH"}
+- In-Progress Owner Intake: ${isInOwnerMode ? "YES" : "NO"}
+- Bot Question Waiting For: ${lastPrompt?.question_type || "NONE"}
+- LAST BOT PROMPT: ${lastPromptText}
+- Known Property Type: ${knownPropType}
+- Known Location: ${knownLocation}
+- Known Budget/Price: ${knownBudgetOrPrice}
+- Has Active Site Visit: ${lead?.site_visit_booked ? "YES" : "NO"}`;
+}
+
 /**
  * Route Cognitive Turn using 3-Tier Multi-Tenant Scaling Pool
  * Tier 1: Google Gemini 2.0 Flash (with Round-Robin Key Pool)
@@ -545,6 +583,8 @@ export async function routeCognitiveTurn(
     return routeCognitiveTurnDeterministic(normText, lead);
   }
 
+  const leadContextBlock = buildCognitiveLeadContext(lead);
+
   const prompt = `You are the lead intelligence perception engine for ${tenantContext.agencyName || "NextGen Realty"} in ${tenantContext.operatingCity || "Vadodara"}.
 Analyze the user message and extract strictly valid JSON conforming to MicroIntentResult schema.
 
@@ -571,11 +611,17 @@ Analyze the user message and extract strictly valid JSON conforming to MicroInte
 4. If property_type is "Plot" or property_category is "PLOT_LAND": possession_timeline MUST be "READY_TO_MOVE" (never "UNDER_CONSTRUCTION", plots have no building construction).
 5. If user utterance does not explicitly state "buy", "rent", or "sell", leave transaction_type and purpose as null (do NOT assume BUY). If user states "rent" or "bhade", transaction_type is STRICTLY "RENT".
 6. project_or_society should ONLY be extracted if it is a genuine building, residency, or township name (e.g. "Nilamber Bellissimo", "Perl Heights"). NEVER extract pronouns ("usko", "isko"), filler words, or the agency name ("Griham", "Nextgen").
+7. DUAL-ROLE & CONTEXT CONTINUITY:
+   - When Active Persona is "SELLER" or Lead State is "OWNER_*":
+     * Affirmative answers ("yes", "haan", "sure", "ha") or property field answers ("2BHK", "Commercial Shop", "Gotri", "50 lakh", "800 sqft") MUST have active_role: "SELLER" and primary_intent: "SUBMIT_PROPERTY".
+     * ONLY switch active_role to "BUYER" if user explicitly demands to search, buy, or rent another property (e.g. "mere liye 3bhk flat dikhao", "flat kharidna hai").
+   - When Active Persona is "BUYER" or Lead State is "QUALIFYING" / "OPTIONS_SENT" / "SITE_VISIT_*":
+     * Criteria answers ("3BHK", "Alkapuri", "90 lakh", "ready to move") MUST have active_role: "BUYER" and primary_intent: "SEARCH_PROPERTY".
+     * ONLY switch active_role to "SELLER" if user explicitly states they want to sell, list, or rent out their own property.
+   - When user expresses BOTH intents in a single turn (e.g. "mera 2bhk bechna hai aur 3bhk lena hai"):
+     * primary_intent: "DUAL_ROLE_INTENT", active_role: "DUAL_ROLE".
 
-CURRENT CONTEXT:
-- Lead Stored Location: ${lead?.location || "None"}
-- Lead Stored Budget: ${lead?.budget || "None"}
-- Lead State: ${lead?.state || "FRESH"}
+${leadContextBlock}
 - User Message: "${normText}"`;
 
   // TIER 1: Google Gemini 2.0 Flash

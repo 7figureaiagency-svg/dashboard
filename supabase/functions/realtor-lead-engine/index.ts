@@ -2763,379 +2763,6 @@ export const VERNACULAR_RENTAL_REGEX = /(?:^|\b)(?:bhade|bhadu|bhada|bhaade|kira
 export const VERNACULAR_SALE_REGEX = /(?:^|\b)(?:vechva|vechvu|vechvo|bechna|bechni|kharidva\s*nathi|sale|bikri)\b/i;
 
 /**
- * Validates, normalizes, and sanitizes untrusted LLM JSON output into a
- * strictly typed UserAction discriminated union instance.
- */
-export function validateUserAction(raw: any, leadOrState?: any, rawMessageText?: string): UserAction {
-  if (!raw || typeof raw !== "object") {
-    return { intent: "GENERAL_QUERY", query: rawMessageText || "" };
-  }
-
-  const leadState = typeof leadOrState === "string" ? leadOrState : leadOrState?.state;
-  const lastPrompt = typeof leadOrState === "object" ? leadOrState?.metadata?.last_bot_prompt : null;
-  const isPostVisitSurvey = !leadState?.startsWith("OWNER_") && (leadState === "SITE_VISIT_DONE" || leadState === "SITE_VISIT_BOOKED" || lastPrompt?.question_type === "VISIT_ATTENDANCE" || Boolean(typeof leadOrState === "object" && leadOrState?.post_visit_feedback_sent));
-
-  const src = (raw.action && typeof raw.action === "object") ? raw.action : raw;
-  const rawIntent = String(src.intent || raw.intent || "").trim().toUpperCase();
-
-  const cleanStr = (val: any): string | null => {
-    if (val === undefined || val === null) return null;
-    const s = String(val).trim();
-    return s.length > 0 ? s : null;
-  };
-
-  const cleanInt = (val: any): number | null => {
-    if (val === undefined || val === null) return null;
-    if (typeof val === "number" && !isNaN(val)) return Math.round(val);
-    const s = String(val).replace(/,/g, "").trim();
-    const parsed = parseInt(s, 10);
-    return isNaN(parsed) ? null : parsed;
-  };
-
-  const parseBudgetVal = (val: any): number | null => {
-    if (val === undefined || val === null) return null;
-    if (typeof val === "number" && !isNaN(val) && val > 0) return Math.round(val);
-    const s = String(val).trim();
-    if (!s) return null;
-    const parsed = parseBudgetFromText(s);
-    return parsed > 0 ? parsed : null;
-  };
-
-  const cleanPhone = (val: any): string | null => {
-    if (!val) return null;
-    const digits = String(val).replace(/\D/g, "");
-    if (digits.length === 12 && digits.startsWith("91")) {
-      const ten = digits.slice(2);
-      if (/^[6-9]\d{9}$/.test(ten)) return ten;
-    }
-    if (digits.length === 11 && digits.startsWith("0")) {
-      const ten = digits.slice(1);
-      if (/^[6-9]\d{9}$/.test(ten)) return ten;
-    }
-    if (digits.length === 10 && /^[6-9]\d{9}$/.test(digits)) {
-      return digits;
-    }
-    return null;
-  };
-
-  const parseOptionIdx = (val: any): number => {
-    if (typeof val === "number" && !isNaN(val)) {
-      if (val === 0) return 0;
-      if (val >= 1) return Math.min(val - 1, 3);
-      return 0;
-    }
-    const s = String(val || "").trim().toLowerCase();
-    if (/^(?:1|1️⃣|first|1st|option\s*1|pehla|pahla)$/i.test(s)) return 0;
-    if (/^(?:2|2️⃣|second|2nd|option\s*2|dusra|doosra|biji)$/i.test(s)) return 1;
-    if (/^(?:3|3️⃣|third|3rd|option\s*3|teesra|tisra)$/i.test(s)) return 2;
-    if (/^(?:4|4️⃣|fourth|4th|option\s*4|chautha)$/i.test(s)) return 3;
-    const parsed = parseInt(s.replace(/\D/g, ""), 10);
-    if (!isNaN(parsed) && parsed >= 1) return Math.max(0, Math.min(parsed - 1, 3));
-    return 0;
-  };
-
-  switch (rawIntent) {
-    case "BOOK_VISIT": {
-      let targetIdx: number | null = null;
-      if (src.target_property_index !== undefined && src.target_property_index !== null) {
-        targetIdx = parseOptionIdx(src.target_property_index);
-      } else if (src.selected_option_index !== undefined && src.selected_option_index !== null) {
-        targetIdx = parseOptionIdx(src.selected_option_index);
-      } else {
-        const textToScan = cleanStr(src.text || src.messageText || src.raw_message || "");
-        const optMatch = textToScan.match(/\b(?:option|opt|choice|number|no\.?)\s*([1-4])\b/i) ||
-          textToScan.match(/\b([1-4])\s*(?:st|nd|rd|th)?\s*(?:option|number|project|property)\b/i);
-        if (optMatch && optMatch[1]) {
-          targetIdx = parseOptionIdx(optMatch[1]);
-        }
-      }
-
-      return {
-        intent: "BOOK_VISIT",
-        target_property_index: targetIdx,
-        target_property_name: cleanStr(src.target_property_name || src.project_or_society || src.property_type),
-        preferred_date_raw: cleanStr(src.preferred_date_raw || src.date_raw || src.reschedule_slot),
-        preferred_time_raw: cleanStr(src.preferred_time_raw || src.time_raw),
-        slot_iso: cleanStr(src.slot_iso),
-      };
-    }
-
-    case "SELECT_OPTION": {
-      const idxRaw = src.option_index !== undefined ? src.option_index : (src.selected_option_index !== undefined ? src.selected_option_index : src.option);
-      return {
-        intent: "SELECT_OPTION",
-        option_index: parseOptionIdx(idxRaw),
-      };
-    }
-
-    case "CHANGE_REQUIREMENT":
-    case "CHANGE_CRITERIA":
-    case "SEEKER_QUALIFICATION":
-    case "ASK_MORE_OPTIONS":
-    case "QUALIFICATION_INFO": {
-      let req: "BUY" | "RENT" | "LEASE" | null = null;
-      const tx = cleanStr(src.requirement || src.transaction_type);
-      if (tx) {
-        const uTx = tx.toUpperCase();
-        if (uTx === "RENT") req = "RENT";
-        else if (uTx === "LEASE") req = "LEASE";
-        else if (uTx === "BUY" || uTx === "PURCHASE") req = "BUY";
-      }
-
-      // Check for rental cues in raw fields and raw query text using boundary-checked token tree
-      const rawMsg = String(src.query || raw.messageText || raw.text || raw.userText || "").toLowerCase();
-      const rawCombined = `${src.property_type || ""} ${src.location || ""} ${src.notes || ""} ${rawMsg}`.toLowerCase();
-      if (VERNACULAR_RENTAL_REGEX.test(rawCombined)) {
-        req = "RENT";
-      }
-
-      const isFlex = Boolean(
-        src.is_flexible_location ||
-        (src.location && String(src.location).toUpperCase() === "FLEXIBLE")
-      );
-
-      let rawParsed = parseBudgetVal(src.budget || src.price_or_budget || src.budget_str);
-      const rawUserMsg = String(src.query || raw.messageText || raw.text || raw.userText || "");
-      if (rawParsed === 100000000 && /(?:^|\b)1\s*(?:cr|crore|karod)\b/i.test(rawUserMsg)) {
-        rawParsed = 10000000;
-      }
-      const parsedBudget = rawParsed;
-
-      // SANITY GUARD: If residential/flat with monthly budget < 50,000, it cannot be BUY. In Indian real estate, ₹1,000 - ₹50,000 is strictly RENT!
-      if (parsedBudget && parsedBudget >= 1000 && parsedBudget < 50000 && req !== "LEASE") {
-        req = "RENT";
-      }
-
-      return {
-        intent: "CHANGE_REQUIREMENT",
-        property_type: cleanStr(src.property_type),
-        budget: parsedBudget,
-        location: isFlex ? "FLEXIBLE" : cleanStr(src.location),
-        requirement: req,
-        is_flexible_location: isFlex,
-      };
-    }
-
-    case "CONFIRM_CRITERIA":
-    case "CONFIRM_SAME_CRITERIA": {
-      const isConfirmed = src.confirm !== false && src.confirm !== "false" && src.confirm !== 0;
-      return {
-        intent: "CONFIRM_CRITERIA",
-        confirm: isConfirmed,
-      };
-    }
-
-    case "ASK_FAQ":
-    case "FAQ":
-    case "GENERAL_FAQ":
-    case "PRICE_NEGOTIATION": {
-      let topic: AskFaqAction["topic"] = "AMENITIES";
-      const rawTopic = String(src.topic || src.faq_topic || (rawIntent === "PRICE_NEGOTIATION" ? "PRICING_DISCOUNT" : "")).toUpperCase();
-      if (rawTopic.includes("ADDRESS") || rawTopic.includes("LOCATION") || rawTopic.includes("OFFICE_ADDR")) topic = "OFFICE_ADDRESS";
-      else if (rawTopic.includes("TIMING") || rawTopic.includes("HOUR") || rawTopic.includes("OFFICE_TIME")) topic = "OFFICE_TIMINGS";
-      else if (rawTopic.includes("AGENCY") || rawTopic.includes("COMPANY") || rawTopic.includes("WHO")) topic = "AGENCY_INFO";
-      else if (rawTopic.includes("CUSTOM") || rawTopic.includes("DOC") || rawTopic.includes("POLICY")) topic = "CUSTOM_FAQ";
-      else if (rawTopic.includes("RERA")) topic = "RERA";
-      else if (rawTopic.includes("LOAN") || rawTopic.includes("BANK")) topic = "LOAN";
-      else if (rawTopic.includes("POSSESSION")) topic = "POSSESSION";
-      else if (rawTopic.includes("BROKERAGE") || rawTopic.includes("COMMISSION")) topic = "BROKERAGE";
-      else if (rawTopic.includes("LANDMARK") || rawTopic.includes("DISTANCE")) topic = "LANDMARKS";
-      else if (rawTopic.includes("DISCOUNT") || rawTopic.includes("PRICE") || rawTopic.includes("PRICING")) topic = "PRICING_DISCOUNT";
-      else if (rawTopic.includes("AMENIT") || rawTopic.includes("LIFT") || rawTopic.includes("PARKING")) topic = "AMENITIES";
-
-      return {
-        intent: "ASK_FAQ",
-        topic,
-        specific_query: cleanStr(src.specific_query || src.query || src.message),
-      };
-    }
-
-    case "SUBMIT_LISTING":
-    case "OWNER_LISTING": {
-      // BHK Configuration vs Role Option 2 Collision Guard:
-      // If user is in ROLE_SELECTION_PENDING and text is a BHK/property config ("2 BHK", "2bhk"),
-      // LLM may falsely classify as Option 2 SUBMIT_LISTING. Correct strictly to CHANGE_REQUIREMENT!
-      if (leadState === "ROLE_SELECTION_PENDING" && isBhkOrPropertyConfiguration(rawMessageText || "")) {
-        const propType = parsePropertyTypeFromText(rawMessageText || "") || "2BHK";
-        return {
-          intent: "CHANGE_REQUIREMENT",
-          property_type: propType,
-          requirement: VERNACULAR_RENTAL_REGEX.test(rawMessageText || "") ? "RENT" : "BUY",
-        };
-      }
-      let txType: "SELL" | "RENT_OUT" | null = null;
-      const rawTx = cleanStr(src.transaction_type);
-      if (rawTx) {
-        const uTx = rawTx.toUpperCase();
-        if (uTx === "RENT" || uTx === "RENT_OUT" || uTx === "LEASE") txType = "RENT_OUT";
-        else if (uTx === "SELL" || uTx === "SALE") txType = "SELL";
-      }
-
-      let possStatus: "READY_TO_MOVE" | "UNDER_CONSTRUCTION" | null = null;
-      const rawPoss = cleanStr(src.possession_status);
-      if (rawPoss) {
-        const uPoss = rawPoss.toUpperCase();
-        if (uPoss.includes("READY") || uPoss === "RTM" || uPoss === "1") possStatus = "READY_TO_MOVE";
-        else if (uPoss.includes("CONSTRUCTION") || uPoss === "UC" || uPoss === "2") possStatus = "UNDER_CONSTRUCTION";
-      }
-
-      let furnStatus: "FURNISHED" | "SEMI_FURNISHED" | "UNFURNISHED" | null = null;
-      const rawFurn = cleanStr(src.furnishing_status);
-      if (rawFurn) {
-        const uFurn = rawFurn.toUpperCase();
-        if (uFurn.includes("SEMI") || uFurn === "2") furnStatus = "SEMI_FURNISHED";
-        else if (uFurn.includes("UNFURNISHED") || uFurn === "1") furnStatus = "UNFURNISHED";
-        else if (uFurn.includes("FURNISHED") || uFurn === "3") furnStatus = "FURNISHED";
-      }
-
-      let cleanProj = cleanStr(src.project_or_society);
-      if (cleanProj && !isLikelySocietyOrProjectName(cleanProj)) {
-        cleanProj = null;
-      }
-
-      let cleanProp = cleanStr(src.property_type);
-      if (rawMessageText && (!cleanProp || cleanProp === "1BHK" || cleanProp === "2BHK" || cleanProp === "3BHK")) {
-        const directProp = parsePropertyTypeFromText(rawMessageText);
-        if (directProp) cleanProp = directProp;
-      }
-
-      let cleanLocation = cleanStr(src.location);
-      const leadLoc = typeof leadOrState === "object" ? leadOrState?.location : null;
-      if (cleanLocation && leadLoc && cleanLocation.toLowerCase().includes(leadLoc.toLowerCase()) && !String(rawMessageText || "").toLowerCase().includes(leadLoc.toLowerCase())) {
-        cleanLocation = cleanLocation.replace(new RegExp(`(?:,\\s*)?${leadLoc.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}`, "gi"), "").trim();
-        if (cleanLocation.length < 2) cleanLocation = null;
-      }
-
-      let rawPrice = parseBudgetVal(src.price_or_rent || src.price_or_budget || src.expected_price || src.expected_rent);
-      const hasPriceInText = Boolean(parseBudgetFromText(rawMessageText || "")) || /(?:cr|crore|karod|lakh|lac|k\b|thousand|hazar|rupees|rs|inr|₹|\b\d{5,9}\b)/i.test(rawMessageText || "");
-      const isPriceStage = leadState === "OWNER_PRICE_PENDING";
-      const seekerBudget = typeof leadOrState === "object" ? Number(leadOrState?.budget || 0) : 0;
-      if (rawPrice && ((!isPriceStage && !hasPriceInText) || (seekerBudget > 0 && rawPrice === seekerBudget && !hasPriceInText))) {
-        rawPrice = null;
-      }
-
-      return {
-        intent: "SUBMIT_LISTING",
-        transaction_type: txType,
-        property_type: cleanProp,
-        location: cleanLocation,
-        project_or_society: cleanProj,
-        price_or_rent: rawPrice,
-        carpet_sqft: cleanInt(src.carpet_sqft),
-        super_built_up_sqft: cleanInt(src.super_built_up_sqft),
-        plot_area_sqft: cleanInt(src.plot_area_sqft),
-        possession_status: possStatus,
-        furnishing_status: furnStatus,
-        contact_phone: cleanPhone(src.contact_phone || src.phone),
-      };
-    }
-
-    case "CANCEL_VISIT": {
-      return {
-        intent: "CANCEL_VISIT",
-        reason: cleanStr(src.reason),
-      };
-    }
-
-    case "RESCHEDULE_VISIT": {
-      return {
-        intent: "RESCHEDULE_VISIT",
-        new_slot_raw: cleanStr(src.new_slot_raw || src.reschedule_slot || src.preferred_date_raw),
-      };
-    }
-
-    case "CANNOT_ATTEND_VISIT": {
-      return {
-        intent: "CANNOT_ATTEND_VISIT",
-        reason: cleanStr(src.reason),
-      };
-    }
-
-    case "CONFIRM_VISIT_ATTENDANCE":
-    case "CONFIRM_VISIT": {
-      const attended = src.attended !== false && src.attended !== "false" && src.attended !== 0;
-      return {
-        intent: "CONFIRM_VISIT_ATTENDANCE",
-        attended,
-        feedback: cleanStr(src.feedback || src.reason),
-      };
-    }
-
-    case "REQUEST_HUMAN_CALL":
-    case "HUMAN_CALL": {
-      return {
-        intent: "REQUEST_HUMAN_CALL",
-        reason: cleanStr(src.reason || src.query),
-      };
-    }
-
-    case "BROCHURE_REQUEST": {
-      return {
-        intent: "BROCHURE_REQUEST",
-        project_name: cleanStr(src.project_name || src.project_or_society),
-      };
-    }
-
-    case "MAP_REQUEST": {
-      return {
-        intent: "MAP_REQUEST",
-        project_name: cleanStr(src.project_name || src.project_or_society || src.location),
-      };
-    }
-
-    case "MARKET_ADVISORY": {
-      return {
-        intent: "MARKET_ADVISORY",
-        query: cleanStr(src.query || src.specific_query),
-      };
-    }
-
-    case "GREETING": {
-      return {
-        intent: "GREETING",
-        token: cleanStr(src.token),
-      };
-    }
-
-    case "OPT_OUT": {
-      const lowerRaw = String(rawMessageText || raw.messageText || raw.text || raw.userText || src.query || "").trim().toLowerCase();
-      const isExplicitOptOut = /(?:stop|unsubscribe|not\s*interested|nathi\s*joiye|message\s*mat\s*karo|band\s*karo|dont\s*message|call\s*mat\s*karo|msg\s*mat\s*karo|don't\s*text)/i.test(lowerRaw);
-
-      // INVERTED ANTI-OPT_OUT GUARD: OPT_OUT is mathematically impossible unless isExplicitOptOut === true
-      if (!isExplicitOptOut) {
-        if (leadState === "CRITERIA_CONFIRMATION_PENDING" || lastPrompt?.question_type === "CRITERIA_CONFIRM") {
-          return { intent: "CONFIRM_CRITERIA", confirm: false };
-        }
-        if (isPostVisitSurvey) {
-          return { intent: "CANNOT_ATTEND_VISIT", reason: lowerRaw };
-        }
-        return {
-          intent: "GENERAL_QUERY",
-          query: lowerRaw || "nahi",
-        };
-      }
-      return {
-        intent: "OPT_OUT",
-      };
-    }
-
-    case "OFF_TOPIC": {
-      return {
-        intent: "OFF_TOPIC",
-      };
-    }
-
-    case "GENERAL_QUERY":
-    default: {
-      return {
-        intent: "GENERAL_QUERY",
-        query: cleanStr(src.query || src.message || raw.messageText || "") || "",
-      };
-    }
-  }
-}
-
-/**
  * Builds a backward-compatible ClassifiedActionResult from a validated UserAction
  * and raw payload for legacy downstream callers.
  */
@@ -3185,206 +2812,6 @@ export function buildClassifiedActionResult(
   };
 }
 
-export const CORE_INTENT_SYSTEM_PROMPT = `You are an expert real estate lead intent classifier for multi-tenant WhatsApp/Telegram leads.
-Generate ONLY a single JSON object satisfying IntentResult.
-
-### TYPESCRIPT DEFINITION:
-\`\`\`typescript
-type UserAction =
-  | { intent: "BOOK_VISIT"; target_property_index?: number; target_property_name?: string; preferred_date_raw?: string; preferred_time_raw?: string; }
-  | { intent: "SELECT_OPTION"; option_index: number; }
-  | { intent: "CHANGE_REQUIREMENT"; property_type?: string; budget?: number; location?: string; requirement?: "BUY"|"RENT"|"LEASE"; is_flexible_location?: boolean; }
-  | { intent: "CONFIRM_CRITERIA"; confirm: boolean; }
-  | { intent: "ASK_FAQ"; topic: "AMENITIES"|"RERA"|"LOAN"|"POSSESSION"|"BROKERAGE"|"LANDMARKS"|"PRICING_DISCOUNT"|"OFFICE_ADDRESS"|"OFFICE_TIMINGS"|"AGENCY_INFO"|"CUSTOM_FAQ"; specific_query?: string; }
-  | { intent: "SUBMIT_LISTING"; transaction_type?: "SELL"|"RENT_OUT"; property_type?: string; location?: string; project_or_society?: string; price_or_rent?: number; carpet_sqft?: number; super_built_up_sqft?: number; plot_area_sqft?: number; possession_status?: "READY_TO_MOVE"|"UNDER_CONSTRUCTION"; furnishing_status?: "FURNISHED"|"SEMI_FURNISHED"|"UNFURNISHED"; contact_phone?: string; }
-  | { intent: "CANCEL_VISIT"|"CANNOT_ATTEND_VISIT"|"REQUEST_HUMAN_CALL"; reason?: string; }
-  | { intent: "RESCHEDULE_VISIT"; new_slot_raw?: string; }
-  | { intent: "CONFIRM_VISIT_ATTENDANCE"; attended: boolean; feedback?: string; }
-  | { intent: "BROCHURE_REQUEST"|"MAP_REQUEST"; project_name?: string; }
-  | { intent: "MARKET_ADVISORY"; query?: string; }
-  | { intent: "GREETING"; token?: string; }
-  | { intent: "OPT_OUT"|"OFF_TOPIC"; }
-  | { intent: "GENERAL_QUERY"; query: string; };
-
-interface IntentResult {
-  action: UserAction;
-  user_role: "SEEKER" | "OWNER" | "UNKNOWN";
-  language: "HINGLISH" | "GUJLISH" | "ENGLISH" | "GUJARATI_SCRIPT";
-}
-\`\`\`
-
-### ROLES: "OWNER", "SEEKER", "UNKNOWN".
-
-### TIER 1 GLOBAL PRECEDENCE (ALWAYS OVERRIDES INTAKE):
-- OPT_OUT: Explicit unsubscription only ("stop", "unsubscribe", "not interested", "message mat karo"). Conversational "nahi" is NEVER OPT_OUT!
-- REQUEST_HUMAN_CALL: User asks for call/human ("call me", "agent se baat", "phone pe baat").
-- BROCHURE_REQUEST / MAP_REQUEST: Direct brochure or location map ask.
-- ASK_FAQ: Office address, timings, RERA, brokerage, agency info, or loan questions.
-
-### OUTPUT FORMAT:
-Respond ONLY with valid JSON satisfying IntentResult: {"action": {...}, "user_role": "...", "language": "..."}.`;
-
-export const INTENT_CLASSIFICATION_SYSTEM_PROMPT = CORE_INTENT_SYSTEM_PROMPT;
-
-/**
- * Builds dynamic, stage-conditioned micro-prompt (~350-450 tokens) injecting
- * state-specific rules, active turn goals, and focused exemplars.
- */
-export function buildStageMicroPrompt(lead: any, currentState?: string): string {
-  const state = String(currentState || lead?.state || "FRESH").trim();
-  const lastPrompt = lead?.metadata?.last_bot_prompt;
-  const isPostVisit =
-    state === "SITE_VISIT_DONE" ||
-    (state === "SITE_VISIT_BOOKED" &&
-      (Boolean(lead?.post_visit_feedback_sent) || lastPrompt?.question_type === "VISIT_ATTENDANCE"));
-
-  if (isPostVisit) {
-    return `### ACTIVE STAGE RULES: POST-VISIT ATTENDANCE & FEEDBACK SURVEY
-- Bot asked: 1 Attended, 2 Not Attended.
-- "1" / "haan" / "visit kiya" -> CONFIRM_VISIT_ATTENDANCE (attended: true).
-- "2" / "nahi" / "missed" / "visit nahi ho payi" -> CANNOT_ATTEND_VISIT (attended: false). NEVER OPT_OUT!
-- Property feedback or objections ("Layout accha nai laga", "canal pass me he") -> CONFIRM_VISIT_ATTENDANCE (attended: true, feedback: "...").
-- Asking for other projects/options ("Option share karo", "dusre projects batao") -> GENERAL_QUERY (query: "request_alternative_options").
-
-### STAGE EXEMPLARS:
-1. "1" / "visit attend ki" -> {"action": {"intent": "CONFIRM_VISIT_ATTENDANCE", "attended": true}, "language": "HINGLISH", "user_role": "SEEKER"}
-2. "2" / "nahi ja paya" -> {"action": {"intent": "CANNOT_ATTEND_VISIT", "reason": "could_not_attend"}, "language": "HINGLISH", "user_role": "SEEKER"}
-3. "Layout accha nai laga" -> {"action": {"intent": "CONFIRM_VISIT_ATTENDANCE", "attended": true, "feedback": "Layout accha nai laga"}, "language": "HINGLISH", "user_role": "SEEKER"}
-4. "Option share karo" -> {"action": {"intent": "GENERAL_QUERY", "query": "request_alternative_options"}, "language": "HINGLISH", "user_role": "SEEKER"}`;
-  }
-
-  if (state === "ROLE_SELECTION_PENDING" || state === "FRESH") {
-    return `### ACTIVE STAGE RULES: ROLE SELECTION & INITIAL TRIAGE
-- Bot asked: 1 Buy/Rent (SEEKER), 2 Sell/Lease (OWNER), 3 Both (DUAL).
-- Isolated single "1" / "leni hai" / "buy" -> CHANGE_REQUIREMENT (user_role: "SEEKER").
-- Isolated single "2" / "deni hai" / "sell" -> SUBMIT_LISTING (user_role: "OWNER").
-- Property specifications ("2 BHK", "2bhk in Gotri", "commercial shop", "flat") are strictly SEEKER requirements (CHANGE_REQUIREMENT). "2 BHK" is NEVER Option 2 OWNER!
-- Direct owner declarations ("shop bechni he", "maro flat vechvo che") -> SUBMIT_LISTING (user_role: "OWNER").
-
-### STAGE EXEMPLARS:
-1. "1" -> {"action": {"intent": "CHANGE_REQUIREMENT"}, "language": "HINGLISH", "user_role": "SEEKER"}
-2. "2" -> {"action": {"intent": "SUBMIT_LISTING"}, "language": "HINGLISH", "user_role": "OWNER"}
-3. "2 BHK" -> {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "2BHK Flat", "location": "Gotri"}, "language": "HINGLISH", "user_role": "SEEKER"}
-4. "shop bechni he" -> {"action": {"intent": "SUBMIT_LISTING", "transaction_type": "SELL", "property_type": "Shop"}, "language": "HINGLISH", "user_role": "OWNER"}`;
-  }
-
-  if (state === "OWNER_POSSESSION_PENDING") {
-    return `### ACTIVE STAGE RULES: OWNER POSSESSION STATUS
-- Role: "OWNER", intent: SUBMIT_LISTING.
-- "1" -> possession_status: "READY_TO_MOVE", "2" -> possession_status: "UNDER_CONSTRUCTION". Single digit reply is strictly possession_status!
-
-### STAGE EXEMPLARS:
-1. "1" / "ready" -> {"action": {"intent": "SUBMIT_LISTING", "possession_status": "READY_TO_MOVE"}, "language": "HINGLISH", "user_role": "OWNER"}
-2. "2" / "under construction" -> {"action": {"intent": "SUBMIT_LISTING", "possession_status": "UNDER_CONSTRUCTION"}, "language": "HINGLISH", "user_role": "OWNER"}`;
-  }
-
-  if (state === "OWNER_FURNISHING_PENDING") {
-    return `### ACTIVE STAGE RULES: OWNER FURNISHING STATUS
-- Role: "OWNER", intent: SUBMIT_LISTING.
-- "1" -> furnishing_status: "UNFURNISHED", "2" -> furnishing_status: "SEMI_FURNISHED", "3" -> furnishing_status: "FURNISHED". Single digit reply is strictly furnishing_status!
-
-### STAGE EXEMPLARS:
-1. "1" -> {"action": {"intent": "SUBMIT_LISTING", "furnishing_status": "UNFURNISHED"}, "language": "HINGLISH", "user_role": "OWNER"}
-2. "2" -> {"action": {"intent": "SUBMIT_LISTING", "furnishing_status": "SEMI_FURNISHED"}, "language": "HINGLISH", "user_role": "OWNER"}
-3. "3" -> {"action": {"intent": "SUBMIT_LISTING", "furnishing_status": "FURNISHED"}, "language": "HINGLISH", "user_role": "OWNER"}`;
-  }
-
-  if (state.startsWith("OWNER_") && state.endsWith("_PENDING")) {
-    return `### ACTIVE STAGE RULES: IN-PROGRESS OWNER INTAKE (${state})
-- Role: "OWNER", intent: SUBMIT_LISTING (unless user asks Tier 1 global intent like FAQ, call, brochure).
-- In OWNER_PHONE_PENDING: extract 10-digit number into contact_phone. NEVER price or budget!
-- Area units: 1 Var (વાર) / Gaj = 9 sqft (e.g. 500var = 4500 sqft). 1 Vigha = 17,424 sqft.
-- If user provides both society/project name and property type, extract BOTH project_or_society and property_type.
-- CRITICAL PROPERTY TYPES: "Tenement" / "Ternament" / "Tenament" / "ટેનામેન્ટ" / "ટેનામેંટ" / "टेनामेंट" / "Row House" / "Villa" / "Duplex" / "Flat" / "Shop" / "Office" are PROPERTY CONFIGURATIONS / TYPES, NEVER society or project names!
-- NEVER copy or hallucinate previous buyer location or budget into owner listing! Price or rent must only be extracted if the user explicitly provided a price in the current message.
-- If user message does not contain a price or currency amount, price_or_rent MUST be null!
-- If user message does not contain an area/locality, location MUST be null!
-
-### STAGE EXEMPLARS:
-1. "1bhk ternament" -> {"action": {"intent": "SUBMIT_LISTING", "property_type": "1BHK Tenement", "transaction_type": "SELL"}, "language": "HINGLISH", "user_role": "OWNER"}
-2. "Plot 500var flat 1200sqft" -> {"action": {"intent": "SUBMIT_LISTING", "plot_area_sqft": 4500, "super_built_up_sqft": 1200}, "language": "GUJLISH", "user_role": "OWNER"}
-3. "'Ananta astha' 3bhk duplex" -> {"action": {"intent": "SUBMIT_LISTING", "project_or_society": "Ananta Astha", "property_type": "3BHK Duplex", "transaction_type": "SELL"}, "language": "HINGLISH", "user_role": "OWNER"}`;
-  }
-
-  if (state === "QUALIFYING") {
-    return `### ACTIVE STAGE RULES: BUYER / TENANT QUALIFICATION
-- Role: "SEEKER", intent: CHANGE_REQUIREMENT.
-- Rental indicators ("bhade", "bhadu", "bhada par", "kiraya", "rent", "reva mate") -> requirement: "RENT" (NEVER "BUY").
-- Commercial lease ("office lease par", "shop on lease") -> requirement: "LEASE".
-- Purchase indicators ("kharidva mate", "kharidvu che", "buy", "lena hai") -> requirement: "BUY".
-- Budget ₹1,000-₹50,000 without Lakh/Cr is monthly rent (e.g. 15000 -> budget: 15000, requirement: "RENT").
-- Property types ("Flat", "Villa", "Office", "Shop", "Plot", "2 BHK") are property_type, NEVER OFF_TOPIC.
-
-### STAGE EXEMPLARS:
-1. "Bhade flat reva mate" -> {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "Flat", "requirement": "RENT"}, "language": "GUJLISH", "user_role": "SEEKER"}
-2. "3BHK flat in Gotri 75 lakh" -> {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "3BHK Flat", "location": "Gotri", "budget": 7500000, "requirement": "BUY"}, "language": "HINGLISH", "user_role": "SEEKER"}
-3. "commercial office lease par" -> {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "Commercial Office", "requirement": "LEASE"}, "language": "HINGLISH", "user_role": "SEEKER"}
-4. "15000 budget" -> {"action": {"intent": "CHANGE_REQUIREMENT", "budget": 15000, "requirement": "RENT"}, "language": "HINGLISH", "user_role": "SEEKER"}`;
-  }
-
-  if (state === "OPTIONS_SENT" || state === "VISIT_REQUESTED" || state === "SITE_VISIT_PROPOSED") {
-    return `### ACTIVE STAGE RULES: PROPERTY OPTIONS & SITE VISIT BOOKING
-- Option selection: "1" / "pehla" -> SELECT_OPTION (option_index: 0), "2" / "dusra" -> SELECT_OPTION (option_index: 1), "3" -> SELECT_OPTION (option_index: 2).
-- Slot booking: any date/time indication ("aaj 6 baje", "Sunday 11 AM", "kal shaam 5 baje", "kale sanje 5 vage") -> BOOK_VISIT.
-- In SITE_VISIT_PROPOSED, affirmative replies ("haan", "yes", "sure", "chalse") -> BOOK_VISIT.
-
-### STAGE EXEMPLARS:
-1. "aaj 6 baje" -> {"action": {"intent": "BOOK_VISIT", "preferred_date_raw": "aaj", "preferred_time_raw": "6 baje"}, "language": "HINGLISH", "user_role": "SEEKER"}
-2. "Sunday 11 AM" -> {"action": {"intent": "BOOK_VISIT", "preferred_date_raw": "Sunday", "preferred_time_raw": "11 AM"}, "language": "ENGLISH", "user_role": "SEEKER"}
-3. "kale sanje 5 vage" -> {"action": {"intent": "BOOK_VISIT", "preferred_date_raw": "kale", "preferred_time_raw": "sanje 5 vage"}, "language": "GUJLISH", "user_role": "SEEKER"}
-4. "pehla option saras chhe" -> {"action": {"intent": "SELECT_OPTION", "option_index": 0}, "language": "GUJLISH", "user_role": "SEEKER"}`;
-  }
-
-  if (state === "CRITERIA_CONFIRMATION_PENDING") {
-    return `### ACTIVE STAGE RULES: CONFIRM SEARCH CRITERIA
-- Bot asked user to confirm saved requirement criteria:
-- "1" / "ha" / "yes" / "barobar" / "yahi" -> CONFIRM_CRITERIA (confirm: true).
-- "2" / "nahi" / "no" / "badalna" / "naya" -> CONFIRM_CRITERIA (confirm: false). NEVER OPT_OUT!
-
-### STAGE EXEMPLARS:
-1. "1" / "barobar chhe" -> {"action": {"intent": "CONFIRM_CRITERIA", "confirm": true}, "language": "GUJLISH", "user_role": "SEEKER"}
-2. "2" / "nahi badalna hai" -> {"action": {"intent": "CONFIRM_CRITERIA", "confirm": false}, "language": "HINGLISH", "user_role": "SEEKER"}`;
-  }
-
-  if (state === "OWNER_DETAILS_GATHERED") {
-    return `### ACTIVE STAGE RULES: POST-OWNER INTAKE FOLLOWUP
-- Bot asked if owner wants to list another property, or search Buy/Rent options.
-- "nahi" / "nathi karvi" / "dusri nahi hai" / "no" -> GENERAL_QUERY (query: "nahi karni"). NEVER OPT_OUT!
-- Listing 2nd property ("ek aur plot bechna hai") -> SUBMIT_LISTING (user_role: "OWNER").
-- Switching to search ("ab flat kharidna hai") -> CHANGE_REQUIREMENT (user_role: "SEEKER").
-
-### STAGE EXEMPLARS:
-1. "nahi karni" -> {"action": {"intent": "GENERAL_QUERY", "query": "nahi karni"}, "language": "HINGLISH", "user_role": "OWNER"}
-2. "ek aur flat bechna hai" -> {"action": {"intent": "SUBMIT_LISTING", "transaction_type": "SELL", "property_type": "Flat"}, "language": "HINGLISH", "user_role": "OWNER"}
-3. "ab 2bhk kharidna hai" -> {"action": {"intent": "CHANGE_REQUIREMENT", "property_type": "2BHK", "requirement": "BUY"}, "language": "HINGLISH", "user_role": "SEEKER"}`;
-  }
-
-  if (state === "DUAL_ROLE_MENU_PENDING") {
-    return `### ACTIVE STAGE RULES: DUAL ROLE MENU
-- Returning client menu: 1 = Provider listing action, 2 = Seeker search action, 3 = Call request.
-### STAGE EXEMPLARS:
-1. "1" -> {"action": {"intent": "SUBMIT_LISTING"}, "language": "HINGLISH", "user_role": "OWNER"}
-2. "2" -> {"action": {"intent": "CHANGE_REQUIREMENT"}, "language": "HINGLISH", "user_role": "SEEKER"}
-3. "3" / "call me" -> {"action": {"intent": "REQUEST_HUMAN_CALL"}, "language": "HINGLISH", "user_role": "UNKNOWN"}`;
-  }
-
-  if (state === "VISIT_MISSED") {
-    return `### ACTIVE STAGE RULES: RESCHEDULE MISSED VISIT
-- User missed scheduled visit. Any slot/date/time is RESCHEDULE_VISIT.
-### STAGE EXEMPLARS:
-1. "kal shaam 5 baje" -> {"action": {"intent": "RESCHEDULE_VISIT", "new_slot_raw": "kal shaam 5 baje"}, "language": "HINGLISH", "user_role": "SEEKER"}
-2. "Sunday morning 11" -> {"action": {"intent": "RESCHEDULE_VISIT", "new_slot_raw": "Sunday morning 11"}, "language": "ENGLISH", "user_role": "SEEKER"}`;
-  }
-
-  return `### ACTIVE STAGE RULES: GENERAL INQUIRY & DISCOVERY
-- Identify greetings, property searches, FAQs, brochure/map requests, or explicit opt-out.
-### STAGE EXEMPLARS:
-1. "kem cho" / "hello" -> {"action": {"intent": "GREETING"}, "language": "GUJLISH", "user_role": "UNKNOWN"}
-2. "brochure bhej do" -> {"action": {"intent": "BROCHURE_REQUEST"}, "language": "HINGLISH", "user_role": "SEEKER"}
-3. "aapka office address kya hai?" -> {"action": {"intent": "ASK_FAQ", "topic": "OFFICE_ADDRESS"}, "language": "HINGLISH", "user_role": "SEEKER"}
-4. "stop" / "unsubscribe" -> {"action": {"intent": "OPT_OUT"}, "language": "ENGLISH", "user_role": "UNKNOWN"}`;
-}
-
 export function deriveBotQuestionType(nextState: string, replyText: string, metadata?: any): string | null {
   if (!replyText || !replyText.trim()) return null;
   if (metadata?.last_bot_prompt?.question_type) return metadata.last_bot_prompt.question_type;
@@ -3400,138 +2827,6 @@ export function deriveBotQuestionType(nextState: string, replyText: string, meta
   if (nextState === "QUALIFYING") return "QUALIFYING_FIELD";
   if (nextState === "VISIT_MISSED") return "RESCHEDULE_SLOT";
   if (replyText.includes("?") || /1️⃣|2️⃣|3️⃣/.test(replyText)) return "GENERAL_QUESTION";
-  return null;
-}
-
-export function buildLeadContextForClassifier(lead: any, messageText: string): string {
-  const isInProgressOwner = [
-    "OWNER_CONFIG_PENDING",
-    "OWNER_SOCIETY_PENDING",
-    "OWNER_LOCATION_PENDING",
-    "OWNER_AREA_PENDING",
-    "OWNER_FLOOR_PENDING",
-    "OWNER_SIZE_PENDING",
-    "OWNER_PRICE_PENDING",
-    "OWNER_AMENITIES_PENDING",
-    "OWNER_POSSESSION_PENDING",
-    "OWNER_FURNISHING_PENDING",
-    "OWNER_PHONE_PENDING",
-  ].includes(lead?.state);
-
-  const lockedTx = lead?.metadata?.owner_draft?.transaction_type || lead?.requirement || null;
-  const knownPhone = lead?.phone || lead?.metadata?.owner_draft?.contact_phone || null;
-
-  // Stale Prompt Decay (> 72 hours)
-  const lastPrompt = lead?.metadata?.last_bot_prompt;
-  let lastBotPromptText = "None";
-  let isPromptStale = false;
-  if (lastPrompt && lastPrompt.asked_at) {
-    const promptAgeHours = (Date.now() - new Date(lastPrompt.asked_at).getTime()) / (1000 * 60 * 60);
-    if (promptAgeHours > 72) {
-      isPromptStale = true;
-      lastBotPromptText = `${lastPrompt.question_type || "GENERAL"} - "${lastPrompt.text_preview || ""}" (STALE / > 72h ago)`;
-    } else {
-      lastBotPromptText = `${lastPrompt.question_type || "GENERAL"} - "${lastPrompt.text_preview || ""}"`;
-    }
-  }
-
-  let currentPendingQuestion = "NONE";
-  const state = lead?.state;
-
-  if (state === "OWNER_DETAILS_GATHERED") {
-    currentPendingQuestion = "SECOND_PROPERTY_LISTING_OR_BUYER_SEARCH (Bot asked if they want to list another property, or search Buy/Rent options. 'Nahi', 'nahi karni', or 'nathi karvi' means DECLINE_SECOND_LISTING, NEVER OPT_OUT!)";
-  } else if (state === "SITE_VISIT_DONE" || (state === "SITE_VISIT_BOOKED" && (lead?.post_visit_feedback_sent || lastPrompt?.question_type === "VISIT_ATTENDANCE"))) {
-    currentPendingQuestion = "POST_VISIT_ATTENDANCE (Bot asked: 1 Attended, 2 Not Attended. 'Nahi' / '2' / 'visit nahi ho paayi' is strictly CANNOT_ATTEND_VISIT, NEVER OPT_OUT!)";
-  } else if (state === "CRITERIA_CONFIRMATION_PENDING" || lastPrompt?.question_type === "CRITERIA_CONFIRM") {
-    currentPendingQuestion = "CONFIRM_CRITERIA (Bot asked to confirm requirement. 'Nahi' / '2' / 'badalna hai' is CONFIRM_CRITERIA with confirm: false)";
-  } else if (state === "DUAL_ROLE_MENU_PENDING" || lastPrompt?.question_type === "DUAL_ROLE_SELECTION") {
-    currentPendingQuestion = "DUAL_ROLE_SELECTION (1 Reschedule/Search, 2 Status, 3 Call)";
-  } else if (state === "VISIT_MISSED" || lastPrompt?.question_type === "RESCHEDULE_SLOT") {
-    currentPendingQuestion = "RESCHEDULE_SLOT (Bot asked for convenient day/time to reschedule missed visit)";
-  } else if (state === "OPTIONS_SENT" || state === "VISIT_REQUESTED" || state === "SITE_VISIT_PROPOSED" || lastPrompt?.question_type === "VISIT_SLOT") {
-    currentPendingQuestion = "VISIT_SLOT_OR_OPTION_SELECTION (Bot sent property cards or proposed a site visit. Any date, time, day, slot, or affirmative response is strictly BOOK_VISIT or SELECT_OPTION!)";
-  } else if (state === "ROLE_SELECTION_PENDING") {
-    currentPendingQuestion = "ROLE_SELECTION (Bot asked user: 1 or 'Leni hai' to Buy/Rent properties, 2 or 'Deni hai' to Sell/Rent Out their property. Replies indicating property types like 'Office', 'Residential', 'Commercial', 'Shop', 'Flat' are SEEKER requests, NEVER OFF_TOPIC!)";
-  } else if (state === "OWNER_CONFIG_PENDING") {
-    currentPendingQuestion = "PROPERTY_CONFIG (Bot asked for property type / configuration: Flat, Villa, Commercial Office, Shop, Plot. If user specifies project/society name too, extract BOTH project_or_society and property_type!)";
-  } else if (state === "OWNER_SOCIETY_PENDING") {
-    currentPendingQuestion = "SOCIETY_OR_ROAD (Bot asked for Commercial Complex, Business Hub, Society, or Road name)";
-  } else if (state === "OWNER_LOCATION_PENDING") {
-    currentPendingQuestion = "LOCATION_AREA (Bot asked for exact area / locality in the city)";
-  } else if (state === "OWNER_AREA_PENDING" || state === "OWNER_SIZE_PENDING") {
-    currentPendingQuestion = "CARPET_AREA_SQFT (Bot asked for Carpet / Plot / Built-up Area. Extract numbers into carpet_sqft, super_built_up_sqft, or plot_area_sqft)";
-  } else if (state === "OWNER_FLOOR_PENDING") {
-    currentPendingQuestion = "FLOOR_NUMBER (Bot asked which floor the property is on, e.g. Ground floor, 2nd floor, 4th floor, or NA)";
-  } else if (state === "OWNER_PRICE_PENDING") {
-    currentPendingQuestion = "PRICE_OR_RENT (Bot asked for expected selling price or monthly rent. If user specifies built-up or plot area, extract super_built_up_sqft / plot_area_sqft!)";
-  } else if (state === "OWNER_AMENITIES_PENDING") {
-    currentPendingQuestion = "PARKING_POSSESSION_PHONE (Bot asked for car parking availability, possession status, and direct contact phone)";
-  } else if (state === "OWNER_POSSESSION_PENDING") {
-    currentPendingQuestion = "POSSESSION_STATUS (Bot asked: 1 Ready to Move, 2 Under Construction. Single digit reply is strictly possession_status!)";
-  } else if (state === "OWNER_FURNISHING_PENDING") {
-    currentPendingQuestion = "FURNISHING_STATUS (Bot asked: 1 Unfurnished, 2 Semi-Furnished, 3 Fully Furnished. Single digit reply is strictly furnishing_status, DO NOT hallucinate transaction_type or price!)";
-  } else if (state === "OWNER_PHONE_PENDING") {
-    currentPendingQuestion = "CONTACT_PHONE (Bot asked for direct calling/WhatsApp number. Extract 10-digit number into contact_phone)";
-  } else if (state === "QUALIFYING") {
-    if (!lead?.property_type) currentPendingQuestion = "SEEKER_PROPERTY_TYPE (Bot asked what type of property: Residential, Commercial, Flat, Office, Villa, Shop. Replies with property types are strictly CHANGE_REQUIREMENT, NEVER OFF_TOPIC!)";
-    else if (!lead?.requirement) currentPendingQuestion = "SEEKER_REQUIREMENT (Buy or Rent)";
-    else if (!lead?.location) currentPendingQuestion = "SEEKER_LOCATION";
-    else if (!lead?.budget) currentPendingQuestion = "SEEKER_BUDGET (A numeric reply is price_or_budget)";
-    else if (!lead?.timeline) currentPendingQuestion = "SEEKER_TIMELINE";
-    else currentPendingQuestion = "SEEKER_QUALIFYING_FIELD";
-  } else if (state && state.startsWith("OWNER_") && state.endsWith("_PENDING")) {
-    currentPendingQuestion = "OWNER_INTAKE_FIELD";
-  }
-
-  const stageMicroPrompt = buildStageMicroPrompt(lead, lead?.state);
-
-  const knownPropType = isInProgressOwner
-    ? (lead?.metadata?.owner_draft?.property_type || "None")
-    : (lead?.metadata?.seeker_draft?.property_type || lead?.property_type || "None");
-
-  const knownLocation = isInProgressOwner
-    ? (lead?.metadata?.owner_draft?.location || "None")
-    : (lead?.metadata?.seeker_draft?.location || lead?.location || "None");
-
-  const knownBudgetOrPrice = isInProgressOwner
-    ? (lead?.metadata?.owner_draft?.expected_price ? `₹${Number(lead.metadata.owner_draft.expected_price).toLocaleString("en-IN")}` : lead?.metadata?.owner_draft?.expected_rent ? `₹${Number(lead.metadata.owner_draft.expected_rent).toLocaleString("en-IN")}/mo` : "None")
-    : (lead?.metadata?.seeker_draft?.budget ? `₹${Number(lead.metadata.seeker_draft.budget).toLocaleString("en-IN")}` : lead?.budget ? `₹${Number(lead.budget).toLocaleString("en-IN")}` : "None");
-
-  return `LEAD STATUS:
-- Active Persona: ${lead?.lead_type || "UNKNOWN"}
-- State: ${lead?.state || "FRESH"}
-- Suspended Detour State: ${lead?.metadata?.suspended_state || "None"}
-- In-Progress Owner Intake: ${isInProgressOwner ? "YES" : "NO"}
-- Known Locked Transaction: ${lockedTx || "None"}
-- Known User Phone: ${knownPhone || "None"}
-- Bot Question Waiting For: ${currentPendingQuestion}
-- LAST BOT PROMPT: "${lastBotPromptText}"${isPromptStale ? " (Note: This prompt is stale >72h and should not constrain unprompted queries)" : ""}
-- Known Property Type: ${knownPropType}
-- Known Location: ${knownLocation}
-- Known Budget/Price: ${knownBudgetOrPrice}
-- Known Carpet Area: ${lead?.metadata?.owner_draft?.carpet_area_sqft ? `${lead.metadata.owner_draft.carpet_area_sqft} sq.ft` : "None"}
-- Known Built-up Area: ${lead?.metadata?.owner_draft?.super_built_up_sqft ? `${lead.metadata.owner_draft.super_built_up_sqft} sq.ft` : "None"}
-- Has Active Site Visit: ${lead?.site_visit_booked ? "YES" : "NO"}
-
-${stageMicroPrompt}
-
-USER MESSAGE: "${messageText}"`;
-}
-
-function parseJsonSafely(str: string): any {
-  if (!str) return null;
-  const clean = str.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-  try {
-    return JSON.parse(clean);
-  } catch (_) {
-    const firstBrace = clean.indexOf("{");
-    const lastBrace = clean.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      try {
-        return JSON.parse(clean.substring(firstBrace, lastBrace + 1));
-      } catch (_) {}
-    }
-  }
   return null;
 }
 
@@ -7040,6 +6335,21 @@ export async function dispatchStateAction(
   const lower = context.lower || context.messageText.toLowerCase().trim();
   const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : "ji";
 
+  // Pre-load latest visit if lead has any site visit record
+  let latestVisit: any = null;
+  if (lead?.site_visit_booked || lead?.site_visit_at || lead?.site_visit_datetime || String(lead?.state).includes("VISIT")) {
+    const { data: v } = await supabase
+      .from("site_visits")
+      .select("*, inventory(*)")
+      .eq("client_id", activeTenantId)
+      .eq("lead_id", lead.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (v && v.length > 0) {
+      latestVisit = v[0];
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // 1. GLOBAL CRITICAL INTERCEPTORS
   // ---------------------------------------------------------------------------
@@ -7267,18 +6577,19 @@ export async function dispatchStateAction(
 
     const latestSub = subs && subs.length > 0 ? subs[0] : null;
 
-    // 2. Query latest site visit (scheduled, confirmed, rescheduled, or missed)
-    let latestVisit: any = null;
-    const { data: visits } = await supabase
-      .from("site_visits")
-      .select("*, inventory(*)")
-      .eq("client_id", activeTenantId)
-      .eq("lead_id", lead.id)
-      .order("created_at", { ascending: false })
-      .limit(1);
+    // 2. Query latest site visit if not already loaded
+    if (!latestVisit) {
+      const { data: visits } = await supabase
+        .from("site_visits")
+        .select("*, inventory(*)")
+        .eq("client_id", activeTenantId)
+        .eq("lead_id", lead.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
 
-    if (visits && visits.length > 0) {
-      latestVisit = visits[0];
+      if (visits && visits.length > 0) {
+        latestVisit = visits[0];
+      }
     }
 
     const scheduledTime = latestVisit?.scheduled_at || (lead.site_visit_booked ? (lead.site_visit_at || lead.site_visit_datetime) : null);
@@ -8100,14 +7411,20 @@ export async function dispatchStateAction(
       };
     }
     const isOpt1 =
+      context.cognitiveTurn?.selected_option === 1 ||
+      context.cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" ||
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
       /^(1|1️⃣|first|1st|option\s*1|site\s*visit|visit|search|buy|property\s*search)\b/i.test(lower);
 
     const isOpt2 =
+      context.cognitiveTurn?.selected_option === 2 ||
+      (context.cognitiveTurn?.active_role === "SELLER" && context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY") ||
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
       /^(2|2️⃣|second|2nd|option\s*2|meri\s*listed|listed|listing|status|property\s*status|update)\b/i.test(lower);
 
     const isOpt3 =
+      context.cognitiveTurn?.selected_option === 3 ||
+      context.cognitiveTurn?.primary_intent === "REQUEST_CALL" ||
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
       intent === "REQUEST_HUMAN_CALL" ||
       /^(3|3️⃣|third|3rd|option\s*3|call|advisor|senior|senior\s*advisor|talk|phone|human)\b/i.test(lower);
@@ -8123,16 +7440,17 @@ export async function dispatchStateAction(
 
     // Option 1: Route to Buyer context / anchor site visit
     if (isOpt1) {
-      let latestVisit: any = null;
-      const { data: visits } = await supabase
-        .from("site_visits")
-        .select("*, inventory(*)")
-        .eq("client_id", activeTenantId)
-        .eq("lead_id", lead.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
+      if (!latestVisit) {
+        const { data: visits } = await supabase
+          .from("site_visits")
+          .select("*, inventory(*)")
+          .eq("client_id", activeTenantId)
+          .eq("lead_id", lead.id)
+          .order("created_at", { ascending: false })
+          .limit(1);
 
-      if (visits && visits.length > 0) latestVisit = visits[0];
+        if (visits && visits.length > 0) latestVisit = visits[0];
+      }
       const scheduledTime = latestVisit?.scheduled_at || (lead.site_visit_booked ? (lead.site_visit_at || lead.site_visit_datetime) : null);
       const visitTimeMs = scheduledTime ? new Date(scheduledTime).getTime() : 0;
       const isVisitInFuture = visitTimeMs > Date.now();
@@ -11640,14 +10958,41 @@ async function handleQualificationCascade(
   const lastPromptQ = lastBotPrompt?.question_type;
 
   // Extract what was JUST provided in this user turn vs cumulative values (AI-first single source of truth)
+  const cogEntities = context.cognitiveTurn?.entities;
   const aiEntities = actionResult.extracted?.entities;
-  const justPropType = actionResult.property_type || (aiEntities?.property_type !== "UNKNOWN" ? aiEntities?.property_type : null) || parsePropertyTypeFromText(context.messageText, lastPromptQ);
-  const explicitlyStatedReq = parseRequirementFromText(context.messageText, lastPromptQ);
+
+  const justPropType =
+    cogEntities?.property_type ||
+    actionResult.property_type ||
+    (aiEntities?.property_type !== "UNKNOWN" ? aiEntities?.property_type : null) ||
+    parsePropertyTypeFromText(context.messageText, lastPromptQ);
+
+  const explicitlyStatedReq =
+    (cogEntities?.transaction_type === "RENT" || cogEntities?.transaction_type === "RENT_OUT") ? "RENT" :
+    (cogEntities?.transaction_type === "LEASE" || cogEntities?.transaction_type === "LEASE_OUT") ? "LEASE" :
+    (cogEntities?.transaction_type === "BUY") ? "BUY" :
+    parseRequirementFromText(context.messageText, lastPromptQ);
+
   const justReq = explicitlyStatedReq || null;
-  const justPurpose = (aiEntities?.purpose !== "UNKNOWN" ? aiEntities?.purpose : null) || parsePurposeFromText(context.messageText, lastPromptQ);
-  const justTimeline = actionResult.timeline || (aiEntities?.timeline !== "UNKNOWN" ? aiEntities?.timeline : null) || parseTimelineFromText(context.messageText, lastPromptQ);
+
+  const justPurpose =
+    (cogEntities?.purpose ? (cogEntities.purpose.toLowerCase().includes("invest") ? "INVESTMENT" : "SELF_USE") : null) ||
+    (aiEntities?.purpose !== "UNKNOWN" ? aiEntities?.purpose : null) ||
+    parsePurposeFromText(context.messageText, lastPromptQ);
+
+  const justTimeline =
+    cogEntities?.possession_timeline ||
+    actionResult.timeline ||
+    (aiEntities?.timeline !== "UNKNOWN" ? aiEntities?.timeline : null) ||
+    parseTimelineFromText(context.messageText, lastPromptQ);
+
   const currentReqForBudget = lead?.requirement || explicitlyStatedReq || (actionResult.transaction_type && actionResult.transaction_type !== "BUY" ? actionResult.transaction_type : null);
-  const justBudget = actionResult.price_or_budget || aiEntities?.budget_inr || parseBudgetFromText(context.messageText, lastPromptQ, currentReqForBudget);
+
+  const justBudget =
+    (cogEntities?.budget_max && cogEntities.budget_max > 0 ? cogEntities.budget_max : null) ||
+    actionResult.price_or_budget ||
+    aiEntities?.budget_inr ||
+    parseBudgetFromText(context.messageText, lastPromptQ, currentReqForBudget);
 
   const { data: allTenantInventory } = await supabase
     .from("inventory")
@@ -11657,7 +11002,10 @@ async function handleQualificationCascade(
 
   const detectedCity = extractCityFromText(context.messageText);
   const matchedLocs = extractLocationsFromText(context.messageText, allTenantInventory || []);
-  const extractedLoc = actionResult.location || (aiEntities?.location_name ? aiEntities.location_name : (matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(context.messageText, allTenantInventory || [])));
+  const extractedLoc =
+    cogEntities?.location ||
+    actionResult.location ||
+    (aiEntities?.location_name ? aiEntities.location_name : (matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(context.messageText, allTenantInventory || [])));
   const isMsgFlex = actionResult.is_flexible_location || /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|any\s*location|flexible|gamete)\b/i.test(context.lower);
   const justLoc = (actionResult.is_flexible_location || isMsgFlex) ? "FLEXIBLE" : extractedLoc;
   const primaryTenantCity = resolvedCity || "Vadodara";
@@ -12444,7 +11792,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v99-owner-circuit-breaker-and-dedup",
+        version: "v100-dual-role-fsm-modernization",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -13405,6 +12753,7 @@ Deno.serve(async (req: Request) => {
     if (cognitiveTurn.primary_intent === "SUBMIT_PROPERTY" || cognitiveTurn.active_role === "SELLER") {
       const isDualLead = lead.lead_type === "SEEKER" || Boolean(lead.metadata?.has_buyer_profile);
       const detectedPropType = cognitiveTurn.entities?.property_type || "Flat";
+      const existingOwnerDraft = lead.metadata?.owner_draft || {};
 
       const ownerRes = await handleOwnerFlow({
         lead: {
@@ -13415,14 +12764,17 @@ Deno.serve(async (req: Request) => {
             has_seller_profile: true,
             active_persona: "SELLER",
             owner_draft: {
-              started_at: new Date().toISOString(),
-              transaction_type: (cognitiveTurn.entities?.transaction_type === "RENT" || cognitiveTurn.entities?.transaction_type === "LEASE") ? "RENT_OUT" : "SELL",
-              property_type: detectedPropType,
-              configuration: detectedPropType,
+              started_at: existingOwnerDraft.started_at || new Date().toISOString(),
+              transaction_type: (cognitiveTurn.entities?.transaction_type === "RENT" || cognitiveTurn.entities?.transaction_type === "LEASE")
+                ? "RENT_OUT"
+                : (existingOwnerDraft.transaction_type || "SELL"),
+              property_type: existingOwnerDraft.property_type || detectedPropType,
+              configuration: existingOwnerDraft.configuration || detectedPropType,
               ...(cognitiveTurn.entities?.property_category ? { property_category: cognitiveTurn.entities.property_category } : {}),
               ...(cognitiveTurn.entities?.project_or_society ? { society_name: cognitiveTurn.entities.project_or_society } : {}),
               ...(cognitiveTurn.entities?.size_area_sqft ? { carpet_area_sqft: cognitiveTurn.entities.size_area_sqft } : {}),
               ...(cognitiveTurn.entities?.expected_price_inr ? { expected_price: cognitiveTurn.entities.expected_price_inr } : {}),
+              ...existingOwnerDraft,
             },
           },
         },
