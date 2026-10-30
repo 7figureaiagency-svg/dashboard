@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-30T11:56:00+05:30
+updated: 2026-10-30T20:25:00+05:30
 ---
 
 # Project State
@@ -7,13 +7,16 @@ updated: 2026-10-30T11:56:00+05:30
 ## Current Position
 
 **Milestone:** PropTech Matching Precision & Robustness  
-**Phase:** 41 - Pure AI-First Cognitive Intent Routing, Role-Switch Circuit Breaker & Zero-Regex Decision Architecture  
-**Status:** ✅ Complete (`v95-ai-first-cognitive-intent-routing` deployed live to Supabase production)  
-**Decisions Documented:** `.gsd/DECISIONS.md` (Phase 41 Decisions)
+**Phase:** 42 - Intent-Driven, Anti-Yes/No Conversational Follow-Up & Multilingual Nurture Architecture  
+**Status:** ✅ Complete (`v104-intent-driven-multilingual-cron-templates` deployed live to Supabase production)  
+**Decisions Documented:** `.gsd/DECISIONS.md` (Phase 42 Decisions)
 
 ## Last Action
 
-Completed Phase 41 Execution (Pure AI-First Cognitive Intent Routing, Role-Switch Circuit Breaker & Zero-Regex Decision Architecture):
+Completed Phase 42 Execution (Intent-Driven, Anti-Yes/No Conversational Follow-Up & Multilingual Nurture Architecture):
+- **Wave 1 (`Plan 42.1`):** Refactored Modules 1A, 1, 2, 2B, and 2C across Gujlish, English, and Hinglish. Completely eradicated binary Yes/No questions (e.g. "confirm samjhein?", "Were you able to attend? 1 for Yes, 2 for No"). Replaced with active prompts for arrival status, on-site route guidance, layout/budget fit, and concrete 2-slot reschedule choices ("Kal shaam 5 baje ya Sunday subah 11 baje").
+- **Wave 1 (`Plan 42.2`):** Refactored Module 3 (Options Sent, Visit Requested & Incomplete Qualification Cases 1-6) and Module 4 (Post-Visit Day-Wise Drips for Day 1, Day 3, and Day 7). Injected explicit benchmark entities (e.g., "₹50 Lakhs ya ₹1.2 Cr", "South Bopal ya Shela"), floor/facing preferences, down payment ranges for loan sanctioning, and private senior management closing meeting slots.
+- **Wave 2 (`Plan 42.3`):** Verified 23-assertion test matrix in `scratch/test_phase42_cron_templates.cjs` (23/23 assertions passed, 100%). Bundled and deployed `v104-intent-driven-multilingual-cron-templates` (Version #164) live to Supabase serverless production. Executed live targeted sweep verification confirming dispatch to Bhagirath's Telegram chat (`id: 509972276`, message_id 810).
 - **Wave 1 (`Plan 41.1`):** Eradicated hardcoded decision regexes in `handleOwnerFlow` (`isSecondListing`, `isSeekerInquiry`, `isDecliningSecondListing`, `isStatusInquiry`) and deployed the Top-Level Mid-Flow Role-Switch Circuit Breaker in `processIncomingMessage`. Passing `cognitiveTurn` to all 12 call sites of `handleOwnerFlow`. Verified via `scratch/test_phase41_owner_switch.cjs` (5/5 passed).
 - **Wave 2 (`Plan 41.2`):** Modernized router state guards, site visit lifecycle actions (`isUnableToAttendVisit`, `isRescheduleVisit`, `isCancelVisit`, `isVisitDetails`), first-turn role selection (`ROLE_SELECTION_PENDING`), and post-visit objections using `cognitiveTurn.primary_intent`, `cognitiveTurn.active_role`, and `cognitiveTurn.selected_option`.
 - **Wave 3 (`Plan 41.3`):** Verified 10-point automated matrix in `scratch/test_phase41_matrix.cjs` (10/10 assertions passed). Compiled frontend build (`npm.cmd run build`) in 2.51s with 0 errors. Deployed Edge Function `v95-ai-first-cognitive-intent-routing` live to Supabase production and confirmed HTTP 200 `ONLINE`. Wiped test Telegram lead `5117510624` clean for live testing.

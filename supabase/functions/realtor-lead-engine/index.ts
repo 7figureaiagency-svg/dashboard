@@ -3686,11 +3686,11 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
             let briefingMsg = "";
             if (lang === "GUJLISH") {
-              briefingMsg = `Suprabhat <b>${name} bhai</b>! 🌅\n\nAaje tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>${formattedTime}</b> par scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Shu timing confirm samjie?`;
+              briefingMsg = `Suprabhat <b>${name} bhai</b>! 🌅\n\nAaje tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>${formattedTime}</b> par scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par hajir raheshe. Tame direct site par pahonchi rahya chho ke raste koi landmark guidance joiye chhe? <i>(Jo timing ma thodo ferfar karvo hoy, to naya anukool time janavi shako chho)</i>`;
             } else if (lang === "ENGLISH") {
-              briefingMsg = `Good morning <b>${name}</b>! 🌅\n\nA quick briefing that your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled today at <b>${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the site location. Looking forward to meeting you!`;
+              briefingMsg = `Good morning <b>${name}</b>! 🌅\n\nA quick briefing that your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled today at <b>${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will be present directly on-site. Will you be reaching the site directly or do you need any navigation/landmark guidance? <i>(If you need to adjust the timing, simply let us know your preferred time)</i>`;
             } else {
-              briefingMsg = `Suprabhat <b>${name} ji</b>! 🌅\n\nAaj aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>${formattedTime}</b> par scheduled hai! 🚗\n\n${mapLink}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par aapse milenge. Kya hum timing confirm samjhein?`;
+              briefingMsg = `Suprabhat <b>${name} ji</b>! 🌅\n\nAaj aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>${formattedTime}</b> par scheduled hai! 🚗\n\n${mapLink}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par ready rahenge. Aap direct site par pahunch rahe hain ya raste me koi landmark guidance chahiye? <i>(Agar timing me thoda aage-piche karna ho, toh bas aapka naya convenient time bata dijiye)</i>`;
             }
 
             await sleepJitter();
@@ -3782,11 +3782,11 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
             let reminderMsg = "";
             if (lang === "GUJLISH") {
-              reminderMsg = `Namaste <b>${name} bhai</b>! ⏰ Reminder: Tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>1 kalak ma (${formattedTime})</b> scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par tamne malshe. Jo time ma thodo ferfar hoy to janavjo!`;
+              reminderMsg = `Namaste <b>${name} bhai</b>! ⏰ Reminder: Tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>1 kalak ma (${formattedTime})</b> scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Executive Site Par Ready Chhe!</b> Amara senior sales executive site location par pahonchi gaya chhe. Tame on-the-way chho, ke raste koi direction guidance joiye chhe? <i>(Jo pahonchva ma thodo samay lagvano hoy to kitla vage pahonchsho janavjo taaki executive wait kare)</i>`;
             } else if (lang === "ENGLISH") {
-              reminderMsg = `Hello <b>${name}</b>! ⏰ Reminder: Your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled in <b>1 hour at ${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will meet you directly at the site on time. Please let us know if you need any adjustments to your schedule!`;
+              reminderMsg = `Hello <b>${name}</b>! ⏰ Reminder: Your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled in <b>1 hour at ${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>Advisor Ready On-Site!</b> Our senior sales advisor has arrived at the property. Are you on the way, or do you need any directions assistance? <i>(If you are running slightly behind schedule, let us know your estimated arrival time so our team coordinates smoothly)</i>`;
             } else {
-              reminderMsg = `Namaste <b>${name} ji</b>! ⏰ Reminder: Aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>1 ghante me (${formattedTime})</b> scheduled hai! 🚗\n\n${mapLink}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par aapse milenge. Agar timing me thoda aage-piche ho to kripya bataiye!`;
+              reminderMsg = `Namaste <b>${name} ji</b>! ⏰ Reminder: Aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>1 ghante me (${formattedTime})</b> scheduled hai! 🚗\n\n${mapLink}\n\n🤝 <b>Executive Site Par Ready Hain!</b> Hamare senior sales executive site location par pahunch chuke hain. Kya aap on-the-way hain, ya raste me koi direction guidance chahiye? <i>(Agar pahunchne me thoda extra time lag raha ho, toh lagbhag kitne baje tak pahuchenge bata dijiye taaki executive coordinate kare)</i>`;
             }
 
             await sleepJitter();
@@ -3868,11 +3868,11 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
             let feedbackMsg = "";
             if (lang === "GUJLISH") {
-              feedbackMsg = `Namaste <b>${name} bhai</b>! 🙏\nAaje <b>${projectName}</b> par tamari VIP site visit scheduled hati.\n\nShu tame visit par pahonchi shakya hata? 🚗\n\n1️⃣ <b>Haan, visit attend kari</b>\n2️⃣ <b>Nahi, visit nathi thai saki</b>\n\n<i>(Tame 1 ke 2 lakhi ne pan reply kari shako chho)</i>`;
+              feedbackMsg = `Namaste <b>${name} bhai</b>! 🙏\nAaje <b>${projectName}</b> par tamari VIP site visit scheduled hati.\n\nTamaro site visit experience kevo rahyo — <b>developer no layout ane pricing tamari expectation sathe match thayi</b>, ke tame aa area ma bija better alternative options jova mango chho? 🚗\n\n1️⃣ <b>Haan, visit attend kari (Layout/Price saras hatu)</b>\n2️⃣ <b>Nahi, aaje visit nathi thai saki (Navi visit reschedule karo)</b>\n\n<i>(Tame direct tamari feedback lakhi shako chho athva 1 ke 2 reply kari shako chho)</i>`;
             } else if (lang === "ENGLISH") {
-              feedbackMsg = `Hello <b>${name}</b>! 🙏\nYou had a VIP site visit scheduled today for <b>${projectName}</b>.\n\nWere you able to attend the visit? 🚗\n\n1️⃣ <b>Yes, attended the visit</b>\n2️⃣ <b>No, couldn't make it</b>\n\n<i>(You can reply with 1 or 2)</i>`;
+              feedbackMsg = `Hello <b>${name}</b>! 🙏\nYou had a VIP site visit scheduled today for <b>${projectName}</b>.\n\nHow was your visit experience — <b>did the unit layout and pricing match your expectations</b>, or would you like to explore 2 better alternative options in this corridor? 🚗\n\n1️⃣ <b>Yes, attended the visit (Layout/Pricing was good)</b>\n2️⃣ <b>No, couldn't make it today (Reschedule fresh visit)</b>\n\n<i>(Feel free to share your thoughts directly or reply with 1 or 2)</i>`;
             } else {
-              feedbackMsg = `Namaste <b>${name} ji</b>! 🙏\nAaj <b>${projectName}</b> par aapki VIP site visit scheduled thi.\n\nKya aap visit par pahunch paaye the? 🚗\n\n1️⃣ <b>Haan, visit attend ki</b>\n2️⃣ <b>Nahi, visit nahi ho paayi</b>\n\n<i>(Aap 1 ya 2 likhkar bhi reply kar sakte hain)</i>`;
+              feedbackMsg = `Namaste <b>${name} ji</b>! 🙏\nAaj <b>${projectName}</b> par aapki VIP site visit scheduled thi.\n\nAapka site visit experience kaisa raha — <b>kya developer ka sample layout aur pricing aapke budget se match hui</b>, ya hum is area ke 2 better alternative options share karein? 🚗\n\n1️⃣ <b>Haan, visit attend ki (Layout/Price accha laga)</b>\n2️⃣ <b>Nahi, aaj visit nahi ho paayi (Fresh visit reschedule karein)</b>\n\n<i>(Aap direct apni feedback likhkar bhej sakte hain ya 1 ya 2 reply kar sakte hain)</i>`;
             }
 
             await sleepJitter();
@@ -3963,11 +3963,11 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
               let nudgeMsg = "";
               if (lang === "GUJLISH") {
-                nudgeMsg = `Hi <b>${name} bhai</b>! 🙏 Kaale tamari <b>${projectName}</b> visit babate check karvano hato — shu kaale javani thayu hatu, ke aa aavta weekend par navi visit plan kariye? 🚗`;
+                nudgeMsg = `Hi <b>${name} bhai</b>! 🙏\nKaale tamari <b>${projectName}</b> visit babate check karvano hato — jo tame visit kari lidhi hoy to layout kevo lagyo janavjo! Ane jo kaale javani na thayu hoy, to shu ame <b>kaale sanje 5:00 vage</b> ke <b>Sunday savare 11:00 vage</b> navi VIP Site Visit 🚗 reschedule karie?`;
               } else if (lang === "ENGLISH") {
-                nudgeMsg = `Hi <b>${name}</b>! 🙏 Just following up regarding your <b>${projectName}</b> site visit yesterday — were you able to make it, or should we arrange a fresh visit this upcoming weekend? 🚗`;
+                nudgeMsg = `Hi <b>${name}</b>! 🙏\nFollowing up regarding your <b>${projectName}</b> site visit — if you visited, we'd love to know how you liked the layout! And if you weren't able to make it yesterday, shall we reschedule your VIP Site Visit 🚗 for <b>tomorrow at 5:00 PM</b> or <b>Sunday at 11:00 AM</b>?`;
               } else {
-                nudgeMsg = `Hi <b>${name} ji</b>! 🙏 Kal aapki <b>${projectName}</b> visit ke baare me follow-up kar raha tha — kya kal aapka visit par jana ho paaya tha, ya hum is aane wale weekend par nayi visit arrange karein? 🚗`;
+                nudgeMsg = `Hi <b>${name} ji</b>! 🙏\nKal aapki <b>${projectName}</b> visit ke baare me follow-up kar raha tha — agar aapne visit kar li ho toh bataiye layout kaisa laga! Aur agar kal jana nahi ho paaya, toh kya hum <b>kal shaam 5:00 PM</b> ya <b>Sunday subah 11:00 AM</b> aapki fresh VIP Site Visit 🚗 reschedule karein?`;
               }
 
               await sleepJitter();
@@ -4052,11 +4052,11 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
               let rescheduleMsg = "";
               if (lang === "GUJLISH") {
-                rescheduleMsg = `Namaste <b>${name} bhai</b>! 🙏\n\nTamari <b>${projectName}</b> mate VIP site visit miss thai hati. Shu ame aa athvadiye tamara anukool samay par navi visit plan kariye? 🚗📍\n\n👉 <b>Tame anukool divas ane samay (jem ke: 'Kaale 4 vage' ke 'Sunday 11 vage') lakhi ne mokli shako chho!</b>`;
+                rescheduleMsg = `Namaste <b>${name} bhai</b>! 🙏\nKoi vaat nahi, schedule ma badlav aavto rahe chhe! <b>${projectName}</b> mate developer sathe tamari fresh VIP site visit 🚗 arrange karva mate kayo slot sauthi anukool raheshe — <b>kaale sanje 5:00 vage</b> ke <b>Sunday savare 11:00 vage</b>?\n\n👉 <i>(Tame tamaro koi preferred divas ane samay pan lakhi ne mokli shako chho)</i>`;
               } else if (lang === "ENGLISH") {
-                rescheduleMsg = `Hello <b>${name}</b>! 🙏\n\nWe noticed your VIP site visit for <b>${projectName}</b> was missed. Would you like to reschedule for a convenient day this week? 🚗📍\n\n👉 <b>Simply reply with your preferred day and time (e.g., 'Tomorrow 4 PM' or 'Saturday 11 AM')!</b>`;
+                rescheduleMsg = `Hello <b>${name}</b>! 🙏\nNo worries at all, schedules change! To arrange your fresh VIP site visit 🚗 for <b>${projectName}</b> with the developer, which slot works best for you — <b>tomorrow at 5:00 PM</b> or <b>Sunday at 11:00 AM</b>?\n\n👉 <i>(You can also reply with any specific day and time that suits you)</i>`;
               } else {
-                rescheduleMsg = `Namaste <b>${name} ji</b>! 🙏\nAapki <b>${projectName}</b> ke liye VIP site visit miss ho gayi thi. Kya hum is week aapke liye ek fresh convenient timing par visit schedule karein? 🚗📍\n\n👉 <b>Aap apna convenient din aur samay (jaise: 'Kal 4 baje' ya 'Sunday subah 11 baje') likhkar bhej sakte hain!</b>`;
+                rescheduleMsg = `Namaste <b>${name} ji</b>! 🙏\nKoi baat nahi, schedules me changes hote rehte hain! <b>${projectName}</b> ke liye developer ke sath aapki fresh VIP site visit 🚗 arrange karne ke liye kaunsa slot best rahega — <b>kal shaam 5:00 baje</b> ya <b>Sunday subah 11:00 baje</b>?\n\n👉 <i>(Aap apna koi preferred din aur samay bhi likhkar bhej sakte hain)</i>`;
               }
 
               await sleepJitter();
@@ -4168,20 +4168,20 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                   const topProject = projectName && projectName !== "VIP Property" ? projectName : "selected property";
 
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Ame je properties share kari hati (jaise <b>${topProject}</b>), shu tame check kari? Developer taraf thi limited units par <b>exclusive price sheet ane spot token booking benefits</b> chali rahya chhe. Jo tame direct inspection karva mangta ho, to ame <b>kaale sanje 5 vage</b> VIP Site Visit arrange kari shakie chhiye. 🚗`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Ame share kareli properties (jaise <b>${topProject}</b>) ma tamne <b>kaunso layout ke facing sauthi anukool lagyo</b>, jethi ame direct developer sathe private walk-through ane spot token benefits confirm kariye? Shu ame <b>kaale sanje 5:00 vage</b> ke <b>Sunday savare 11:00 vage</b> tamari VIP Site Visit 🚗 arrange karie?`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 Did you get a chance to review the shortlisted properties (such as <b>${topProject}</b>)? The developer is currently offering <b>exclusive price sheet & spot token booking benefits</b> on select units. Shall we schedule a VIP Site Visit <b>tomorrow at 5:00 PM</b>? 🚗`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 Among the shortlisted properties (such as <b>${topProject}</b>), <b>which layout or facing did you find most appealing</b> so we can coordinate a private walkthrough and developer spot-token privileges? Would you prefer a VIP Site Visit 🚗 <b>tomorrow at 5:00 PM</b> or <b>Sunday at 11:00 AM</b>?`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Jo properties humne share ki thin (jaise <b>${topProject}</b>), kya aapne review keen? Developer ki taraf se limited units par <b>exclusive price sheet aur spot token booking benefits</b> chal rahe hain. Kya hum <b>kal shaam 5 baje</b> VIP Site Visit plan karein? 🚗`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Jo properties humne share ki thin (jaise <b>${topProject}</b>), usme aapko <b>kaunsa layout ya facing sabse zyada pasand aaya</b>, taaki hum direct developer se private walk-through aur spot token benefits coordinate karein? Kya hum <b>kal shaam 5:00 baje</b> ya <b>Sunday subah 11:00 baje</b> aapki VIP Site Visit 🚗 arrange karein?`;
                   }
                 }
               } else if (l.state === "VISIT_REQUESTED") {
                 if (lang === "GUJLISH") {
-                  nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Tamari VIP Site Visit schedule karva mate, <b>kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b> mathi kayo slot confirm karie? 🚗`;
+                  nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Tamari VIP Site Visit 🚗 confirm karva mate, <b>kaale sanje 5:00 vage</b> ke <b>Sunday savare 11:00 vage</b> mathi kayo slot sauthi anukool raheshe? <i>(Tame tamaro koi bija preferred timing pan janavi shako chho)</i>`;
                 } else if (lang === "ENGLISH") {
-                  nudgeMsg = `Hello <b>${name}</b>! 👋 To confirm your VIP Site Visit, would you prefer <b>tomorrow at 5 PM</b> or <b>Sunday at 11 AM</b>? 🚗`;
+                  nudgeMsg = `Hello <b>${name}</b>! 👋 To confirm your VIP Site Visit 🚗, which slot would be most convenient — <b>tomorrow at 5:00 PM</b> or <b>Sunday at 11:00 AM</b>? <i>(You can also share any other timing that suits you best)</i>`;
                 } else {
-                  nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Aapki VIP Site Visit schedule karne ke liye, <b>kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b> me se kaunsa slot confirm karein? 🚗`;
+                  nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Aapki VIP Site Visit 🚗 confirm karne ke liye, <b>kal shaam 5:00 baje</b> ya <b>Sunday subah 11:00 baje</b> me se kaunsa slot aapko sabse convenient rahega? <i>(Aap apna koi doosra preferred timing bhi bata sakte hain)</i>`;
                 }
               } else {
                 // Incomplete Qualification (QUALIFYING, FRESH, COLD_UNQUALIFIED, COLD)
@@ -4196,56 +4196,56 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 if (hasPropType && !hasLocation && !hasBudget) {
                   // e.g. Bhagirath (2BHK Flat noted, location & budget missing)
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat tamari ${propDesc} requirement babate thai hati. Aagad vadhta, fakt tamaro <b>budget range ane preferred location</b> janavi do, jethi ame direct matching options share kari tamari <b>VIP Site Visit 🚗</b> arrange kari shakie!`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat tamari ${propDesc} requirement babate thai hati. Aagad vadhta, fakt tamaro <b>budget range (jem ke ₹50 Lakhs ke ₹1.2 Cr) ane preferred location (jem ke Shela, Bopal, ke SG Highway)</b> janavi do, jethi ame direct matching options share kari tamari <b>VIP Site Visit 🚗</b> arrange kari shakie!`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we noted your requirement for ${propDesc}. Moving forward, could you please share your <b>budget range and preferred location</b> so we can share matching options and schedule your <b>VIP Site Visit 🚗</b>?`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we noted your requirement for ${propDesc}. Moving forward, could you please share your <b>budget range (e.g., ₹50 Lakhs or ₹1.2 Cr) and preferred location (e.g., Shela, South Bopal, or SG Highway)</b> so we can share matching options and schedule your <b>VIP Site Visit 🚗</b>?`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat aapke ${propDesc} requirement ke baare me hui thi. Aage badhte hue, bas aapka <b>budget range aur preferred location</b> bata dijiye, taaki hum direct matching options share karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein!`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat aapke ${propDesc} requirement ke baare me hui thi. Aage badhte hue, bas aapka <b>budget range (jaise ₹50 Lakhs ya ₹1.2 Cr) aur preferred location (jaise Shela, South Bopal, ya SG Highway)</b> bata dijiye, taaki hum direct matching options share karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein!`;
                   }
                 } else if (hasPropType && hasLocation && !hasBudget) {
                   // Property type and location known, budget missing
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat ${locDesc} ma ${propDesc} babate thai hati. Aagad vadhta, fakt tamaro <b>budget range</b> janavi do, jethi ame direct matching options share kari tamari <b>VIP Site Visit 🚗</b> plan kari shakie!`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat ${locDesc} ma ${propDesc} babate thai hati. Aagad vadhta, fakt tamaro <b>approximate budget range (jem ke ₹50-70 Lakhs ke ₹1.5 Cr+)</b> janavi do, jethi ame direct matching options share kari tamari <b>VIP Site Visit 🚗</b> plan kari shakie!`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we noted you're looking for ${propDesc} in ${locDesc}. Moving forward, please share your <b>budget range</b> so we can share matching options and schedule your <b>VIP Site Visit 🚗</b>!`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we noted you're looking for ${propDesc} in ${locDesc}. Moving forward, please share your <b>approximate budget range (e.g., ₹50-70 Lakhs or ₹1.5 Cr+)</b> so we can share matching options and schedule your <b>VIP Site Visit 🚗</b>!`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat ${locDesc} me ${propDesc} ke baare me hui thi. Aage badhte hue, bas aapka <b>budget range</b> bata dijiye, taaki hum direct matching options share karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein!`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat ${locDesc} me ${propDesc} ke baare me hui thi. Aage badhte hue, bas aapka <b>approximate budget range (jaise ₹50-70 Lakhs ya ₹1.5 Cr+)</b> bata dijiye, taaki hum direct matching options share karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein!`;
                   }
                 } else if (hasPropType && hasBudget && !hasLocation) {
                   // Property type and budget known, location missing
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat ${propDesc} (${budgetDesc}) babate thai hati. Aagad vadhta, tamari <b>preferred location ke area</b> kayo chhe, jethi ame top options shortlist kari tamari <b>VIP Site Visit 🚗</b> arrange kari shakie?`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat ${propDesc} (${budgetDesc}) babate thai hati. Aagad vadhta, tamari <b>preferred location ke area (jem ke Science City, Shela, ke Bopal)</b> kayo chhe, jethi ame top options shortlist kari tamari <b>VIP Site Visit 🚗</b> arrange kari shakie?`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we noted your interest in ${propDesc} within ${budgetDesc}. Moving forward, what is your <b>preferred location or area</b> so we can shortlist top options and plan your <b>VIP Site Visit 🚗</b>?`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we noted your interest in ${propDesc} within ${budgetDesc}. Moving forward, what is your <b>preferred location or area (e.g., Science City, Shela, or South Bopal)</b> so we can shortlist top options and plan your <b>VIP Site Visit 🚗</b>?`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat ${propDesc} (${budgetDesc}) ke baare me hui thi. Aage badhte hue, aapki <b>preferred location ya area</b> kaunsi hai, taaki hum top options shortlist karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein?`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat ${propDesc} (${budgetDesc}) ke baare me hui thi. Aage badhte hue, aapki <b>preferred location ya area (jaise Science City, Shela, ya South Bopal)</b> kaunsi hai, taaki hum top options shortlist karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein?`;
                   }
                 } else if (!hasPropType && hasLocation) {
                   // Location known, property type and/or budget missing
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat ${locDesc} area babate thai hati. Aagad vadhta, tamne <b>keva type ni property ane ketla budget</b> ma joiye chhe, jethi ame options share kari tamari <b>VIP Site Visit 🚗</b> schedule kari shakie?`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat ${locDesc} area babate thai hati. Aagad vadhta, tamne <b>keva type ni property (2/3 BHK Flat ke Villa) ane ketla budget range</b> ma joiye chhe, jethi ame options share kari tamari <b>VIP Site Visit 🚗</b> schedule kari shakie?`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we discussed the ${locDesc} area. Moving forward, what <b>property type and budget range</b> are you looking for so we can share options and arrange your <b>VIP Site Visit 🚗</b>?`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we discussed the ${locDesc} area. Moving forward, what <b>property type (2/3 BHK Flat or Villa) and budget range</b> are you looking for so we can share options and arrange your <b>VIP Site Visit 🚗</b>?`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat ${locDesc} area ke baare me hui thi. Aage badhte hue, aapko <b>kis type ki property (Flat/Villa) aur budget range</b> me dekhni hai, taaki hum verified options share karke aapki <b>VIP Site Visit 🚗</b> schedule karein?`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat ${locDesc} area ke baare me hui thi. Aage badhte hue, aapko <b>kis type ki property (2/3 BHK Flat ya Villa) aur budget range</b> me dekhni hai, taaki hum verified options share karke aapki <b>VIP Site Visit 🚗</b> schedule karein?`;
                   }
                 } else if (hasPropType && hasLocation && hasBudget) {
                   // All 3 present, stalled before booking visit
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Amari teame ${locDesc} ma tamara mujab ${propDesc} (${budgetDesc}) na top verified options ready rakhya chhe. Shu ame <b>kaale sanje 5 vage ke Sunday savare 11 vage</b> tamari <b>VIP Site Visit 🚗</b> arrange karie?`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Amari teame ${locDesc} ma tamara mujab ${propDesc} (${budgetDesc}) na top verified options ready rakhya chhe. Shu ame <b>kaale sanje 5:00 vage ke Sunday savare 11:00 vage</b> tamari <b>VIP Site Visit 🚗</b> arrange karie?`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 Our team has curated top verified options for ${propDesc} in ${locDesc} (${budgetDesc}). Shall we schedule your <b>VIP Site Visit 🚗</b> for <b>tomorrow at 5 PM or Sunday at 11 AM</b>?`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 Our team has curated top verified options for ${propDesc} in ${locDesc} (${budgetDesc}). Shall we schedule your <b>VIP Site Visit 🚗</b> for <b>tomorrow at 5:00 PM or Sunday at 11:00 AM</b>?`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Hamari team ne ${locDesc} me aapke mutabiq ${propDesc} (${budgetDesc}) ke top verified options ready rakhe hain. Kya hum <b>kal shaam 5 baje ya Sunday subah 11 baje</b> aapki <b>VIP Site Visit 🚗</b> arrange karein?`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Hamari team ne ${locDesc} me aapke mutabiq ${propDesc} (${budgetDesc}) ke top verified options ready rakhe hain. Kya hum <b>kal shaam 5:00 baje ya Sunday subah 11:00 baje</b> aapki <b>VIP Site Visit 🚗</b> arrange karein?`;
                   }
                 } else {
                   // Fresh or no slots yet
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Griham Realty taraf thi follow-up kari rahya hata. Tame <b>keva type ni property</b> shodhva mango chho ane tamaro <b>budget range</b> shu chhe, jethi ame direct matching options share kari tamari <b>VIP Site Visit 🚗</b> arrange karie?`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Griham Realty taraf thi follow-up kari rahya hata. Tame <b>keva type ni property (Flat/Villa)</b> shodhva mango chho ane tamaro <b>approximate budget range (jem ke ₹50L ke ₹1.5 Cr)</b> shu chhe, jethi ame direct matching options share kari tamari <b>VIP Site Visit 🚗</b> arrange karie?`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 Following up from Griham Realty. What <b>property type</b> and <b>budget range</b> are you exploring so we can share matching properties and arrange your <b>VIP Site Visit 🚗</b>?`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 Following up from Griham Realty. What <b>property type (Flat/Villa)</b> and <b>approximate budget range (e.g. ₹50L or ₹1.5 Cr)</b> are you exploring so we can share matching properties and arrange your <b>VIP Site Visit 🚗</b>?`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Griham Realty se follow-up kar rahe the. Aap <b>kis type ki property</b> search kar rahe hain aur aapka <b>budget range</b> kya hai, taaki hum direct matching properties share karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein?`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Griham Realty se follow-up kar rahe the. Aap <b>kis type ki property (Flat/Villa)</b> search kar rahe hain aur aapka <b>approximate budget range (jaise ₹50L ya ₹1.5 Cr)</b> kya hai, taaki hum direct matching properties share karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein?`;
                   }
                 }
               }
@@ -4352,29 +4352,29 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               if (stage === "POST_VISIT_DAY_1") {
                 nextDripStage = "POST_VISIT_DAY_3";
                 if (lang === "GUJLISH") {
-                  dripMsg = `Namaste <b>${name} bhai</b>! 🌟 Tamari <b>${projectName}</b> ni site visit pachhi, shu tame koi preferred unit ya floor select karyo chhe? Developer taraf thi limited units par token booking offer ane priority allotment chali rahyu chhe. Shu ame booking form share kariye?`;
+                  dripMsg = `Namaste <b>${name} bhai</b>! 🌟 Tamari <b>${projectName}</b> ni site visit pachhi, <b>tamne kaunso floor ke unit facing (Garden facing ke Road facing) sauthi attractive lagyo</b>, jethi ame builder sathe exclusive negotiated pricing sheet ane inventory availability lock kariye? 🚗`;
                 } else if (lang === "ENGLISH") {
-                  dripMsg = `Hello <b>${name}</b>! 🌟 Following your site visit to <b>${projectName}</b>, have you selected your preferred unit or floor? The developer is currently offering priority allotment and exclusive token booking terms on select inventory. Shall we share the booking process details?`;
+                  dripMsg = `Hello <b>${name}</b>! 🌟 Following your site visit to <b>${projectName}</b>, <b>which floor band or unit facing (such as Garden view or Main Road facing) did you like best</b>, so we can lock in exclusive negotiated pricing and inventory availability with the developer? 🚗`;
                 } else {
-                  dripMsg = `Namaste <b>${name} ji</b>! 🌟 Aapki <b>${projectName}</b> ki site visit ke baad, kya aapne koi preferred unit ya floor finalize kiya? Developer ki taraf se limited units par token booking offer aur priority allotment chal raha hai. Kya hum booking process share karein?`;
+                  dripMsg = `Namaste <b>${name} ji</b>! 🌟 Aapki <b>${projectName}</b> ki site visit ke baad, <b>aapko kaunsa floor ya unit facing (Garden facing ya Road facing) sabse attractive laga</b>, taaki hum builder se exclusive negotiated pricing sheet aur inventory availability lock karein? 🚗`;
                 }
               } else if (stage === "POST_VISIT_DAY_3") {
                 nextDripStage = "POST_VISIT_DAY_7";
                 if (lang === "GUJLISH") {
-                  dripMsg = `Namaste <b>${name} bhai</b>! 🏦 <b>${projectName}</b> mate amari banking partners taraf thi lowest home loan rates (8.4% starting) ane flexible construction-linked payment schemes upalabdha chhe. Shu ame EMI calculation ane pre-approval ma madad kariye?`;
+                  dripMsg = `Namaste <b>${name} bhai</b>! 🏦 <b>${projectName}</b> mate amari banking partners taraf thi starting 8.4% par zero-processing-fee loan schemes chali rahi chhe. <b>Tame ketlu down payment plan kari rahya chho</b>, jethi ame customized monthly EMI sheet ane instant bank eligibility prepare kari shakiye?`;
                 } else if (lang === "ENGLISH") {
-                  dripMsg = `Hello <b>${name}</b>! 🏦 For <b>${projectName}</b>, our banking partners are offering lowest home loan interest rates (starting at 8.4%) along with flexible payment schedules. Would you like us to assist you with customized EMI calculation and fast-track pre-approval?`;
+                  dripMsg = `Hello <b>${name}</b>! 🏦 For <b>${projectName}</b>, our banking partners are offering special home loan schemes starting at 8.4% with zero processing fee. <b>What down payment range are you planning</b>, so we can prepare your exact monthly EMI breakdown and pre-sanction assessment?`;
                 } else {
-                  dripMsg = `Namaste <b>${name} ji</b>! 🏦 <b>${projectName}</b> ke liye hamare banking partners lowest home loan rates (8.4% starting) aur flexible payment plans provide kar rahe hain. Kya hum aapki EMI calculation aur pre-approval assist karein?`;
+                  dripMsg = `Namaste <b>${name} ji</b>! 🏦 <b>${projectName}</b> ke liye hamare partner banks se starting 8.4% par zero-processing-fee loan schemes chal rahi hain. <b>Aap kitna down payment plan kar rahe hain</b>, taaki hum exact monthly EMI sheet aur bank sanction eligibility prepare karein?`;
                 }
               } else if (stage === "POST_VISIT_DAY_7") {
                 nextDripStage = "POST_VISIT_COMPLETED";
                 if (lang === "GUJLISH") {
-                  dripMsg = `Namaste <b>${name} bhai</b>! 🏢 <b>${projectName}</b> babate tamaro aaghad no vichar kevo chhe? Jo tame aa project final karva magta ho to developer sathe final meeting arrange kari shakie, athva tamare aa j budget ma bija matching projects jova hoy to janavjo!`;
+                  dripMsg = `Namaste <b>${name} bhai</b>! 🏢 <b>${projectName}</b> ma limited premium units par aa weekend special developer spot-discounts chali rahya chhe. Shu ame <b>Saturday sanje 4:00 vage</b> developer na senior management sathe tamari private deal-closing meeting fix kariye, ke tame aa j budget ma bija verified options jova mango chho?`;
                 } else if (lang === "ENGLISH") {
-                  dripMsg = `Hello <b>${name}</b>! 🏢 Following up on <b>${projectName}</b> — what are your thoughts on taking this forward? If you'd like to finalize, we can arrange the final developer meeting, or if you wish to explore alternative matching options in the same budget, please let us know!`;
+                  dripMsg = `Hello <b>${name}</b>! 🏢 For <b>${projectName}</b>, the developer is offering exclusive spot-closure benefits on select premium inventory this weekend. Shall we schedule a private deal-finalization meeting with senior management on <b>Saturday at 4:00 PM</b>, or would you like to explore alternative verified properties in this exact budget?`;
                 } else {
-                  dripMsg = `Namaste <b>${name} ji</b>! 🏢 <b>${projectName}</b> ke baare me aapka aage ka kya plan hai? Agar aap is deal ko close karna chahte hain to hum developer ke sath final meeting arrange kar sakte hain, ya agar aap isi budget me doosri matching properties dekhna chahte hain to zaroor batayein!`;
+                  dripMsg = `Namaste <b>${name} ji</b>! 🏢 <b>${projectName}</b> me limited premium units par is weekend special developer spot-discounts chal rahe hain. Kya hum <b>Saturday shaam 4:00 baje</b> developer ke senior management ke sath aapki private deal-closing meeting fix karein, ya aap is budget me doosri verified properties dekhna chahte hain?`;
                 }
               }
 
@@ -11840,7 +11840,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v103-incomplete-lead-contextual-followup",
+        version: "v104-intent-driven-multilingual-cron-templates",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,

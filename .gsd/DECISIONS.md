@@ -251,6 +251,27 @@
 - Test suite execution policy: Do not run automated test suites unless explicitly requested by the user.
 - Multi-tenant WABA safety: Enforce tenant-scoped rate limits, batch caps (max 20), and delay jitter.
 
+## Phase 42 Decisions: Intent-Driven, Anti-Yes/No Conversational Follow-Up & Multilingual Nurture Architecture
+
+**Date:** 2026-10-30
+
+### Scope
+- **Eradication of Binary Yes/No Prompts:** Eliminated all closed questions (`"confirm samjhein?"`, `"confirm samjie?"`, `"Were you able to attend? 1. Yes 2. No"`, `"kya aapne review keen?"`, `"booking form share kariye?"`, `"EMI assist karein?"`) across all 7 automated outreach modules in `executeAutomatedCronSweep`.
+- **Intent-Eliciting Logistics & Qualitative Assessments:**
+  - *Module 1A (Morning Briefing):* Probes arrival mode (direct arrival vs route/landmark navigation) and opens convenient slot rescheduling.
+  - *Module 1 (Pre-Visit Reminder):* Checks on-the-way ETA and executive on-site readiness so lead provides arrival estimates.
+  - *Module 2 (Post-Visit Feedback):* Asks qualitative assessment of sample flat layout/pricing vs 2 alternative options while retaining friction-free reply numbers.
+  - *Module 2B & 2C (Unconfirmed Attendance & Missed Visit Reschedule):* Offers concrete 2-slot anchor choices ("Kal shaam 5:00 baje ya Sunday subah 11:00 baje") directly triggering `parseVisitSlot`.
+  - *Module 3 (Daily Incomplete Lead Recovery):* Replaced passive review queries with unit/layout preference + VIP visit booking, and injected concrete numerical/corridor benchmarks (*"₹50 Lakhs ya ₹1.2 Cr"*, *"Shela ya South Bopal"*) into incomplete slot questions.
+  - *Module 4 (Day 1, 3, 7 Drips):* Probes specific unit/facing (Garden vs Road facing), down payment amounts for loan pre-sanction, and Saturday 4:00 PM private developer closing meetings.
+- **Strict Database Language Lock:** Enforced 100% dialect consistency across `GUJLISH`, `ENGLISH`, and `HINGLISH` matching `l.user_language`.
+
+### Verification
+- Executed 23-assertion automated test matrix in `scratch/test_phase42_cron_templates.cjs` (100% passed).
+- Built and deployed `v104-intent-driven-multilingual-cron-templates` (Version #164) live to Supabase production.
+- Verified live targeted sweep on Bhagirath (`509972276`) confirming Telegram delivery (`message_id: 810`).
+
+
 
 
 

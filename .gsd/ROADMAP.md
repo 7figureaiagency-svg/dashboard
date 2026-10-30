@@ -431,6 +431,18 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 41.2: Router State Guards, Visit Lifecycle & Option Selection AI Modernization ([`41.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/41/41.2-PLAN.md))
 - [x] Plan 41.3: Verification Matrix, Frontend Build Audit & Production Deployment (`v95`) ([`41.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/41/41.3-PLAN.md))
 
+---
+
+### Phase 42: Intent-Driven, Anti-Yes/No Conversational Follow-Up & Multilingual Nurture Architecture
+**Status:** ✅ Complete  
+**Objective:** Overhaul all 7 automated outreach and reminder modules (Morning Briefing, 1-Hr Pre-Visit, 1-Hr Post-Visit Feedback, Unconfirmed Attendance Nudge, Missed Visit Reschedule, Daily Incomplete Lead Recovery, and Post-Visit Drip Cadence) across Gujlish, English, and Hinglish. Completely eliminate passive/binary Yes/No questions; replace with active, intent-eliciting prompts that trigger concrete slot parsing (arrival status, layout fit, down payment range, and concrete 2-slot visit booking options). Deploy `v104`.  
+**Depends on:** Phase 41  
+**Plans:**
+- [x] Plan 42.1: Pre-Visit, Arrival & Post-Visit Feedback Intent-Eliciting Templates (Modules 1A, 1, 2, 2B, 2C) ([`42.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/42/42.1-PLAN.md))
+- [x] Plan 42.2: Incomplete Lead Recovery & Post-Visit Nurture Drip Intent-Eliciting Templates (Modules 3 & 4) ([`42.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/42/42.2-PLAN.md))
+- [x] Plan 42.3: Verification Matrix, Intent Router Integration Check & Production Deployment (`v104`) ([`42.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/42/42.3-PLAN.md))
+
+
 
 
 
