@@ -9910,17 +9910,11 @@ export async function dispatchStateAction(
             : `🌟 <b>${critSummary} Ke Mutabiq Naye Verified Options</b>\n\n${nameStr}, aapke criteria ke hisab se ye fresh options hain:`;
 
         const trailer =
-          freshProperties.length === 1
-            ? (lang === "GUJLISH"
-              ? `👉 <i>Tame <b>${freshProperties[0].project_name}</b> ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho — <b>Kaale sanje 5 vage</b> ke <b>Sunday savare 11 vage</b>?</i>`
-              : lang === "ENGLISH"
-              ? `👉 <i>When would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>${freshProperties[0].project_name}</b> — <b>Tomorrow 5 PM</b> or <b>Sunday 11 AM</b>?</i>`
-              : `👉 <i>Aap <b>${freshProperties[0].project_name}</b> ki <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge — <b>Kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b>?</i>`)
-            : (lang === "GUJLISH"
-              ? `👉 <i>Tame aamathi kayi property ni <b>VIP Site Visit 🚗</b> schedule karva mango chho — <b>Option 1</b>, <b>Option 2</b> ke <b>Option 3</b>?</i>`
-              : lang === "ENGLISH"
-              ? `👉 <i>Which of these properties would you like to schedule a <b>VIP Site Visit 🚗</b> for — <b>Option 1</b>, <b>Option 2</b>, or <b>Option 3</b>?</i>`
-              : `👉 <i>Aap inme se kis property ki <b>VIP Site Visit 🚗</b> schedule karna chahenge — <b>Option 1</b>, <b>Option 2</b> ya <b>Option 3</b>?</i>`);
+          lang === "GUJLISH"
+            ? `👉 <i>Tame kaya date ane time par <b>VIP Site Visit 🚗</b> plan karva mangsho? (Jem ke: <b>'Kaale sanje 5:00 vage'</b> ya <b>'Sunday 11:00 AM'</b>)</i>`
+            : lang === "ENGLISH"
+            ? `👉 <i>Which date and time would you prefer to plan your <b>VIP Site Visit 🚗</b>? (For example: <b>'Tomorrow 5:00 PM'</b> or <b>'Sunday 11:00 AM'</b>)</i>`
+            : `👉 <i>Aap kis date aur time par <b>VIP Site Visit 🚗</b> plan karna chahenge? (Jaise: <b>'Kal shaam 5:00 baje'</b> ya <b>'Sunday 11:00 AM'</b>)</i>`;
 
         return {
           replyText: `${heading}\n\n${optionsCards}\n\n${trailer}`,
@@ -13157,17 +13151,11 @@ async function handleQualificationCascade(
 
     const optionsCards = properties.map((p, idx) => formatN8nPropertyCard(p, idx, false)).join("\n\n---\n\n");
     const trailer =
-      properties.length === 1
-        ? (lang === "GUJLISH"
-          ? `👉 <i>Tame <b>${properties[0].project_name}</b> ni <b>VIP Site Visit 🚗</b> mate kayo time anukool ganasho — <b>Kaale sanje 5:00 vage</b> ke <b>Sunday savare 11:00 vage</b>?</i>`
-          : lang === "ENGLISH"
-          ? `👉 <i>When would you like to schedule a <b>VIP Site Visit 🚗</b> for <b>${properties[0].project_name}</b> — <b>Tomorrow 5:00 PM</b> or <b>Sunday 11:00 AM</b>?</i>`
-          : `👉 <i>Aap <b>${properties[0].project_name}</b> ki <b>VIP Site Visit 🚗</b> ke liye kaunsa slot prefer karenge — <b>Kal shaam 5:00 baje</b> ya <b>Sunday subah 11:00 baje</b>?</i>`)
-        : (lang === "GUJLISH"
-          ? `👉 <b>Kayi property ni VIP Site Visit 🚗 schedule kariye — Option 1 ke Option 2?</b> (Kaale sanje 5:00 vage ke Sunday savare 11:00 vage?)`
-          : lang === "ENGLISH"
-          ? `👉 <b>Which property would you like to schedule a VIP Site Visit 🚗 for — Option 1 or Option 2?</b> (Tomorrow 5:00 PM or Sunday 11:00 AM?)`
-          : `👉 <b>Kis property ki VIP Site Visit 🚗 schedule karein — Option 1 ya Option 2?</b> (Kal shaam 5:00 baje ya Sunday subah 11:00 baje?)`);
+      lang === "GUJLISH"
+        ? `👉 <i>Tame kaya date ane time par <b>VIP Site Visit 🚗</b> plan karva mangsho? (Jem ke: <b>'Kaale sanje 5:00 vage'</b> ya <b>'Sunday 11:00 AM'</b>)</i>`
+        : lang === "ENGLISH"
+        ? `👉 <i>Which date and time would you prefer to plan your <b>VIP Site Visit 🚗</b>? (For example: <b>'Tomorrow 5:00 PM'</b> or <b>'Sunday 11:00 AM'</b>)</i>`
+        : `👉 <i>Aap kis date aur time par <b>VIP Site Visit 🚗</b> plan karna chahenge? (Jaise: <b>'Kal shaam 5:00 baje'</b> ya <b>'Sunday 11:00 AM'</b>)</i>`;
 
     const budgetStr = leadBudget > 0 ? `${formatPriceShort(leadBudget)} budget` : "aapke budget";
     const heading =
@@ -13187,10 +13175,10 @@ async function handleQualificationCascade(
     leadUpdates.last_option_ids = [];
     const replyText =
       lang === "GUJLISH"
-        ? `Ji ${nameStr}, tamari requirement (<b>${propType}</b> in <b>${location || "tamara shehar"}</b>) mujab amara senior sales executive specialized <b>off-market options</b> arrange kari rahya chhe ane direct <b>call par connect karshe</b>. 📞`
+        ? `Ji ${nameStr}, amari team tamara criteria mujab best options shodhi rahi chhe, jaldi j tamaro sampark karshe. 🤝`
         : lang === "ENGLISH"
-        ? `Sure ${nameStr}, our senior sales executives are sourcing specialized <b>off-market options</b> matching your requirement (<b>${propType}</b> in <b>${location || "your city"}</b>) and will <b>connect with you directly over a call</b>. 📞`
-        : `Ji ${nameStr}, aapki requirement (<b>${propType}</b> in <b>${location || "aapke shehar"}</b>) ke mutabiq hamare senior sales executive specialized <b>off-market options</b> arrange kar rahe hain aur aapse direct <b>call par connect karenge</b>. 📞`;
+        ? `Hello ${nameStr}, our team is reviewing the best options matching your criteria and will connect with you shortly. 🤝`
+        : `Ji ${nameStr}, hamari team aapke criteria ke mutabiq best options dekh rahi hai, jaldi hi connect karegi. 🤝`;
 
     return {
       replyText,
@@ -13281,7 +13269,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v93-ai-first-zero-regex-cognitive-engine",
+        version: "v94-production-modular-slot-engine",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
