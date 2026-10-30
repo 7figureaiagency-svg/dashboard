@@ -377,6 +377,17 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 36.2: Owner Submission Plot Area Sync, Field Parity & Inspector Drawer Polish ([`36.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/36/36.2-PLAN.md))
 - [x] Plan 36.3: Security Boundary Hardening, Automated Test Matrix & Production Deployment ([`36.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/36/36.3-PLAN.md))
 
+---
+
+### Phase 37: First-Turn Intake Triage, Option Selection Robustness & Pan-India Multi-City Dynamic Resolution
+**Status:** ✅ Complete  
+**Objective:** Transform first-turn intake triage into a clean 2-stage intent disambiguation (Acquisition: Buy/Rent/Commercial vs Disposition: Sell/Rent-Out/Lease-Out) with instant bypass for direct intent; eradicate Turn 7 option selection array bounds off-by-one errors; deploy Pan-India dynamic city resolution; verify approved owner inventory matching; and deploy live to production.  
+**Depends on:** Phase 36  
+**Plans:**
+- [x] Plan 37.1: First-Turn Intake Triage, Modern Apple HIG / WhatsApp Greeting & Auto-Bypass Rule ([`37.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/37/37.1-PLAN.md))
+- [x] Plan 37.2: Option Selection Off-by-One Array Bounds Fix & Pan-India Multi-City Dynamic Resolution Engine ([`37.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/37/37.2-PLAN.md))
+- [x] Plan 37.3: Verification Matrix, Frontend Build Audit & Live Supabase Edge Function Deployment ([`37.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/37/37.3-PLAN.md))
+
 
 
 

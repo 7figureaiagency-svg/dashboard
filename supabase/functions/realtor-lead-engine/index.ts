@@ -2027,9 +2027,10 @@ function formatSocietyName(raw: string): string {
 
 function parseRequirementFromText(text: string, lastQ?: string): string {
   const lower = (text || "").toLowerCase().trim();
-  if (lastQ === "REQUIREMENT") {
+  if (lastQ === "REQUIREMENT" || lastQ === "ACQUISITION_TYPE") {
     if (/^(?:1|1️⃣|option\s*1|first|1st)\b/i.test(lower)) return "BUY";
     if (/^(?:2|2️⃣|option\s*2|second|2nd)\b/i.test(lower)) return "RENT";
+    if (/^(?:3|3️⃣|option\s*3|third|3rd)\b/i.test(lower)) return "LEASE";
   }
 
   // 1. SELL / SELLER INTENT (Checked first so negation like "lease par nahi deni, bechni hai" or "rent nahi, bechna hai" classifies as SELL)
@@ -4591,9 +4592,13 @@ export function mapCognitiveResultToActionResult(
         action = { intent: "CHANGE_REQUIREMENT" };
       }
     } else if (state === "OPTIONS_SENT") {
-      action = { intent: "SELECT_OPTION", option_index: extracted.selected_menu_option };
+      const optVal = Number(extracted.selected_menu_option);
+      const safeZeroBased = (!isNaN(optVal) && optVal >= 1) ? optVal - 1 : 0;
+      action = { intent: "SELECT_OPTION", option_index: safeZeroBased };
     } else {
-      action = { intent: "SELECT_OPTION", option_index: extracted.selected_menu_option };
+      const optVal = Number(extracted.selected_menu_option);
+      const safeZeroBased = (!isNaN(optVal) && optVal >= 1) ? optVal - 1 : 0;
+      action = { intent: "SELECT_OPTION", option_index: safeZeroBased };
     }
   } else if (extracted.primary_intent === "CONFIRM_VISIT") {
     action = { intent: "BOOK_VISIT", preferred_date_raw: messageText };
@@ -7085,12 +7090,29 @@ async function handleOwnerFlow({
 
   // Turn 1: Configuration & Transaction Type
   if (!draft.configuration && !draft.property_type) {
-    const replyText =
-      lang === "GUJLISH"
-        ? `Ji bilkul <b>${nameStr}</b>! ${agency} par verified buyers ane tenants sathe deal kariye chhiye. 🏢✨\nProperty kaya type ni chhe — Flat, Villa ke Shop/Office? Ane Sell karvi chhe ke Rent/Lease par aapvi chhe?`
-        : lang === "ENGLISH"
-        ? `Certainly <b>${nameStr}</b>! ${agency} connects property owners directly with verified buyers & tenants. 🏢✨\nWhat type of property is this — Flat, Villa, or Shop/Office? And are you looking to Sell or Rent/Lease it out?`
-        : `Ji bilkul <b>${nameStr}</b>! ${agency} par hum verified buyers aur tenants ke sath deal karte hain. 🏢✨\nProperty kis type ki hai — Flat, Villa ya Shop/Office? Aur Sell karni hai ya Rent/Lease par deni hai? 🏢`;
+    let replyText = "";
+    if (draft.transaction_type === "SELL") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul <b>${nameStr}</b>! Vechva mate property kaya type ni chhe — <b>2/3 BHK Flat, Villa, Plot ke Shop/Office</b>? 🏡`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! For sale, what type of property is this — <b>2/3 BHK Flat, Villa, Plot, or Shop/Office</b>? 🏡`
+          : `Ji bilkul <b>${nameStr}</b>! Bechna ke liye property kis type ki hai — <b>2/3 BHK Flat, Villa, Plot ya Shop/Office</b>? 🏡`;
+    } else if (draft.transaction_type === "RENT_OUT" || draft.transaction_type === "LEASE_OUT") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul <b>${nameStr}</b>! Bhade aapva mate property kaya type ni chhe — <b>Flat, House, Shop ke Office</b>? 🏠`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! To rent out, what type of property is this — <b>Flat, House, Shop, or Office</b>? 🏠`
+          : `Ji bilkul <b>${nameStr}</b>! Kiraye par dene ke liye property kis type ki hai — <b>Flat, House, Shop ya Office</b>? 🏠`;
+    } else {
+      replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul <b>${nameStr}</b>! ${agency} par verified buyers ane tenants sathe deal kariye chhiye. 🏢✨\nProperty kaya type ni chhe — Flat, Villa ke Shop/Office? Ane Sell karvi chhe ke Rent/Lease par aapvi chhe?`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! ${agency} connects property owners directly with verified buyers & tenants. 🏢✨\nWhat type of property is this — Flat, Villa, or Shop/Office? And are you looking to Sell or Rent/Lease it out?`
+          : `Ji bilkul <b>${nameStr}</b>! ${agency} par hum verified buyers aur tenants ke sath deal karte hain. 🏢✨\nProperty kis type ki hai — Flat, Villa ya Shop/Office? Aur Sell karni hai ya Rent/Lease par deni hai? 🏢`;
+    }
 
     await supabase.from("leads").update({
       lead_type: effectiveOwnerLeadType,
@@ -7887,12 +7909,12 @@ export interface DialogTransitionResult {
 
 export function getGreetingTriageReply(lang: string, nameStr: string, agencyName: string): string {
   if (lang === "GUJLISH") {
-    return `Namaste <b>${nameStr}</b>! ${agencyName} ma swagat chhe. 🙏\n👉 1️⃣ <b>Property Buy ke Rent par levi chhe</b> 🏡  2️⃣ <b>Potani property Sell ke Rent par aapvi chhe</b> 📋  3️⃣ <b>Banne / Upgrade</b> 🔄\n<i>(1, 2 ya 3 reply karo, athva direct requirement lakho)</i>`;
+    return `Namaste <b>${nameStr}</b>! <b>${agencyName}</b> ma aapnu hardik swagat chhe. 🙏✨\n\nAap kaya purpose mate connect thaya chho?\n\n🏡 1️⃣ <b>Property Levi Chhe</b> <i>(Buy / Rent / Commercial Lease)</i>\n📋 2️⃣ <b>Potani Property List Karvi Chhe</b> <i>(Sell / Rent Out)</i>\n\n👉 <i>Tame 1 ke 2 reply kari shako chho, athva direct tamari requirement lakhi shako chho.</i>`;
   }
   if (lang === "ENGLISH") {
-    return `Hello <b>${nameStr}</b>! Welcome to ${agencyName}. 🙏\n👉 1️⃣ <b>Looking to Buy / Rent</b> 🏡  2️⃣ <b>Looking to Sell / Lease</b> 📋  3️⃣ <b>Both / Upgrade</b> 🔄\n<i>(Reply with 1, 2, or 3, or share your requirement directly)</i>`;
+    return `Hello <b>${nameStr}</b>! Welcome to <b>${agencyName}</b>. 🙏✨\n\nHow may we assist you today?\n\n🏡 1️⃣ <b>Looking for Property</b> <i>(Buy / Rent / Commercial Lease)</i>\n📋 2️⃣ <b>List Your Property</b> <i>(Sell / Rent Out)</i>\n\n👉 <i>Reply with 1 or 2, or simply type your requirement directly.</i>`;
   }
-  return `Namaste <b>${nameStr}</b>! ${agencyName} me aapka swagat hai. 🙏\n👉 1️⃣ <b>Property Buy ya Rent karni hai</b> 🏡  2️⃣ <b>Apni property Sell ya Rent out karni hai</b> 📋  3️⃣ <b>Dono / Upgrade</b> 🔄\n<i>(1, 2 ya 3 reply karein, ya direct requirement likhein)</i>`;
+  return `Namaste <b>${nameStr}</b>! <b>${agencyName}</b> me aapka hardik swagat hai. 🙏✨\n\nAap kis purpose ke liye connect hue hain?\n\n🏡 1️⃣ <b>Property Leni Hai</b> <i>(Buy / Rent / Commercial Lease)</i>\n📋 2️⃣ <b>Apni Property List Karni Hai</b> <i>(Sell / Rent Out)</i>\n\n👉 <i>Aap 1 ya 2 reply kar sakte hain, ya direct apni requirement likh sakte hain.</i>`;
 }
 
 export function buildContextualRecapCard(lead: any, lang: string, senderName: string, agencyName: string): string {
@@ -9415,10 +9437,10 @@ export async function dispatchStateAction(
 
       const replyText =
         lang === "GUJLISH"
-          ? `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
+          ? `Aabhar <b>${nameStr}</b>! Potani property list karva mate. 🙏✨\n\nTame potani property:\n💰 1️⃣ <b>Sell (Vechva)</b> mango chho\n🏠 2️⃣ <b>Rent Out (Bhade aapva)</b> mango chho\n🏢 3️⃣ <b>Lease Out (Commercial Lease)</b> par aapva mango chho\n\n👉 <i>(1, 2 ya 3 reply karo, athva property type lakho)</i>`
           : lang === "ENGLISH"
-          ? `Thank you <b>${nameStr}</b>! 🙏 We would be delighted to assist you in listing your property with ${agencyName}.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
-          : `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
+          ? `Thank you <b>${nameStr}</b>! We would be delighted to assist you in listing your property. 🙏✨\n\nAre you looking to:\n💰 1️⃣ <b>Sell</b> your property\n🏠 2️⃣ <b>Rent Out</b> your property\n🏢 3️⃣ <b>Lease Out</b> commercially\n\n👉 <i>(Reply with 1, 2, or 3, or share property details directly)</i>`
+          : `Dhanyawad <b>${nameStr}</b>! Apni property list karne ke liye. 🙏✨\n\nAap apni property:\n💰 1️⃣ <b>Sell (Bechna)</b> chahte hain\n🏠 2️⃣ <b>Rent Out (Kiraye par dena)</b> chahte hain\n🏢 3️⃣ <b>Lease Out (Commercial Lease)</b> par dena chahte hain\n\n👉 <i>(1, 2 ya 3 reply karein, ya property type likhein)</i>`;
 
       return {
         replyText,
@@ -9428,6 +9450,10 @@ export async function dispatchStateAction(
           state: "OWNER_CONFIG_PENDING",
           metadata: {
             ...(lead.metadata || {}),
+            last_bot_prompt: {
+              question_type: "DISPOSITION_TYPE",
+              sent_at: new Date().toISOString(),
+            },
             owner_draft: initialDraft,
           },
         },
@@ -9462,10 +9488,10 @@ export async function dispatchStateAction(
       // Transition to QUALIFYING as SEEKER (Option 1 pure choice)
       const replyText =
         lang === "GUJLISH"
-          ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
+          ? `Khub saras <b>${nameStr}</b>! 🏡\n\nAap property:\n🔑 1️⃣ <b>Buy (Kharidva)</b> mango chho\n🏠 2️⃣ <b>Rent (Bhade par)</b> leva mango chho\n🏢 3️⃣ <b>Commercial Lease</b> par leva mango chho\n\n👉 <i>(1, 2 ya 3 reply karo, athva direct tamari requirement lakho)</i>`
           : lang === "ENGLISH"
-          ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
-          : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
+          ? `Great choice <b>${nameStr}</b>! 🏡\n\nAre you looking to:\n🔑 1️⃣ <b>Buy (Purchase)</b> property\n🏠 2️⃣ <b>Rent</b> property\n🏢 3️⃣ Take on <b>Commercial Lease</b>\n\n👉 <i>(Reply with 1, 2, or 3, or share your requirement directly)</i>`
+          : `Bahut badhiya <b>${nameStr}</b>! 🏡\n\nAap property:\n🔑 1️⃣ <b>Buy (Kharidna)</b> chahte hain\n🏠 2️⃣ <b>Rent (Kiraye par)</b> lena chahte hain\n🏢 3️⃣ <b>Commercial Lease</b> par lena chahte hain\n\n👉 <i>(1, 2 ya 3 reply karein, ya direct requirement likhein)</i>`;
 
       const isDualFromRoleSelection = lead?.lead_type === "PROVIDER" || lead?.lead_type === "DUAL_ROLE" || Boolean(lead?.metadata?.has_seller_profile);
       return {
@@ -9477,7 +9503,7 @@ export async function dispatchStateAction(
           metadata: {
             ...(lead.metadata || {}),
             last_bot_prompt: {
-              question_type: "TURN_1_COMPOUND",
+              question_type: "ACQUISITION_TYPE",
               sent_at: new Date().toISOString(),
             },
             ...(isDualFromRoleSelection ? {
@@ -10957,8 +10983,21 @@ export async function dispatchStateAction(
 
     // ZERO OPTION HIJACKING: Option selection picks property and asks slot!
     if (intent === "SELECT_OPTION") {
-      const idx = (action as SelectOptionAction).option_index;
-      let selectedPropId = lead.last_option_ids?.[idx] || lead.selected_property_id;
+      const rawIdx = (action as SelectOptionAction).option_index;
+      const optionIds = Array.isArray(lead.last_option_ids) ? lead.last_option_ids : [];
+      let selectedPropId: string | null = null;
+      if (optionIds.length > 0) {
+        if (typeof rawIdx === "number" && rawIdx >= 0 && rawIdx < optionIds.length) {
+          selectedPropId = optionIds[rawIdx];
+        } else if (typeof rawIdx === "number" && rawIdx >= 1 && (rawIdx - 1) < optionIds.length) {
+          selectedPropId = optionIds[rawIdx - 1];
+        } else {
+          selectedPropId = optionIds[0];
+        }
+      }
+      if (!selectedPropId) {
+        selectedPropId = lead.selected_property_id;
+      }
       let selectedProp: any = null;
 
       if (selectedPropId) {
@@ -11341,35 +11380,33 @@ export async function dispatchStateAction(
       };
     }
 
-    // Direct buyer criteria auto-bypass:
+    // Direct buyer criteria auto-bypass: only bypass if user actually provided concrete criteria
     const detectedFreshBuyerType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
     const detectedFreshLoc = actionResult.location || extractLocationFromText(context.messageText);
     const detectedFreshBudget = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
     const detectedFreshReq = parseRequirementFromText(context.messageText);
-
-    if (
+    const hasRealCriteria = Boolean(
       detectedFreshBuyerType ||
-      detectedFreshLoc ||
-      detectedFreshBudget ||
-      detectedFreshReq === "BUY" ||
-      detectedFreshReq === "RENT" ||
-      intent === "CHANGE_REQUIREMENT" ||
-      intent === "SEEKER_QUALIFICATION"
-    ) {
+      (detectedFreshLoc && detectedFreshLoc !== "FLEXIBLE") ||
+      (detectedFreshBudget && detectedFreshBudget > 0) ||
+      (detectedFreshReq && /(?:kharid|buy|purchase|rent|kiray|lease|bhad)/i.test(context.messageText))
+    );
+
+    if (hasRealCriteria) {
       return handleQualificationCascade(lead, actionResult, context);
     }
 
-    // Option 1 directly chosen:
+    // Option 1 directly chosen (Property Leni Hai):
     const isFreshOption1 =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
-      /^(1|1️⃣|option\s*1|first|1st|leni|lena|kharidna|kharidvu)\b/i.test(lower.trim());
+      /^(1|1️⃣|option\s*1|first|1st|leni|lena|kharidna|kharidvu|buy|rent)\b/i.test(lower.trim());
     if (isFreshOption1) {
       const replyText =
         lang === "GUJLISH"
-          ? `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par tame kaya type ni property joi rahya chho — <b>2/3 BHK Flat</b>, <b>Villa</b>, ke <b>Commercial Shop/Office</b>?`
+          ? `Khub saras <b>${nameStr}</b>! 🏡\n\nAap property:\n🔑 1️⃣ <b>Buy (Kharidva)</b> mango chho\n🏠 2️⃣ <b>Rent (Bhade par)</b> leva mango chho\n🏢 3️⃣ <b>Commercial Lease</b> par leva mango chho\n\n👉 <i>(1, 2 ya 3 reply karo, athva direct tamari requirement lakho)</i>`
           : lang === "ENGLISH"
-          ? `Certainly <b>${nameStr}</b>! 🏡 What type of property are you looking for — <b>2/3 BHK Flat</b>, <b>Villa</b>, or <b>Commercial Shop/Office</b>?`
-          : `Zaroor <b>${nameStr}</b>! 🏡 ${agencyName} par aap kis type ki property dekh rahe hain — <b>2/3 BHK Flat</b>, <b>Villa</b>, ya <b>Commercial Shop/Office</b>?`;
+          ? `Great choice <b>${nameStr}</b>! 🏡\n\nAre you looking to:\n🔑 1️⃣ <b>Buy (Purchase)</b> property\n🏠 2️⃣ <b>Rent</b> property\n🏢 3️⃣ Take on <b>Commercial Lease</b>\n\n👉 <i>(Reply with 1, 2, or 3, or share your requirement directly)</i>`
+          : `Bahut badhiya <b>${nameStr}</b>! 🏡\n\nAap property:\n🔑 1️⃣ <b>Buy (Kharidna)</b> chahte hain\n🏠 2️⃣ <b>Rent (Kiraye par)</b> lena chahte hain\n🏢 3️⃣ <b>Commercial Lease</b> par lena chahte hain\n\n👉 <i>(1, 2 ya 3 reply karein, ya direct requirement likhein)</i>`;
 
       return {
         replyText,
@@ -11377,21 +11414,28 @@ export async function dispatchStateAction(
         leadUpdates: {
           lead_type: "SEEKER",
           state: "QUALIFYING",
+          metadata: {
+            ...(lead.metadata || {}),
+            last_bot_prompt: {
+              question_type: "ACQUISITION_TYPE",
+              asked_at: new Date().toISOString(),
+            },
+          },
         },
       };
     }
 
-    // Option 2 directly chosen:
+    // Option 2 directly chosen (Potani Property List Karvi Chhe):
     const isFreshOption2 =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
       /^(2|2️⃣|option\s*2|second|2nd|deni|dene|sell|bechna|vechvu|rent\s*out|list|listing)\b/i.test(lower.trim());
     if (isFreshOption2) {
       const replyText =
         lang === "GUJLISH"
-          ? `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
+          ? `Aabhar <b>${nameStr}</b>! Potani property list karva mate. 🙏✨\n\nTame potani property:\n💰 1️⃣ <b>Sell (Vechva)</b> mango chho\n🏠 2️⃣ <b>Rent Out (Bhade aapva)</b> mango chho\n🏢 3️⃣ <b>Lease Out (Commercial Lease)</b> par aapva mango chho\n\n👉 <i>(1, 2 ya 3 reply karo, athva property type lakho)</i>`
           : lang === "ENGLISH"
-          ? `Thank you <b>${nameStr}</b>! 🙏 We would be delighted to assist you in listing your property with ${agencyName}.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
-          : `Namaste <b>${nameStr}</b>! 🙏 ${agencyName} par apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
+          ? `Thank you <b>${nameStr}</b>! We would be delighted to assist you in listing your property. 🙏✨\n\nAre you looking to:\n💰 1️⃣ <b>Sell</b> your property\n🏠 2️⃣ <b>Rent Out</b> your property\n🏢 3️⃣ <b>Lease Out</b> commercially\n\n👉 <i>(Reply with 1, 2, or 3, or share property details directly)</i>`
+          : `Dhanyawad <b>${nameStr}</b>! Apni property list karne ke liye. 🙏✨\n\nAap apni property:\n💰 1️⃣ <b>Sell (Bechna)</b> chahte hain\n🏠 2️⃣ <b>Rent Out (Kiraye par dena)</b> chahte hain\n🏢 3️⃣ <b>Lease Out (Commercial Lease)</b> par dena chahte hain\n\n👉 <i>(1, 2 ya 3 reply karein, ya property type likhein)</i>`;
 
       return {
         replyText,
@@ -11401,6 +11445,10 @@ export async function dispatchStateAction(
           state: "OWNER_CONFIG_PENDING",
           metadata: {
             ...(lead.metadata || {}),
+            last_bot_prompt: {
+              question_type: "DISPOSITION_TYPE",
+              asked_at: new Date().toISOString(),
+            },
             owner_draft: { started_at: new Date().toISOString() },
           },
         },
@@ -12329,30 +12377,63 @@ async function handleQualificationCascade(
     location = null;
   }
 
-  if (isOutOfMarketCity && !justLoc) {
-    const outOfMarketReply = lang === "GUJLISH"
-      ? `Griham Realty hal ma mukhyatve <b>${primaryTenantCity}</b> na prime vistaro ma specialize kare chhe. 🏡✨\n\nShu tame <b>${primaryTenantCity}</b> ma investment ke property explore karva mango chho?`
-      : lang === "ENGLISH"
-      ? `Currently, Griham Realty specializes exclusively in prime properties across <b>${primaryTenantCity}</b>. 🏡✨\n\nAre you looking to explore high-ROI investments or residential properties in <b>${primaryTenantCity}</b>?`
-      : `Griham Realty filhal mukhyatva <b>${primaryTenantCity}</b> ke prime locations me specialize karta hai. 🏡✨\n\nKya aap <b>${primaryTenantCity}</b> me property ya high-ROI investment explore karna chahte hain?`;
-    return {
-      replyText: outOfMarketReply,
-      nextState: "QUALIFYING",
-      leadUpdates: {
-        state: "QUALIFYING",
-        metadata: {
-          ...(lead?.metadata || {}),
-          seeker_draft: {
-            ...(lead?.metadata?.seeker_draft || {}),
-            target_city: detectedCity,
-          },
-          last_bot_prompt: {
-            question_type: "OUT_OF_MARKET_CITY",
-            sent_at: new Date().toISOString(),
+  // Pan-India City Interceptor: User provided a city name, prompt for the specific neighborhood/area
+  if (detectedCity && !justLoc) {
+    if (isPrimaryCity) {
+      const askAreaInCity =
+        lang === "GUJLISH"
+          ? `Khub saras, <b>${primaryTenantCity}</b> ma! 📍\n\n👉 <b>${primaryTenantCity}</b> ma tame kaya specific <b>Area, Society ke Landmark</b> pase property joi rahya chho?`
+          : lang === "ENGLISH"
+          ? `Great, in <b>${primaryTenantCity}</b>! 📍\n\n👉 Which specific <b>Area, Society or Landmark</b> are you looking at in <b>${primaryTenantCity}</b>?`
+          : `Bahut badhiya, <b>${primaryTenantCity}</b> me! 📍\n\n👉 <b>${primaryTenantCity}</b> me aap kis specific <b>Area, Society ya Landmark</b> ke paas property dekh rahe hain?`;
+
+      return {
+        replyText: askAreaInCity,
+        nextState: "QUALIFYING",
+        leadUpdates: {
+          state: "QUALIFYING",
+          location: null,
+          metadata: {
+            ...(lead?.metadata || {}),
+            seeker_draft: {
+              ...(lead?.metadata?.seeker_draft || {}),
+              target_city: detectedCity,
+              location_confirmed: false,
+            },
+            last_bot_prompt: {
+              question_type: "LOCATION",
+              sent_at: new Date().toISOString(),
+            },
           },
         },
-      },
-    };
+      };
+    } else {
+      const outOfMarketReply =
+        lang === "GUJLISH"
+          ? `<b>${agencyName}</b> hal ma mukhyatve <b>${primaryTenantCity}</b> na prime vistaro ma specialize kare chhe. 🏡✨\n\nShu tame <b>${primaryTenantCity}</b> ma high-ROI investment ke property explore karva mango chho?`
+          : lang === "ENGLISH"
+          ? `Currently, <b>${agencyName}</b> specializes exclusively in prime properties across <b>${primaryTenantCity}</b>. 🏡✨\n\nAre you looking to explore high-ROI investments or properties in <b>${primaryTenantCity}</b>?`
+          : `<b>${agencyName}</b> filhal mukhyatva <b>${primaryTenantCity}</b> ke prime locations me specialize karta hai. 🏡✨\n\nKya aap <b>${primaryTenantCity}</b> me high-ROI investment ya property explore karna chahte hain?`;
+
+      return {
+        replyText: outOfMarketReply,
+        nextState: "QUALIFYING",
+        leadUpdates: {
+          state: "QUALIFYING",
+          metadata: {
+            ...(lead?.metadata || {}),
+            seeker_draft: {
+              ...(lead?.metadata?.seeker_draft || {}),
+              target_city: detectedCity,
+            },
+            last_bot_prompt: {
+              question_type: "OUT_OF_MARKET_CITY",
+              sent_at: new Date().toISOString(),
+            },
+          },
+        },
+      };
+    }
   }
 
   // F-05: Commercial Lease Seeker Disambiguation & Sub-50k Budget Protection
@@ -12908,7 +12989,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v90-proptech-duplex-plot-budget-precision",
+        version: "v91-intake-triage-option-selection-pan-india-cities",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,

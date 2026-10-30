@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-30T08:28:00+05:30
+updated: 2026-10-30T09:48:00+05:30
 ---
 
 # Project State
@@ -7,16 +7,21 @@ updated: 2026-10-30T08:28:00+05:30
 ## Current Position
 
 **Milestone:** PropTech Matching Precision & Robustness  
-**Phase:** 36 - PropTech Matching Precision, Short Budget Parsing, Owner Plot Sync & Inspection Alignment  
-**Status:** 🎉 Completed Phase 36  
+**Phase:** 37 - First-Turn Intake Triage, Option Selection Robustness & Pan-India Multi-City Dynamic Resolution  
+**Status:** 🎉 Completed Phase 37  
 **Plans:**
-- `.gsd/phases/36/36.1-PLAN.md` (PropTech Matching Precision & Short Budget Parsing) — 🎉 Completed
-- `.gsd/phases/36/36.2-PLAN.md` (Owner Submission Plot Area Sync, Field Parity & Inspector Drawer Polish) — 🎉 Completed
-- `.gsd/phases/36/36.3-PLAN.md` (Security Boundary Hardening, Automated Test Matrix & Production Deployment) — 🎉 Completed
+- `.gsd/phases/37/37.1-PLAN.md` (First-Turn Intake Triage, Modern Apple HIG / WhatsApp Greeting & Auto-Bypass Rule) — 🎉 Completed
+- `.gsd/phases/37/37.2-PLAN.md` (Option Selection Off-by-One Array Bounds Fix & Pan-India Multi-City Dynamic Resolution Engine) — 🎉 Completed
+- `.gsd/phases/37/37.3-PLAN.md` (Verification Matrix, Frontend Build Audit & Live Supabase Edge Function Deployment) — 🎉 Completed
 
 ## Last Action
 
-Completed Phase 35 (Enterprise Multi-Tenant Hardening & Zero-Regex Autonomous Cognitive Engine):
+Completed Phase 37 (First-Turn Intake Triage, Option Selection Robustness & Pan-India Multi-City Dynamic Resolution):
+- **First-Turn Intake Triage & Greeting Design:** Redesigned `getGreetingTriageReply()` with clear 2-stage options (1️⃣ Property Leni Hai / Levi Chhe vs 2️⃣ Apni Property List Karni Hai / Potani Property List Karvi Chhe) with sub-turn disambiguation for Buy/Rent/Commercial vs Sell/Rent Out/Lease Out, and smart auto-bypass when criteria is provided upfront.
+- **Option 2 Selection Off-by-One Array Bounds Fix:** Solved off-by-one bug where selecting option 2 failed with `"pasand kareli property ni details confirm nathi thai saki"` by adding dual-index fallback (`rawIdx` and `rawIdx - 1`) in `handleOptionsSent` and normalizing 1-based choices in `mapCognitiveResultToActionResult`.
+- **Pan-India Multi-City Dynamic Resolution Engine:** Added dynamic city interceptor that intercepts any major Indian city name, warmly acknowledges the city, and asks for the specific area/neighborhood within that city instead of misclassifying it as an Alkapuri landmark or defaulting.
+- **Approved Owner Submissions Verification:** Confirmed that approved properties (`OWNER-3BHK-MVSGTBE9`, Saraswati Bungalows in Alkapuri for 87 Lakhs) are queried, matched, and surfaced to prospective buyers seamlessly.
+- **Frontend Build & Live Production Edge Deployment:** Vite React build passed in 1.36s with 0 errors. Deployed Edge Function `v91-intake-triage-option-selection-pan-india-cities` live to Supabase production (`yeiygfysijptjdepctnx`) and verified live HTTP 200 `ONLINE`.
 - **Eradicated Cross-Tenant Fallbacks:** Removed dangerous line 902 `client_id = defaultTenantId` fallback in `matchInventoryForPortalLead`, guaranteeing zero cross-tenant data contamination.
 - **Implemented In-Memory Tenant Cache:** Added `TENANT_CACHE_BY_ID`, `TENANT_CACHE_BY_PHONE`, `TENANT_CACHE_BY_TOKEN` with 10-minute TTL, cutting DB lookups from 4-5 to 1 per turn (sub-1ms tenant lookup).
 - **Applied Composite PostgreSQL Indexes:** Applied migration `20261029000000_multi_tenant_scale_composite_indexes.sql` creating composite indexes on `leads(client_id, lead_id)`, `leads(client_id, state, last_active_at DESC)`, `leads(client_id, phone)`, `inventory(client_id, status, property_category)`, `site_visits(client_id, lead_id, scheduled_at DESC)`, etc.
