@@ -11,7 +11,8 @@ import {
   routeCognitiveTurnDeterministic,
   CognitiveTurnResult,
   normalizeIndicNumerals,
-  VERNACULAR_LOCALITY_MAP
+  VERNACULAR_LOCALITY_MAP,
+  extractSocietyOrProjectName
 } from "./cognitive_turn_router.ts";
 
 export * from "./voice_decoder.ts";
@@ -2150,10 +2151,10 @@ function parseRequirementFromText(text: string, lastQ?: string): string {
 export function isOwnerIntentUtterance(text: string, lower?: string, actionResult?: any): boolean {
   const l = (lower || text || "").toLowerCase().trim();
 
-  // Direct Devanagari, Gujarati & Hinglish seller cues (inclusive of bechvo/bechvu)
-  const SELLER_VERB_REGEX = /(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|vechavo|vechavi|vechavu|vechava|sell|selling|resale|bikri|વેચવું|વેચવા|વેચવાનો|વેચવાની|બેચવું|બેચવા|બેચવાનો|બેચવાની|बेचना|बेचनी|बेचने|बिक्री|सेल)/i;
-  const SELLER_PHRASE_REGEX = /(?:meri|mera|maro|mari|apna|apni|own|mujhe|mane|amari|mari|મારી|મારો|મને|मेरा|मेरी|अपनी|अपना|मुझे|हमारा|हमारी)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,3}(?:flat|makan|ghar|house|villa|plot|shop|office|showroom|commercial|property|दुकान|मकान|घर|प्रॉपर्टी|દુકાન|મકાન|ઘર|શૉપ|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|sell|bikri|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
-  const SELLER_DIRECT_INTENT_REGEX = /(?:shop|flat|villa|plot|office|commercial|दुकान|मकान|घर|દુકાન|શૉપ|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|sell|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
+  // Direct Devanagari, Gujarati & Hinglish seller cues (inclusive of bechvo/bechvu/listing)
+  const SELLER_VERB_REGEX = /(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|vechavo|vechavi|vechavu|vechava|sell|selling|resale|bikri|list|listing|property\s*list|list\s*property|લિસ્ટ|लिस्ट|વેચવું|વેચવા|વેચવાનો|વેચવાની|બેચવું|બેચવા|બેચવાનો|બેચવાની|बेचना|बेचनी|बेचने|बिक्री|सेल)/i;
+  const SELLER_PHRASE_REGEX = /(?:meri|mera|maro|mari|apna|apni|own|mujhe|mane|amari|mari|મારી|મારો|મને|मेरा|मेरी|अपनी|अपना|मुझे|हमारा|हमारी)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,3}(?:flat|makan|ghar|house|villa|plot|shop|office|showroom|commercial|property|दुकान|मकान|घर|प्रॉपर्टी|દુકાન|મકાન|ઘર|શૉપ|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|sell|bikri|list|listing|લિસ્ટ|लिस्ट|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
+  const SELLER_DIRECT_INTENT_REGEX = /(?:shop|flat|villa|plot|office|commercial|property|दुकान|मकान|घर|દુકાન|શૉપ|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|sell|list|listing|લિસ્ટ|लिस्ट|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
 
   const hasExplicitSell = parseRequirementFromText(text) === "SELL" ||
     SELLER_PHRASE_REGEX.test(l) ||
@@ -10102,6 +10103,111 @@ export async function dispatchStateAction(
     }
 
     // =========================================================================
+    // G0. PENDING SOCIETY DISAMBIGUATION HANDLER (Prioritized before general option choice)
+    // =========================================================================
+    const pendingSociety = lead.metadata?.pending_society_disambiguation;
+    if (pendingSociety) {
+      const isListChoice =
+        (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+        actionResult.selected_option_index === 0 ||
+        context.cognitiveTurn?.selected_option === 1 ||
+        /^(?:1|1️⃣|first|1st|option\s*1|list|vechvu|bechna|sell|potani\s*property|apni\s*property)\b/i.test(lower.trim());
+
+      const isSearchSocietyChoice =
+        (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
+        actionResult.selected_option_index === 1 ||
+        context.cognitiveTurn?.selected_option === 2 ||
+        /^(?:2|2️⃣|second|2nd|option\s*2|options|search|dekhna|dekhvu|explore|buy)\b/i.test(lower.trim());
+
+      const isVisitDetailsChoiceInDisambiguation =
+        (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
+        actionResult.selected_option_index === 2 ||
+        context.cognitiveTurn?.selected_option === 3 ||
+        /^(?:3|3️⃣|third|3rd|option\s*3|details|visit|map)\b/i.test(lower.trim());
+
+      if (isListChoice) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Bahuj saras <b>${nameStr}</b>! 🙏 <b>${pendingSociety}</b> ma tamari property list karva mate aabhar.\n\nTamari property kai chhe? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ke Plot</b>) ane tame <b>Rent par aapva mango chho ke Sell karva</b>?`
+            : lang === "ENGLISH"
+            ? `Thank you <b>${nameStr}</b>! 🙏 We would be delighted to assist you in listing your property in <b>${pendingSociety}</b>.\n\nWhat type of property is it? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa or Plot</b>) and are you looking to <b>Rent it out or Sell</b>?`
+            : `Bahut badhiya <b>${nameStr}</b>! 🙏 <b>${pendingSociety}</b> me apni property list karne ke liye dhanyawad.\n\nAapki property kis type ki hai? (e.g. <b>Commercial Office, Shop, 2BHK/3BHK Flat, Villa ya Plot</b>) aur aap ise <b>Rent par dena chahte hain ya Sell karna</b>?`;
+
+        return {
+          replyText,
+          nextState: "OWNER_CONFIG_PENDING",
+          leadUpdates: {
+            lead_type: "DUAL_ROLE",
+            state: "OWNER_CONFIG_PENDING",
+            metadata: {
+              ...(lead.metadata || {}),
+              has_seller_profile: true,
+              has_buyer_profile: true,
+              active_persona: "SELLER",
+              pending_society_disambiguation: null,
+              owner_draft: {
+                started_at: new Date().toISOString(),
+                project_name: pendingSociety,
+                society_name: pendingSociety,
+              },
+            },
+          },
+        };
+      }
+
+      if (isSearchSocietyChoice) {
+        // Query inventory for properties in pendingSociety
+        const { data: matchedProps } = await supabase
+          .from("inventory")
+          .select("*")
+          .eq("client_id", activeTenantId)
+          .eq("status", "AVAILABLE")
+          .ilike("project_name", `%${pendingSociety}%`);
+
+        if (matchedProps && matchedProps.length > 0) {
+          const formatted = formatInventoryResults(matchedProps, lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH", nameStr);
+          return {
+            replyText: formatted,
+            nextState: "OPTIONS_SENT",
+            leadUpdates: {
+              state: "OPTIONS_SENT",
+              property_type: matchedProps[0].property_type || lead.property_type,
+              location: matchedProps[0].location || pendingSociety,
+              metadata: {
+                ...(lead.metadata || {}),
+                pending_society_disambiguation: null,
+                last_option_ids: matchedProps.map((p: any) => p.property_id),
+              },
+            },
+          };
+        } else {
+          const replyText =
+            lang === "GUJLISH"
+              ? `Ji <b>${nameStr}</b>, hal ma <b>${pendingSociety}</b> ma direct available listing nathi. Amara senior sales executive exclusive off-market options check karine aapse direct connect karshe! 📞\n\n👉 Shu tame ${resolvedCity || "Vadodara"} na bija koi area ma properties jova mango chho?`
+              : lang === "ENGLISH"
+              ? `Hello <b>${nameStr}</b>, currently we do not have an active verified listing in <b>${pendingSociety}</b>. Our senior property consultants are checking off-market inventory and will connect with you directly! 📞\n\n👉 Would you like to explore verified options in other nearby locations in ${resolvedCity || "Vadodara"}?`
+              : `Ji <b>${nameStr}</b>, abhi <b>${pendingSociety}</b> me direct verified listing available nahi hai. Hamare senior sales advisor exclusive off-market options check karke aapse direct connect karenge! 📞\n\n👉 Kya aap ${resolvedCity || "Vadodara"} ke kisi doosre nearby area me options dekhna chahenge?`;
+
+          return {
+            replyText,
+            nextState: "SITE_VISIT_BOOKED",
+            leadUpdates: {
+              metadata: {
+                ...(lead.metadata || {}),
+                pending_society_disambiguation: null,
+              },
+            },
+          };
+        }
+      }
+
+      if (isVisitDetailsChoiceInDisambiguation) {
+        lead.metadata = { ...(lead.metadata || {}) };
+        delete lead.metadata.pending_society_disambiguation;
+      }
+    }
+
+    // =========================================================================
     // A0. UPCOMING / TODAY'S VISIT CONFIRMATION GUARD
     // (Handles "Ha", "Haan", "Yes", "Sure", "Ok" confirming upcoming or today's visit)
     // =========================================================================
@@ -10544,16 +10650,77 @@ export async function dispatchStateAction(
       return handleBrochureOrMapResponse(lead, intent, context, true);
     }
 
+    // G1. SOCIETY / PROJECT NAME INTAKE DISAMBIGUATION
+    // If user typed a society/project name (like "Perl Heights", "Nilamber Palms", etc.) without explicit buy/sell verb
+    const extractedSociety = extractSocietyOrProjectName(context.messageText);
+    const hasExplicitBuyOrSellVerb = Boolean(
+      context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+      context.cognitiveTurn?.active_role === "SELLER" ||
+      isOwnerIntentUtterance(context.messageText, lower, actionResult) ||
+      /(?:chahiye|joiye|kharid|buy|purchase|vechvu|vechvo|bechna|bechni|sell|list)\b/i.test(lower)
+    );
+
+    if (extractedSociety && !hasExplicitBuyOrSellVerb) {
+      let activePropName = lead.metadata?.selected_property_name || "VIP Property";
+      if (!lead.metadata?.selected_property_name && lead.selected_property_id) {
+        const { data: p } = await supabase.from("inventory").select("project_name").eq("client_id", activeTenantId).eq("property_id", lead.selected_property_id).maybeSingle();
+        if (p?.project_name) activePropName = p.project_name;
+      }
+
+      const replyText =
+        lang === "GUJLISH"
+          ? `Samji gayo <b>${nameStr}</b>! Tame <b>${extractedSociety}</b> ma potani property list/sell karva mango chho ke navi property explore kari rahya chho? 🏢\n\n1️⃣ <b>Potani Property List Karvi Chhe 📋</b>\n2️⃣ <b>${extractedSociety} ma Options Jova Chhe 🏡</b>\n3️⃣ <b>Booked Visit na Details (${activePropName}) 🚗</b>\n\n<i>(1, 2 ke 3 reply karo)</i>`
+          : lang === "ENGLISH"
+          ? `Understood <b>${nameStr}</b>! Are you looking to list/sell your property in <b>${extractedSociety}</b>, or explore available options there? 🏢\n\n1️⃣ <b>List My Property Here 📋</b>\n2️⃣ <b>Explore Options in ${extractedSociety} 🏡</b>\n3️⃣ <b>Booked Visit Details (${activePropName}) 🚗</b>\n\n<i>(Reply with 1, 2, or 3)</i>`
+          : `Samajh gaya <b>${nameStr}</b>! Aap <b>${extractedSociety}</b> me apni property list/sell karna chahte hain ya nayi property explore kar rahe hain? 🏢\n\n1️⃣ <b>Apni Property List Karni Hai 📋</b>\n2️⃣ <b>${extractedSociety} me Options Dekhna Hai 🏡</b>\n3️⃣ <b>Booked Visit Details (${activePropName}) 🚗</b>\n\n<i>(1, 2 ya 3 reply karein)</i>`;
+
+      return {
+        replyText,
+        nextState: "SITE_VISIT_BOOKED",
+        leadUpdates: {
+          metadata: {
+            ...(lead.metadata || {}),
+            pending_society_disambiguation: extractedSociety,
+            last_bot_prompt: {
+              question_type: "SOCIETY_DISAMBIGUATION",
+              society_name: extractedSociety,
+              asked_at: new Date().toISOString(),
+            },
+          },
+        },
+      };
+    }
+
     // G. DUAL-ROLE: OWNER LISTING INTAKE FROM BOOKED VISIT
-    if (
+    const isOwnerListingDirect = Boolean(
       context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
       context.cognitiveTurn?.active_role === "SELLER" ||
       intent === "SUBMIT_LISTING" ||
       actionResult.user_role === "OWNER" ||
-      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower)
-    ) {
+      isOwnerIntentUtterance(context.messageText, lower, actionResult) ||
+      /(?:property\s*list|list\s*property|fir\s*me\s*property\s*list|list\s*kar|list\s*karn|bech|vech|sell|resale)\b/i.test(lower)
+    );
+
+    if (isOwnerListingDirect) {
+      const societyToSeed = extractedSociety || actionResult.project_or_society || context.cognitiveTurn?.entities?.project_or_society;
+      const detectedPropType = context.cognitiveTurn?.entities?.property_type || actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+
       const ownerRes = await handleOwnerFlow({
-        lead,
+        lead: {
+          ...lead,
+          lead_type: "DUAL_ROLE",
+          metadata: {
+            ...(lead.metadata || {}),
+            has_seller_profile: true,
+            has_buyer_profile: true,
+            active_persona: "SELLER",
+            owner_draft: {
+              started_at: new Date().toISOString(),
+              ...(societyToSeed ? { project_name: societyToSeed, society_name: societyToSeed } : {}),
+              ...(detectedPropType ? { property_type: detectedPropType, configuration: detectedPropType } : {}),
+            },
+          },
+        },
         messageText: context.messageText,
         lower,
         lang: lang === "ENGLISH" ? "ENGLISH" : lang === "GUJLISH" ? "GUJLISH" : "HINGLISH",
@@ -10575,8 +10742,19 @@ export async function dispatchStateAction(
     }
 
     // H. NEW PROPERTY INQUIRY FROM BOOKED VISIT (F-09: Secondary Search Active Visit Preservation)
+    // STRICT GUARD: Must have concrete new buyer search entities or explicit search intent.
+    // NEVER trigger on default fallback CHANGE_REQUIREMENT or generic society names!
     const parsedTypeInBooked = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
-    if (intent === "CHANGE_REQUIREMENT" || parsedTypeInBooked) {
+    const hasExplicitBuyerEntities = Boolean(
+      parsedTypeInBooked &&
+      (actionResult.location || actionResult.price_or_budget || /(?:chahiye|joiye|buy|kharid|purchase|options|dekhna|dekhvu|shodhva)\b/i.test(lower))
+    );
+    const hasExplicitBuyerSearchIntent = Boolean(
+      context.cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" &&
+      (Boolean(actionResult.property_type) || Boolean(actionResult.location) || Boolean(actionResult.price_or_budget) || /(?:chahiye|joiye|buy|kharid|purchase|options|dekhna|dekhvu|shodhva)\b/i.test(lower))
+    );
+
+    if (hasExplicitBuyerEntities || hasExplicitBuyerSearchIntent) {
       const existingSearches = Array.isArray(lead.metadata?.seeker_profile?.searches)
         ? [...lead.metadata.seeker_profile.searches]
         : [];
@@ -10623,6 +10801,45 @@ export async function dispatchStateAction(
         },
       };
     }
+
+    // I. FALLBACK FOR UNRECOGNIZED INPUT IN SITE_VISIT_BOOKED:
+    // Safely re-anchor to booked visit and present clear next steps.
+    // NEVER dump old search inventory or switch states blindly!
+    let fallbackScheduledTime = lead.site_visit_at || lead.site_visit_datetime;
+    const { data: latestVisitFallback } = await supabase
+      .from("site_visits")
+      .select("*, inventory(*)")
+      .eq("client_id", activeTenantId)
+      .eq("lead_id", lead.id)
+      .in("status", ["SCHEDULED", "CONFIRMED", "RESCHEDULED"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let fallbackProp = latestVisitFallback?.inventory;
+    if (latestVisitFallback?.scheduled_at) {
+      fallbackScheduledTime = latestVisitFallback.scheduled_at;
+    }
+    if (!fallbackProp && lead.selected_property_id) {
+      const { data: p } = await supabase.from("inventory").select("*").eq("client_id", activeTenantId).eq("property_id", lead.selected_property_id).maybeSingle();
+      fallbackProp = p;
+    }
+    const visitProjectName = fallbackProp?.project_name || lead.metadata?.selected_property_name || "VIP Property";
+    const formattedVisitTime = fallbackScheduledTime
+      ? new Date(fallbackScheduledTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
+      : "Scheduled Time";
+
+    const replyText =
+      lang === "GUJLISH"
+        ? `Namaste <b>${nameStr}</b>! 🙏\n🚗 <b>Scheduled Visit:</b> ${visitProjectName} (${formattedVisitTime})\n\nAap kaya vishay ma aagal vadharva mango chho?\n\n1️⃣ <b>Visit Details & Location Map 📍</b>\n2️⃣ <b>Reschedule / Cancel Visit ⏰</b>\n3️⃣ <b>Nayi Property Search karvi chhe 🏡</b>\n4️⃣ <b>Potani Property List Karvi Chhe 📋</b>\n\n<i>(1, 2, 3 ke 4 reply karo)</i>`
+        : lang === "ENGLISH"
+        ? `Hello <b>${nameStr}</b>! 🙏\n🚗 <b>Scheduled Visit:</b> ${visitProjectName} (${formattedVisitTime})\n\nHow would you like to proceed?\n\n1️⃣ <b>Visit Details & Location Map 📍</b>\n2️⃣ <b>Reschedule / Cancel Visit ⏰</b>\n3️⃣ <b>Search Other Properties 🏡</b>\n4️⃣ <b>List Your Property 📋</b>\n\n<i>(Reply with 1, 2, 3, or 4)</i>`
+        : `Namaste <b>${nameStr}</b>! 🙏\n🚗 <b>Scheduled Visit:</b> ${visitProjectName} (${formattedVisitTime})\n\nAap kis baare me aage badhna chahte hain?\n\n1️⃣ <b>Visit Details & Location Map 📍</b>\n2️⃣ <b>Reschedule / Cancel Visit ⏰</b>\n3️⃣ <b>Nayi Property Search karni hai 🏡</b>\n4️⃣ <b>Apni Property List Karni Hai 📋</b>\n\n<i>(1, 2, 3 ya 4 reply karein)</i>`;
+
+    return {
+      replyText,
+      nextState: "SITE_VISIT_BOOKED",
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -13411,7 +13628,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v95-ai-first-cognitive-intent-routing",
+        version: "v96-post-visit-disambiguation-engine",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,

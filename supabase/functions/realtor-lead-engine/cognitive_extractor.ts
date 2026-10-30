@@ -404,7 +404,7 @@ export function runDeterministicCognitiveExtractor(
     /(?:nahi|nhi|na|nathi|not)\s*(?:chahiye|chahye|chahie|chaiye|leni|lena|lene|joiye|leva|kharidvu|kharidna|buy)/i.test(lower) ||
     /(?:chahiye|chahye|chahie|chaiye|leni|lena|joiye|leva)\s*(?:nahi|nhi|na|nathi|not)/i.test(lower);
   const hasSellingAction =
-    /(?:bechni|bechna|bechne|vechvu|vechvo|vechva|vechvano|vechvani|sell|resale|bikri|વેચવું|વેચવા|વેચવાનો|बेचना|बेचनी)\b/i.test(lower);
+    /(?:bechni|bechna|bechne|vechvu|vechvo|vechva|vechvano|vechvani|sell|resale|bikri|list|listing|property\s*list|list\s*property|લિસ્ટ|लिस्ट|વેચવું|વેચવા|વેચવાનો|बेचना|बेचनी)\b/i.test(lower);
   const userNegatedAssumptions = Boolean(
     hasNegationOfTaking && (hasSellingAction || lower.includes("bech") || lower.includes("vech"))
   );

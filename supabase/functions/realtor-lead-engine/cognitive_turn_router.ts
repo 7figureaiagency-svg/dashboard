@@ -109,6 +109,33 @@ export const VERNACULAR_LOCALITY_MAP: Record<string, string> = {
   "माकरपुरा": "Makarpura",
 };
 
+export function extractSocietyOrProjectName(text: string): string | null {
+  if (!text) return null;
+  const t = text.trim();
+  if (/^(?:hi|hello|hey|namaste|kem cho|pranam|ok|okay|yes|ha|haan|no|nahi|cancel|reschedule|1|2|3|4)\b/i.test(t)) return null;
+  if (/^(?:flat|apartment|villa|plot|shop|office|commercial|residential|tenement)\b/i.test(t)) return null;
+
+  const societySuffixPattern = /\b([a-zA-Z0-9\s]{2,30}?)\s+(heights|residency|enclave|palms|park|greens|villas|villa|towers|tower|apartments|apartment|complex|square|hub|icon|status|pride|paradise|regency|county|city|terrace|flora|orchid|sapphire|emerald|pearl|perl|diamond|solitaire|avenue|woods|nest|oasis|horizon|antica|elegance|serene|empire|skyline|arcade|heritage|classic|lifestyle|court|gardens|garden|estate|manor|view|valley|hills|breeze|vista|retreat|haven|bliss|corner|clover|aurum|crest|grove)\b/i;
+  const matchSuffix = t.match(societySuffixPattern);
+  if (matchSuffix) {
+    const raw = matchSuffix[0].trim();
+    return raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  }
+
+  const developerPrefixPattern = /\b(darshanam|shreeji|avadh|nilamber|narayan|samanvay|vihav|alembic|griham|shree ram|shri ram)\s+([a-zA-Z0-9\s]{2,25})\b/i;
+  const matchPrefix = t.match(developerPrefixPattern);
+  if (matchPrefix) {
+    const raw = matchPrefix[0].trim();
+    return raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  }
+
+  if (/\b(?:perl|pearl)\s+[a-zA-Z0-9]+/i.test(t) || /[a-zA-Z0-9]+\s+(?:perl|pearl)\b/i.test(t)) {
+    return t.split(/\s+/).slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  }
+
+  return null;
+}
+
 export const COGNITIVE_TURN_SCHEMA = {
   type: "OBJECT",
   properties: {
@@ -242,7 +269,7 @@ export function routeCognitiveTurnDeterministic(
   }
 
   // Selling Action Check (Inclusive of Gujarati 'bechvo', 'vechvo', 'bechvu', 'vechvu', 'vechvani')
-  const hasSellIntent = /(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|vechavo|sell|selling|resale|bikri|વેચવું|વેચવા|વેચવાનો|વેચવાની|બેચવું|બેચવા|બેચવાનો|બેચવાની|बेचना|बेचनी|बेचने|बिक्री|सेल)/i.test(lower);
+  const hasSellIntent = /(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|vechavo|sell|selling|resale|bikri|list|listing|property\s*list|list\s*property|લિસ્ટ|लिस्ट|વેચવું|વેચવા|વેચવાનો|વેચવાની|બેચવું|બેચવા|બેચવાનો|બેચવાની|बेचना|बेचनी|बेचने|बिक्री|सेल)/i.test(lower);
   const hasBuyIntent = /(?:buy|purchase|kharid|khareed|kharidvu|kharidva|kharidna|lena|leni|lene|chahiye|joiye|joyiye|levu|leva|dekhna|dekhvu|shodhva)/i.test(lower);
   const hasCallIntent = /(?:call\s*karo|call\s*me|call\s*karjo|phone\s*karo|phone\s*karjo|talk\s*to|executive|agent\s*se|baat\s*karni|connect\s*karo)/i.test(lower);
   const hasOptOut = /(?:stop|unsubscribe|mat\s*bhejo|don'?t\s*message|dnd|band\s*karo|nahi\s*chahiye\s*message)/i.test(lower);
@@ -296,7 +323,7 @@ export function routeCognitiveTurnDeterministic(
   else if (/\b(dusri|other|biji|dusr[iy]|koi\s*aur|aur\s*dikhao|aur\s*options)\b/i.test(lower)) {
     primary_intent = "SEARCH_PROPERTY";
     reset_previous_context = true;
-  } else if (selected_option !== null && (lead?.state === "ROLE_SELECTION_PENDING" || lead?.state === "DUAL_ROLE_MENU_PENDING")) {
+  } else if (selected_option !== null && (lead?.state === "ROLE_SELECTION_PENDING" || lead?.state === "DUAL_ROLE_MENU_PENDING" || lead?.state === "SITE_VISIT_BOOKED")) {
     primary_intent = "SELECT_OPTION";
   }
 
@@ -391,7 +418,7 @@ export function routeCognitiveTurnDeterministic(
       budget_min: null,
       possession_timeline,
       size_area_sqft: null,
-      project_or_society: null,
+      project_or_society: extractSocietyOrProjectName(rawText),
       expected_price_inr: hasSellIntent ? budget_max : null,
       transaction_type: hasSellIntent ? "SELL" : (/\b(rent|bhadu|भाड़ा)\b/i.test(lower) ? "RENT" : "BUY"),
       purpose: hasSellIntent ? "sell" : (/\b(rent|bhadu|भाड़ा)\b/i.test(lower) ? "rent" : "buy"),
