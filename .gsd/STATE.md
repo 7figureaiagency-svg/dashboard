@@ -8,12 +8,18 @@ updated: 2026-10-30T11:56:00+05:30
 
 **Milestone:** PropTech Matching Precision & Robustness  
 **Phase:** 40 - Dual-Role Modular Slot Engine, Conversational Steering & Production Restructuring  
-**Status:** 🔄 Discuss Phase Completed, Ready to Plan (`/plan 40`)  
+**Status:** ✅ Complete (`v94-production-modular-slot-engine` deployed live to Supabase production)  
 **Decisions Documented:** `.gsd/DECISIONS.md` (Phase 40 Decisions)
 
 ## Last Action
 
-Completed Phase 40 Architecture Discussion & Interactive Requirements Discovery:
+Completed Phase 40 Execution (Dual-Role Modular Slot Engine, Conversational Steering & Production Restructuring):
+- **Wave 1 (`Plan 40.1`):** Rewrote `cognitive_turn_router.ts` implementing `MicroIntentResult` schema, vernacular selling verbs (`bechvo`, `vechvo`, `bechvu`, etc.), dual-role intent detection, call requests, FAQ detour, and 3-Tier Multi-Tenant Scaling Pool (Gemini 2.0 Flash -> Groq Llama 3.3 70B -> Deterministic slot engine). (Commit `4e346a5`).
+- **Wave 2 (`Plan 40.2`):** Injected `cognitiveTurn` into `DialogContext`, implemented `steerConversationTurn()` executing the Anti-Derailment AAS Formula (Acknowledge & Answer in 1 line -> Steer back with pending slot question), Dual-Role Priority Disambiguation, Seller Direct Action Interceptor (`SUBMIT_PROPERTY` routes straight to `handleOwnerFlow` with buyer profile isolated), and Fast-Track 4-Slot Buyer Qualification. (Commit `32dbe0b`).
+- **Wave 3 (`Plan 40.3`):** Upgraded presentation layer with Open Site Visit prompt examples (*"Aap kis date aur time par VIP Site Visit 🚗 plan karna chahenge? (Jaise: 'Kal shaam 5:00 baje' ya 'Sunday 11:00 AM')"*), Zero-Inventory Reassurance (*"Hamari team aapke criteria ke mutabiq best options dekh rahi hai, jaldi hi connect karegi. 🤝"*), and bumped version to `v94-production-modular-slot-engine`. (Commit `6927e31`).
+- **Automated Verification Matrix:** Ran 10-point test matrix in `scratch/test_phase40_production_matrix.cjs` (10/10 passed).
+- **Production Edge Serverless Deployment:** Deployed Edge Function `v94-production-modular-slot-engine` live to Supabase production (`yeiygfysijptjdepctnx`) and verified live HTTP 200 `ONLINE`.
+- **Database Wipe for Test Lead:** Cleared previous history and reset test lead `5117510624` to fresh state for end-to-end live testing.
 - **Intake Greeting:** Open conversational greeting (*"Namaste! Griham Realty me aapka swagat hai. Aap kis type ki property search ya list karna chahte hain?"*) with smart auto-bypass for specific messages.
 - **Dual-Role Priority (Buy + Sell):** When both intents are mentioned together (*"Mera 2BHK bechna hai aur 3BHK lena hai"*), bot asks user which one to address first: *"Bahut badhiya! Pehle aap naya 3BHK flat explore karna chahenge ya purana flat list karna chahenge?"*, then bridges smoothly to the second.
 - **Fast-Track 4-Slot Buyer Qualification:** (1) Property Type, (2) Location/Area, (3) Budget Range, (4) Timeline (Ready to Move vs Under Construction). Purpose auto-defaults to Self-Use.
