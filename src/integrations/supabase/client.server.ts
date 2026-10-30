@@ -30,6 +30,9 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 }
 
 function createSupabaseAdminClient() {
+  if (typeof window !== "undefined") {
+    throw new Error("CRITICAL SECURITY VIOLATION: supabaseAdmin / client.server.ts cannot be executed in browser client bundle!");
+  }
   const SUPABASE_URL = process.env['SUPABASE_URL'];
   const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 

@@ -366,6 +366,18 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 35.2: Zero-Regex Single-Pass Cognitive Turn Router & Dynamic Reschedule Engine ([`35.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/35/35.2-PLAN.md))
 - [x] Plan 35.3: Empirical Multilingual Turn Verification & Production Edge Deployment ([`35.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/35/35.3-PLAN.md))
 
+---
+
+### Phase 36: PropTech Matching Precision, Short Budget Parsing, Owner Plot Sync & Inspection Alignment
+**Status:** ⏳ In Progress  
+**Objective:** Eliminate property matching asymmetry for duplexes/penthouses, fix short budget underflow (`< 15`), map plot area on owner submission approval, achieve 100% field parity with Add Inventory, polish mobile alignment, and harden SSR service role key boundaries.  
+**Depends on:** Phase 35  
+**Plans:**
+- [ ] Plan 36.1: PropTech Matching Precision (Duplex / Villa / Penthouse) & Short Budget Parsing ([`36.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/36/36.1-PLAN.md))
+- [ ] Plan 36.2: Owner Submission Plot Area Sync, Field Parity & Inspector Drawer Polish ([`36.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/36/36.2-PLAN.md))
+- [ ] Plan 36.3: Security Boundary Hardening, Automated Test Matrix & Production Deployment ([`36.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/36/36.3-PLAN.md))
+
+
 
 
 

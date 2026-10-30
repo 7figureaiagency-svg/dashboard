@@ -12908,7 +12908,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v89-enterprise-multi-tenant-cognitive-router",
+        version: "v90-proptech-duplex-plot-budget-precision",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
