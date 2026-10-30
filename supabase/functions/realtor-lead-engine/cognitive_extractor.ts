@@ -537,10 +537,12 @@ export function runDeterministicCognitiveExtractor(
   }
 
   const isVisitAttendanceTurn =
-    currentLead?.state === "SITE_VISIT_DONE" ||
-    Boolean(currentLead?.post_visit_feedback_sent) ||
-    lastPrompt?.question_type === "VISIT_ATTENDANCE" ||
-    currentLead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE";
+    !currentLead?.state?.startsWith("OWNER_") && (
+      currentLead?.state === "SITE_VISIT_DONE" ||
+      (currentLead?.state === "SITE_VISIT_BOOKED" && Boolean(currentLead?.post_visit_feedback_sent)) ||
+      lastPrompt?.question_type === "VISIT_ATTENDANCE" ||
+      currentLead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE"
+    );
 
   if (userNegatedAssumptions) {
     primaryIntent = "NEGATION_CORRECTION";
@@ -553,10 +555,10 @@ export function runDeterministicCognitiveExtractor(
       primaryIntent = "SELECT_OPTION";
     }
   } else if (isVisitAttendanceTurn) {
-    if (/(?:nahi|nhi|na|nathi|miss|missed|cancel|attend\s*nahi)/i.test(lower)) {
+    if (/(?:^|\b)(?:nahi|nhi|na|nathi|miss|missed|cancel|attend\s*nahi)\b/i.test(lower)) {
       primaryIntent = "RESCHEDULE_VISIT";
       selectedMenuOption = 2;
-    } else if (/(?:ha|haan|yes|yep|done|attended|gaya|gaye)/i.test(lower)) {
+    } else if (/(?:^|\b)(?:ha|haan|yes|yep|done|attended|gaya|gaye)\b/i.test(lower)) {
       primaryIntent = "CONFIRM_VISIT";
       selectedMenuOption = 1;
     }

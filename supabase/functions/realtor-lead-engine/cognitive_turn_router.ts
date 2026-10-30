@@ -279,8 +279,15 @@ export function routeCognitiveTurnDeterministic(
   }
 
   // 2. Intent Detection
-  let primary_intent: MicroIntentResult["primary_intent"] = "SEARCH_PROPERTY";
-  let active_role: MicroIntentResult["active_role"] = "BUYER";
+  const isInOwnerMode = Boolean(
+    lead?.state?.startsWith("OWNER_") ||
+    lead?.lead_type === "PROVIDER" ||
+    lead?.metadata?.active_persona === "SELLER" ||
+    lead?.metadata?.awaiting_listing_initiation
+  );
+
+  let primary_intent: MicroIntentResult["primary_intent"] = isInOwnerMode ? "SUBMIT_PROPERTY" : "SEARCH_PROPERTY";
+  let active_role: MicroIntentResult["active_role"] = isInOwnerMode ? "SELLER" : "BUYER";
   const missing_critical_slots: string[] = [];
   let reset_previous_context = false;
   let user_negated_assumptions = false;
@@ -300,14 +307,20 @@ export function routeCognitiveTurnDeterministic(
   const hasOptOut = /(?:stop|unsubscribe|mat\s*bhejo|don'?t\s*message|dnd|band\s*karo|nahi\s*chahiye\s*message)/i.test(lower);
   const hasFaq = /(?:rera|loan|sbi|interest|brokerage|commission|map|address|office|location\s*pin|amenities|possession)/i.test(lower);
 
-  // Post-visit Attendance Check
-  const isPostVisitState = lead?.state === "SITE_VISIT_DONE" || lead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE";
+  // Post-visit Attendance Check (Guarded: NEVER treat owner turns as visit attendance!)
+  const isPostVisitState = !lead?.state?.startsWith("OWNER_") && (
+    lead?.state === "SITE_VISIT_DONE" ||
+    (lead?.state === "SITE_VISIT_BOOKED" && Boolean(lead?.post_visit_feedback_sent)) ||
+    lead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE"
+  );
   const hasAttended = isPostVisitState && (
-    lower === "1" || /(?:haan|ha|yes|done|attended|visit\s*ho\s*gayi|visit\s*thai\s*gai|gaya\s*tha|gaya\s*hati)/i.test(lower)
+    lower === "1" || /\b(?:haan|ha|yes|done|attended|visit\s*ho\s*gayi|visit\s*thai\s*gai|gaya\s*tha|gaya\s*hati)\b/i.test(lower)
   );
   const hasNotAttended = isPostVisitState && (
-    lower === "2" || /(?:nahi|nhi|na|nathi|missed|nahi\s*ho\s*paayi|nathi\s*thai|ja\s*nathi\s*shakyo)/i.test(lower)
+    lower === "2" || /\b(?:nahi|nhi|na|nathi|missed|nahi\s*ho\s*paayi|nathi\s*thai|ja\s*nathi\s*shakyo)\b/i.test(lower)
   );
+
+  const isAffirmativeListingTurn = /^(?:yes|haan|ha|haa|ji\s*haan|sure|yep|list\s*another|ek\s*aur|dusri|doosri|property\s*list|list\s*karni|list\s*karvi|list\s*karo)\b/i.test(lower.trim());
 
   if (hasAttended) {
     primary_intent = "VISIT_ATTENDED";
@@ -317,6 +330,9 @@ export function routeCognitiveTurnDeterministic(
     primary_intent = "OPT_OUT";
   } else if (hasCallIntent) {
     primary_intent = "REQUEST_CALL";
+  } else if (isInOwnerMode && isAffirmativeListingTurn) {
+    primary_intent = "SUBMIT_PROPERTY";
+    active_role = "SELLER";
   } else if (hasSellIntent && hasBuyIntent) {
     primary_intent = "DUAL_ROLE_INTENT";
     active_role = "DUAL_ROLE";
@@ -345,7 +361,7 @@ export function routeCognitiveTurnDeterministic(
     active_role = "UNKNOWN";
   }
   // Request other property
-  else if (/\b(dusri|other|biji|dusr[iy]|koi\s*aur|aur\s*dikhao|aur\s*options)\b/i.test(lower)) {
+  else if (!isInOwnerMode && /\b(dusri|other|biji|dusr[iy]|koi\s*aur|aur\s*dikhao|aur\s*options)\b/i.test(lower)) {
     primary_intent = "SEARCH_PROPERTY";
     reset_previous_context = true;
   } else if (selected_option !== null && (lead?.state === "ROLE_SELECTION_PENDING" || lead?.state === "DUAL_ROLE_MENU_PENDING" || lead?.state === "SITE_VISIT_BOOKED")) {

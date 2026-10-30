@@ -2,8 +2,15 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyOutboundReply } from "./verifier_gate.ts";
 import * as VoiceDecoder from "./voice_decoder.ts";
-import * as CognitiveExtractor from "./cognitive_extractor.ts";
-import * as MultilingualSynthesizer from "./multilingual_synthesizer.ts";
+import {
+  extractCognitiveIntentWithAI,
+  CognitiveExtractionResult,
+} from "./cognitive_extractor.ts";
+import {
+  synthesizeMultilingualReply,
+  LanguageProfile,
+  SynthesizeReplyParams,
+} from "./multilingual_synthesizer.ts";
 import * as VerifierGate from "./verifier_gate.ts";
 import * as CognitiveTurnRouter from "./cognitive_turn_router.ts";
 import {
@@ -21,7 +28,7 @@ export * from "./multilingual_synthesizer.ts";
 export * from "./verifier_gate.ts";
 export * from "./cognitive_turn_router.ts";
 
-export { VoiceDecoder, CognitiveExtractor, MultilingualSynthesizer, VerifierGate, CognitiveTurnRouter };
+export { VoiceDecoder, VerifierGate, CognitiveTurnRouter };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1765,35 +1772,6 @@ function parseAreaFromText(text: string): ParsedArea {
   return { carpet_sqft: carpet, super_built_up_sqft: superBuilt, plot_area_sqft: plot };
 }
 
-function formatSocietyAndLocationLabel(society?: string | null, location?: string | null, city?: string | null): string {
-  const soc = (society || "").trim();
-  const loc = (location || "").trim();
-
-  if (!soc && !loc) return city || "Prime Area";
-  if (!soc) return loc;
-  if (!loc) return soc;
-
-  const socParts = soc.split(/,\s*/).map(p => p.trim()).filter(Boolean);
-  const locParts = loc.split(/,\s*/).map(p => p.trim()).filter(Boolean);
-  const allParts = [...socParts, ...locParts];
-
-  const deduped: string[] = [];
-  for (const part of allParts) {
-    const pClean = part.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (!pClean) continue;
-    const isDup = deduped.some(d => {
-      const dClean = d.toLowerCase().replace(/[^a-z0-9]/g, "");
-      return dClean.includes(pClean) || pClean.includes(dClean) ||
-        (dClean.length > 5 && pClean.length > 5 && (dClean.slice(0, 5) === pClean.slice(0, 5) || dClean.slice(-7) === pClean.slice(-7)));
-    });
-    if (!isDup) {
-      deduped.push(part);
-    }
-  }
-
-  return deduped.join(", ") || soc;
-}
-
 /**
  * Detects random keystroke mashes, consonant-only strings, repeated chars,
  * and unintelligible inputs (e.g. "gfnfgn", "asdfghj", "zzzzz", "?????")
@@ -2785,175 +2763,6 @@ export const VERNACULAR_RENTAL_REGEX = /(?:^|\b)(?:bhade|bhadu|bhada|bhaade|kira
 export const VERNACULAR_SALE_REGEX = /(?:^|\b)(?:vechva|vechvu|vechvo|bechna|bechni|kharidva\s*nathi|sale|bikri)\b/i;
 
 /**
- * Extracts isolated single digit choice (1-5 or emoji digits) with boundary checking.
- */
-export function parseSingleDigitChoice(text: string): number | null {
-  if (!text) return null;
-  const normalized = normalizeGujaratiDigits(text).trim();
-  const match = normalized.match(/^(?:option\s*)?([1-5]|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|wala|vala))?$/i);
-  if (match) {
-    const raw = match[1];
-    if (raw === "1" || raw === "1️⃣") return 1;
-    if (raw === "2" || raw === "2️⃣") return 2;
-    if (raw === "3" || raw === "3️⃣") return 3;
-    if (raw === "4" || raw === "4️⃣") return 4;
-    if (raw === "5" || raw === "5️⃣") return 5;
-  }
-  return null;
-}
-
-/**
- * Deterministically binds isolated single digits (1, 2, 3) to the active stage options
- * across all dialog states with zero cross-stage collision.
- */
-export function disambiguateNumericChoice(
-  digit: number,
-  currentState: string,
-  lead?: any,
-  messageText: string = ""
-): { action: UserAction; userRole: "OWNER" | "SEEKER" | "UNKNOWN" } | null {
-  const isPostVisit =
-    currentState === "SITE_VISIT_DONE" ||
-    (currentState === "SITE_VISIT_BOOKED" &&
-      (Boolean(lead?.post_visit_feedback_sent) ||
-       lead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE" ||
-       lead?.metadata?.last_bot_prompt?.question_type === "PAST_VISIT_ATTENDANCE" ||
-       (lead?.site_visit_at ? new Date(lead.site_visit_at).getTime() <= Date.now() : true)));
-
-  if (isPostVisit) {
-    if (digit === 1) {
-      return {
-        action: { intent: "CONFIRM_VISIT_ATTENDANCE", attended: true },
-        userRole: "SEEKER",
-      };
-    }
-    if (digit === 2) {
-      return {
-        action: { intent: "CANNOT_ATTEND_VISIT", reason: "reschedule_requested" },
-        userRole: "SEEKER",
-      };
-    }
-    if (digit === 3) {
-      return {
-        action: { intent: "SELECT_OPTION", option_index: 2 },
-        userRole: "SEEKER",
-      };
-    }
-  }
-
-  if (currentState === "ROLE_SELECTION_PENDING" || currentState === "FRESH") {
-    if (isBhkOrPropertyConfiguration(messageText)) {
-      const propType = parsePropertyTypeFromText(messageText) || "2BHK";
-      return {
-        action: { intent: "CHANGE_REQUIREMENT", property_type: propType },
-        userRole: "SEEKER",
-      };
-    }
-    if (digit === 1) {
-      return {
-        action: { intent: "CHANGE_REQUIREMENT" },
-        userRole: "SEEKER",
-      };
-    }
-    if (digit === 2) {
-      return {
-        action: { intent: "SUBMIT_LISTING" },
-        userRole: "OWNER",
-      };
-    }
-    if (digit === 3) {
-      return {
-        action: { intent: "CHANGE_REQUIREMENT" },
-        userRole: "UNKNOWN",
-      };
-    }
-  }
-
-  if (currentState === "OWNER_POSSESSION_PENDING") {
-    if (digit === 1) {
-      return {
-        action: { intent: "SUBMIT_LISTING", possession_status: "READY_TO_MOVE" },
-        userRole: "OWNER",
-      };
-    }
-    if (digit === 2) {
-      return {
-        action: { intent: "SUBMIT_LISTING", possession_status: "UNDER_CONSTRUCTION" },
-        userRole: "OWNER",
-      };
-    }
-  }
-
-  if (currentState === "OWNER_FURNISHING_PENDING") {
-    if (digit === 1) {
-      return {
-        action: { intent: "SUBMIT_LISTING", furnishing_status: "UNFURNISHED" },
-        userRole: "OWNER",
-      };
-    }
-    if (digit === 2) {
-      return {
-        action: { intent: "SUBMIT_LISTING", furnishing_status: "SEMI_FURNISHED" },
-        userRole: "OWNER",
-      };
-    }
-    if (digit === 3) {
-      return {
-        action: { intent: "SUBMIT_LISTING", furnishing_status: "FURNISHED" },
-        userRole: "OWNER",
-      };
-    }
-  }
-
-  if (currentState === "CRITERIA_CONFIRMATION_PENDING") {
-    if (digit === 1) {
-      return {
-        action: { intent: "CONFIRM_CRITERIA", confirm: true },
-        userRole: "SEEKER",
-      };
-    }
-    if (digit === 2) {
-      return {
-        action: { intent: "CONFIRM_CRITERIA", confirm: false },
-        userRole: "SEEKER",
-      };
-    }
-  }
-
-  if (currentState === "DUAL_ROLE_MENU_PENDING") {
-    if (digit === 1) {
-      return {
-        action: { intent: "SUBMIT_LISTING" },
-        userRole: "OWNER",
-      };
-    }
-    if (digit === 2) {
-      return {
-        action: { intent: "CHANGE_REQUIREMENT" },
-        userRole: "SEEKER",
-      };
-    }
-    if (digit === 3) {
-      return {
-        action: { intent: "REQUEST_HUMAN_CALL" },
-        userRole: "UNKNOWN",
-      };
-    }
-  }
-
-  if (currentState === "OPTIONS_SENT" || currentState === "VISIT_REQUESTED" || currentState === "SITE_VISIT_PROPOSED") {
-    if (digit >= 1 && digit <= 3) {
-      return {
-        action: { intent: "SELECT_OPTION", option_index: digit - 1 },
-        userRole: "SEEKER",
-      };
-    }
-  }
-
-  return null;
-}
-
-/**
  * Validates, normalizes, and sanitizes untrusted LLM JSON output into a
  * strictly typed UserAction discriminated union instance.
  */
@@ -2964,7 +2773,7 @@ export function validateUserAction(raw: any, leadOrState?: any, rawMessageText?:
 
   const leadState = typeof leadOrState === "string" ? leadOrState : leadOrState?.state;
   const lastPrompt = typeof leadOrState === "object" ? leadOrState?.metadata?.last_bot_prompt : null;
-  const isPostVisitSurvey = leadState === "SITE_VISIT_DONE" || leadState === "SITE_VISIT_BOOKED" || lastPrompt?.question_type === "VISIT_ATTENDANCE" || Boolean(typeof leadOrState === "object" && leadOrState?.post_visit_feedback_sent);
+  const isPostVisitSurvey = !leadState?.startsWith("OWNER_") && (leadState === "SITE_VISIT_DONE" || leadState === "SITE_VISIT_BOOKED" || lastPrompt?.question_type === "VISIT_ATTENDANCE" || Boolean(typeof leadOrState === "object" && leadOrState?.post_visit_feedback_sent));
 
   const src = (raw.action && typeof raw.action === "object") ? raw.action : raw;
   const rawIntent = String(src.intent || raw.intent || "").trim().toUpperCase();
@@ -3726,852 +3535,9 @@ function parseJsonSafely(str: string): any {
   return null;
 }
 
-async function classifyLeadIntentWithGemini(
-  apiKey: string,
-  messageText: string,
-  lead: any
-): Promise<ClassifiedIntent | null> {
-  const cleanKey = apiKey.trim().replace(/^["']|["']$/g, "");
-  const userContent = buildLeadContextForClassifier(lead, messageText);
-
-  const fullPrompt = `${CORE_INTENT_SYSTEM_PROMPT}\n\n${userContent}`;
-
-  const candidates = [
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cleanKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${cleanKey}`,
-    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${cleanKey}`,
-    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${cleanKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${cleanKey}`,
-  ];
-
-  const candidateErrors: string[] = [];
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 250,
-            responseMimeType: "application/json",
-          },
-        }),
-        signal: AbortSignal.timeout(4000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawText) {
-          const parsed = parseJsonSafely(rawText);
-          if (parsed && (parsed.action || parsed.intent)) {
-            parsed.messageText = messageText;
-            const action = validateUserAction(parsed, lead, messageText);
-            const userRole = parsed.user_role || (action.intent === "SUBMIT_LISTING" ? "OWNER" : "SEEKER");
-            const lang = parsed.language || "HINGLISH";
-            return buildClassifiedActionResult(action, userRole, lang, "GEMINI", 0, parsed);
-          }
-        }
-      } else {
-        const errText = await res.text().catch(() => "");
-        candidateErrors.push(`${url.split("/models/")[1]?.split("?")[0]} [${res.status}]: ${errText.slice(0, 150)}`);
-      }
-    } catch (e: any) {
-      candidateErrors.push(`${url.split("/models/")[1]?.split("?")[0]} [fetch]: ${e.message}`);
-    }
-  }
-
-  throw new Error(`All Gemini candidates failed: ${candidateErrors.join(" | ")}`);
-}
-
-async function classifyLeadIntentWithGroq(
-  apiKey: string,
-  messageText: string,
-  lead: any
-): Promise<ClassifiedIntent | null> {
-  const cleanKey = apiKey.trim().replace(/^["']|["']$/g, "");
-  const userContent = buildLeadContextForClassifier(lead, messageText);
-
-  const models = [
-    "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
-    "qwen/qwen3.8-27b",
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-  ];
-
-  const groqErrors: string[] = [];
-  for (const model of models) {
-    try {
-      // First try with json_object response format
-      let res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${cleanKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: CORE_INTENT_SYSTEM_PROMPT },
-            { role: "user", content: userContent },
-          ],
-          temperature: 0.1,
-          max_tokens: 250,
-          response_format: { type: "json_object" },
-        }),
-        signal: AbortSignal.timeout(3500),
-      });
-
-      // If model does not support response_format json_object, fallback to standard completion
-      if (!res.ok && res.status === 400) {
-        res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${cleanKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: "system", content: CORE_INTENT_SYSTEM_PROMPT },
-              { role: "user", content: userContent },
-            ],
-            temperature: 0.1,
-            max_tokens: 250,
-          }),
-          signal: AbortSignal.timeout(3500),
-        });
-      }
-
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data.choices?.[0]?.message?.content;
-        if (rawText) {
-          const parsed = parseJsonSafely(rawText);
-          if (parsed && (parsed.action || parsed.intent)) {
-            parsed.messageText = messageText;
-            const action = validateUserAction(parsed, lead, messageText);
-            const userRole = parsed.user_role || (action.intent === "SUBMIT_LISTING" ? "OWNER" : "SEEKER");
-            const lang = parsed.language || "HINGLISH";
-            return buildClassifiedActionResult(action, userRole, lang, "GROQ", 0, parsed);
-          }
-        }
-      } else {
-        const errBody = await res.text().catch(() => "");
-        groqErrors.push(`${model} [${res.status}]: ${errBody.slice(0, 150)}`);
-      }
-    } catch (e: any) {
-      groqErrors.push(`${model} [fetch]: ${e.message}`);
-    }
-  }
-
-  throw new Error(`All Groq models failed: ${groqErrors.join(" | ")}`);
-}
-
-async function findAdjacentLocalityWithAI(
-  requestedLoc: string,
-  city: string | null,
-  availableLocs: string[]
-): Promise<{ adjacent_location: string; distance_context: string } | null> {
-  if (!requestedLoc || !availableLocs || availableLocs.length === 0) return null;
-  const geminiKey = (Deno.env.get("GEMINI_API_KEY") || "").trim().replace(/^["']|["']$/g, "");
-  if (!geminiKey) return null;
-
-  const prompt = `You are an expert real estate geographical routing system.
-Context:
-- Target City: "${city || "India"}"
-- Buyer Requested Locality: "${requestedLoc}"
-- Available Localities in Realtor's Inventory: ${JSON.stringify(availableLocs)}
-
-Task:
-Identify if ANY of the available localities is geographically adjacent, part of the same micro-market / corridor, or within a ~5-10 minute drive to "${requestedLoc}" in ${city || "this city"}.
-If yes, choose the single closest matching locality and describe the distance context in brief Hinglish (e.g. "sirf 5-7 minute ki distance par" or "adjacent corridor par").
-If none are reasonably close or you are unsure, return null for both fields.
-
-Respond ONLY with valid JSON:
-{"adjacent_location": "ExactNameFromList" | null, "distance_context": "distance string" | null}`;
-
-  const candidates = [
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${geminiKey}`,
-  ];
-
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 120,
-            responseMimeType: "application/json",
-          },
-        }),
-        signal: AbortSignal.timeout(2200),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawText) {
-          const parsed = parseJsonSafely(rawText);
-          if (parsed?.adjacent_location) {
-            const matchedName = availableLocs.find(
-              (l) => l.toLowerCase() === String(parsed.adjacent_location).toLowerCase().trim()
-            );
-            if (matchedName) {
-              return {
-                adjacent_location: matchedName,
-                distance_context: parsed.distance_context || "paas ke area me",
-              };
-            }
-          }
-        }
-      }
-    } catch (e: any) {
-      console.warn(`[AI Proximity] Candidate ${url.split("/models/")[1]?.split("?")[0]} failed:`, e.message);
-    }
-  }
-
-  return null;
-}
-
-// =============================================================================
-// ZERO-REGEX COGNITIVE INTENT & ENTITY EXTRACTOR ENGINE (PHASE 33.2)
-// =============================================================================
-
-export function buildCognitivePrompt(context: {
-  messageText: string;
-  currentLead: any;
-  lastPrompt?: any;
-  recentMessages?: any[];
-}): string {
-  const { messageText, currentLead, lastPrompt, recentMessages } = context;
-  const leadState = currentLead?.state || "FRESH";
-  const leadType = currentLead?.lead_type || currentLead?.metadata?.active_persona || "UNKNOWN";
-  const lastBotPromptText =
-    lastPrompt?.text_preview || currentLead?.metadata?.last_bot_prompt?.text_preview || "None";
-  const lastBotQuestionType =
-    lastPrompt?.question_type || currentLead?.metadata?.last_bot_prompt?.question_type || "None";
-
-  // Build last 6 conversation turns if provided
-  let historySection = "No previous turns recorded.";
-  if (Array.isArray(recentMessages) && recentMessages.length > 0) {
-    const turns = recentMessages.slice(-6).map((m: any, idx: number) => {
-      const speaker = m.sender || (m.role === "assistant" || m.event_type?.includes("BOT") ? "BOT" : "USER");
-      const text = m.text || m.payload?.userText || m.payload?.reply_sent || m.content || "";
-      return `Turn ${idx + 1} [${speaker}]: ${text}`;
-    });
-    historySection = turns.join("\n");
-  } else if (currentLead?.metadata?.recent_turns && Array.isArray(currentLead.metadata.recent_turns)) {
-    historySection = currentLead.metadata.recent_turns.slice(-6).join("\n");
-  }
-
-  return `You are an expert Real Estate Cognitive Intent & Entity Extractor for Indian real estate dialogs across Hinglish, Gujlish, Gujarati, Hindi, and English.
-Analyze the user's message in the full context of the dialog state, pending bot question, and recent conversation turns.
-
-### CURRENT CONVERSATION CONTEXT:
-- Active Lead State: ${leadState}
-- Lead Persona/Role: ${leadType}
-- Pending Question Type: ${lastBotQuestionType}
-- Last Bot Prompt: "${lastBotPromptText}"
-
-### RECENT DIALOG TURNS:
-${historySection}
-
-### CRITICAL DISAMBIGUATION RULES:
-1. PROPERTY TYPE vs SOCIETY/PROJECT NAME:
-   - "ternament", "tenament", "tenaments", "ternaments", "row house", "ટેનામેન્ટ" is property_type: "TENEMENT" (Tenement/Row house). It is NEVER a project or society name, and NEVER a location!
-   - "shop", "office", "flat", "apartment", "duplex", "villa", "penthouse", "plot" are property types. NEVER put them into location_name!
-
-2. SELLER vs SEEKER NEGATION:
-   - "shop bechni he lena nahi", "muje shop bechni hai", "flat vechvano chhe", "bechvu che": lead_role is strictly "SELLER", budget_type is "OUTRIGHT_BUY" (expected price), NOT a commercial lease or rent seeker!
-   - "chahiye nahi, bechni hai", "lena nahi hai", "nahi lena": user_negated_assumptions MUST BE TRUE, lead_role is "SELLER", primary_intent is "NEGATION_CORRECTION".
-
-3. NUMERIC MENU SELECTIONS & DISAMBIGUATION:
-   - If user responds with a single isolated digit like "1", "2", "3" or "option 2":
-     - Map to selected_menu_option as 1-based integer (1, 2, 3, etc.).
-     - NEVER map an isolated digit "1", "2", "3" to budget_inr! A single digit is ALWAYS a menu option, NEVER a budget, unless the pending question is explicitly "BUDGET".
-     - In ROLE_SELECTION_PENDING, "1" = BUYER / ACQUISITION, "2" = SELLER / DISPOSITION, "3" = HUMAN_ESCALATION.
-     - In ACQUISITION_TYPE, "1" = BUY, "2" = RENT, "3" = COMMERCIAL_LEASE.
-     - In PROPERTY_TYPE, "1" = FLAT, "2" = VILLA, "3" = COMMERCIAL.
-     - In post-visit attendance (SITE_VISIT_DONE, VISIT_ATTENDANCE), "1" = attended (CONFIRM_VISIT), "2" = did not attend / reschedule (RESCHEDULE_VISIT). NEVER confuse "2" with "Option 3: search new properties"!
-     - In DUAL_ROLE_MENU_PENDING, "1" = SELECT_OPTION, "2" = CHECK_STATUS, "3" = HUMAN_ESCALATION.
-     - However, "2bhk", "2 bhk", "3 bed" is property configuration (unit_bhk), NOT a menu selection!
-
-4. VERNACULAR ADJECTIVES vs LOCALITIES:
-   - "purana", "purani", "juno", "juni" mean OLD/RESALE. They are condition descriptors, NEVER locations!
-   - "navo", "nava", "naya", "nayi" mean NEW. NEVER locations!
-   - location_name must be a pure geographical area or locality (e.g. "Alkapuri", "Waghodia Road", "Gotri", "Vasna"). If no real locality is mentioned, location_name MUST BE NULL!
-
-5. BUDGET & CURRENCY NORMALIZATION:
-   - Isolated single digits like "1", "2", "3" MUST NEVER be extracted as budget_inr unless Pending Question Type is "BUDGET".
-   - If Pending Question Type is "BUDGET" and user is buying:
-     - "1", "1 cr", "1 crore", "૧ કરોડ" = 10000000 INR (1 Crore, NOT 1 Lakh!)
-     - "1.5", "1.5 cr" = 15000000 INR
-     - "50", "50 lakh", "50L", "૫૦ લાખ", "50 lac" = 5000000 INR
-     - "40 lakh ma" = 4000000 INR
-   - If Pending Question Type is "BUDGET" and user is renting:
-     - "15", "15000", "15k" = 15000 INR
-   - "25 hazar", "25k" = 25000 INR
-
-6. LANGUAGE & DIALECT DETECTION:
-   - Accurately detect all 22 scheduled Indian languages and vernacular regional dialects (Hindi, Gujarati, Marathi, Tamil, Telugu, Kannada, Bengali, Punjabi, Malayalam, Odia, Marwari, Kathiyawadi, Hinglish, Gujlish, English).
-   - Detect script ("Latin", "Devanagari", "Gujarati", "Other").
-   - Detect dialect ("Gujlish", "Hinglish", "Pure Gujarati", "Marathi", "Tamil", "Telugu", "English").
-   - Detect code ("gu-IN", "hi-IN", "en-IN", "mr-IN", "ta-IN", "te-IN", "kn-IN", "bn-IN", "pa-IN").
-   - Detect primary_language (e.g. "Gujarati", "Hindi", "Marathi", "Tamil", "English").
-   - Detect formality ("POLITE_RESPECTFUL", "CASUAL", "FORMAL").
-
-USER MESSAGE TO EXTRACT:
-"${messageText}"`;
-}
-
-export function runDeterministicCognitiveExtractor(
-  messageText: string,
-  currentLead?: any,
-  lastPrompt?: any
-): CognitiveExtractionResult {
-  const normalized = normalizeIndicDigits(normalizeGujaratiDigits(messageText || ""));
-  const lower = normalized.toLowerCase().trim();
-
-  // 1. Script & Language Detection
-  let script: "Latin" | "Devanagari" | "Gujarati" | "Other" = "Latin";
-  let primaryLang = "Hindi";
-  let code = "hi-IN";
-  let dialect = "Hinglish";
-  let formality: "POLITE_RESPECTFUL" | "CASUAL" | "FORMAL" = "POLITE_RESPECTFUL";
-
-  if (/[\u0A80-\u0AFF]/.test(normalized)) {
-    script = "Gujarati";
-    primaryLang = "Gujarati";
-    code = "gu-IN";
-    dialect = "Pure Gujarati";
-  } else if (/[\u0900-\u097F]/.test(normalized)) {
-    script = "Devanagari";
-    if (/(?:मला|पाहिजे|आहे|विकायचे|विकणे|किती|दाखवा|भाड्याने|माला|mala|pahije|aahe|vikayche|vikne|kiti|dakhva)/i.test(lower)) {
-      primaryLang = "Marathi";
-      code = "mr-IN";
-      dialect = "Marathi";
-    } else {
-      primaryLang = "Hindi";
-      code = "hi-IN";
-      dialect = "Devanagari Hindi";
-    }
-  } else if (/[\u0B80-\u0BFF]/.test(normalized)) {
-    script = "Other";
-    primaryLang = "Tamil";
-    code = "ta-IN";
-    dialect = "Tamil";
-  } else if (/[\u0C00-\u0C7F]/.test(normalized)) {
-    script = "Other";
-    primaryLang = "Telugu";
-    code = "te-IN";
-    dialect = "Telugu";
-  } else if (/[\u0C80-\u0CFF]/.test(normalized)) {
-    script = "Other";
-    primaryLang = "Kannada";
-    code = "kn-IN";
-    dialect = "Kannada";
-  } else if (/[\u0980-\u09FF]/.test(normalized)) {
-    script = "Other";
-    primaryLang = "Bengali";
-    code = "bn-IN";
-    dialect = "Bengali";
-  } else if (/[\u0A00-\u0A7F]/.test(normalized)) {
-    script = "Other";
-    primaryLang = "Punjabi";
-    code = "pa-IN";
-    dialect = "Punjabi";
-  } else {
-    // Latin Script
-    script = "Latin";
-    const hasGujLex = /\b(kem|cho|chho|chhe|che|nathi|joiye|joyiye|joie|mane|aapo|aapjo|batavo|shu|bhai|ben|tamare|amare|vechvu|vechvano|bhade|bhadu|kale|aaje)\b/i.test(lower);
-    const hasMarLex = /\b(mala|pahije|aahe|vikaycha|vikayche|vikne|kiti|dakhva|bhadane|ghyaye)\b/i.test(lower);
-    const hasTamLex = /\b(enakku|vendum|kaatunga|vaanga|enna|irukku|illai)\b/i.test(lower);
-    const hasTelLex = /\b(naaku|kaavaali|chupinchandi|undi|ledu|kavalenu)\b/i.test(lower);
-    const hasPunLex = /\b(mainu|chahida|kithe|daso|vechna|kidaan)\b/i.test(lower);
-    const hasExplicitEnglish = lower.includes("in english") || lower.includes("speak english") || lower.includes("english please") || lower === "english";
-    const hasEnglishGrammar = /\b(can you|could you|would you|please send|please show|please share|i am looking|i want to|i need to|we are looking|we want to|what is the|what are the|tell me about|could we|how much is|where is it|show me some|looking for|interested in|share with me|under construction|ready to move|reschedule|cancel|call me)\b/i.test(lower);
-    const hasHinLex = /\b(hai|hain|nahi|nhi|nai|chahiye|chahye|chahie|chaiye|karna|karni|dekhna|dikhao|batao|bhejo|kitna|kitne|kaunsa|kahan|kidhar|milega|mujhe|mera|meri|apna)\b/i.test(lower);
-
-    if (hasGujLex) {
-      primaryLang = "Gujarati";
-      code = "gu-IN";
-      dialect = "Gujlish";
-    } else if (hasMarLex) {
-      primaryLang = "Marathi";
-      code = "mr-IN";
-      dialect = "Marathi";
-    } else if (hasTamLex) {
-      primaryLang = "Tamil";
-      code = "ta-IN";
-      dialect = "Tamil";
-    } else if (hasTelLex) {
-      primaryLang = "Telugu";
-      code = "te-IN";
-      dialect = "Telugu";
-    } else if (hasPunLex) {
-      primaryLang = "Punjabi";
-      code = "pa-IN";
-      dialect = "Punjabi";
-    } else if (hasExplicitEnglish || (hasEnglishGrammar && !hasHinLex && !hasGujLex)) {
-      primaryLang = "English";
-      code = "en-IN";
-      dialect = "English";
-    } else {
-      primaryLang = "Hindi";
-      code = "hi-IN";
-      dialect = "Hinglish";
-    }
-  }
-
-  // Formality detection
-  if (/\b(ji|aap|tamare|kripya|please|namaste|pranam|sir|madam|saheb)\b/i.test(lower)) {
-    formality = "POLITE_RESPECTFUL";
-  } else if (/\b(yaar|bhai|re|tu|tare|tere)\b/i.test(lower)) {
-    formality = "CASUAL";
-  }
-
-  // 2. Negation Check (e.g. "muje chahiye nahi, bechni hai", "lena nahi hai", "nahi lena")
-  const hasNegationOfTaking =
-    /(?:nahi|nhi|na|nathi|not)\s*(?:chahiye|chahye|chahie|chaiye|leni|lena|lene|joiye|leva|kharidvu|kharidna|buy)/i.test(lower) ||
-    /(?:chahiye|chahye|chahie|chaiye|leni|lena|joiye|leva)\s*(?:nahi|nhi|na|nathi|not)/i.test(lower);
-  const hasSellingAction =
-    /(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|vechavo|sell|selling|resale|bikri|વેચવું|વેચવા|વેચવાનો|વેચવાની|બેચવું|બેચવા|બેચવાનો|બેચવાની|बेचना|बेचनी|बेचने|बिक्री|सेल)\b/i.test(lower);
-  const userNegatedAssumptions = Boolean(
-    hasNegationOfTaking && (hasSellingAction || lower.includes("bech") || lower.includes("vech"))
-  );
-
-  // 3. Lead Role & Budget Type
-  let leadRole: "BUYER" | "TENANT" | "SELLER" | "LANDLORD" | "BROKER" | "UNKNOWN" = "UNKNOWN";
-  let budgetType: "OUTRIGHT_BUY" | "MONTHLY_RENT" | "COMMERCIAL_LEASE" | "UNKNOWN" = "UNKNOWN";
-
-  if (hasSellingAction || userNegatedAssumptions) {
-    leadRole = "SELLER";
-    budgetType = "OUTRIGHT_BUY";
-  } else if (/\b(rent\s*out|bhade\s*aapvu|kiraye\s*pe\s*deni|kiraye\s*pe\s*dena)\b/i.test(lower)) {
-    leadRole = "LANDLORD";
-    budgetType = "MONTHLY_RENT";
-  } else if (/\b(rent|kiraya|kiraye|bhadu|bhade|bhaade|reva\s*mate)\b/i.test(lower)) {
-    leadRole = "TENANT";
-    budgetType = "MONTHLY_RENT";
-  } else if (/\b(lease|corporate\s*lease|commercial\s*lease)\b/i.test(lower)) {
-    leadRole = "TENANT";
-    budgetType = "COMMERCIAL_LEASE";
-  } else if (/\b(buy|purchase|kharid|khareed|leni|lena|chahiye|joiye)\b/i.test(lower)) {
-    leadRole = "BUYER";
-    budgetType = "OUTRIGHT_BUY";
-  } else if (currentLead?.lead_type === "PROVIDER") {
-    leadRole = "SELLER";
-  } else if (currentLead?.lead_type === "SEEKER") {
-    leadRole = currentLead?.requirement === "RENT" ? "TENANT" : "BUYER";
-    budgetType = currentLead?.requirement === "RENT"
-      ? "MONTHLY_RENT"
-      : (currentLead?.requirement === "LEASE"
-        ? "COMMERCIAL_LEASE"
-        : (currentLead?.requirement === "BUY" ? "OUTRIGHT_BUY" : "UNKNOWN"));
-  }
-
-  // 4. Property Type & Category
-  let propertyType: "FLAT" | "TENEMENT" | "DUPLEX" | "VILLA" | "SHOP" | "OFFICE" | "PLOT" | "UNKNOWN" = "UNKNOWN";
-  let propertyCategory: "RESIDENTIAL" | "COMMERCIAL" | "PLOT_LAND" | "UNKNOWN" = "UNKNOWN";
-  let unitBhk: number | null = null;
-
-  const bhkMatch = lower.match(/(?:^|\b)([1-5])\s*(?:bhk|rk|bed|bedroom|bedrooms)\b/i);
-  if (bhkMatch) {
-    unitBhk = parseInt(bhkMatch[1], 10);
-  }
-
-  if (
-    /(?:^|\b)(?:ternament|ternaments|tenament|tenaments|tenement|tenements|row\s*house|rowhouse|rowhouses|ટેનામેન્ટ|ટેનામેંટ|टेनामेंट|टेनमेंट)\b/i.test(lower)
-  ) {
-    propertyType = "TENEMENT";
-    propertyCategory = "RESIDENTIAL";
-  } else if (/(?:^|\b)(?:shop|shops|dukan|dukaan|દુકાન|दुकान)\b/i.test(lower)) {
-    propertyType = "SHOP";
-    propertyCategory = "COMMERCIAL";
-  } else if (/(?:^|\b)(?:office|offices|corporate\s*space|ઓફિસ|ऑफिस)\b/i.test(lower)) {
-    propertyType = "OFFICE";
-    propertyCategory = "COMMERCIAL";
-  } else if (/(?:^|\b)(?:duplex|ડુપ્લેક્સ|डुप्लेक्स)\b/i.test(lower)) {
-    propertyType = "DUPLEX";
-    propertyCategory = "RESIDENTIAL";
-  } else if (/(?:^|\b)(?:villa|villas|bungalow|bungalows|બંગલો|बंगला)\b/i.test(lower)) {
-    propertyType = "VILLA";
-    propertyCategory = "RESIDENTIAL";
-  } else if (/(?:^|\b)(?:plot|plots|land|jamin|zameen|પ્લોટ|जमीन)\b/i.test(lower)) {
-    propertyType = "PLOT";
-    propertyCategory = "PLOT_LAND";
-  } else if (
-    /(?:^|\b)(?:flat|flats|apartment|apartments|એપાર્ટમેન્ટ|ફ્લેટ|फ्लैट)\b/i.test(lower) ||
-    unitBhk !== null
-  ) {
-    propertyType = "FLAT";
-    propertyCategory = "RESIDENTIAL";
-  }
-
-  // 5. Budget In INR
-  let budgetInr: number | null = null;
-  const crMatch = lower.match(/(?:^|\b)(\d+(?:\.\d+)?)\s*(?:cr|crore|crores|કરોડ|करोड़)\b/i);
-  const lakhMatch = lower.match(/(?:^|\b)(\d+(?:\.\d+)?)\s*(?:l|lac|lacs|lakh|lakhs|લાખ|लाख)\b/i);
-  const kMatch = lower.match(/(?:^|\b)(\d+(?:\.\d+)?)\s*(?:k|hazar|thousand|હજાર|हजार)\b/i);
-
-  if (crMatch) {
-    budgetInr = Math.round(parseFloat(crMatch[1]) * 10000000);
-  } else if (lakhMatch) {
-    budgetInr = Math.round(parseFloat(lakhMatch[1]) * 100000);
-  } else if (kMatch) {
-    budgetInr = Math.round(parseFloat(kMatch[1]) * 1000);
-  } else {
-    const rawNumMatch = lower.match(/(?:^|\b)(\d{5,9})\b/);
-    if (rawNumMatch) {
-      budgetInr = parseInt(rawNumMatch[1], 10);
-    }
-  }
-
-  // 6. Location Name (Clean Locality, STRICTLY EXCLUDING property types and adjectives)
-  let locationName: string | null = null;
-  const knownLocalities = [
-    "Alkapuri",
-    "Waghodia Road",
-    "Waghodia",
-    "Gotri",
-    "Vasna",
-    "Akota",
-    "Karelibaug",
-    "Manjalpur",
-    "Fatehgunj",
-    "Harni",
-    "Bhayli",
-    "Sama",
-    "Subhanpura",
-    "Atladra",
-    "Sayajigunj",
-    "Gorwa",
-    "Chhani",
-    "Sevasi",
-    "Bill",
-    "Kalali",
-    "Tarsali",
-    "Tandalja",
-    "Makarpura",
-    "Nizampura",
-    "Ellora Park",
-    "Sun Pharma Road",
-    "Ajwa Road",
-    "Dabhoi Road",
-    "Old Padra Road",
-    "New VIP Road",
-    "VIP Road",
-  ];
-
-  for (const loc of knownLocalities) {
-    const locLower = loc.toLowerCase();
-    const regex = new RegExp(
-      `(?:^|\\b)${locLower}(?:\\s*(?:road|area|circle|cross\\s*roads?))?(?:\\s*(?:ma|me|mein|pase|paas))?(?:\\b|$)`,
-      "i"
-    );
-    if (regex.test(lower)) {
-      locationName = loc;
-      break;
-    }
-  }
-
-  // 7. Selected Menu Option & Primary Intent
-  let selectedMenuOption: number | null = null;
-  let primaryIntent: CognitiveExtractionResult["primary_intent"] = "NEW_INQUIRY";
-
-  const isolatedDigitMatch = lower.match(
-    /^(?:option\s*)?([1-5]|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|wala|vala))?$/i
-  );
-  if (isolatedDigitMatch && !unitBhk) {
-    const digitChar = isolatedDigitMatch[1]
-      .replace("1️⃣", "1")
-      .replace("2️⃣", "2")
-      .replace("3️⃣", "3")
-      .replace("4️⃣", "4")
-      .replace("5️⃣", "5");
-    selectedMenuOption = parseInt(digitChar, 10);
-  }
-
-  const isVisitAttendanceTurn =
-    currentLead?.state === "SITE_VISIT_DONE" ||
-    Boolean(currentLead?.post_visit_feedback_sent) ||
-    lastPrompt?.question_type === "VISIT_ATTENDANCE" ||
-    currentLead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE";
-
-  if (userNegatedAssumptions) {
-    primaryIntent = "NEGATION_CORRECTION";
-  } else if (selectedMenuOption !== null) {
-    if (isVisitAttendanceTurn) {
-      if (selectedMenuOption === 1) primaryIntent = "CONFIRM_VISIT";
-      else if (selectedMenuOption === 2) primaryIntent = "RESCHEDULE_VISIT";
-      else primaryIntent = "SELECT_OPTION";
-    } else {
-      primaryIntent = "SELECT_OPTION";
-    }
-  } else if (isVisitAttendanceTurn) {
-    if (/(?:nahi|nhi|na|nathi|miss|missed|cancel|attend\s*nahi)/i.test(lower)) {
-      primaryIntent = "RESCHEDULE_VISIT";
-      selectedMenuOption = 2;
-    } else if (/(?:ha|haan|yes|yep|done|attended|gaya|gaye)/i.test(lower)) {
-      primaryIntent = "CONFIRM_VISIT";
-      selectedMenuOption = 1;
-    }
-  } else if (/(?:call|talk|contact|agent|human|baat\s*karni|fon|phone)/i.test(lower)) {
-    primaryIntent = "HUMAN_ESCALATION";
-  } else if (/(?:reschedule|change\s*time|badalna|dusra\s*time)/i.test(lower)) {
-    primaryIntent = "RESCHEDULE_VISIT";
-  } else if (/(?:cancel|drop)/i.test(lower)) {
-    primaryIntent = "CANCEL_VISIT";
-  } else if (/(?:hi|hello|hey|namaste|kem\s*cho|pranam)/i.test(lower) && lower.split(/\s+/).length <= 3) {
-    primaryIntent = "GREETING_ONLY";
-  } else if (/(?:loan|rera|brokerage|amenities|distance|possession)/i.test(lower)) {
-    primaryIntent = "SIDE_FAQ";
-  }
-
-  // Purpose & Timeline & Furnishing
-  let purpose: "END_USE" | "INVESTMENT" | "UNKNOWN" = "UNKNOWN";
-  if (/(?:invest|investment|roi|rental\s*yield|retire)/i.test(lower)) purpose = "INVESTMENT";
-  else if (/(?:reva|rehna|family|self\s*use|own\s*use|living)/i.test(lower)) purpose = "END_USE";
-
-  let timeline: "READY_TO_MOVE" | "UNDER_CONSTRUCTION" | "UNKNOWN" = "UNKNOWN";
-  if (/(?:ready|immediate|turant|ready\s*to\s*move)/i.test(lower)) timeline = "READY_TO_MOVE";
-  else if (/(?:under\s*construction|construction|new\s*booking|launch)/i.test(lower)) timeline = "UNDER_CONSTRUCTION";
-
-  let furnishing: "UNFURNISHED" | "SEMI_FURNISHED" | "FULLY_FURNISHED" | "UNKNOWN" = "UNKNOWN";
-  if (/(?:full|fully\s*furnished)/i.test(lower)) furnishing = "FULLY_FURNISHED";
-  else if (/(?:semi|semi\s*furnished)/i.test(lower)) furnishing = "SEMI_FURNISHED";
-  else if (/(?:raw|unfurnished|koro|kora)/i.test(lower)) furnishing = "UNFURNISHED";
-
-  return {
-    lead_role: leadRole,
-    primary_intent: primaryIntent,
-    direct_answer_to_last_question:
-      selectedMenuOption !== null || userNegatedAssumptions || Boolean(budgetInr || propertyType !== "UNKNOWN"),
-    user_negated_assumptions: userNegatedAssumptions,
-    negation_explanation: userNegatedAssumptions ? "User explicitly negated taking/buying and clarified selling" : null,
-    selected_menu_option: selectedMenuOption,
-    entities: {
-      property_category: propertyCategory,
-      property_type: propertyType,
-      unit_bhk: unitBhk,
-      budget_inr: budgetInr,
-      budget_type: budgetType,
-      location_name: locationName,
-      purpose,
-      timeline,
-      carpet_area_sqft: null,
-      floor: null,
-      furnishing,
-    },
-    user_side_question: primaryIntent === "SIDE_FAQ" ? messageText : null,
-    detected_language: {
-      code,
-      dialect,
-      script,
-      primary_language: primaryLang,
-      formality,
-    },
-  };
-}
-
-export async function extractCognitiveIntentWithAI(context: {
-  messageText: string;
-  currentLead: any;
-  lastPrompt?: any;
-  recentMessages?: any[];
-  options?: {
-    geminiApiKey?: string;
-    groqApiKey?: string;
-    forceProEscalation?: boolean;
-    fetchImpl?: typeof fetch;
-  };
-}): Promise<{
-  extracted: CognitiveExtractionResult;
-  provider_used: "GEMINI_FLASH" | "GEMINI_PRO" | "GROQ_LLAMA" | "DETERMINISTIC_FALLBACK";
-  latency_ms: number;
-  escalated_to_pro: boolean;
-}> {
-  const start = Date.now();
-  const fetchFn = context.options?.fetchImpl || fetch;
-
-  const geminiKey = (
-    context.options?.geminiApiKey ||
-    Deno.env.get("GEMINI_API_KEY") ||
-    ""
-  ).trim().replace(/^["']|["']$/g, "");
-
-  const groqKey = (
-    context.options?.groqApiKey ||
-    Deno.env.get("GROQ_API_KEY") ||
-    ""
-  ).trim().replace(/^["']|["']$/g, "");
-
-  const promptText = buildCognitivePrompt(context);
-
-  // 1. Google Gemini 2.0 Flash / 1.5 Pro with responseSchema
-  if (geminiKey) {
-    try {
-      const isForcePro = Boolean(context.options?.forceProEscalation);
-      const flashUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
-      const proUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiKey}`;
-
-      const targetUrl = isForcePro ? proUrl : flashUrl;
-
-      const res = await fetchFn(targetUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 600,
-            responseMimeType: "application/json",
-            responseSchema: REAL_ESTATE_EXTRACTION_SCHEMA,
-          },
-        }),
-        signal: AbortSignal.timeout(isForcePro ? 4000 : 2500),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const rawJsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawJsonText) {
-          const parsed = parseJsonSafely(rawJsonText);
-          if (parsed && parsed.lead_role && parsed.primary_intent && parsed.entities) {
-            // Check Auto-Escalation Gate:
-            // If user_negated_assumptions === true and not already Pro, escalate to Gemini 2.5 Pro!
-            if (parsed.user_negated_assumptions && !isForcePro) {
-              try {
-                const proRes = await fetchFn(proUrl, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    contents: [
-                      {
-                        parts: [
-                          {
-                            text:
-                              "USER ASSUMPTION NEGATION / ROLE CORRECTION DETECTED. Re-evaluate this user turn with maximum reasoning depth:\n" +
-                              promptText,
-                          },
-                        ],
-                      },
-                    ],
-                    generationConfig: {
-                      temperature: 0.1,
-                      maxOutputTokens: 600,
-                      responseMimeType: "application/json",
-                      responseSchema: REAL_ESTATE_EXTRACTION_SCHEMA,
-                    },
-                  }),
-                  signal: AbortSignal.timeout(3500),
-                });
-                if (proRes.ok) {
-                  const proData = await proRes.json();
-                  const proJsonText = proData.candidates?.[0]?.content?.parts?.[0]?.text;
-                  const proParsed = parseJsonSafely(proJsonText);
-                  if (proParsed && proParsed.lead_role && proParsed.entities) {
-                    return {
-                      extracted: proParsed as CognitiveExtractionResult,
-                      provider_used: "GEMINI_PRO",
-                      latency_ms: Date.now() - start,
-                      escalated_to_pro: true,
-                    };
-                  }
-                }
-              } catch (proErr: any) {
-                console.warn("[Cognitive AI] Pro escalation timed out/failed; using Flash result:", proErr.message);
-              }
-            }
-
-            return {
-              extracted: parsed as CognitiveExtractionResult,
-              provider_used: isForcePro ? "GEMINI_PRO" : "GEMINI_FLASH",
-              latency_ms: Date.now() - start,
-              escalated_to_pro: isForcePro,
-            };
-          }
-        }
-      }
-    } catch (gErr: any) {
-      console.warn("[Cognitive AI] Gemini failed (falling back to Groq Llama):", gErr.message);
-    }
-  }
-
-  // 2. Groq Llama-3.3-70b High-Speed Fallback (Structured JSON Mode)
-  if (groqKey) {
-    try {
-      const groqRes = await fetchFn("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${groqKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an expert Real Estate Cognitive Intent & Entity Extractor. Output strictly valid JSON conforming to this schema: " +
-                JSON.stringify(REAL_ESTATE_EXTRACTION_SCHEMA),
-            },
-            {
-              role: "user",
-              content: promptText,
-            },
-          ],
-          temperature: 0.1,
-          max_tokens: 600,
-          response_format: { type: "json_object" },
-        }),
-        signal: AbortSignal.timeout(3000),
-      });
-
-      if (groqRes.ok) {
-        const groqData = await groqRes.json();
-        const contentStr = groqData.choices?.[0]?.message?.content;
-        if (contentStr) {
-          const parsed = parseJsonSafely(contentStr);
-          if (parsed && parsed.lead_role && parsed.primary_intent && parsed.entities) {
-            return {
-              extracted: parsed as CognitiveExtractionResult,
-              provider_used: "GROQ_LLAMA",
-              latency_ms: Date.now() - start,
-              escalated_to_pro: false,
-            };
-          }
-        }
-      }
-    } catch (groqErr: any) {
-      console.warn("[Cognitive AI] Groq Llama failed (falling back to deterministic engine):", groqErr.message);
-    }
-  }
-
-  // 3. Resilient Deterministic Cognitive Fallback Engine
-  const fallbackExtracted = runDeterministicCognitiveExtractor(
-    context.messageText,
-    context.currentLead,
-    context.lastPrompt
-  );
-
-  return {
-    extracted: fallbackExtracted,
-    provider_used: "DETERMINISTIC_FALLBACK",
-    latency_ms: Date.now() - start,
-    escalated_to_pro: false,
-  };
-}
-
+// -----------------------------------------------------------------------------
+// Cognitive Extractor mappings (Core logic implemented in cognitive_extractor.ts)
+// -----------------------------------------------------------------------------
 export function mapCognitiveResultToActionResult(
   extracted: CognitiveExtractionResult,
   lead: any,
@@ -4624,9 +3590,11 @@ export function mapCognitiveResultToActionResult(
   let action: UserAction;
   const state = lead?.state;
   const isPostVisit =
-    state === "SITE_VISIT_DONE" ||
-    Boolean(lead?.post_visit_feedback_sent) ||
-    lead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE";
+    !state?.startsWith("OWNER_") && (
+      state === "SITE_VISIT_DONE" ||
+      Boolean(lead?.post_visit_feedback_sent) ||
+      lead?.metadata?.last_bot_prompt?.question_type === "VISIT_ATTENDANCE"
+    );
 
   if (extracted.user_negated_assumptions) {
     if (extracted.lead_role === "SELLER" || userRole === "OWNER") {
@@ -4924,233 +3892,9 @@ export function computeUpdatedLanguageProfile(
   };
 }
 
-// =============================================================================
-// PHASE 33.3: UNIVERSAL MULTILINGUAL DYNAMIC SYNTHESIZER
-// =============================================================================
-
-export interface SynthesizeReplyParams {
-  goal: string;
-  lead?: any;
-  contextData?: {
-    matchedInventory?: any[];
-    availableSlots?: string[];
-    brochureUrl?: string;
-    mapUrl?: string;
-    propertySummary?: string;
-    options?: string[];
-    [key: string]: any;
-  };
-  languageProfile?: Partial<LanguageProfile> | null;
-  agencyBranding?: {
-    agencyName?: string;
-    city?: string;
-    contactNumber?: string;
-  };
-  fallbackTemplate?: string;
-  fetchFn?: typeof fetch;
-}
-
-export function buildSynthesizerPrompt(params: SynthesizeReplyParams): string {
-  const { goal, lead, contextData, languageProfile, agencyBranding } = params;
-  const agencyName = agencyBranding?.agencyName || "NextGen Realty";
-  const city = agencyBranding?.city || "Vadodara";
-  const primaryLang = languageProfile?.primary_language || "Hindi";
-  const dialect = languageProfile?.dialect || (primaryLang === "Gujarati" ? "Gujlish" : "Hinglish");
-  const script = languageProfile?.script || "Latin";
-  const formality = languageProfile?.formality || "POLITE_RESPECTFUL";
-  const userName = lead?.name && lead.name !== "Unknown" ? lead.name : "";
-
-  let contextSnippet = "";
-  if (contextData) {
-    if (contextData.propertySummary) {
-      contextSnippet += `\n- Property Details: ${contextData.propertySummary}`;
-    }
-    if (Array.isArray(contextData.options) && contextData.options.length > 0) {
-      contextSnippet += `\n- Numbered Options:\n${contextData.options.map((opt, i) => `  ${i + 1}. ${opt}`).join("\n")}`;
-    }
-    if (Array.isArray(contextData.availableSlots) && contextData.availableSlots.length > 0) {
-      contextSnippet += `\n- Available Visit Slots: ${contextData.availableSlots.join(", ")}`;
-    }
-    if (contextData.brochureUrl) {
-      contextSnippet += `\n- Brochure Link: ${contextData.brochureUrl}`;
-    }
-    if (contextData.mapUrl) {
-      contextSnippet += `\n- Location Map: ${contextData.mapUrl}`;
-    }
-  }
-
-  return `You are an elite, highly professional real estate advisor for ${agencyName} in ${city}.
-Generate a conversational, warm, and concise reply (strictly <= 4 lines, formatted for WhatsApp) fulfilling this exact goal:
-"${goal}"
-
-### RECIPIENT CONTEXT:
-- Recipient Name: ${userName ? userName : "Valued Client"}
-- Role: ${lead?.lead_type || lead?.metadata?.active_persona || "Client"}${contextSnippet}
-
-### LINGUISTIC & DIALECT SPECIFICATIONS:
-- Primary Language: Strictly write in ${primaryLang}.
-- Dialect: Strictly write in ${dialect}.
-- Script: Strictly use ${script} script.
-  * If script is "Gujarati", output genuine Gujarati text (ગુજરાતી લિપિ).
-  * If script is "Devanagari", output Devanagari text (देवनागरी लिपि) for Hindi or Marathi.
-  * If script is "Latin" and dialect is "Gujlish", write conversational phonetic Gujlish (e.g. "Namaste ji! Alkapuri ma 1BHK Tenement mate tamari expected price shu chhe?").
-  * If script is "Latin" and dialect is "Hinglish", write natural conversational Hinglish.
-  * If language is "English", write professional English.
-- Formality: ${formality === "POLITE_RESPECTFUL" ? "Respectful Indian hospitality (use respectful honorifics like 'ji', 'aap', 'tame')" : "Warm and courteous"}.
-- Formatting: Clean WhatsApp typography. Use <b>bolding</b> for key figures, project names, or options. Do NOT use markdown code blocks, backticks, or hashtags.
-
-### STRICT REAL ESTATE DOMAIN INVARIANTS:
-1. Never hallucinate prices, configurations, or inventory not provided in the goal or context data.
-2. Use standard Indian real estate conventions (BHK, Lakh, Crore, Carpet Area, Sq. Ft.).
-3. If numbered options are provided, keep them clearly numbered so the user can easily reply with 1, 2, or 3.
-4. Keep the response under 4 lines total. Be direct, helpful, and polite.`;
-}
-
-export function getCuratedRegionalFallback(
-  goal: string,
-  languageProfile?: Partial<LanguageProfile> | null,
-  agencyName = "NextGen Realty",
-  fallbackTemplate?: string
-): string {
-  if (fallbackTemplate && fallbackTemplate.trim()) {
-    return fallbackTemplate.trim();
-  }
-
-  const lang = (languageProfile?.primary_language || "").toLowerCase();
-  const dialect = (languageProfile?.dialect || "").toLowerCase();
-  const script = languageProfile?.script || "Latin";
-
-  if (lang.includes("guj") || dialect.includes("guj")) {
-    if (script === "Gujarati") {
-      return `નમસ્તે! ${agencyName} માં આપનું સ્વાગત છે. તમારી જરૂરિયાત નોંધી લીધી છે. વિગતો માટે અમારા એડવાઈઝર ટૂંક સમયમાં સંપર્ક કરશે. 🙏`;
-    }
-    return `Namaste! ${agencyName} ma aapnu swagat chhe. Tamari requirement nondhi lidhi chhe. Amari team jald thi aapse contact karshe. 🙏`;
-  }
-  if (lang.includes("marathi") || dialect.includes("marathi")) {
-    if (script === "Devanagari") {
-      return `नमस्कार! ${agencyName} मध्ये आपले स्वागत आहे. तुमची माहिती नोंदवून घेतली आहे. आमची टीम लवकरच आपल्याशी संपर्क करेल. 🙏`;
-    }
-    return `Namaskar! ${agencyName} madhye aple swagat aahe. Tumchi requirement nondavli aahe. Aamchi team lavkarach aapyashi sampark karel. 🙏`;
-  }
-  if (lang.includes("tamil") || dialect.includes("tamil")) {
-    return `Vanakkam! ${agencyName}-il ungalai varaverkirom. Ungal thevaigalai padivu seidhom. Engal kulu viraivil ungalai thodarbu kollum. 🙏`;
-  }
-  if (lang.includes("telugu") || dialect.includes("telugu")) {
-    return `Namaskaram! ${agencyName} ki swagatham. Mee requirement record chesam. Ma team tvaralo mimmalni contact chestundi. 🙏`;
-  }
-  if (lang.includes("eng") || dialect.includes("eng")) {
-    return `Hello! Welcome to ${agencyName}. We have noted your requirement and our real estate team will connect with you shortly. 🙏`;
-  }
-  // Default Hinglish / Hindi
-  if (script === "Devanagari") {
-    return `नमस्ते! ${agencyName} में आपका स्वागत है। आपकी आवश्यकता नोट कर ली गई है। हमारी टीम जल्द ही आपसे संपर्क करेगी। 🙏`;
-  }
-  return `Namaste! ${agencyName} me aapka swagat hai. Aapki requirement note kar li gayi hai. Hamari team jald hi aapse connect karegi. 🙏`;
-}
-
-function sanitizeGeneratedReply(text: string): string {
-  let clean = text.replace(/^```(?:markdown)?\n?/i, "").replace(/```$/g, "").trim();
-  clean = clean.replace(/^["']|["']$/g, "").trim();
-  return clean;
-}
-
-export async function synthesizeMultilingualReply(params: SynthesizeReplyParams): Promise<string> {
-  const fetchFn = params.fetchFn || fetch;
-  const agencyName = params.agencyBranding?.agencyName || "NextGen Realty";
-
-  // Clean / prepare API keys
-  let geminiKey = "";
-  let groqKey = "";
-  try {
-    if (typeof Deno !== "undefined" && Deno.env) {
-      geminiKey = Deno.env.get("GEMINI_API_KEY") || "";
-      groqKey = Deno.env.get("GROQ_API_KEY") || "";
-    }
-  } catch (_) {}
-  if (!geminiKey && typeof process !== "undefined" && process.env) {
-    geminiKey = process.env.GEMINI_API_KEY || "";
-  }
-  if (!groqKey && typeof process !== "undefined" && process.env) {
-    groqKey = process.env.GROQ_API_KEY || "";
-  }
-  geminiKey = geminiKey.trim().replace(/^["']|["']$/g, "");
-  groqKey = groqKey.trim().replace(/^["']|["']$/g, "");
-
-  const promptText = buildSynthesizerPrompt(params);
-
-  // 1. Google Gemini 2.0 Flash Primary (~150-300ms)
-  if (geminiKey) {
-    try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
-      const res = await fetchFn(geminiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 250,
-          },
-        }),
-        signal: AbortSignal.timeout(2000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (generatedText && generatedText.length > 5) {
-          return sanitizeGeneratedReply(generatedText);
-        }
-      }
-    } catch (geminiErr: any) {
-      console.warn("[Synthesizer] Gemini 2.5 Flash call failed:", geminiErr.message);
-    }
-  }
-
-  // 2. Groq Llama-3.3-70b Fallback (~200ms)
-  if (groqKey) {
-    try {
-      const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
-      const groqRes = await fetchFn(groqUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${groqKey}`,
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          temperature: 0.3,
-          max_tokens: 250,
-          messages: [
-            {
-              role: "system",
-              content: `You are an elite real estate advisor for ${agencyName}. Write concise WhatsApp replies under 4 lines adhering strictly to the user's language, dialect, and script.`,
-            },
-            {
-              role: "user",
-              content: promptText,
-            },
-          ],
-        }),
-        signal: AbortSignal.timeout(2000),
-      });
-
-      if (groqRes.ok) {
-        const groqData = await groqRes.json();
-        const text = groqData.choices?.[0]?.message?.content?.trim();
-        if (text && text.length > 5) {
-          return sanitizeGeneratedReply(text);
-        }
-      }
-    } catch (groqErr: any) {
-      console.warn("[Synthesizer] Groq fallback failed:", groqErr.message);
-    }
-  }
-
-  // 3. Curated Regional Fallback Template
-  return getCuratedRegionalFallback(params.goal, params.languageProfile, agencyName, params.fallbackTemplate);
-}
-
+// -----------------------------------------------------------------------------
+// Multilingual Synthesizer (Core logic implemented in multilingual_synthesizer.ts)
+// -----------------------------------------------------------------------------
 async function classifyLeadIntent(
   messageText: string,
   lead: any
@@ -5267,15 +4011,6 @@ function matchesListingType(leadReq?: string | null, propListingType?: string | 
   }
 
   return true;
-}
-
-function getPropertyCategoryGroup(propType?: string | null): "COMMERCIAL" | "RESIDENTIAL" | "PLOT" | "UNKNOWN" {
-  if (!propType) return "UNKNOWN";
-  const lt = String(propType).toLowerCase();
-  if (/(commercial|shop|office|showroom|warehouse|godown|co-working|coworking|co_working|industrial|shed|restaurant|hotel|retail)/i.test(lt)) return "COMMERCIAL";
-  if (/(flat|villa|bhk|bungalow|penthouse|apartment|studio|row\s*house)/i.test(lt)) return "RESIDENTIAL";
-  if (/(plot|land|jamin|zameen|kheti)/i.test(lt)) return "PLOT";
-  return "UNKNOWN";
 }
 
 function matchesPropertyType(leadType?: string | null, propCategory?: string | null, propConfig?: string | null, propProjectName?: string | null): boolean {
@@ -6927,14 +5662,12 @@ async function handleOwnerFlow({
 
   // If already gathered, check if user is listing a SECOND property, inquiring status, or asking for buyer options
   if (lead.state === "OWNER_DETAILS_GATHERED") {
-    // 1. AI-First Buyer Intent Check (Phase 41: Always prioritize buyer switch over second listing!)
-    const isSeekingProperty = Boolean(
-      cognitiveTurn?.active_role === "BUYER" ||
-      cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" ||
-      aiAnalysis?.extracted?.lead_role === "BUYER" ||
-      (aiAnalysis?.action as any)?.requirement === "BUY" ||
-      /(?:chahiye|joiye|buy|kharid|purchase|options|dekhna|lena|leni|lene|levo|levi|levu)\b/i.test(lower)
-    ) && !(
+    // 1. AI-First Buyer Intent Check (Phase 41: Guarded against affirmative listing confirmations)
+    const isAffirmativeListingTurn = /^(?:yes|haan|ha|haa|ji\s*haan|sure|yep|list\s*another|ek\s*aur|dusri|doosri|property\s*list|list\s*karni|list\s*karvi|list\s*karo)\b/i.test(lower.trim());
+
+    const hasExplicitBuyerKeyword = /(?:chahiye|joiye|buy|purchase|kharid|khareed|kharidna|kharidvu|options\s*dikhao|options\s*batao|dekhna\s*hai|lena\s*hai|leni\s*hai|lene\s*hain|levu\s*che|leva\s*chhe)\b/i.test(lower);
+
+    const isSeekingProperty = !isAffirmativeListingTurn && hasExplicitBuyerKeyword && !(
       cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
       cognitiveTurn?.active_role === "SELLER"
     );
@@ -8318,7 +7051,7 @@ export async function dispatchStateAction(
     if (!isExplicitOptOut) {
       console.log(`[OPT_OUT GUARD] Intercepted non-explicit conversational negation "${context.messageText}" - reclassifying for state ${currentState}`);
       const lastPromptQ = lead?.metadata?.last_bot_prompt?.question_type;
-      const isPostVisit = currentState === "SITE_VISIT_DONE" || currentState === "SITE_VISIT_BOOKED" || lastPromptQ === "VISIT_ATTENDANCE" || Boolean(lead?.post_visit_feedback_sent);
+      const isPostVisit = !currentState?.startsWith("OWNER_") && (currentState === "SITE_VISIT_DONE" || currentState === "SITE_VISIT_BOOKED" || lastPromptQ === "VISIT_ATTENDANCE" || Boolean(lead?.post_visit_feedback_sent));
 
       if (currentState === "CRITERIA_CONFIRMATION_PENDING" || lastPromptQ === "CRITERIA_CONFIRM") {
         intent = "CONFIRM_CRITERIA";
@@ -8780,16 +7513,15 @@ export async function dispatchStateAction(
     // If user expresses clear buyer/search intent while in ANY owner state (e.g. OWNER_SOCIETY_PENDING,
     // OWNER_AREA_PENDING, OWNER_DETAILS_GATHERED), break out of owner flow immediately!
     // ---------------------------------------------------------------------------
-    const isBuyerSwitchIntent = Boolean(
-      context.cognitiveTurn?.active_role === "BUYER" ||
-      context.cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" ||
-      actionResult.extracted?.lead_role === "BUYER" ||
-      (actionResult.action as any)?.requirement === "BUY" ||
-      /(?:chahiye|joiye|buy|kharid|purchase|options|dekhna|lena|leni|lene|levo|levi|levu)\b/i.test(lower)
-    ) && !(
+    const isAffirmativeListingTurn = /^(?:yes|haan|ha|haa|ji\s*haan|sure|yep|list\s*another|ek\s*aur|dusri|doosri|property\s*list|list\s*karni|list\s*karvi|list\s*karo)\b/i.test(lower.trim());
+
+    const hasExplicitBuyerKeyword = /(?:chahiye|joiye|buy|purchase|kharid|khareed|kharidna|kharidvu|options\s*dikhao|options\s*batao|dekhna\s*hai|lena\s*hai|leni\s*hai|lene\s*hain|levu\s*che|leva\s*chhe)\b/i.test(lower);
+
+    const isBuyerSwitchIntent = !isAffirmativeListingTurn && hasExplicitBuyerKeyword && !(
       context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
       context.cognitiveTurn?.active_role === "SELLER" ||
-      actionResult.action?.intent === "SUBMIT_LISTING"
+      actionResult.action?.intent === "SUBMIT_LISTING" ||
+      /(?:bech|vech|sell|rent\s*par|kiraye|bhade)/i.test(lower)
     );
 
     if (isBuyerSwitchIntent) {
@@ -9055,9 +7787,6 @@ export async function dispatchStateAction(
       }
     }
     // ── end site-visit intent guard ──────────────────────────────────────────────
-
-    // If user says "yes" / "haan" / "list another" in OWNER_DETAILS_GATHERED, do NOT let it be treated as buyer search!
-    const isAffirmativeListingTurn = /^(?:yes|haan|ha|haa|ji\s*haan|sure|yep|list\s*another|ek\s*aur|dusri|doosri|property\s*list|list\s*karni|list\s*karvi|list\s*karo)\b/i.test(lower.trim());
 
     // If owner explicitly asks for buyer property search, route to qualification cascade
     const isExplicitBuyerSearch = !isAffirmativeListingTurn && Boolean(
@@ -9537,6 +8266,11 @@ export async function dispatchStateAction(
               ...(lead.metadata || {}),
               active_persona: "SELLER",
               awaiting_listing_initiation: true,
+              last_bot_prompt: {
+                question_type: "OWNER_LISTING_INVITATION",
+                asked_at: new Date().toISOString(),
+                text_preview: "Kya aap apni koi property Sell ya Rent ke liye list karna chahte hain?",
+              },
             },
           },
         };
@@ -9576,6 +8310,12 @@ export async function dispatchStateAction(
           metadata: {
             ...(lead.metadata || {}),
             active_persona: "SELLER",
+            awaiting_listing_initiation: true,
+            last_bot_prompt: {
+              question_type: "OWNER_LISTING_INVITATION",
+              asked_at: new Date().toISOString(),
+              text_preview: "Kya aapko koi dusri property bhi list karni hai?",
+            },
           },
         },
       };
@@ -13669,25 +12409,15 @@ Deno.serve(async (req: Request) => {
       metadata: isOwnerState ? { owner_draft: { property_type: "Villa", transaction_type: "SELL" } } : {},
     };
 
-    let geminiDirect: any = null;
-    let geminiError: string | null = null;
-    const gStart = Date.now();
+    const crStart = Date.now();
+    let cognitiveTurnResult: any = null;
+    let routerError: string | null = null;
     try {
-      geminiDirect = await classifyLeadIntentWithGemini(geminiKey, testMsg, sampleLead);
+      cognitiveTurnResult = await routeCognitiveTurn(testMsg, sampleLead);
     } catch (e: any) {
-      geminiError = e.message;
+      routerError = e.message;
     }
-    const geminiDuration = Date.now() - gStart;
-
-    let groqDirect: any = null;
-    let groqError: string | null = null;
-    const grStart = Date.now();
-    try {
-      groqDirect = await classifyLeadIntentWithGroq(groqKey, testMsg, sampleLead);
-    } catch (e: any) {
-      groqError = e.message;
-    }
-    const groqDuration = Date.now() - grStart;
+    const routerDuration = Date.now() - crStart;
 
     const fullStart = Date.now();
     const orchestrated = await classifyLeadIntent(testMsg, sampleLead);
@@ -13697,8 +12427,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify(
         {
           test_message: testMsg,
-          gemini: { result: geminiDirect, error: geminiError, duration_ms: geminiDuration },
-          groq: { result: groqDirect, error: groqError, duration_ms: groqDuration },
+          cognitive_turn: { result: cognitiveTurnResult, error: routerError, duration_ms: routerDuration },
           orchestrated: { ...orchestrated, total_duration_ms: fullDuration },
         },
         null,
@@ -13715,7 +12444,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v98-strict-rent-invariant-and-plot-bypass",
+        version: "v99-owner-circuit-breaker-and-dedup",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
