@@ -6483,6 +6483,7 @@ async function handleOwnerFlow({
   aiAnalysis,
   city,
   agencyName,
+  cognitiveTurn,
 }: {
   lead: any;
   messageText: string;
@@ -6496,6 +6497,7 @@ async function handleOwnerFlow({
   aiAnalysis?: ClassifiedIntent;
   city?: string | null;
   agencyName?: string;
+  cognitiveTurn?: CognitiveTurnResult;
 }): Promise<{ replyText: string; nextState: string; leadUpdates?: any }> {
   // 1. Initialize or load in-progress draft from metadata
   const existingMeta = lead.metadata || {};
@@ -6892,7 +6894,51 @@ async function handleOwnerFlow({
 
   // If already gathered, check if user is listing a SECOND property, inquiring status, or asking for buyer options
   if (lead.state === "OWNER_DETAILS_GATHERED") {
-    const isDecliningSecondListing = /^(?:nahi|no|na|nathi|nhi|nope|nathi\s*karvi|nahi\s*karni|rehne\s*do|koi\s*nahi|ek\s*j\s*chhe|bas\s*itna\s*hi|kuch\s*nahi|nathi\s*aapvi)\b/i.test(lower.trim());
+    // 1. AI-First Buyer Intent Check (Phase 41: Always prioritize buyer switch over second listing!)
+    const isSeekingProperty = Boolean(
+      cognitiveTurn?.active_role === "BUYER" ||
+      cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" ||
+      aiAnalysis?.extracted?.lead_role === "BUYER" ||
+      (aiAnalysis?.action as any)?.requirement === "BUY" ||
+      /(?:chahiye|joiye|buy|kharid|purchase|options|dekhna|lena|leni|lene|levo|levi|levu)\b/i.test(lower)
+    ) && !(
+      cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+      cognitiveTurn?.active_role === "SELLER"
+    );
+
+    if (isSeekingProperty) {
+      await supabase.from("leads").update({
+        lead_type: "DUAL_ROLE",
+        state: "QUALIFYING",
+        last_active_at: new Date().toISOString(),
+        metadata: {
+          ...existingMeta,
+          has_seller_profile: true,
+          has_buyer_profile: true,
+          active_persona: "BUYER",
+        },
+      }).eq("id", lead.id);
+      lead.lead_type = "DUAL_ROLE";
+      lead.state = "QUALIFYING";
+
+      const displayCityOwner = city || "prime locations";
+      const replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Amari pase ${displayCityOwner} ma verified properties available chhe. Kripya janavjo — tame kaya area ane budget ma property joi rahya chho? 🏡`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${senderName || "Friend"}</b>! We have prime verified properties across ${displayCityOwner}. Please share your preferred locality and budget range! 🏡`
+          : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamare paas ${displayCityOwner} me verified properties available hain. Kripya batayein — aap kis area aur budget me property dekh rahe hain? 🏡`;
+
+      return { replyText, nextState: "QUALIFYING", leadUpdates: buildOwnerLeadUpdates("QUALIFYING", draft, { active_persona: "BUYER" }) };
+    }
+
+    const isDecliningSecondListing = Boolean(
+      !isSeekingProperty && (
+        cognitiveTurn?.user_negated_assumptions ||
+        cognitiveTurn?.primary_intent === "OPT_OUT" ||
+        /^(?:nahi|no|na|nathi|nhi|nope|nathi\s*karvi|nahi\s*karni|rehne\s*do|koi\s*nahi|ek\s*j\s*chhe|bas\s*itna\s*hi|kuch\s*nahi|nathi\s*aapvi)\b/i.test(lower.trim())
+      )
+    );
 
     if (isDecliningSecondListing) {
       if (existingMeta.declined_second_listing) {
@@ -6933,6 +6979,8 @@ async function handleOwnerFlow({
 
     if (existingMeta.declined_second_listing) {
       const isAffirmativeSeekerInterest =
+        cognitiveTurn?.active_role === "BUYER" ||
+        cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" ||
         /^(?:haan|ha|ji\s*haan|yes|yep|sure|chalo|dikhao|batavo|batao|options|buy|rent|kharidna|bhade)\b/i.test(lower.trim()) ||
         /(?:options|dikhao|dikhavo|batavo|batao|properties|shortlist|buy|rent)/i.test(lower);
 
@@ -6959,24 +7007,28 @@ async function handleOwnerFlow({
       }
     }
 
-    const isSecondListing =
-      /^(?:2|2️⃣|option\s*2|dusri|biji|haan|ha|ji\s*haan|yes|yep|sure|list\s*another|karni\s*hai|aur\s*bhi|ek\s*aur|bilkul)\b/i.test(lower.trim()) ||
-      /(?:dusri|biji|ek\s*aur|nayi|navi|another|second|2nd)\s*(?:property|flat|house|ghar|makan|villa|office|shop|plot)\b/i.test(lower) ||
-      /(?:dusri\s*property\s*sell|nayi\s*property\s*list|office\s*bhade|shop\s*rent|flat\s*bechna|ghar\s*bechna|biji\s*vechvi)/i.test(lower) ||
-      ((/(?:bechna|bechni|vechvu|vechva|sell|list|bhade|bhaade|kiraya|kiraye|rent\s*par\s*den|chadani|lease)/i.test(lower)) &&
-       (/\b(flat|house|ghar|makan|villa|office|shop|plot|godown|showroom|commercial)\b/i.test(lower))) ||
-      aiAnalysis?.action?.intent === "SUBMIT_LISTING" ||
-      (aiAnalysis?.action?.intent === "CONFIRM_CRITERIA" && (aiAnalysis?.action as any)?.confirm);
+    // Explicit Second Listing Check (Phase 41: Never trigger on generic affirmative 'ha' or buyer phrasing!)
+    const isSecondListing = Boolean(
+      !isSeekingProperty && (
+        (cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" && cognitiveTurn?.active_role === "SELLER") ||
+        (cognitiveTurn?.selected_option === 2 && !isSeekingProperty) ||
+        aiAnalysis?.action?.intent === "SUBMIT_LISTING" ||
+        ((/(?:bechna|bechni|vechvu|vechva|sell|list|bhade|bhaade|kiraya|kiraye|rent\s*par\s*den|chadani|lease)/i.test(lower)) &&
+         (/\b(flat|house|ghar|makan|villa|office|shop|plot|godown|showroom|commercial)\b/i.test(lower)))
+      )
+    );
 
-    const isBuyerDemandInquiry =
-      /(?:buyer|khareedne\s*wala|kharidne\s*wala|graahak|grahak|customer|inquiry|inquiries|koi\s*aaya|koi\s*aayi|koi\s*mila|ketla\s*malya|any\s*buyers|interested\s*buyers)/i.test(lower) &&
-      !/(?:chahiye|joiye|kharidna\s*hai|buy\s*karna|looking\s*to\s*buy)/i.test(lower);
+    const isBuyerDemandInquiry = Boolean(
+      !isSeekingProperty && (
+        /(?:buyer|khareedne\s*wala|kharidne\s*wala|graahak|grahak|customer|inquiry|inquiries|koi\s*aaya|koi\s*aayi|koi\s*mila|ketla\s*malya|any\s*buyers|interested\s*buyers)/i.test(lower) &&
+        !/(?:chahiye|joiye|kharidna\s*hai|buy\s*karna|looking\s*to\s*buy)/i.test(lower)
+      )
+    );
 
-    const isStatusInquiry = /(?:status|update|kya\s*hua|ketle\s*pahonchyu|check\s*status|listing\s*status|verification|approved)/i.test(lower);
-
-    const isSeekerInquiry =
-      /(?:chahiye|chahye|chahie|chaiye|joiye|joyiye|joie|buy|kharid|khareed|purchase|options|dikhao|dikhavo|batavo|batao|budget)/i.test(lower) ||
-      (/\b([1-5]\s*bhk|flat|villa|office|shop|plot)\b/i.test(lower) && /\b(chahiye|joiye|buy|kharid|dekhna|budget|me|mein)\b/i.test(lower));
+    const isStatusInquiry = Boolean(
+      cognitiveTurn?.primary_intent === "ASK_FAQ" ||
+      /(?:status|update|kya\s*hua|ketle\s*pahonchyu|check\s*status|listing\s*status|verification|approved)/i.test(lower)
+    );
 
     if (isSecondListing) {
       console.log(`[MULTI-PROPERTY OWNER] Lead ${lead.id} is registering a second property: "${messageText}"`);
@@ -7110,32 +7162,6 @@ async function handleOwnerFlow({
           : `Ji <b>${senderName ? `${senderName} ji` : "ji"}</b>! Aapki listed property (<b>${propLabel}</b>) abhi <b>${statusLabel}</b> stage par hai. 📋 Hamari inspection team verification ke liye jald aapse call par connect karegi! 🙏`);
 
       return { replyText, nextState: "OWNER_DETAILS_GATHERED", leadUpdates: buildOwnerLeadUpdates("OWNER_DETAILS_GATHERED", draft) };
-    }
-
-    if (isSeekerInquiry) {
-      await supabase.from("leads").update({
-        lead_type: "DUAL_ROLE",
-        state: "QUALIFYING",
-        last_active_at: new Date().toISOString(),
-        metadata: {
-          ...existingMeta,
-          has_seller_profile: true,
-          has_buyer_profile: true,
-          active_persona: "BUYER",
-        },
-      }).eq("id", lead.id);
-      lead.lead_type = "DUAL_ROLE";
-      lead.state = "QUALIFYING";
-
-      const displayCityOwner = city || "prime locations";
-      const replyText =
-        lang === "GUJLISH"
-          ? `Ji bilkul <b>${senderName ? `${senderName} bhai` : "ji"}</b>! Amari pase ${displayCityOwner} ma verified properties available chhe. Kripya janavjo — tame kaya area ane budget ma property joi rahya chho? 🏡`
-          : lang === "ENGLISH"
-          ? `Certainly <b>${senderName || "Friend"}</b>! We have prime verified properties across ${displayCityOwner}. Please share your preferred locality and budget range! 🏡`
-          : `Ji bilkul <b>${senderName ? `${senderName} ji` : "ji"}</b>! Hamare paas ${displayCityOwner} me verified properties available hain. Kripya batayein — aap kis area aur budget me property dekh rahe hain? 🏡`;
-
-      return { replyText, nextState: "QUALIFYING", leadUpdates: buildOwnerLeadUpdates("QUALIFYING", draft, { active_persona: "BUYER" }) };
     }
 
     const agency = agencyName || "NextGen Realty";
@@ -8691,6 +8717,54 @@ export async function dispatchStateAction(
   const hasOwnerProfileRouter = lead.lead_type === "PROVIDER" || lead.lead_type === "DUAL_ROLE" || Boolean(lead.metadata?.has_seller_profile);
 
   if (isInOwnerIntake || currentState === "OWNER_DETAILS_GATHERED" || (hasOwnerProfileRouter && isBuyerDemandInquiryRouter)) {
+    // ---------------------------------------------------------------------------
+    // MID-FLOW ROLE-SWITCH CIRCUIT BREAKER (Phase 41 - Zero-Regex Persona Switch)
+    // If user expresses clear buyer/search intent while in ANY owner state (e.g. OWNER_SOCIETY_PENDING,
+    // OWNER_AREA_PENDING, OWNER_DETAILS_GATHERED), break out of owner flow immediately!
+    // ---------------------------------------------------------------------------
+    const isBuyerSwitchIntent = Boolean(
+      context.cognitiveTurn?.active_role === "BUYER" ||
+      context.cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" ||
+      actionResult.extracted?.lead_role === "BUYER" ||
+      (actionResult.action as any)?.requirement === "BUY" ||
+      /(?:chahiye|joiye|buy|kharid|purchase|options|dekhna|lena|leni|lene|levo|levi|levu)\b/i.test(lower)
+    ) && !(
+      context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+      context.cognitiveTurn?.active_role === "SELLER" ||
+      actionResult.action?.intent === "SUBMIT_LISTING"
+    );
+
+    if (isBuyerSwitchIntent) {
+      console.log(`[CIRCUIT-BREAKER] Lead ${lead.id} is switching from ${currentState} to BUYER persona: "${context.messageText}"`);
+      const existingArchived = Array.isArray(lead.metadata?.archived_submissions) ? [...lead.metadata.archived_submissions] : [];
+      if (lead.metadata?.owner_draft && Object.keys(lead.metadata.owner_draft).length > 0) {
+        existingArchived.push({
+          ...lead.metadata.owner_draft,
+          archived_at: new Date().toISOString(),
+          archived_reason: "SWITCHED_TO_BUYER",
+        });
+      }
+
+      lead.lead_type = "DUAL_ROLE";
+      lead.state = "QUALIFYING";
+      lead.metadata = {
+        ...(lead.metadata || {}),
+        has_seller_profile: true,
+        has_buyer_profile: true,
+        active_persona: "BUYER",
+        owner_draft: {},
+        archived_submissions: existingArchived,
+      };
+
+      await supabase.from("leads").update({
+        lead_type: "DUAL_ROLE",
+        state: "QUALIFYING",
+        metadata: lead.metadata,
+      }).eq("id", lead.id);
+
+      return handleQualificationCascade(lead, actionResult, context);
+    }
+
     // ── Site-visit intent guard: DUAL_ROLE leads can be in OWNER_DETAILS_GATHERED
     //    while still having an active site visit. Catch visit intents here so they
     //    are never swallowed by the owner-flow handlers. ───────────────────────────
@@ -8706,37 +8780,50 @@ export async function dispatchStateAction(
       /1️⃣.*?Visit|2️⃣.*?Reschedule|Scheduled\s*Visit/i.test(lead.metadata?.last_bot_prompt?.text_preview || "")
     );
 
-    const isUnableToAttendVisit =
+    const isUnableToAttendVisit = Boolean(
+      context.cognitiveTurn?.primary_intent === "CANCEL_VISIT" ||
+      context.cognitiveTurn?.primary_intent === "VISIT_NOT_ATTENDED" ||
       intent === "CANNOT_ATTEND_VISIT" ||
       (/(?:site\s*visit|visit).*?(?:nai|nahi|nathi|cannot|can't|not\s*possible|miss|late|aaje)/i.test(lower) && /(?:nai|nahi|nathi|cannot|can't|miss)/i.test(lower)) ||
-      /(?:nai|nahi|nathi|na)\s*(?:aavi\s*saku|aavi\s*shaku|aavi\s*sakyo|aavay|aavish|aa\s*saku|aa\s*sakta|aa\s*paunga)/i.test(lower);
+      /(?:nai|nahi|nathi|na)\s*(?:aavi\s*saku|aavi\s*shaku|aavi\s*sakyo|aavay|aavish|aa\s*saku|aa\s*sakta|aa\s*paunga)/i.test(lower)
+    );
 
-    const isRescheduleVisit =
+    const isRescheduleVisit = Boolean(
+      context.cognitiveTurn?.primary_intent === "RESCHEDULE_VISIT" ||
       intent === "RESCHEDULE_VISIT" ||
       (/(?:site\s*visit|visit).*?(?:reschedule|change\s*time|badal|timing)/i.test(lower) && !isUnableToAttendVisit) ||
       /(?:reschedule|timing\s*change|time\s*badlo)/i.test(lower) ||
       ((hasActiveVisit || isVisitMenuPrompt) && (
+        context.cognitiveTurn?.selected_option === 2 ||
         /^(?:2|2️⃣|second|2nd|option\s*2)\b/i.test(lower) ||
         (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1)
-      ));
+      ))
+    );
 
-    const isCancelVisit =
+    const isCancelVisit = Boolean(
+      context.cognitiveTurn?.primary_intent === "CANCEL_VISIT" ||
       intent === "CANCEL_VISIT" ||
       (/(?:site\s*visit|visit).*?(?:cancel|cancel\s*kar)/i.test(lower) && !isUnableToAttendVisit) ||
-      /^(?:cancel|visit\s*cancel)\b/i.test(lower);
+      /^(?:cancel|visit\s*cancel)\b/i.test(lower)
+    );
 
-    const isVisitDetails =
+    const isVisitDetails = Boolean(
       (hasActiveVisit || isVisitMenuPrompt) && (
+        context.cognitiveTurn?.selected_option === 1 ||
         /^(?:1|1️⃣|first|1st|option\s*1)\b/i.test(lower) ||
         (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
         /(?:visit\s*details|view\s*details)/i.test(lower)
-      );
+      )
+    );
 
-    const isSecondarySearchChoice =
+    const isSecondarySearchChoice = Boolean(
       (hasActiveVisit || isVisitMenuPrompt) && (
+        context.cognitiveTurn?.selected_option === 3 ||
+        (context.cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" && Boolean(lead.site_visit_booked)) ||
         /^(?:3|3️⃣|third|3rd|option\s*3|biji\s*property|dusri\s*property|other\s*propert|nayi\s*property|aur\s*options|kuch\s*aur\s*options)\b/i.test(lower) ||
         (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2)
-      );
+      )
+    );
 
     if (
       (lead.site_visit_booked || hasActiveVisit || isVisitMenuPrompt) &&
@@ -8912,9 +8999,13 @@ export async function dispatchStateAction(
     // ── end site-visit intent guard ──────────────────────────────────────────────
 
     // If owner explicitly asks for buyer property search, route to qualification cascade
-    const isExplicitBuyerSearch =
-      (intent === "CHANGE_REQUIREMENT" || intent === "SEEKER_QUALIFICATION") &&
-      /(?:chahiye|joiye|buy|kharid|purchase|options|dekhna)/i.test(lower);
+    const isExplicitBuyerSearch = Boolean(
+      context.cognitiveTurn?.active_role === "BUYER" ||
+      context.cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" ||
+      intent === "CHANGE_REQUIREMENT" ||
+      intent === "SEEKER_QUALIFICATION" ||
+      /(?:chahiye|joiye|buy|kharid|purchase|options|dekhna|lena|leni|lene|levo|levi|levu)\b/i.test(lower)
+    );
 
     if (currentState === "OWNER_DETAILS_GATHERED" && isExplicitBuyerSearch) {
       return handleQualificationCascade(lead, actionResult, context);
@@ -8933,6 +9024,7 @@ export async function dispatchStateAction(
       aiAnalysis: actionResult,
       city: resolvedCity,
       agencyName,
+      cognitiveTurn: context.cognitiveTurn,
     });
     return {
       replyText: ownerRes.replyText,
@@ -9092,14 +9184,21 @@ export async function dispatchStateAction(
 
     if (isInitialDualOnboarding) {
       const isInitialSearchChoice =
+        context.cognitiveTurn?.selected_option === 1 ||
+        context.cognitiveTurn?.active_role === "BUYER" ||
+        context.cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" ||
         (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
         /^(1|1️⃣|first|1st|option\s*1|search|buy|naye|kharidna|kharidvu|naye\s*options|pehle\s*naye)\b/i.test(lower.trim());
 
       const isInitialListChoice =
+        context.cognitiveTurn?.selected_option === 2 ||
+        (context.cognitiveTurn?.active_role === "SELLER" && context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY") ||
         (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
         /^(2|2️⃣|second|2nd|option\s*2|list|listing|pehle\s*property\s*list|pehle\s*list|bechna|vechvu|apni)\b/i.test(lower.trim());
 
       const isDirectOwnerUtterance =
+        context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+        (context.cognitiveTurn?.active_role === "SELLER" && !isInitialSearchChoice) ||
         actionResult.user_role === "OWNER" ||
         intent === "SUBMIT_LISTING" ||
         /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower) ||
@@ -9140,6 +9239,7 @@ export async function dispatchStateAction(
             aiAnalysis: actionResult,
             city: resolvedCity,
             agencyName,
+            cognitiveTurn: context.cognitiveTurn,
           });
         }
 
@@ -9519,6 +9619,7 @@ export async function dispatchStateAction(
         aiAnalysis: actionResult,
         city: resolvedCity,
         agencyName,
+        cognitiveTurn: context.cognitiveTurn,
       });
       return {
         replyText: ownerRes.replyText,
@@ -9637,6 +9738,7 @@ export async function dispatchStateAction(
           aiAnalysis: actionResult,
           city: resolvedCity,
           agencyName,
+          cognitiveTurn: context.cognitiveTurn,
         });
         return {
           replyText: ownerRes.replyText,
@@ -10444,6 +10546,8 @@ export async function dispatchStateAction(
 
     // G. DUAL-ROLE: OWNER LISTING INTAKE FROM BOOKED VISIT
     if (
+      context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+      context.cognitiveTurn?.active_role === "SELLER" ||
       intent === "SUBMIT_LISTING" ||
       actionResult.user_role === "OWNER" ||
       /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower)
@@ -10461,6 +10565,7 @@ export async function dispatchStateAction(
         aiAnalysis: actionResult,
         city: resolvedCity,
         agencyName,
+        cognitiveTurn: context.cognitiveTurn,
       });
       return {
         replyText: ownerRes.replyText,
@@ -10588,8 +10693,14 @@ export async function dispatchStateAction(
   // ---------------------------------------------------------------------------
   if (currentState === "SITE_VISIT_DONE") {
     // 1. Negotiation / Token Sitting Request
-    const isNeg = /(discount|negotiat|bhav\s*ochho|rate\s*kam|price|offer|token|sitting|baithak|deal)/i.test(lower);
-    const isLoan = /(loan|bank|emi|interest|finance)/i.test(lower);
+    const isNeg = Boolean(
+      (context.cognitiveTurn?.primary_intent === "ASK_FAQ" && /discount|price|token|deal/i.test(context.cognitiveTurn?.side_question || "")) ||
+      /(discount|negotiat|bhav\s*ochho|rate\s*kam|price|offer|token|sitting|baithak|deal)/i.test(lower)
+    );
+    const isLoan = Boolean(
+      (context.cognitiveTurn?.primary_intent === "ASK_FAQ" && /loan|bank|emi/i.test(context.cognitiveTurn?.side_question || "")) ||
+      /(loan|bank|emi|interest|finance)/i.test(lower)
+    );
 
     // 2. Post-Visit Feedback & Objections (e.g. "Layout accha nai laga. Front gate oe kenal he", "Pasand nahi aaya")
     const hasDislike = /(?:accha\s*nai|acha\s*nahi|pasand\s*nahi|kharab|bekar|problem|issue|suit\s*nahi|jamyo\s*nahi|nathi\s*gamyu|not\s*good|dislike|negative|complain|concern|khot|kami)/i.test(lower);
@@ -10598,7 +10709,12 @@ export async function dispatchStateAction(
     const hasRoadIssue = /(road|gate|approach|entry|traffic|noise|parking|location)/i.test(lower);
     const hasPriceIssue = /(bhav\s*vadhare|price\s*high|costly|expensive|budget\s*bahar|bohot\s*jyada)/i.test(lower);
 
-    const isObjection = hasDislike || hasLayoutIssue || hasCanalIssue || hasRoadIssue || hasPriceIssue || Boolean((action as ConfirmVisitAttendanceAction)?.feedback);
+    const isObjection = Boolean(
+      context.cognitiveTurn?.side_question ||
+      context.cognitiveTurn?.user_negated_assumptions ||
+      hasDislike || hasLayoutIssue || hasCanalIssue || hasRoadIssue || hasPriceIssue ||
+      Boolean((action as ConfirmVisitAttendanceAction)?.feedback)
+    );
 
     // Prior feedback checks to prevent amnesiac repetitions
     const hasPriorFeedback = Boolean(
@@ -10616,22 +10732,26 @@ export async function dispatchStateAction(
     const isSelectingOpt1 =
       hasOptionsAlreadySent &&
       lastOptionIds.length > 0 &&
-      /^(?:1|1️⃣|first|1st|option\s*1|pehla|pehli)\b/i.test(lower.trim());
+      (context.cognitiveTurn?.selected_option === 1 ||
+       /^(?:1|1️⃣|first|1st|option\s*1|pehla|pehli)\b/i.test(lower.trim()));
 
     const isSelectingOpt2 =
       hasOptionsAlreadySent &&
       lastOptionIds.length > 1 &&
-      /^(?:2|2️⃣|second|2nd|option\s*2|dusra|doosra|bijo)\b/i.test(lower.trim());
+      (context.cognitiveTurn?.selected_option === 2 ||
+       /^(?:2|2️⃣|second|2nd|option\s*2|dusra|doosra|bijo)\b/i.test(lower.trim()));
 
     // Answering choice 1 (alternative options) to post-visit objection question
     const isChoice1Alternative =
       hasPriorFeedback &&
       !hasOptionsAlreadySent &&
-      (/^(?:1|1️⃣|first|1st|option\s*1)\b/i.test(lower.trim()) ||
+      (context.cognitiveTurn?.selected_option === 1 ||
+       /^(?:1|1️⃣|first|1st|option\s*1)\b/i.test(lower.trim()) ||
        /^(?:haan|ha|yes|share\s*karo|karo|bhejo|sure|ok|chalo)\b/i.test(lower.trim()));
 
     // General or explicit request for alternative options (e.g. "Option share karo", "options share karo", "option bhejo", etc.)
     const hasAskedOptions =
+      context.cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" ||
       /(?:options?|alternative|projects?|properties?)\s*(?:share|dikhao|batao|bhejo|send|aapo|chahiye|kar\s*do|karo|moklo)/i.test(lower) ||
       /(?:share|bhejo|send|dikhao|batao|moklo)\s*(?:options?|alternative|projects?|properties?|list|details)/i.test(lower) ||
       /^(?:options?|alternative|bija\s*options?|dusre?\s*options?|nava\s*options?)\b/i.test(lower.trim()) ||
@@ -10639,18 +10759,21 @@ export async function dispatchStateAction(
       /(?:dusra|doosra|bijo|bija|other|aur|nava|navi|new|alternative)\s*(?:option|options|property|project|flat|villa|dikhao|batao|share|bhejo)/i.test(lower) ||
       (intent === "GENERAL_QUERY" && (action as any)?.query === "request_alternative_options");
 
-    const isAlternativeRequest = (hasAskedOptions || isChoice1Alternative) && !isSelectingOpt1 && !isSelectingOpt2;
+    const isAlternativeRequest = Boolean((hasAskedOptions || isChoice1Alternative) && !isSelectingOpt1 && !isSelectingOpt2);
 
     // Choice 2 (call) to post-visit objection question or human call request
     const isChoice2Call =
       hasPriorFeedback &&
       !hasOptionsAlreadySent &&
-      /^(?:2|2️⃣|second|2nd|option\s*2)\b/i.test(lower.trim());
+      (context.cognitiveTurn?.selected_option === 2 ||
+       /^(?:2|2️⃣|second|2nd|option\s*2)\b/i.test(lower.trim()));
 
-    const isAdvisorCallRequest =
+    const isAdvisorCallRequest = Boolean(
+      context.cognitiveTurn?.primary_intent === "REQUEST_CALL" ||
       intent === "REQUEST_HUMAN_CALL" ||
       isChoice2Call ||
-      /(?:call|phone|baat|consult|advisor|director|executive|manager)\s*(?:karo|karvao|karein|karvu|karvo|connect|chahiye|schedule|arrange)/i.test(lower);
+      /(?:call|phone|baat|consult|advisor|director|executive|manager)\s*(?:karo|karvao|karein|karvu|karvo|connect|chahiye|schedule|arrange)/i.test(lower)
+    );
 
     // Persist feedback notes in site_visits table
     await supabase
@@ -10971,6 +11094,8 @@ export async function dispatchStateAction(
   if (currentState === "VISIT_CANCELLED") {
     // 1. Owner Listing Intent (e.g. "Muje meri property sell krni he")
     if (
+      context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+      context.cognitiveTurn?.active_role === "SELLER" ||
       intent === "SUBMIT_LISTING" ||
       actionResult.user_role === "OWNER" ||
       /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower)
@@ -10988,6 +11113,7 @@ export async function dispatchStateAction(
         aiAnalysis: actionResult,
         city: resolvedCity,
         agencyName,
+        cognitiveTurn: context.cognitiveTurn,
       });
       return {
         replyText: ownerRes.replyText,
@@ -11287,6 +11413,8 @@ export async function dispatchStateAction(
 
     // DUAL-ROLE: OWNER LISTING INTAKE FROM OPTIONS_SENT
     if (
+      context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+      context.cognitiveTurn?.active_role === "SELLER" ||
       intent === "SUBMIT_LISTING" ||
       actionResult.user_role === "OWNER" ||
       /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower)
@@ -11304,6 +11432,7 @@ export async function dispatchStateAction(
         aiAnalysis: actionResult,
         city: resolvedCity,
         agencyName,
+        cognitiveTurn: context.cognitiveTurn,
       });
       return {
         replyText: ownerRes.replyText,
@@ -11532,7 +11661,11 @@ export async function dispatchStateAction(
   // ---------------------------------------------------------------------------
   if (currentState === "QUALIFYING") {
     // Phase 32: Dynamic Mid-Stream Role Switcher from QUALIFYING to OWNER
-    if (isOwnerIntentUtterance(context.messageText, lower, actionResult)) {
+    if (
+      context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+      context.cognitiveTurn?.active_role === "SELLER" ||
+      isOwnerIntentUtterance(context.messageText, lower, actionResult)
+    ) {
       const ownerRes = await handleOwnerFlow({
         lead: {
           ...lead,
@@ -11550,6 +11683,7 @@ export async function dispatchStateAction(
         aiAnalysis: actionResult,
         city: resolvedCity,
         agencyName,
+        cognitiveTurn: context.cognitiveTurn,
       });
       return {
         replyText: ownerRes.replyText,
@@ -11575,7 +11709,10 @@ export async function dispatchStateAction(
   // ---------------------------------------------------------------------------
   if (currentState === "FRESH") {
     // If user expressed owner/seller intent right away (e.g. "muje meri shop bechni he", "flat bechna hai"):
-    const isFirstMessageOwner = isOwnerIntentUtterance(context.messageText, lower, actionResult);
+    const isFirstMessageOwner =
+      context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+      context.cognitiveTurn?.active_role === "SELLER" ||
+      isOwnerIntentUtterance(context.messageText, lower, actionResult);
 
     if (isFirstMessageOwner) {
       const ownerRes = await handleOwnerFlow({
@@ -11594,6 +11731,7 @@ export async function dispatchStateAction(
         aiAnalysis: actionResult,
         city: resolvedCity,
         agencyName,
+        cognitiveTurn: context.cognitiveTurn,
       });
       return {
         replyText: ownerRes.replyText,
@@ -11747,6 +11885,8 @@ export async function dispatchStateAction(
 
   // If user expressed owner/seller intent:
   if (
+    context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+    context.cognitiveTurn?.active_role === "SELLER" ||
     actionResult.user_role === "OWNER" ||
     intent === "SUBMIT_LISTING" ||
     /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:bechna|vechvu|sell|bikri|rent)/i.test(lower)
@@ -11764,6 +11904,7 @@ export async function dispatchStateAction(
       aiAnalysis: actionResult,
       city: resolvedCity,
       agencyName,
+      cognitiveTurn: context.cognitiveTurn,
     });
     return {
       replyText: ownerRes.replyText,
@@ -12433,6 +12574,7 @@ async function handleQualificationCascade(
       aiAnalysis: actionResult,
       city: resolvedCity,
       agencyName: context.agencyName || "Nextgen Realty",
+      cognitiveTurn: context.cognitiveTurn,
     });
   }
 
@@ -13269,7 +13411,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v94-production-modular-slot-engine",
+        version: "v95-ai-first-cognitive-intent-routing",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -14261,6 +14403,7 @@ Deno.serve(async (req: Request) => {
         supabase,
         city: resolvedCity,
         agencyName,
+        cognitiveTurn,
       });
 
       if (ownerRes.leadUpdates) {

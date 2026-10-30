@@ -420,6 +420,17 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 40.2: Dual-Role Black-Board Slot Memory & Conversational Steering Engine ([`40.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/40/40.2-PLAN.md))
 - [x] Plan 40.3: Action/Presentation Layer, Verification Matrix & Production Deployment (`v94`) ([`40.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/40/40.3-PLAN.md))
 
+---
+
+### Phase 41: Pure AI-First Cognitive Intent Routing, Role-Switch Circuit Breaker & Zero-Regex Decision Architecture
+**Status:** ✅ Complete  
+**Objective:** Eradicate all 28 business-decision and routing regexes across `handleOwnerFlow`, router state guards, site visit lifecycle, first-turn intake, and post-options handling. Introduce the Mid-Flow Role-Switch Circuit Breaker allowing leads to transition seamlessly between seller and buyer personas without getting trapped in `OWNER_*` states. Enforce AI Micro-LLM Perception (`cognitiveTurn`) as the single source of truth for intent, active role, option selection, and state routing while preserving deterministic templating for 100% anti-hallucination and sub-400 token efficiency. Deploy `v95`.  
+**Depends on:** Phase 40  
+**Plans:**
+- [x] Plan 41.1: Mid-Flow Role-Switch Circuit Breaker & `handleOwnerFlow` AI Modernization ([`41.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/41/41.1-PLAN.md))
+- [x] Plan 41.2: Router State Guards, Visit Lifecycle & Option Selection AI Modernization ([`41.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/41/41.2-PLAN.md))
+- [x] Plan 41.3: Verification Matrix, Frontend Build Audit & Production Deployment (`v95`) ([`41.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/41/41.3-PLAN.md))
+
 
 
 
