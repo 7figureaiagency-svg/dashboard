@@ -2854,13 +2854,14 @@ export function mapCognitiveResultToActionResult(
 
   // Language Mapping
   let language: "HINGLISH" | "GUJLISH" | "ENGLISH" | "GUJARATI_SCRIPT" = "HINGLISH";
-  if (extracted.detected_language.script === "Gujarati") {
+  const detLang = extracted.detected_language || ({} as any);
+  if (detLang.script === "Gujarati") {
     language = "GUJARATI_SCRIPT";
-  } else if (extracted.detected_language.dialect?.toLowerCase().includes("guj")) {
+  } else if (detLang.dialect?.toLowerCase().includes("guj")) {
     language = "GUJLISH";
   } else if (
-    extracted.detected_language.code === "en-IN" ||
-    extracted.detected_language.dialect?.toLowerCase().includes("eng")
+    detLang.code === "en-IN" ||
+    detLang.dialect?.toLowerCase().includes("eng")
   ) {
     language = "ENGLISH";
   } else {
@@ -2868,17 +2869,18 @@ export function mapCognitiveResultToActionResult(
   }
 
   // Formatted Property Type string
+  const entities = extracted.entities || ({} as any);
   let formattedPropType: string | null = null;
-  if (extracted.entities.property_type && extracted.entities.property_type !== "UNKNOWN") {
-    if (extracted.entities.unit_bhk && extracted.entities.property_type === "FLAT") {
-      formattedPropType = `${extracted.entities.unit_bhk}BHK Flat`;
-    } else if (extracted.entities.unit_bhk && extracted.entities.property_type === "TENEMENT") {
-      formattedPropType = `${extracted.entities.unit_bhk}BHK Tenement`;
+  if (entities.property_type && entities.property_type !== "UNKNOWN") {
+    if (entities.unit_bhk && entities.property_type === "FLAT") {
+      formattedPropType = `${entities.unit_bhk}BHK Flat`;
+    } else if (entities.unit_bhk && entities.property_type === "TENEMENT") {
+      formattedPropType = `${entities.unit_bhk}BHK Tenement`;
     } else {
-      formattedPropType = extracted.entities.property_type;
+      formattedPropType = entities.property_type;
     }
-  } else if (extracted.entities.unit_bhk) {
-    formattedPropType = `${extracted.entities.unit_bhk}BHK`;
+  } else if (entities.unit_bhk) {
+    formattedPropType = `${entities.unit_bhk}BHK`;
   }
 
   // Action Assembly
@@ -2895,23 +2897,23 @@ export function mapCognitiveResultToActionResult(
     if (extracted.lead_role === "SELLER" || userRole === "OWNER") {
       action = {
         intent: "SUBMIT_LISTING",
-        transaction_type: extracted.entities.budget_type === "MONTHLY_RENT" ? "RENT_OUT" : "SELL",
+        transaction_type: entities.budget_type === "MONTHLY_RENT" ? "RENT_OUT" : "SELL",
         property_type: formattedPropType || undefined,
-        price_or_rent: extracted.entities.budget_inr || undefined,
-        location: extracted.entities.location_name || undefined,
+        price_or_rent: entities.budget_inr || undefined,
+        location: entities.location_name || undefined,
       };
     } else {
       action = {
         intent: "CHANGE_REQUIREMENT",
         requirement:
-          extracted.entities.budget_type === "MONTHLY_RENT"
+          entities.budget_type === "MONTHLY_RENT"
             ? "RENT"
-            : extracted.entities.budget_type === "COMMERCIAL_LEASE"
+            : entities.budget_type === "COMMERCIAL_LEASE"
             ? "LEASE"
             : "BUY",
         property_type: formattedPropType || undefined,
-        budget: extracted.entities.budget_inr || undefined,
-        location: extracted.entities.location_name || undefined,
+        budget: entities.budget_inr || undefined,
+        location: entities.location_name || undefined,
       };
     }
   } else if (
@@ -3599,7 +3601,8 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
   const runAll = !options.types || options.types.length === 0;
   const runPreVisit = runAll || options.types.includes("pre_visit");
   const runPostVisit = runAll || options.types.includes("post_visit");
-  const runMissedVisit = runAll || options.types.includes("missed_visit") || options.types.includes("post_visit");
+  const runUnconfirmedNudge = runAll || options.types.includes("unconfirmed_nudge");
+  const runMissedVisit = runAll || options.types.includes("missed_visit");
   const runDaily = runAll || options.types.includes("daily_followup");
   const runPostVisitDrip = runAll || options.types.includes("post_visit_drip");
 
@@ -3920,7 +3923,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
     // =========================================================================
     // 2b. MODULE 2B: UNCONFIRMED VISIT ATTENDANCE NUDGE (20-48 Hours After Post-Visit Check)
     // =========================================================================
-    if (runPostVisit) {
+    if (runUnconfirmedNudge) {
       const inBusinessHours = isWithinWorkingHours(11, 19);
       if (inBusinessHours || options.force) {
         let qNudge = supabase
@@ -3940,6 +3943,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
         if (unconfirmedLeads) {
           for (const l of unconfirmedLeads) {
             try {
+              // Never send unconfirmed nudge if feedback was sent in this exact sweep execution
+              if (sweepLog.post_visit_feedbacks.some((f: any) => f.lead_id === l.lead_id)) continue;
+
               const meta = (typeof l.metadata === "object" && l.metadata !== null) ? (l.metadata as Record<string, unknown>) : {};
               if (meta.post_visit_nudge_sent && !options.force) continue;
 
@@ -6428,38 +6434,48 @@ export async function dispatchStateAction(
 
   // 1. Office Address / Location Query Interceptor
   const isOfficeAddressQuery =
-    /(?:office\s*(?:address|location|kaha|kidhar|kya\s*hai|kya\s*he|kya\s*chhe|kya\s*che|no\s*address|nu\s*address|par\s*aavu|aavvu|milna|mil\s*sakte)|karyalay|branch\s*address|where\s*is\s*your\s*office|office\s*pin|address\s*bhejo|address\s*aapo|office\s*par\s*milna)\b/i.test(lower);
+    /\b(?:office\s*(?:address|location|kaha|kidhar|kya\s*hai|kya\s*he|kya\s*chhe|kya\s*che|no\s*address|nu\s*address|par\s*aavu|aavvu|milna|mil\s*sakte)|karyalay|branch\s*address|where\s*is\s*your\s*office|office\s*pin|address\s*bhejo|address\s*aapo|office\s*par\s*milna)\b/i.test(lower);
 
   // 2. Office Timings / Working Hours Interceptor
   const isOfficeTimingQuery =
-    /(?:timing|timings|visiting\s*hours|kab\s*khula|kab\s*open|khulva\s*no\s*samay|office\s*time|working\s*hours|business\s*hours|opening\s*time|closing\s*time)\b/i.test(lower);
+    /\b(?:timing|timings|visiting\s*hours|kab\s*khula|kab\s*open|khulva\s*no\s*samay|office\s*time|working\s*hours|business\s*hours|opening\s*time|closing\s*time)\b/i.test(lower);
 
   // 3. Agency / Company Identity Interceptor
   const isAgencyIdentityQuery =
-    /(?:agency|company|firm|karyalay|tamari\s*company|tamaru\s*nam|aapki\s*agency|aapka\s*naam|aap\s*kaun|who\s*are\s*you|naam\s*kya|nam\s*su\s*che|nam\s*kya\s*he|nam\s*su|tamara\s*vishe|agency\s*name|company\s*name)\b/i.test(lower);
+    /\b(?:agency|company|firm|karyalay|tamari\s*company|tamaru\s*nam|aapki\s*agency|aapka\s*naam|aap\s*kaun|who\s*are\s*you|naam\s*kya|nam\s*su\s*che|nam\s*kya\s*he|nam\s*su|tamara\s*vishe|agency\s*name|company\s*name)\b/i.test(lower);
 
-  if (isOfficeTimingQuery && !isRealEstateTerm) {
-    action = { intent: "ASK_FAQ", topic: "OFFICE_TIMINGS" } as AskFaqAction;
-    intent = "ASK_FAQ";
-  } else if (isOfficeAddressQuery && !isRealEstateTerm) {
-    action = { intent: "ASK_FAQ", topic: "OFFICE_ADDRESS" } as AskFaqAction;
-    intent = "ASK_FAQ";
-  } else if (isAgencyIdentityQuery && !isRealEstateTerm) {
-    action = { intent: "ASK_FAQ", topic: "AGENCY_INFO" } as AskFaqAction;
-    intent = "ASK_FAQ";
-  } else if (Array.isArray(botKnowledge.custom_faqs) && botKnowledge.custom_faqs.length > 0 && !isRealEstateTerm) {
-    for (const faq of botKnowledge.custom_faqs) {
-      const qLower = (faq.question || "").toLowerCase();
-      const qWords = qLower.split(/\s+/).filter((w) => w.length >= 4);
-      const matches = qWords.filter((w) => lower.includes(w));
-      if (matches.length >= 2 || (qWords.length === 1 && matches.length === 1)) {
-        action = {
-          intent: "ASK_FAQ",
-          topic: "CUSTOM_FAQ",
-          specific_query: faq.question,
-        } as AskFaqAction;
-        intent = "ASK_FAQ";
-        break;
+  // Guard: NEVER hijack visit booking or reschedule turns into agency FAQs!
+  const isVisitRescheduling =
+    currentState === "VISIT_MISSED" ||
+    currentState === "VISIT_REQUESTED" ||
+    intent === "RESCHEDULE_VISIT" ||
+    intent === "BOOK_VISIT" ||
+    Boolean(context.cognitiveTurn?.primary_intent === "RESCHEDULE_VISIT" || context.cognitiveTurn?.primary_intent === "BOOK_VISIT");
+
+  if (!isVisitRescheduling && !isRealEstateTerm) {
+    if (isOfficeTimingQuery) {
+      action = { intent: "ASK_FAQ", topic: "OFFICE_TIMINGS" } as AskFaqAction;
+      intent = "ASK_FAQ";
+    } else if (isOfficeAddressQuery) {
+      action = { intent: "ASK_FAQ", topic: "OFFICE_ADDRESS" } as AskFaqAction;
+      intent = "ASK_FAQ";
+    } else if (isAgencyIdentityQuery) {
+      action = { intent: "ASK_FAQ", topic: "AGENCY_INFO" } as AskFaqAction;
+      intent = "ASK_FAQ";
+    } else if (Array.isArray(botKnowledge.custom_faqs) && botKnowledge.custom_faqs.length > 0) {
+      for (const faq of botKnowledge.custom_faqs) {
+        const qLower = (faq.question || "").toLowerCase();
+        const qWords = qLower.split(/\s+/).filter((w) => w.length >= 4);
+        const matches = qWords.filter((w) => lower.includes(w));
+        if (matches.length >= 2 || (qWords.length === 1 && matches.length === 1)) {
+          action = {
+            intent: "ASK_FAQ",
+            topic: "CUSTOM_FAQ",
+            specific_query: faq.question,
+          } as AskFaqAction;
+          intent = "ASK_FAQ";
+          break;
+        }
       }
     }
   }
@@ -11792,7 +11808,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v100-dual-role-fsm-modernization",
+        version: "v102-adversarial-audit-verified",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,

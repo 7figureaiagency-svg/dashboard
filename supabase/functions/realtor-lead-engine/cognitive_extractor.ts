@@ -705,6 +705,15 @@ export async function extractCognitiveIntentWithAI(context: {
         if (rawJsonText) {
           const parsed = parseJsonSafely(rawJsonText);
           if (parsed && parsed.lead_role && parsed.primary_intent && parsed.entities) {
+            if (!parsed.detected_language) {
+              parsed.detected_language = {
+                primary_language: "Hindi",
+                code: "hi-IN",
+                dialect: "Hinglish",
+                script: "Latin",
+                formality: "POLITE_RESPECTFUL",
+              };
+            }
             if (parsed.user_negated_assumptions && !isForcePro) {
               try {
                 const proUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiKey}`;
@@ -812,6 +821,15 @@ export async function extractCognitiveIntentWithAI(context: {
           if (rawJsonText) {
             const parsed = parseJsonSafely(rawJsonText);
             if (parsed && parsed.lead_role && parsed.primary_intent && parsed.entities) {
+              if (!parsed.detected_language) {
+                parsed.detected_language = {
+                  primary_language: "Hindi",
+                  code: "hi-IN",
+                  dialect: "Hinglish",
+                  script: "Latin",
+                  formality: "POLITE_RESPECTFUL",
+                };
+              }
               return {
                 extracted: parsed,
                 provider_used: "GROQ_LLAMA",
