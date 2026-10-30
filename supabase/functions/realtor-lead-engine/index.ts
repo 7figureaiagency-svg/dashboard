@@ -1625,9 +1625,14 @@ function parseBudgetFromText(text: string): number {
     }
   }
 
-  const shortNumMatch = lower.match(/^(?:around|approx|budget|lagbhag|andaje|max|under)?\s*(\d{2,3})\s*$/i);
+  const shortNumMatch = lower.match(/^(?:(?:rent|kiraya|bhadu|demand)\s+)?(?:around|approx|budget|lagbhag|andaje|max|under)?\s*(\d{1,3})\s*$/i);
   if (shortNumMatch) {
     const val = parseInt(shortNumMatch[1], 10);
+    const hasRentalContext = /(?:rent|kiraya|bhadu|per\s*month|\/month|mahina)/i.test(lower);
+    if (val >= 1 && val < 15) {
+      if (hasRentalContext) return val * 1000;
+      return val * 100000;
+    }
     if (val >= 15 && val <= 500) return val * 100000;
   }
   return 0;
@@ -5186,13 +5191,27 @@ function matchesPropertyType(leadType?: string | null, propCategory?: string | n
   const isPropPlot = /(plot|land)/i.test(combined);
   if (isLeadPlot) return isPropPlot || cat === "plot";
 
-  // 3. Villa / House Subtypes
-  const isLeadVilla = /(villa|bungalow|row house|farmhouse|duplex)/i.test(lt);
-  const isPropVilla = /(villa|bungalow|row_house|farm_house)/i.test(combined);
+  // 3. Duplex Subtypes (Specific handling before general villa/house)
+  const isLeadDuplex = /duplex/i.test(lt);
+  if (isLeadDuplex) {
+    const isPropDuplex = /(duplex)/i.test(combined) || cat === "duplex";
+    if (!isPropDuplex) return false;
+    const bhkMatch = lt.match(/(\d+)\s*bhk/i);
+    if (bhkMatch) {
+      const bhk = bhkMatch[1] + "bhk";
+      const propBhk = combined.replace(/[\s_-]+/g, "").toLowerCase();
+      if (!propBhk.includes(bhk)) return false;
+    }
+    return true;
+  }
+
+  // 4. Villa / House Subtypes
+  const isLeadVilla = /(villa|bungalow|row house|farmhouse|independent house|kothi)/i.test(lt);
+  const isPropVilla = /(villa|bungalow|row_house|row house|farm_house|farmhouse|independent house|kothi|duplex)/i.test(combined) || cat === "villa" || cat === "duplex";
   if (isLeadVilla) {
     if (lt.includes("flat") && (combined.includes("flat") || cat === "flat")) {
       // User allows flat or sky villa
-    } else if (!isPropVilla && cat !== "villa") {
+    } else if (!isPropVilla && cat !== "villa" && cat !== "duplex") {
       return false;
     }
     const bhkMatch = lt.match(/(\d+)\s*bhk/i);
@@ -5204,7 +5223,12 @@ function matchesPropertyType(leadType?: string | null, propCategory?: string | n
     return true;
   }
 
-  // 4. Exact BHK Matches
+  // 5. Penthouse
+  if (lt.includes("penthouse")) {
+    return combined.includes("penthouse") || cat === "penthouse";
+  }
+
+  // 6. Exact BHK Matches
   const bhkMatch = lt.match(/(\d+)\s*bhk/i);
   if (bhkMatch) {
     const bhk = bhkMatch[1] + "bhk";
@@ -5212,12 +5236,7 @@ function matchesPropertyType(leadType?: string | null, propCategory?: string | n
     if (!propBhk.includes(bhk)) return false;
   }
 
-  // 5. Penthouse
-  if (lt.includes("penthouse")) {
-    return combined.includes("penthouse") || combined.includes("5bhk") || combined.includes("4bhk");
-  }
-
-  // 6. Studio
+  // 7. Studio
   if (lt.includes("studio") || lt.includes("1rk")) {
     return combined.includes("studio") || combined.includes("1bhk");
   }
