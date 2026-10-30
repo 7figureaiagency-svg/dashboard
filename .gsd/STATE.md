@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-30T09:48:00+05:30
+updated: 2026-10-30T10:25:00+05:30
 ---
 
 # Project State
@@ -7,16 +7,23 @@ updated: 2026-10-30T09:48:00+05:30
 ## Current Position
 
 **Milestone:** PropTech Matching Precision & Robustness  
-**Phase:** 37 - First-Turn Intake Triage, Option Selection Robustness & Pan-India Multi-City Dynamic Resolution  
-**Status:** 🎉 Completed Phase 37  
+**Phase:** 38 - Eradicate Regex Fallbacks, Enforce AI Single Source of Truth & Context-Aware Prompt State Transitions  
+**Status:** 🎉 Completed Phase 38  
 **Plans:**
-- `.gsd/phases/37/37.1-PLAN.md` (First-Turn Intake Triage, Modern Apple HIG / WhatsApp Greeting & Auto-Bypass Rule) — 🎉 Completed
-- `.gsd/phases/37/37.2-PLAN.md` (Option Selection Off-by-One Array Bounds Fix & Pan-India Multi-City Dynamic Resolution Engine) — 🎉 Completed
-- `.gsd/phases/37/37.3-PLAN.md` (Verification Matrix, Frontend Build Audit & Live Supabase Edge Function Deployment) — 🎉 Completed
+- Eradicate brittle regex shortNumMatch blind overrides in `parseBudgetFromText`
+- Context-aware `parseBudgetFromText` guarded strictly by `lastPromptQ === "BUDGET"`
+- Context-aware `parsePropertyTypeFromText` mapping 1/2/3 to Flat/Villa/Commercial
+- `mapCognitiveResultToActionResult` clean `SELECT_OPTION` mapping in `ROLE_SELECTION_PENDING`
+- Reset and live deployment of `v92-ai-first-zero-regex-prompt-context-guard`
 
 ## Last Action
 
-Completed Phase 37 (First-Turn Intake Triage, Option Selection Robustness & Pan-India Multi-City Dynamic Resolution):
+Completed Phase 38 (Eradicate Regex Fallbacks, Enforce AI Single Source of Truth & Context-Aware Prompt State Transitions):
+- **Eradicated Regex Budget Hijacking:** Replaced brittle `shortNumMatch` regex in `parseBudgetFromText` that turned bare `"1"` into ₹1,00,000. Isolated digits are now guaranteed to return `0` unless the pending question was explicitly `BUDGET` (`lastPromptQ === "BUDGET"`).
+- **Previous-Question Context Awareness:** Injected `lastPromptQ` into `parseBudgetFromText` and `parsePropertyTypeFromText`. Answering `"1"` in property type selection maps to `2/3 BHK Flat`, in acquisition type maps to `BUY`, and in budget prompt normalizes to ₹1 Crore for Indian real estate buyers.
+- **AI Single Source of Truth:** Removed blind `|| parse...` overrides across `ROLE_SELECTION_PENDING`, `CRITERIA_CONFIRMATION_PENDING`, `FRESH`, and `DUAL_ROLE_MENU_PENDING`. Menu selections now strictly follow `SELECT_OPTION` without leaking pseudo-criteria into lead draft.
+- **Production Edge Deployment:** Deployed Edge Function `v92-ai-first-zero-regex-prompt-context-guard` live to Supabase production (`yeiygfysijptjdepctnx`), verified live HTTP 200 `ONLINE`.
+- **Fresh Reset for User:** Cleared all criteria and reset state to `FRESH` for Telegram ID `5117510624`.
 - **First-Turn Intake Triage & Greeting Design:** Redesigned `getGreetingTriageReply()` with clear 2-stage options (1️⃣ Property Leni Hai / Levi Chhe vs 2️⃣ Apni Property List Karni Hai / Potani Property List Karvi Chhe) with sub-turn disambiguation for Buy/Rent/Commercial vs Sell/Rent Out/Lease Out, and smart auto-bypass when criteria is provided upfront.
 - **Option 2 Selection Off-by-One Array Bounds Fix:** Solved off-by-one bug where selecting option 2 failed with `"pasand kareli property ni details confirm nathi thai saki"` by adding dual-index fallback (`rawIdx` and `rawIdx - 1`) in `handleOptionsSent` and normalizing 1-based choices in `mapCognitiveResultToActionResult`.
 - **Pan-India Multi-City Dynamic Resolution Engine:** Added dynamic city interceptor that intercepts any major Indian city name, warmly acknowledges the city, and asks for the specific area/neighborhood within that city instead of misclassifying it as an Alkapuri landmark or defaulting.

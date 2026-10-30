@@ -1594,7 +1594,7 @@ function extractLocationsFromText(text: string, inventory: any[] = []): string[]
 }
 
 // 7. Parsers (Budget, Property Type, Requirement, Purpose, Timeline)
-function parseBudgetFromText(text: string): number {
+function parseBudgetFromText(text: string, lastQ?: string, requirement?: string): number {
   const normalized = normalizeIndicDigits(text || "");
   const clean = normalized.replace(/,/g, "");
   const lower = clean.toLowerCase().trim();
@@ -1607,6 +1607,7 @@ function parseBudgetFromText(text: string): number {
     return highVal * 100000;
   }
 
+  // 1. Explicit Currency Units (Always parsed, anywhere in the text)
   const crMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:cr|crs|crore|crores|karod|karods|કરોડ|કરૉડ|करोड़)(?:(?=[^\w])|$)/i);
   if (crMatch) return parseFloat(crMatch[1]) * 10000000;
 
@@ -1616,25 +1617,50 @@ function parseBudgetFromText(text: string): number {
   const kMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:k|hazar|hazaar|thousand|હજાર|हज़ार)(?:(?=[^\w])|$)/i);
   if (kMatch) return parseFloat(kMatch[1]) * 1000;
 
-  const numMatch = lower.match(/\b(\d{4,8})\b/);
+  // 2. Large Raw Numbers (>= 10,000 or with ₹, rs, inr, rent)
+  const numMatch = lower.match(/\b(\d{4,9})\b/);
   if (numMatch) {
     const val = parseInt(numMatch[1], 10);
     const hasPriceContext = /(?:rent|kiraya|bhadu|budget|rs\.?|₹|inr|per\s*month|\/month|mahina|price|cost|demand)/i.test(lower);
-    if (val >= 3000 || hasPriceContext) {
+    if (val >= 10000 || (val >= 3000 && hasPriceContext)) {
       return val;
     }
   }
 
-  const shortNumMatch = lower.match(/^(?:(?:rent|kiraya|bhadu|demand)\s+)?(?:around|approx|budget|lagbhag|andaje|max|under)?\s*(\d{1,3})\s*$/i);
-  if (shortNumMatch) {
-    const val = parseInt(shortNumMatch[1], 10);
+  // 3. Explicit Budget Prefixes (Required keyword: budget, around, max, under, rent)
+  const keywordNumMatch = lower.match(/^(?:(?:rent|kiraya|bhadu|demand)\s+)?(?:around|approx|budget|lagbhag|andaje|max|under)\s+(\d{1,3}(?:\.\d+)?)\s*$/i);
+  if (keywordNumMatch) {
+    const val = parseFloat(keywordNumMatch[1]);
     const hasRentalContext = /(?:rent|kiraya|bhadu|per\s*month|\/month|mahina)/i.test(lower);
-    if (val >= 1 && val < 15) {
-      if (hasRentalContext) return val * 1000;
-      return val * 100000;
+    if (hasRentalContext) {
+      if (val < 100) return val * 1000;
+      return val;
     }
     if (val >= 15 && val <= 500) return val * 100000;
+    if (val >= 1 && val < 15) {
+      // In Indian real estate purchase, 1..5 is Crores (e.g. "budget 1" or "under 2" = 1 or 2 Cr)
+      return val * 10000000;
+    }
   }
+
+  // 4. BARE NUMBERS (e.g. "1", "2", "3", "50", "75", "1.5")
+  // CRITICAL INVARIANT: Bare numbers are ONLY budgets if the bot explicitly asked for a BUDGET!
+  if (lastQ === "BUDGET" || lastQ === "OWNER_PRICE_PENDING") {
+    const bareNumMatch = lower.match(/^\s*(\d{1,3}(?:\.\d+)?)\s*$/);
+    if (bareNumMatch) {
+      const val = parseFloat(bareNumMatch[1]);
+      const isRent = requirement === "RENT" || requirement === "RENT_OUT" || requirement === "LEASE";
+      if (isRent) {
+        if (val >= 3 && val <= 200) return val * 1000; // e.g. 15 -> 15,000 rent
+        if (val >= 3000) return val;
+      } else {
+        // Buyer / Seller purchase pricing:
+        if (val >= 15 && val <= 500) return val * 100000; // e.g. 50 -> 50 Lakhs, 85 -> 85 Lakhs
+        if (val >= 1 && val < 15) return val * 10000000; // e.g. 1 -> 1 Crore, 1.5 -> 1.5 Crore
+      }
+    }
+  }
+
   return 0;
 }
 
@@ -1803,9 +1829,28 @@ function isGibberishOrInvalidInput(text: string): boolean {
   return false;
 }
 
-function parsePropertyTypeFromText(text: string): string {
+function parsePropertyTypeFromText(text: string, lastQ?: string): string {
   const normalized = normalizeIndicDigits(text || "");
-  const lower = normalized.toLowerCase();
+  const lower = normalized.toLowerCase().trim();
+
+  // Contextual numeric answers to property type prompts
+  if (lastQ === "PROPERTY_TYPE") {
+    if (/^(?:1|1️⃣|option\s*1|first|1st)\b/i.test(lower)) return "2/3 BHK Flat";
+    if (/^(?:2|2️⃣|option\s*2|second|2nd)\b/i.test(lower)) return "Villa";
+    if (/^(?:3|3️⃣|option\s*3|third|3rd)\b/i.test(lower)) return "Commercial Shop/Office";
+  }
+
+  if (lastQ === "COMMERCIAL_SUBTYPE") {
+    if (/^(?:1|1️⃣|option\s*1|first|1st)\b/i.test(lower)) return "Commercial Shop";
+    if (/^(?:2|2️⃣|option\s*2|second|2nd)\b/i.test(lower)) return "Commercial Office";
+    if (/^(?:3|3️⃣|option\s*3|third|3rd)\b/i.test(lower)) return "Showroom";
+  }
+
+  if (lastQ === "RESIDENTIAL_SUBTYPE" || lastQ === "BHK") {
+    if (/^(?:1|1️⃣|option\s*1|first|1st)\b/i.test(lower)) return "2BHK Flat";
+    if (/^(?:2|2️⃣|option\s*2|second|2nd)\b/i.test(lower)) return "3BHK Flat";
+    if (/^(?:3|3️⃣|option\s*3|third|3rd)\b/i.test(lower)) return "Villa";
+  }
 
   // 1. Exact BHK Matches
   const bhkMatch = lower.match(/([1-5])\s*(?:bhk|bedroom|bed|room|બીએચકે|बीएचके)/i);
@@ -3502,6 +3547,9 @@ export function buildStageMicroPrompt(lead: any, currentState?: string): string 
 export function deriveBotQuestionType(nextState: string, replyText: string, metadata?: any): string | null {
   if (!replyText || !replyText.trim()) return null;
   if (metadata?.last_bot_prompt?.question_type) return metadata.last_bot_prompt.question_type;
+  if (nextState === "ROLE_SELECTION_PENDING") return "ROLE_SELECTION";
+  if (nextState === "QUALIFYING" && /Buy.*?Rent|Commercial\s*Lease|Kharidva/i.test(replyText)) return "ACQUISITION_TYPE";
+  if (nextState === "OWNER_CONFIG_PENDING" && /Sell.*?Rent\s*Out|Vechva/i.test(replyText)) return "DISPOSITION_TYPE";
   if (nextState === "OWNER_DETAILS_GATHERED") return "SECOND_PROPERTY_LISTING";
   if (nextState === "SITE_VISIT_DONE" || (nextState === "SITE_VISIT_BOOKED" && /1️⃣|2️⃣|visit attend|attended/i.test(replyText))) return "VISIT_ATTENDANCE";
   if (nextState === "CRITERIA_CONFIRMATION_PENDING") return "CRITERIA_CONFIRM";
@@ -3917,8 +3965,11 @@ ${historySection}
 3. NUMERIC MENU SELECTIONS & DISAMBIGUATION:
    - If user responds with a single isolated digit like "1", "2", "3" or "option 2":
      - Map to selected_menu_option as 1-based integer (1, 2, 3, etc.).
+     - NEVER map an isolated digit "1", "2", "3" to budget_inr! A single digit is ALWAYS a menu option, NEVER a budget, unless the pending question is explicitly "BUDGET".
+     - In ROLE_SELECTION_PENDING, "1" = BUYER / ACQUISITION, "2" = SELLER / DISPOSITION, "3" = HUMAN_ESCALATION.
+     - In ACQUISITION_TYPE, "1" = BUY, "2" = RENT, "3" = COMMERCIAL_LEASE.
+     - In PROPERTY_TYPE, "1" = FLAT, "2" = VILLA, "3" = COMMERCIAL.
      - In post-visit attendance (SITE_VISIT_DONE, VISIT_ATTENDANCE), "1" = attended (CONFIRM_VISIT), "2" = did not attend / reschedule (RESCHEDULE_VISIT). NEVER confuse "2" with "Option 3: search new properties"!
-     - In ROLE_SELECTION_PENDING, "1" = BUYER, "2" = SELLER, "3" = HUMAN_ESCALATION.
      - In DUAL_ROLE_MENU_PENDING, "1" = SELECT_OPTION, "2" = CHECK_STATUS, "3" = HUMAN_ESCALATION.
      - However, "2bhk", "2 bhk", "3 bed" is property configuration (unit_bhk), NOT a menu selection!
 
@@ -3928,9 +3979,14 @@ ${historySection}
    - location_name must be a pure geographical area or locality (e.g. "Alkapuri", "Waghodia Road", "Gotri", "Vasna"). If no real locality is mentioned, location_name MUST BE NULL!
 
 5. BUDGET & CURRENCY NORMALIZATION:
-   - "1 cr", "1 crore", "૧ કરોડ" = 10000000 INR
-   - "50 lakh", "50L", "૫૦ લાખ", "50 lac" = 5000000 INR
-   - "40 lakh ma" = 4000000 INR
+   - Isolated single digits like "1", "2", "3" MUST NEVER be extracted as budget_inr unless Pending Question Type is "BUDGET".
+   - If Pending Question Type is "BUDGET" and user is buying:
+     - "1", "1 cr", "1 crore", "૧ કરોડ" = 10000000 INR (1 Crore, NOT 1 Lakh!)
+     - "1.5", "1.5 cr" = 15000000 INR
+     - "50", "50 lakh", "50L", "૫૦ લાખ", "50 lac" = 5000000 INR
+     - "40 lakh ma" = 4000000 INR
+   - If Pending Question Type is "BUDGET" and user is renting:
+     - "15", "15000", "15k" = 15000 INR
    - "25 hazar", "25k" = 25000 INR
 
 6. LANGUAGE & DIALECT DETECTION:
@@ -4578,13 +4634,9 @@ export function mapCognitiveResultToActionResult(
     }
   } else if (extracted.selected_menu_option !== null) {
     if (state === "ROLE_SELECTION_PENDING") {
-      if (extracted.selected_menu_option === 1) {
-        action = { intent: "CHANGE_REQUIREMENT", requirement: "BUY" };
-      } else if (extracted.selected_menu_option === 2) {
-        action = { intent: "SUBMIT_LISTING", transaction_type: "SELL" };
-      } else {
-        action = { intent: "REQUEST_HUMAN_CALL", reason: "Role menu option 3" };
-      }
+      const optVal = Number(extracted.selected_menu_option);
+      const safeZeroBased = (!isNaN(optVal) && optVal >= 1) ? optVal - 1 : 0;
+      action = { intent: "SELECT_OPTION", option_index: safeZeroBased };
     } else if (state === "CRITERIA_CONFIRMATION_PENDING") {
       if (extracted.selected_menu_option === 1) {
         action = { intent: "CONFIRM_CRITERIA", confirm: true };
@@ -8806,9 +8858,10 @@ export async function dispatchStateAction(
       };
     } else {
       // Option 1 (or default): Switch to SEEKER and start fresh search
-      const givenPropType = parsePropertyTypeFromText(context.messageText);
-      const givenBudget = parseBudgetFromText(context.messageText);
-      const givenLocation = extractLocationFromText(context.messageText);
+      const isPureOpt1 = /^(?:1|1️⃣|first|option\s*1)\b/i.test(lower);
+      const givenPropType = !isPureOpt1 ? parsePropertyTypeFromText(context.messageText) : null;
+      const givenBudget = !isPureOpt1 ? parseBudgetFromText(context.messageText, "DUAL_ROLE_SELECTION") : null;
+      const givenLocation = !isPureOpt1 ? extractLocationFromText(context.messageText) : null;
 
       const replyText = givenPropType
         ? (lang === "GUJLISH"
@@ -9461,23 +9514,23 @@ export async function dispatchStateAction(
     }
 
     // 4. Direct buyer criteria auto-bypass & Option 1 handling:
-    const pType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
-    const bVal = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
-    const locVal = actionResult.location || extractLocationFromText(context.messageText);
-    const parsedReq = parseRequirementFromText(context.messageText);
-
     const isPureOption1 = /^(?:1|1️⃣|option\s*1|first|1st)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim());
     const isSeekerChoice =
       isPureOption1 ||
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
       /^(1|1️⃣|option\s*1|first|1st|leni|lena|kharidna|kharidvu|buy|rent)\b/i.test(lower.trim());
 
-    // Concrete buyer entities: only consider direct criteria if actual fields were provided
-    const hasConcreteBuyerEntities = Boolean(
+    // Concrete buyer entities: only consider direct criteria if actual fields were provided and NOT an option selection
+    const pType = actionResult.property_type || (!isSeekerChoice ? parsePropertyTypeFromText(context.messageText) : null);
+    const bVal = actionResult.price_or_budget || (!isSeekerChoice ? parseBudgetFromText(context.messageText, "ROLE_SELECTION") : null);
+    const locVal = actionResult.location || (!isSeekerChoice ? extractLocationFromText(context.messageText) : null);
+    const parsedReq = !isSeekerChoice ? parseRequirementFromText(context.messageText) : null;
+
+    const hasConcreteBuyerEntities = !isSeekerChoice && Boolean(
       pType ||
       bVal ||
       locVal ||
-      (!isPureOption1 && (parsedReq === "BUY" || parsedReq === "RENT"))
+      (parsedReq === "BUY" || parsedReq === "RENT")
     );
 
     if (isSeekerChoice || hasConcreteBuyerEntities) {
@@ -9614,9 +9667,10 @@ export async function dispatchStateAction(
 
     if (isChange) {
       // Cleanly wipe prior criteria
-      const newPropType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
-      const newBudget = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
-      const newLocation = actionResult.location || extractLocationFromText(context.messageText);
+      const isOption2 = /^(?:2|2️⃣|second|2nd|option\s*2|nahi|no|change|badalna)\b/i.test(lower);
+      const newPropType = actionResult.property_type || (!isOption2 ? parsePropertyTypeFromText(context.messageText) : null);
+      const newBudget = actionResult.price_or_budget || (!isOption2 ? parseBudgetFromText(context.messageText, "CRITERIA_CONFIRM") : null);
+      const newLocation = actionResult.location || (!isOption2 ? extractLocationFromText(context.messageText) : null);
       const isFresh = !newPropType && !newBudget && !newLocation;
       const targetState: DialogState = isFresh ? "ROLE_SELECTION_PENDING" : "QUALIFYING";
 
@@ -11380,12 +11434,13 @@ export async function dispatchStateAction(
       };
     }
 
-    // Direct buyer criteria auto-bypass: only bypass if user actually provided concrete criteria
-    const detectedFreshBuyerType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
-    const detectedFreshLoc = actionResult.location || extractLocationFromText(context.messageText);
-    const detectedFreshBudget = actionResult.price_or_budget || parseBudgetFromText(context.messageText);
-    const detectedFreshReq = parseRequirementFromText(context.messageText);
-    const hasRealCriteria = Boolean(
+    // Direct buyer criteria auto-bypass: only bypass if user actually provided concrete criteria and NOT an option number
+    const isOptionNum = /^(?:option\s*)?([1-5]|1️⃣|2️⃣|3️⃣|4️⃣|5️⃣)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|wala|vala))?$/i.test(lower.trim());
+    const detectedFreshBuyerType = actionResult.property_type || (!isOptionNum ? parsePropertyTypeFromText(context.messageText) : null);
+    const detectedFreshLoc = actionResult.location || (!isOptionNum ? extractLocationFromText(context.messageText) : null);
+    const detectedFreshBudget = actionResult.price_or_budget || (!isOptionNum ? parseBudgetFromText(context.messageText, "FRESH") : null);
+    const detectedFreshReq = !isOptionNum ? parseRequirementFromText(context.messageText) : null;
+    const hasRealCriteria = !isOptionNum && Boolean(
       detectedFreshBuyerType ||
       (detectedFreshLoc && detectedFreshLoc !== "FLEXIBLE") ||
       (detectedFreshBudget && detectedFreshBudget > 0) ||
@@ -12188,12 +12243,13 @@ async function handleQualificationCascade(
   const lastBotPrompt = lead?.metadata?.last_bot_prompt;
   const lastPromptQ = lastBotPrompt?.question_type;
 
-  // Extract what was JUST provided in this user turn vs cumulative values
-  const justPropType = parsePropertyTypeFromText(context.messageText);
-  const justReq = parseRequirementFromText(context.messageText, lastPromptQ);
+  // Extract what was JUST provided in this user turn vs cumulative values (AI-first precedence)
+  const justPropType = actionResult.property_type || parsePropertyTypeFromText(context.messageText, lastPromptQ);
+  const justReq = actionResult.transaction_type || parseRequirementFromText(context.messageText, lastPromptQ);
   const justPurpose = parsePurposeFromText(context.messageText, lastPromptQ);
-  const justTimeline = parseTimelineFromText(context.messageText, lastPromptQ);
-  const justBudget = parseBudgetFromText(context.messageText);
+  const justTimeline = actionResult.timeline || parseTimelineFromText(context.messageText, lastPromptQ);
+  const currentReqForBudget = lead?.requirement || actionResult.transaction_type || justReq;
+  const justBudget = actionResult.price_or_budget || parseBudgetFromText(context.messageText, lastPromptQ, currentReqForBudget);
 
   const { data: allTenantInventory } = await supabase
     .from("inventory")
@@ -12989,7 +13045,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v91-intake-triage-option-selection-pan-india-cities",
+        version: "v92-ai-first-zero-regex-prompt-context-guard",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
