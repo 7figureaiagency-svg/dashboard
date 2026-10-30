@@ -388,6 +388,27 @@ updated: 2026-10-19T18:50:30+05:30
 - [x] Plan 37.2: Option Selection Off-by-One Array Bounds Fix & Pan-India Multi-City Dynamic Resolution Engine ([`37.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/37/37.2-PLAN.md))
 - [x] Plan 37.3: Verification Matrix, Frontend Build Audit & Live Supabase Edge Function Deployment ([`37.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/37/37.3-PLAN.md))
 
+---
+
+### Phase 38: Context-Aware Previous-Question Slot Guard & Option 1 Budget Disambiguation
+**Status:** ✅ Complete  
+**Objective:** Eradicate brittle `shortNumMatch` regex that converted isolated digit `"1"` into ₹1,00,000 budget; inject previous-question awareness (`lastPromptQ`) into budget and property type extractors; and guarantee menu digits never pollute lead criteria.  
+**Depends on:** Phase 37  
+**Plans:**
+- [x] Plan 38.1: Eradicate Regex Budget Hijacking & Inject Context Awareness in Slot Parsing
+- [x] Plan 38.2: Verification Matrix & Live Production Deployment of `v92`
+
+---
+
+### Phase 39: Complete Eradication of Business-Logic Regexes & Full AI-First Cognitive Architecture
+**Status:** ✅ Complete  
+**Objective:** Comprehensive audit and eradication of business-decision regex fallbacks across the lead engine; elevate Gemini 2.0 Flash and Groq Llama 3.3 Cognitive Engine to the authoritative single source of truth for intent classification, slot extraction, negation, and FSM state routing; clean wipe test lead; and deploy `v93` live to Supabase production.  
+**Depends on:** Phase 38  
+**Plans:**
+- [x] Plan 39.1: AI Single-Source of Truth for Intent & State Transitions ([`39.1-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/39/39.1-PLAN.md))
+- [x] Plan 39.2: AI Single-Source of Truth for Entity Extraction & Slot Filling ([`39.2-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/39/39.2-PLAN.md))
+- [x] Plan 39.3: Verification Matrix, Frontend Build Audit & Live Deployment ([`39.3-PLAN.md`](file:///c:/Users/DELL/Downloads/antigravity%20real%20estate/.gsd/phases/39/39.3-PLAN.md))
+
 
 
 

@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-30T10:25:00+05:30
+updated: 2026-10-30T11:05:00+05:30
 ---
 
 # Project State
@@ -7,18 +7,28 @@ updated: 2026-10-30T10:25:00+05:30
 ## Current Position
 
 **Milestone:** PropTech Matching Precision & Robustness  
-**Phase:** 38 - Eradicate Regex Fallbacks, Enforce AI Single Source of Truth & Context-Aware Prompt State Transitions  
-**Status:** 🎉 Completed Phase 38  
+**Phase:** 39 - Complete Eradication of Business-Logic Regexes & Full AI-First Cognitive Architecture  
+**Status:** 🎉 Completed Phase 39  
 **Plans:**
-- Eradicate brittle regex shortNumMatch blind overrides in `parseBudgetFromText`
-- Context-aware `parseBudgetFromText` guarded strictly by `lastPromptQ === "BUDGET"`
-- Context-aware `parsePropertyTypeFromText` mapping 1/2/3 to Flat/Villa/Commercial
-- `mapCognitiveResultToActionResult` clean `SELECT_OPTION` mapping in `ROLE_SELECTION_PENDING`
-- Reset and live deployment of `v92-ai-first-zero-regex-prompt-context-guard`
+- `.gsd/phases/39/39.1-PLAN.md` (AI Single-Source of Truth for Intent & State Transitions) - ✅ Completed
+- `.gsd/phases/39/39.2-PLAN.md` (AI Single-Source of Truth for Entity Extraction & Slot Filling) - ✅ Completed
+- `.gsd/phases/39/39.3-PLAN.md` (Verification Matrix, Frontend Build Audit & Live Deployment) - ✅ Completed
 
 ## Last Action
 
-Completed Phase 38 (Eradicate Regex Fallbacks, Enforce AI Single Source of Truth & Context-Aware Prompt State Transitions):
+Completed Phase 39 (Complete Eradication of Business-Logic Regexes & Full AI-First Cognitive Architecture):
+- **Comprehensive Regex Audit:** Audited all 521 active regex usages in `supabase/functions/realtor-lead-engine/index.ts`. Categorized into List 1 (Current Usages) and List 2 (Forbidden Business-Decision Regexes: Intent Classification, Entity Extraction, Budget/BHK Parsing, State Routing, Negation).
+- **AI Single-Source of Truth for Intent & State Routing:**
+  - Removed keyword regexes that hijacked greetings or forced menu defaults.
+  - Guarded `ROLE_SELECTION_PENDING` with `!hasConcreteBuyerEntities` so compound utterances (e.g., *"Hi mujhe 3bhk flat chahiye"*) bypass menus and directly qualify.
+  - Made `isOwnerIntentUtterance` strictly respect AI intent (`actionResult.user_role === "SEEKER"` or `lead_role === "BUYER" / "TENANT"`), eliminating seller flow hijacking.
+  - Added Human Callback Guard in `OPTIONS_SENT` before `BOOK_VISIT`: requests like *"Kal 5 baje call karo"* route to `REQUEST_HUMAN_CALL` / `HUMAN_ESCALATION` sales alert, never booking a site visit.
+- **AI Single-Source of Truth for Slot Extraction:**
+  - `handleQualificationCascade` queries `actionResult.extracted?.entities` (`unit_bhk`, `budget_inr`, `location_name`, `budget_type`, `timeline`, `purpose`) directly without blind regex overrides.
+  - `parseVisitSlot` natively parses AI-provided ISO date/time strings.
+- **Automated Verification Matrix:** Ran 7-point conversational assertion test suite in `scratch/test_phase39_ai_first_matrix.cjs`: 7/7 assertions passed (100% success).
+- **Production Edge Serverless Deployment:** Deployed Edge Function `v93-ai-first-zero-regex-cognitive-engine` live to Supabase production (`yeiygfysijptjdepctnx`). Verified live HTTP 200 `ONLINE`.
+- **Database Wipe for Test Lead:** Completely wiped lead record, lead events, site visits, and property submissions for Telegram test lead `5117510624` for fresh end-to-end testing.
 - **Eradicated Regex Budget Hijacking:** Replaced brittle `shortNumMatch` regex in `parseBudgetFromText` that turned bare `"1"` into ₹1,00,000. Isolated digits are now guaranteed to return `0` unless the pending question was explicitly `BUDGET` (`lastPromptQ === "BUDGET"`).
 - **Previous-Question Context Awareness:** Injected `lastPromptQ` into `parseBudgetFromText` and `parsePropertyTypeFromText`. Answering `"1"` in property type selection maps to `2/3 BHK Flat`, in acquisition type maps to `BUY`, and in budget prompt normalizes to ₹1 Crore for Indian real estate buyers.
 - **AI Single Source of Truth:** Removed blind `|| parse...` overrides across `ROLE_SELECTION_PENDING`, `CRITERIA_CONFIRMATION_PENDING`, `FRESH`, and `DUAL_ROLE_MENU_PENDING`. Menu selections now strictly follow `SELECT_OPTION` without leaking pseudo-criteria into lead draft.

@@ -1150,6 +1150,19 @@ function isWithinWorkingHours(startHour = 10, endHour = 19): boolean {
 
 // 5. Natural Language Slot Parser with 10 AM - 6 PM IST Validation
 function parseVisitSlot(slotText = ""): { isoUtc: string; isValidTime: boolean; isPast: boolean } {
+  // If slotText is already an ISO string (e.g. from AI extraction)
+  if (slotText && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(slotText.trim())) {
+    const d = new Date(slotText.trim());
+    if (!isNaN(d.getTime())) {
+      const istHour = (d.getUTCHours() + 5.5) % 24;
+      return {
+        isoUtc: d.toISOString(),
+        isValidTime: istHour >= 10 && istHour <= 18,
+        isPast: d.getTime() < Date.now(),
+      };
+    }
+  }
+
   const text = normalizeIndicDigits(slotText).toLowerCase().trim();
   const ist = getIstTime();
 
@@ -2133,11 +2146,14 @@ function parseRequirementFromText(text: string, lastQ?: string): string {
 }
 
 export function isOwnerIntentUtterance(text: string, lower?: string, actionResult?: any): boolean {
-  if (actionResult?.user_role === "OWNER" || actionResult?.raw_intent_name === "SUBMIT_LISTING") return true;
+  // 1. AI Single Source of Truth
+  if (actionResult?.user_role === "OWNER" || actionResult?.raw_intent_name === "SUBMIT_LISTING" || actionResult?.intent === "SUBMIT_LISTING" || actionResult?.extracted?.lead_role === "SELLER") return true;
+  if (actionResult?.user_role === "SEEKER" || actionResult?.extracted?.lead_role === "BUYER" || actionResult?.extracted?.lead_role === "TENANT") return false;
+
   const l = (lower || text || "").toLowerCase().trim();
   if (parseRequirementFromText(text) === "SELL") return true;
 
-  // Direct Devanagari, Gujarati & Hinglish seller cues
+  // Direct Devanagari, Gujarati & Hinglish seller cues (fallback only)
   const SELLER_VERB_REGEX = /(?:bechna|bechni|bechne|bechvano|bechvani|vechvu|vechva|vechvo|vechvano|vechvani|vechavo|sell|selling|resale|bikri|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા|વેચવાનો|વેચવાની)/i;
   const SELLER_PHRASE_REGEX = /(?:meri|mera|maro|mari|apna|apni|own|mujhe|mane|amari|mari|મારી|મારો|મને|मेरा|मेरी|अपनी|अपना|मुझे|हमारा|हमारी)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,3}(?:flat|makan|ghar|house|villa|plot|shop|office|showroom|commercial|property|दुकान|मकान|घर|प्रॉपर्टी|દુકાન|મકાન|ઘર|शॉप|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechna|bechni|bechne|vechvu|vechva|vechvano|vechvani|sell|bikri|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
   const SELLER_DIRECT_INTENT_REGEX = /(?:shop|flat|villa|plot|office|commercial|दुकान|मकान|घर|દુકાન|शॉप|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechna|bechni|bechne|vechvu|vechva|vechvano|vechvani|sell|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
@@ -6646,12 +6662,12 @@ async function handleOwnerFlow({
     // F. Expected Price / Demand / Monthly Rent:
     const isAnsweringPhone = lead.state === "OWNER_PHONE_PENDING" || !!aiAnalysis.contact_phone;
     const isPriceTurn = lead.state === "OWNER_PRICE_PENDING";
-    const hasPriceMentionInText = Boolean(parseBudgetFromText(messageText)) || /(?:cr|crore|karod|lakh|lac|k\b|thousand|hazar|rupees|rs|inr|₹|\b\d{5,9}\b)/i.test(messageText);
-    const directTextBudget = !isAnsweringPhone ? parseBudgetFromText(messageText) : null;
+    const hasPriceMentionInText = Boolean(parseBudgetFromText(messageText, isPriceTurn ? "OWNER_PRICE_PENDING" : undefined, draft.transaction_type)) || /(?:cr|crore|karod|lakh|lac|k\b|thousand|hazar|rupees|rs|inr|₹|\b\d{5,9}\b)/i.test(messageText);
+    const directTextBudget = (!isAnsweringPhone && (isPriceTurn || hasPriceMentionInText)) ? parseBudgetFromText(messageText, isPriceTurn ? "OWNER_PRICE_PENDING" : undefined, draft.transaction_type) : null;
     const isSeekerBudgetLeak = Boolean(lead.budget && aiAnalysis?.price_or_budget === Number(lead.budget) && !directTextBudget);
 
     const resolvedPrice = (!isSeekerBudgetLeak && (isPriceTurn || hasPriceMentionInText))
-      ? (directTextBudget || (hasPriceMentionInText ? aiAnalysis?.price_or_budget : (isPriceTurn ? (aiAnalysis?.price_or_budget || parseBudgetFromText(messageText)) : null)))
+      ? (aiAnalysis?.price_or_budget || directTextBudget || null)
       : null;
 
     if (resolvedPrice && !isAnsweringPhone) {
@@ -9372,12 +9388,24 @@ export async function dispatchStateAction(
   // 4. ROLE SELECTION PENDING (State: ROLE_SELECTION_PENDING)
   // ---------------------------------------------------------------------------
   if (currentState === "ROLE_SELECTION_PENDING") {
-    // 1. F-02 Greeting Guard: Intercept greetings so saying "hi" never defaults to Seeker!
-    const isGreetingInRole =
-      intent === "GREETING" ||
-      /^(hi|hello|hey|namaste|kem\s*cho|pranam|namaskar|good\s*morning|good\s*afternoon|good\s*evening)\b/i.test(lower.trim());
+    // 1. Direct buyer criteria check: If user typed concrete criteria upfront, bypass menus and cascade directly!
+    const hasConcreteBuyerEntities = Boolean(
+      actionResult.property_type ||
+      (actionResult.location && actionResult.location !== "UNKNOWN" && actionResult.location !== "FLEXIBLE") ||
+      (actionResult.price_or_budget && actionResult.price_or_budget > 0)
+    );
 
-    if (isGreetingInRole) {
+    if (hasConcreteBuyerEntities) {
+      return handleQualificationCascade(lead, actionResult, context);
+    }
+
+    // 2. F-02 Greeting Guard: Intercept pure greetings only if NO criteria provided!
+    const isPureGreeting =
+      intent === "GREETING" ||
+      actionResult.extracted?.primary_intent === "GREETING_ONLY" ||
+      /^(?:hi|hello|hey|namaste|kem\s*cho|pranam|namaskar|good\s*(?:morning|afternoon|evening))\s*(!|\.|\?)*$/i.test(lower.trim());
+
+    if (isPureGreeting) {
       if (hasIncompleteSeekerDraft(lead)) {
         return {
           replyText: buildContextualRecapCard(lead, lang, nameStr, agencyName),
@@ -9390,9 +9418,11 @@ export async function dispatchStateAction(
       };
     }
 
-    // 2. Option 3: Both / Dual Role (Upgrade / Sell + Buy)
+    // 3. Option 3: Both / Dual Role (Upgrade / Sell + Buy)
     const isBothChoice =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
+      actionResult.selected_option_index === 2 ||
+      actionResult.extracted?.selected_menu_option === 3 ||
       /^(3|3️⃣|option\s*3|third|3rd|both|banne|dono|upgrade)\b/i.test(lower.trim());
 
     if (isBothChoice) {
@@ -9423,22 +9453,20 @@ export async function dispatchStateAction(
       };
     }
 
-    // 3. Option 2: Owner / Seller / Landlord
-    const detectedBuyerPropType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
-    const hasExplicitOwnerAction = /(?:bechna|bechni|bechne|bechvano|bechvani|vechvu|vechva|vechvo|vechvano|vechvani|vechavo|sell|selling|bikri|deni|dena|dene|list|listing|chadani)/i.test(lower);
-
+    // 4. Option 2: Owner / Seller / Landlord
     const isPureOption2 =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
-      /^(?:2|2️⃣|option\s*2|second|2nd)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim()) ||
-      /^(?:deni|dene|sell|bechna|vechvu|vechva|vechvo|vechvano|bechvano|rent\s*out|rent\s*pe\s*deni|list|listing)\b/i.test(lower.trim()) ||
-      /(?:mera|meri|maro|mari|apna|apni|own)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+)?(?:flat|makan|ghar|house|villa|plot|shop|office)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+)?(?:bechna|bechvani|bechvano|bechni|vechvu|vechva|vechvano|vechvani|sell|bikri|rent)/i.test(lower) ||
-      /(?:bechna|bechni|bechvano|bechvani|vechvu|vechva|vechvo|vechvano|vechvani|sell\s*(?:karna|karni|karvu|karva|kar))/i.test(lower);
+      actionResult.selected_option_index === 1 ||
+      actionResult.extracted?.selected_menu_option === 2 ||
+      /^(?:2|2️⃣|option\s*2|second|2nd)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim());
 
-    // CRITICAL GUARD: If user mentions a property type (e.g. "2 BHK", "Villa", "Shop") without explicit selling verbs,
-    // it is strictly a buyer requirement and NEVER an owner choice!
-    const isOwnerChoice = !hasExplicitOwnerAction && detectedBuyerPropType
-      ? false
-      : (isPureOption2 || ((intent === "SUBMIT_LISTING" || actionResult.user_role === "OWNER") && hasExplicitOwnerAction));
+    const isOwnerChoice =
+      isPureOption2 ||
+      actionResult.user_role === "OWNER" ||
+      intent === "SUBMIT_LISTING" ||
+      actionResult.extracted?.lead_role === "SELLER" ||
+      actionResult.extracted?.user_negated_assumptions === true ||
+      isOwnerIntentUtterance(context.messageText, lower, actionResult);
 
     if (isOwnerChoice) {
       // If user already specified property type (e.g. "muje meri shop bechni he"), directly forward to handleOwnerFlow!
@@ -9513,31 +9541,21 @@ export async function dispatchStateAction(
       };
     }
 
-    // 4. Direct buyer criteria auto-bypass & Option 1 handling:
-    const isPureOption1 = /^(?:1|1️⃣|option\s*1|first|1st)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim());
+    // 5. Option 1: Seeker / Buyer / Tenant
+    const isPureOption1 =
+      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+      actionResult.selected_option_index === 0 ||
+      actionResult.extracted?.selected_menu_option === 1 ||
+      /^(?:1|1️⃣|option\s*1|first|1st)(?:\s*(?:no|number|num|chhe|che|karo|bhai|ji|vala|wala))?$/i.test(lower.trim());
+
     const isSeekerChoice =
       isPureOption1 ||
-      (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 0) ||
+      actionResult.user_role === "SEEKER" ||
+      actionResult.extracted?.lead_role === "BUYER" ||
+      actionResult.extracted?.lead_role === "TENANT" ||
       /^(1|1️⃣|option\s*1|first|1st|leni|lena|kharidna|kharidvu|buy|rent)\b/i.test(lower.trim());
 
-    // Concrete buyer entities: only consider direct criteria if actual fields were provided and NOT an option selection
-    const pType = actionResult.property_type || (!isSeekerChoice ? parsePropertyTypeFromText(context.messageText) : null);
-    const bVal = actionResult.price_or_budget || (!isSeekerChoice ? parseBudgetFromText(context.messageText, "ROLE_SELECTION") : null);
-    const locVal = actionResult.location || (!isSeekerChoice ? extractLocationFromText(context.messageText) : null);
-    const parsedReq = !isSeekerChoice ? parseRequirementFromText(context.messageText) : null;
-
-    const hasConcreteBuyerEntities = !isSeekerChoice && Boolean(
-      pType ||
-      bVal ||
-      locVal ||
-      (parsedReq === "BUY" || parsedReq === "RENT")
-    );
-
-    if (isSeekerChoice || hasConcreteBuyerEntities) {
-      if (hasConcreteBuyerEntities) {
-        return handleQualificationCascade(lead, actionResult, context);
-      }
-
+    if (isSeekerChoice) {
       // Transition to QUALIFYING as SEEKER (Option 1 pure choice)
       const replyText =
         lang === "GUJLISH"
@@ -11149,6 +11167,20 @@ export async function dispatchStateAction(
       };
     }
 
+    // HUMAN CALLBACK / ESCALATION GUARD (Never hijack callback requests as site visits!)
+    if (intent === "REQUEST_HUMAN_CALL" || actionResult.extracted?.primary_intent === "HUMAN_ESCALATION" || /(?:call\s*karo|phone\s*karo|baat\s*karni\s*hai|callback|speak\s*to\s*agent)\b/i.test(lower)) {
+      const replyText = lang === "GUJLISH"
+        ? `Zaroor <b>${nameStr}</b>! Amara senior executive tamne jaldi j <b>call par connect karshe</b>. 📞 Tamara koi saval hoy to janavi shako chho!`
+        : lang === "ENGLISH"
+        ? `Certainly <b>${nameStr}</b>! Our senior executive will <b>call you shortly</b>. 📞 Please let us know if you have any questions in the meantime!`
+        : `Zaroor <b>${nameStr}</b>! Hamare senior executive jald hi aapko <b>call par connect karenge</b>. 📞 Is beech aapka koi aur sawaal ho toh pooch sakte hain!`;
+      return {
+        replyText,
+        nextState: currentState,
+        salesAlert: { type: "HUMAN_CALLBACK_REQUESTED", payload: { userText: context.messageText } }
+      };
+    }
+
     // BOOK_VISIT (Explicit action or natural slot detected)
     const hasSlotKeywords = /\b(aaj|aje|aaje|kal|kale|kaale|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|parso|parsva|\d{1,2}(?::\d{2})?\s*(?:am|pm|baje|vage|વાગે|બજે))\b/i.test(lower) || /આજે|કાલે|પરમ/i.test(lower);
     if (intent === "BOOK_VISIT" || hasSlotKeywords) {
@@ -12224,7 +12256,10 @@ async function handleQualificationCascade(
   }
 
   // Phase 32: Negation Handling (e.g. "mujhe chahiye nahi")
-  const isNegationOfSeeker = /(?:chahiye\s*nahi|nahi\s*chahiye|lena\s*nahi|nathi\s*joitu|not\s*looking\s*to\s*buy|not\s*needed|don'?t\s*need|चाहिए\s*नहीं|नहीं\s*चाहिए|लेना\s*नहीं)/i.test(context.messageText);
+  const isNegationOfSeeker =
+    actionResult.extracted?.user_negated_assumptions === true ||
+    actionResult.intent === "NEGATION_CORRECTION" ||
+    /(?:chahiye\s*nahi|nahi\s*chahiye|lena\s*nahi|nathi\s*joitu|not\s*looking\s*to\s*buy|not\s*needed|don'?t\s*need|चाहिए\s*नहीं|नहीं\s*चाहिए|लेना\s*नहीं)/i.test(context.messageText);
   if (isNegationOfSeeker) {
     const replyText = lang === "GUJLISH"
       ? `Samji gayo, tamne property kharidvi nathi. 🙏\n\nShu tame potani koi property <b>Sell (vechva)</b> ke <b>Rent / Lease</b> par aapva mango chho? 🏡`
@@ -12243,13 +12278,14 @@ async function handleQualificationCascade(
   const lastBotPrompt = lead?.metadata?.last_bot_prompt;
   const lastPromptQ = lastBotPrompt?.question_type;
 
-  // Extract what was JUST provided in this user turn vs cumulative values (AI-first precedence)
-  const justPropType = actionResult.property_type || parsePropertyTypeFromText(context.messageText, lastPromptQ);
-  const justReq = actionResult.transaction_type || parseRequirementFromText(context.messageText, lastPromptQ);
-  const justPurpose = parsePurposeFromText(context.messageText, lastPromptQ);
-  const justTimeline = actionResult.timeline || parseTimelineFromText(context.messageText, lastPromptQ);
+  // Extract what was JUST provided in this user turn vs cumulative values (AI-first single source of truth)
+  const aiEntities = actionResult.extracted?.entities;
+  const justPropType = actionResult.property_type || (aiEntities?.property_type !== "UNKNOWN" ? aiEntities?.property_type : null) || parsePropertyTypeFromText(context.messageText, lastPromptQ);
+  const justReq = actionResult.transaction_type || (aiEntities?.budget_type === "MONTHLY_RENT" ? "RENT" : (aiEntities?.budget_type === "COMMERCIAL_LEASE" ? "LEASE" : (aiEntities?.budget_type === "OUTRIGHT_BUY" ? "BUY" : null))) || parseRequirementFromText(context.messageText, lastPromptQ);
+  const justPurpose = (aiEntities?.purpose !== "UNKNOWN" ? aiEntities?.purpose : null) || parsePurposeFromText(context.messageText, lastPromptQ);
+  const justTimeline = actionResult.timeline || (aiEntities?.timeline !== "UNKNOWN" ? aiEntities?.timeline : null) || parseTimelineFromText(context.messageText, lastPromptQ);
   const currentReqForBudget = lead?.requirement || actionResult.transaction_type || justReq;
-  const justBudget = actionResult.price_or_budget || parseBudgetFromText(context.messageText, lastPromptQ, currentReqForBudget);
+  const justBudget = actionResult.price_or_budget || aiEntities?.budget_inr || parseBudgetFromText(context.messageText, lastPromptQ, currentReqForBudget);
 
   const { data: allTenantInventory } = await supabase
     .from("inventory")
@@ -12259,8 +12295,8 @@ async function handleQualificationCascade(
 
   const detectedCity = extractCityFromText(context.messageText);
   const matchedLocs = extractLocationsFromText(context.messageText, allTenantInventory || []);
-  const extractedLoc = matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(context.messageText, allTenantInventory || []);
-  const isMsgFlex = /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|any\s*location|flexible|gamete)\b/i.test(context.lower);
+  const extractedLoc = actionResult.location || (aiEntities?.location_name ? aiEntities.location_name : (matchedLocs.length > 0 ? matchedLocs.join(", ") : extractLocationFromText(context.messageText, allTenantInventory || [])));
+  const isMsgFlex = actionResult.is_flexible_location || /(?:^|\b)(?:koi\s*bhi|kahi\s*bhi|any\s*location|flexible|gamete)\b/i.test(context.lower);
   const justLoc = (actionResult.is_flexible_location || isMsgFlex) ? "FLEXIBLE" : extractedLoc;
   const primaryTenantCity = resolvedCity || "Vadodara";
   const isPrimaryCity = Boolean(detectedCity && (
@@ -13045,7 +13081,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v92-ai-first-zero-regex-prompt-context-guard",
+        version: "v93-ai-first-zero-regex-cognitive-engine",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
