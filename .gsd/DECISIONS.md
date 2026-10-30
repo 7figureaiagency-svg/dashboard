@@ -76,7 +76,71 @@
 - Local git commits only. No push to remote.
 - WABA safety: batch caps and inter-message delay jitter for sweeps.
 
-## Phase 27 Decisions: Dynamic Stage-Conditioned Intent Engine & Adaptive Real Estate LLM Agent
+## Phase 40 Decisions: Dual-Role Modular Slot Engine, Conversational Steering & Production Restructuring
+
+**Date:** 2026-10-30
+
+### Scope
+- Ground-up architectural restructuring from monolithic procedural code to a clean **3-Layer Slot-Filling Cognitive Engine** (`Layer 1: Perception/AI`, `Layer 2: Slot Memory & Dual-Role Engine`, `Layer 3: Action & Presentation`).
+- **Open Intake Greeting**: Natural, conversational open greeting (`"Namaste! Griham Realty me aapka swagat hai. Aap kis type ki property search ya list karna chahte hain?"`) with instant auto-bypass for messages with concrete details.
+- **Fast-Track 4-Slot Buyer Qualification**:
+  1. `Property Type` (Flat, Villa, Commercial Shop/Office, Plot)
+  2. `Location/Area` (Geographical locality: Alkapuri, Gotri, etc.)
+  3. `Budget Range` (Normalized to INR, e.g. 1 Cr, 85 Lakhs)
+  4. `Timeline / Possession` (Ready to Move vs Under Construction)
+  - Purpose auto-defaults to `Self-Use` unless specified otherwise.
+  - Zero hallucination: DB query triggered strictly when all 4 slots are fulfilled.
+  - No matching inventory in DB: Honest reassurance (*"Hamari team aapke liye best option dekh rahi hai, jaldi hi connect karegi"*) + real-time sales alert.
+- **Fast-Track 3-Slot Seller Intake**:
+  1. `Property Type & Society/Project Name` (e.g. 3BHK Flat in Nilamber Bellissimo)
+  2. `Size / Area` (Carpet/Built-up area or BHK)
+  3. `Expected Price / Rent` (e.g. 85 Lakhs)
+  - Syncs to `property_submissions` table under `PENDING_VERIFICATION`.
+- **Dual-Role Lifecycle (Relocation & Upgrade)**:
+  - If user mentions both buying and selling (e.g., *"Mera 2BHK bechna hai aur naya 3BHK lena hai"*):
+    - Ask user which one to address first: *"Bahut badhiya! Pehle aap naya flat explore karna chahenge ya purana flat list karna chahenge?"*
+  - Complete isolation between `metadata.seeker_profile` and `metadata.seller_profile` with active persona pointer (`active_persona: "BUYER" | "SELLER"`).
+  - Clean Bridge Handoff once one track completes to smoothly resume the other.
+- **Conversational Steering & Anti-Derailment**:
+  - Enforce **AAS Formula (Acknowledge -> Answer Side-FAQ -> Steer Back to Pending Slot)**.
+  - Every bot turn ends with exactly 1 clear question or 1-tap option, keeping the bot in the driver's seat.
+- **Site Visit Booking & Reschedule Ergonomics**:
+  - Open date/time prompt with clear example format: *"Aap kis date aur time par visit plan karna chahenge? 📅 (Jaise: 'Kal shaam 5:00 baje' ya 'Sunday 11:00 AM')"*.
+  - Rescheduling: Directly acknowledges reschedule, prompts for new date/time, updates `site_visits` table, and notifies executive.
+- **Pre-Visit Reminder & Inability Handling**:
+  - Single reminder 1-2 hours prior to scheduled site visit with Google Maps pin & senior on-site executive contact details.
+  - If user replies "Nahi aa paunga" / "Late ho jaunga": Immediately acknowledge with empathy and prompt to reschedule a new slot on the spot without dropping the lead.
+- **Post-Visit Attendance & Feedback Engine**:
+  - Sent 1-2 hours after scheduled visit time:
+    - Step 1 (Attendance Check): `1️⃣ Haan, visit ho gayi` vs `2️⃣ Nahi, visit nahi ho paayi`.
+    - If 1️⃣ (Attended): Ask property feedback and offer official price sheet / developer token negotiation meeting.
+    - If 2️⃣ (Not attended): Immediately offer to reschedule for tomorrow or weekend.
+- **Incomplete Lead Recovery Sweeps**:
+  - Nudge 1: Next day at 11:30 AM IST, gently recalling where conversation paused and asking for the specific missing slot.
+  - Nudge 2 (Day 3): Value-add teaser (fresh deal matching their area).
+  - Max 2 nudges before marking lead dormant (zero spam).
+- **Industry Standard Drip Cadence (Qualified Unvisited Buyers)**:
+  - Day 1 (24 hours after options shown): Price breakdown / brochure nudge.
+  - Day 3: Alternative matching inventory / price point comparison.
+  - Day 7 (Friday 11:30 AM): Weekend VIP site visit invitation.
+- **WABA Anti-Ban Safety Invariants**:
+  - Automated sweeps restricted strictly to 11:00 AM - 6:30 PM IST.
+  - Batch caps: Maximum 20 leads per sweep run with 350ms-550ms inter-message delay jitter.
+  - Instant quiet DND opt-out if user says "stop", "mat bhejo", "not interested".
+- **Inventory Pagination ("Aur Dikhao")**:
+  - Deduplication via `last_option_ids`. Next 2 unseen properties shown if available; otherwise honest team handoff message.
+- **Language Mirroring**:
+  - 100% dialect lock matching incoming user text (Gujlish -> Gujlish, Hinglish -> Hinglish, English -> English).
+- **Human Sales Escalation Points**:
+  - Real-time sales alert to human realtor when: (1) Site visit booked, (2) User asks for a call/executive, (3) No matching inventory found for qualified criteria.
+- **Micro-LLM Token Efficiency & Scalability**:
+  - Hyper-focused Micro-LLM extraction prompt: ~400 tokens per turn (~₹0.004/msg on Gemini 2.0 Flash).
+  - 3-Tier Multi-Tenant Scaling: Gemini 2.0 Flash primary -> Groq Llama 3.3 70B instant hot fallback -> Pure deterministic slot engine.
+
+### Constraints
+- 100% Non-n8n architectural compliance.
+- Zero runtime JavaScript packages added.
+- Multi-tenant WABA safety: inter-message delay jitter and batch caps enforced.
 
 **Date:** 2026-10-28
 

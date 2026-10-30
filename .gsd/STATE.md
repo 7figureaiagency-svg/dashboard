@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-30T11:05:00+05:30
+updated: 2026-10-30T11:56:00+05:30
 ---
 
 # Project State
@@ -7,16 +7,29 @@ updated: 2026-10-30T11:05:00+05:30
 ## Current Position
 
 **Milestone:** PropTech Matching Precision & Robustness  
-**Phase:** 39 - Complete Eradication of Business-Logic Regexes & Full AI-First Cognitive Architecture  
-**Status:** 🎉 Completed Phase 39  
-**Plans:**
-- `.gsd/phases/39/39.1-PLAN.md` (AI Single-Source of Truth for Intent & State Transitions) - ✅ Completed
-- `.gsd/phases/39/39.2-PLAN.md` (AI Single-Source of Truth for Entity Extraction & Slot Filling) - ✅ Completed
-- `.gsd/phases/39/39.3-PLAN.md` (Verification Matrix, Frontend Build Audit & Live Deployment) - ✅ Completed
+**Phase:** 40 - Dual-Role Modular Slot Engine, Conversational Steering & Production Restructuring  
+**Status:** 🔄 Discuss Phase Completed, Ready to Plan (`/plan 40`)  
+**Decisions Documented:** `.gsd/DECISIONS.md` (Phase 40 Decisions)
 
 ## Last Action
 
-Completed Phase 39 (Complete Eradication of Business-Logic Regexes & Full AI-First Cognitive Architecture):
+Completed Phase 40 Architecture Discussion & Interactive Requirements Discovery:
+- **Intake Greeting:** Open conversational greeting (*"Namaste! Griham Realty me aapka swagat hai. Aap kis type ki property search ya list karna chahte hain?"*) with smart auto-bypass for specific messages.
+- **Dual-Role Priority (Buy + Sell):** When both intents are mentioned together (*"Mera 2BHK bechna hai aur 3BHK lena hai"*), bot asks user which one to address first: *"Bahut badhiya! Pehle aap naya 3BHK flat explore karna chahenge ya purana flat list karna chahenge?"*, then bridges smoothly to the second.
+- **Fast-Track 4-Slot Buyer Qualification:** (1) Property Type, (2) Location/Area, (3) Budget Range, (4) Timeline (Ready to Move vs Under Construction). Purpose auto-defaults to Self-Use.
+- **Fast-Track 3-Slot Seller Intake:** (1) Property Type & Society/Project Name, (2) Size/Area (BHK/sqft), (3) Expected Price/Rent. Then hands off to acquisition team.
+- **Anti-Derailment Conversational Steering:** Formula: Acknowledge (1 line) ➔ Answer Side-FAQ (1 line) ➔ Steer Back (repeat pending slot question). Bot always controls the wheel.
+- **Zero-Inventory Graceful Fallback:** Reassuring context (*"Hamari team aapke liye best option dekh rahi hai, jaldi hi connect karegi"*) + real-time sales alert.
+- **Language Mirroring:** 100% dialect lock (Gujlish -> Gujlish, Hinglish -> Hinglish, English -> English).
+- **Site Visit Scheduling:** Open prompt with concrete examples (*"Aap kis date aur time par visit plan karna chahenge? 📅 (Jaise: 'Kal shaam 5:00 baje' ya 'Sunday 11:00 AM')"*). Rescheduling moves slot and notifies agent.
+- **Inventory Pagination ("Aur Dikhao"):** Shows next 2 unseen properties; if exhausted, gracefully sets team follow-up expectation.
+- **Real-Time Human Sales Escalation:** Triggered on (A) Site visit booked, (B) User calls for human/phone, (C) Zero matching inventory.
+- **Follow-up & Nurture Architecture**:
+  - Pre-visit single reminder (1-2 hours prior) with Google Maps pin & senior executive contact. Immediate empathetic reschedule on "nahi aa paunga".
+  - Post-visit attendance check (1-2 hours after visit): Option 1 (Visited) ➔ Price sheet & token meeting; Option 2 (Not visited) ➔ Immediate reschedule offer.
+  - Incomplete lead recovery: Day 1 at 11:30 AM IST (recall pause point) ➔ Day 3 (fresh deal teaser), max 2 nudges.
+  - Industry standard drip cadence: Day 1 (brochure/price breakdown) ➔ Day 3 (alternative properties) ➔ Day 7 Friday (Weekend VIP invite).
+  - WABA anti-ban compliance: 11:00 AM - 6:30 PM IST business hours, batch caps <= 20 with 350-550ms jitter, immediate quiet DND opt-out.
 - **Comprehensive Regex Audit:** Audited all 521 active regex usages in `supabase/functions/realtor-lead-engine/index.ts`. Categorized into List 1 (Current Usages) and List 2 (Forbidden Business-Decision Regexes: Intent Classification, Entity Extraction, Budget/BHK Parsing, State Routing, Negation).
 - **AI Single-Source of Truth for Intent & State Routing:**
   - Removed keyword regexes that hijacked greetings or forced menu defaults.

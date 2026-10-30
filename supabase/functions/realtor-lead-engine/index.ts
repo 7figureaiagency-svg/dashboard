@@ -2094,13 +2094,15 @@ function parseRequirementFromText(text: string, lastQ?: string): string {
   // 1. SELL / SELLER INTENT (Checked first so negation like "lease par nahi deni, bechni hai" or "rent nahi, bechna hai" classifies as SELL)
   if (
     lower.includes("sell") || lower.includes("bechna") || lower.includes("bechni") ||
-    lower.includes("bechne") || lower.includes("bechvano") || lower.includes("bechvani") ||
+    lower.includes("bechne") || lower.includes("bechvo") || lower.includes("bechvu") ||
+    lower.includes("bechva") || lower.includes("bechvano") || lower.includes("bechvani") ||
     lower.includes("vechvu") || lower.includes("vechva") || lower.includes("vechvo") ||
     lower.includes("vechvano") || lower.includes("vechvani") || lower.includes("bikri") ||
     lower.includes("resale") ||
     /\b(?:deni|dena|dene)\s*(?:hai|he|h|chhe|che|chahte)?\b/i.test(lower) ||
     lower.includes("વેચવું") || lower.includes("વેચવા") || lower.includes("વેચવાનો") ||
-    lower.includes("વેચવાની") || lower.includes("બેચના") || lower.includes("बेचना") ||
+    lower.includes("વેચવાની") || lower.includes("બેચવું") || lower.includes("બેચવા") ||
+    lower.includes("બેચના") || lower.includes("बेचना") ||
     lower.includes("बेचनी") || lower.includes("बेचने") || lower.includes("बिक्री") || lower.includes("सेल")
   ) {
     return "SELL";
@@ -2146,19 +2148,25 @@ function parseRequirementFromText(text: string, lastQ?: string): string {
 }
 
 export function isOwnerIntentUtterance(text: string, lower?: string, actionResult?: any): boolean {
-  // 1. AI Single Source of Truth
+  const l = (lower || text || "").toLowerCase().trim();
+
+  // Direct Devanagari, Gujarati & Hinglish seller cues (inclusive of bechvo/bechvu)
+  const SELLER_VERB_REGEX = /(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|vechavo|vechavi|vechavu|vechava|sell|selling|resale|bikri|વેચવું|વેચવા|વેચવાનો|વેચવાની|બેચવું|બેચવા|બેચવાનો|બેચવાની|बेचना|बेचनी|बेचने|बिक्री|सेल)/i;
+  const SELLER_PHRASE_REGEX = /(?:meri|mera|maro|mari|apna|apni|own|mujhe|mane|amari|mari|મારી|મારો|મને|मेरा|मेरी|अपनी|अपना|मुझे|हमारा|हमारी)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,3}(?:flat|makan|ghar|house|villa|plot|shop|office|showroom|commercial|property|दुकान|मकान|घर|प्रॉपर्टी|દુકાન|મકાન|ઘર|શૉપ|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|sell|bikri|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
+  const SELLER_DIRECT_INTENT_REGEX = /(?:shop|flat|villa|plot|office|commercial|दुकान|मकान|घर|દુકાન|શૉપ|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|sell|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
+
+  const hasExplicitSell = parseRequirementFromText(text) === "SELL" ||
+    SELLER_PHRASE_REGEX.test(l) ||
+    SELLER_DIRECT_INTENT_REGEX.test(l) ||
+    SELLER_VERB_REGEX.test(l);
+
+  if (hasExplicitSell) return true;
+
+  // AI Single Source of Truth
   if (actionResult?.user_role === "OWNER" || actionResult?.raw_intent_name === "SUBMIT_LISTING" || actionResult?.intent === "SUBMIT_LISTING" || actionResult?.extracted?.lead_role === "SELLER") return true;
   if (actionResult?.user_role === "SEEKER" || actionResult?.extracted?.lead_role === "BUYER" || actionResult?.extracted?.lead_role === "TENANT") return false;
 
-  const l = (lower || text || "").toLowerCase().trim();
-  if (parseRequirementFromText(text) === "SELL") return true;
-
-  // Direct Devanagari, Gujarati & Hinglish seller cues (fallback only)
-  const SELLER_VERB_REGEX = /(?:bechna|bechni|bechne|bechvano|bechvani|vechvu|vechva|vechvo|vechvano|vechvani|vechavo|sell|selling|resale|bikri|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા|વેચવાનો|વેચવાની)/i;
-  const SELLER_PHRASE_REGEX = /(?:meri|mera|maro|mari|apna|apni|own|mujhe|mane|amari|mari|મારી|મારો|મને|मेरा|मेरी|अपनी|अपना|मुझे|हमारा|हमारी)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,3}(?:flat|makan|ghar|house|villa|plot|shop|office|showroom|commercial|property|दुकान|मकान|घर|प्रॉपर्टी|દુકાન|મકાન|ઘર|शॉप|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechna|bechni|bechne|vechvu|vechva|vechvano|vechvani|sell|bikri|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
-  const SELLER_DIRECT_INTENT_REGEX = /(?:shop|flat|villa|plot|office|commercial|दुकान|मकान|घर|દુકાન|शॉप|શોપ|ઓફિસ|ऑफिस)\s+(?:[a-zA-Z\u0A80-\u0AFF\u0900-\u097F]+\s+){0,2}(?:bechna|bechni|bechne|vechvu|vechva|vechvano|vechvani|sell|बेचना|बेचनी|बेचने|बिक्री|सेल|વેચવું|વેચવા)/i;
-
-  return SELLER_PHRASE_REGEX.test(l) || SELLER_DIRECT_INTENT_REGEX.test(l) || SELLER_VERB_REGEX.test(l);
+  return false;
 }
 
 function parsePurposeFromText(text: string, lastQ?: string): string {
@@ -4128,7 +4136,7 @@ export function runDeterministicCognitiveExtractor(
     /(?:nahi|nhi|na|nathi|not)\s*(?:chahiye|chahye|chahie|chaiye|leni|lena|lene|joiye|leva|kharidvu|kharidna|buy)/i.test(lower) ||
     /(?:chahiye|chahye|chahie|chaiye|leni|lena|joiye|leva)\s*(?:nahi|nhi|na|nathi|not)/i.test(lower);
   const hasSellingAction =
-    /(?:bechni|bechna|bechne|vechvu|vechvo|vechva|vechvano|vechvani|sell|resale|bikri|વેચવું|વેચવા|વેચવાનો|बेचना|बेचनी)\b/i.test(lower);
+    /(?:bechvo|bechvu|bechva|bechvano|bechvani|bechna|bechni|bechne|vechvo|vechvu|vechva|vechvano|vechvani|vechavo|sell|selling|resale|bikri|વેચવું|વેચવા|વેચવાનો|વેચવાની|બેચવું|બેચવા|બેચવાનો|બેચવાની|बेचना|बेचनी|बेचने|बिक्री|सेल)\b/i.test(lower);
   const userNegatedAssumptions = Boolean(
     hasNegationOfTaking && (hasSellingAction || lower.includes("bech") || lower.includes("vech"))
   );
