@@ -4115,7 +4115,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
           .select("*")
           .or("site_visit_booked.is.null,site_visit_booked.eq.false")
           .or("bot_active.is.null,bot_active.eq.true")
-          .in("state", ["QUALIFYING", "OPTIONS_SENT", "FRESH", "VISIT_REQUESTED"])
+          .in("state", ["QUALIFYING", "OPTIONS_SENT", "FRESH", "VISIT_REQUESTED", "COLD_UNQUALIFIED", "COLD"])
           .is("rejection_reason", null);
 
         if (options.testLeadId) {
@@ -4184,38 +4184,68 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                   nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Aapki VIP Site Visit schedule karne ke liye, <b>kal shaam 5 baje</b> ya <b>Sunday subah 11 baje</b> me se kaunsa slot confirm karein? 🚗`;
                 }
               } else {
-                // Incomplete Qualification (QUALIFYING or FRESH)
-                if (!l.budget || l.budget <= 0) {
+                // Incomplete Qualification (QUALIFYING, FRESH, COLD_UNQUALIFIED, COLD)
+                const hasPropType = Boolean(l.property_type && String(l.property_type).trim());
+                const hasLocation = Boolean(l.location && String(l.location).trim());
+                const hasBudget = Boolean(l.budget && Number(l.budget) > 0);
+                const formattedBudget = hasBudget ? formatPriceShort(Number(l.budget)) : "";
+                const propDesc = hasPropType ? `<b>${l.property_type}</b>` : "";
+                const locDesc = hasLocation ? `<b>${l.location}</b>` : "";
+                const budgetDesc = hasBudget ? `<b>${formattedBudget}</b>` : "";
+
+                if (hasPropType && !hasLocation && !hasBudget) {
+                  // e.g. Bhagirath (2BHK Flat noted, location & budget missing)
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Ame tamara mate best properties shortlist kari rahya hata. Fakt tamaro <b>budget range</b> janavi do, jethi ame direct matching options share kari shakie!`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat tamari ${propDesc} requirement babate thai hati. Aagad vadhta, fakt tamaro <b>budget range ane preferred location</b> janavi do, jethi ame direct matching options share kari tamari <b>VIP Site Visit 🚗</b> arrange kari shakie!`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 We are shortlisting the best properties for you. Could you please share your <b>budget range</b> so we can send the top matching options right away?`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we noted your requirement for ${propDesc}. Moving forward, could you please share your <b>budget range and preferred location</b> so we can share matching options and schedule your <b>VIP Site Visit 🚗</b>?`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Hum aapke liye best properties shortlist kar rahe the. Bas aapka <b>budget range</b> bata dijiye, taaki hum direct matching options share kar sakein!`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat aapke ${propDesc} requirement ke baare me hui thi. Aage badhte hue, bas aapka <b>budget range aur preferred location</b> bata dijiye, taaki hum direct matching options share karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein!`;
                   }
-                } else if (!l.location) {
+                } else if (hasPropType && hasLocation && !hasBudget) {
+                  // Property type and location known, budget missing
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Tamari pasandida <b>location / area</b> kayo chhe, jethi ame tyan ni verified properties tamne mokli shakie?`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat ${locDesc} ma ${propDesc} babate thai hati. Aagad vadhta, fakt tamaro <b>budget range</b> janavi do, jethi ame direct matching options share kari tamari <b>VIP Site Visit 🚗</b> plan kari shakie!`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 Which <b>location or area</b> do you prefer so we can share verified properties right there?`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we noted you're looking for ${propDesc} in ${locDesc}. Moving forward, please share your <b>budget range</b> so we can share matching options and schedule your <b>VIP Site Visit 🚗</b>!`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Aapki preferred <b>location ya area</b> kaunsi hai, taaki hum wahan ki verified properties aapko bhej sakein?`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat ${locDesc} me ${propDesc} ke baare me hui thi. Aage badhte hue, bas aapka <b>budget range</b> bata dijiye, taaki hum direct matching options share karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein!`;
                   }
-                } else if (!l.property_type) {
+                } else if (hasPropType && hasBudget && !hasLocation) {
+                  // Property type and budget known, location missing
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Tamne keva type ni property joiye chhe (jaise <b>2 BHK / 3 BHK Flat, Villa, ke Commercial Office / Shop</b>)?`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat ${propDesc} (${budgetDesc}) babate thai hati. Aagad vadhta, tamari <b>preferred location ke area</b> kayo chhe, jethi ame top options shortlist kari tamari <b>VIP Site Visit 🚗</b> arrange kari shakie?`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 What type of property are you looking for (such as <b>2 BHK / 3 BHK Flat, Villa, or Commercial Office / Shop</b>)?`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we noted your interest in ${propDesc} within ${budgetDesc}. Moving forward, what is your <b>preferred location or area</b> so we can shortlist top options and plan your <b>VIP Site Visit 🚗</b>?`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Aapko kis type ki property dekhni hai (jaise <b>2 BHK / 3 BHK Flat, Villa, ya Commercial Office / Shop</b>)?`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat ${propDesc} (${budgetDesc}) ke baare me hui thi. Aage badhte hue, aapki <b>preferred location ya area</b> kaunsi hai, taaki hum top options shortlist karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein?`;
+                  }
+                } else if (!hasPropType && hasLocation) {
+                  // Location known, property type and/or budget missing
+                  if (lang === "GUJLISH") {
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Pichli vaar amari vaat ${locDesc} area babate thai hati. Aagad vadhta, tamne <b>keva type ni property ane ketla budget</b> ma joiye chhe, jethi ame options share kari tamari <b>VIP Site Visit 🚗</b> schedule kari shakie?`;
+                  } else if (lang === "ENGLISH") {
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 During our last conversation, we discussed the ${locDesc} area. Moving forward, what <b>property type and budget range</b> are you looking for so we can share options and arrange your <b>VIP Site Visit 🚗</b>?`;
+                  } else {
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Pichli baar hamari baat ${locDesc} area ke baare me hui thi. Aage badhte hue, aapko <b>kis type ki property (Flat/Villa) aur budget range</b> me dekhni hai, taaki hum verified options share karke aapki <b>VIP Site Visit 🚗</b> schedule karein?`;
+                  }
+                } else if (hasPropType && hasLocation && hasBudget) {
+                  // All 3 present, stalled before booking visit
+                  if (lang === "GUJLISH") {
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Amari teame ${locDesc} ma tamara mujab ${propDesc} (${budgetDesc}) na top verified options ready rakhya chhe. Shu ame <b>kaale sanje 5 vage ke Sunday savare 11 vage</b> tamari <b>VIP Site Visit 🚗</b> arrange karie?`;
+                  } else if (lang === "ENGLISH") {
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 Our team has curated top verified options for ${propDesc} in ${locDesc} (${budgetDesc}). Shall we schedule your <b>VIP Site Visit 🚗</b> for <b>tomorrow at 5 PM or Sunday at 11 AM</b>?`;
+                  } else {
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Hamari team ne ${locDesc} me aapke mutabiq ${propDesc} (${budgetDesc}) ke top verified options ready rakhe hain. Kya hum <b>kal shaam 5 baje ya Sunday subah 11 baje</b> aapki <b>VIP Site Visit 🚗</b> arrange karein?`;
                   }
                 } else {
+                  // Fresh or no slots yet
                   if (lang === "GUJLISH") {
-                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Shu ame tamari property shodh ma aagad madad kari shakie? Tamari requirement janavjo to ame direct top deals share karie.`;
+                    nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Griham Realty taraf thi follow-up kari rahya hata. Tame <b>keva type ni property</b> shodhva mango chho ane tamaro <b>budget range</b> shu chhe, jethi ame direct matching options share kari tamari <b>VIP Site Visit 🚗</b> arrange karie?`;
                   } else if (lang === "ENGLISH") {
-                    nudgeMsg = `Hello <b>${name}</b>! 👋 Can we assist you further with your property search? Please let us know your requirements so we can share the best available options.`;
+                    nudgeMsg = `Hello <b>${name}</b>! 👋 Following up from Griham Realty. What <b>property type</b> and <b>budget range</b> are you exploring so we can share matching properties and arrange your <b>VIP Site Visit 🚗</b>?`;
                   } else {
-                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Kya hum aapki property search me aage madad karein? Aapki requirement batayenge to hum direct top deals share karenge.`;
+                    nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Griham Realty se follow-up kar rahe the. Aap <b>kis type ki property</b> search kar rahe hain aur aapka <b>budget range</b> kya hai, taaki hum direct matching properties share karke aapki <b>VIP Site Visit 🚗</b> plan kar sakein?`;
                   }
                 }
               }
@@ -4236,8 +4266,10 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               const newCount = (l.followup_count || 0) + 1;
               const dripStage = l.state === "OPTIONS_SENT" ? "OPTIONS_NUDGE" : "QUALIFYING_NUDGE";
               const dailyQType = l.state === "OPTIONS_SENT" ? "VISIT_SLOT" : (l.state === "QUALIFYING" ? "QUALIFYING_FIELD" : "GENERAL_QUESTION");
+              const nextState = (l.state === "COLD_UNQUALIFIED" || l.state === "COLD") ? "QUALIFYING" : l.state;
 
               await supabase.from("leads").update({
+                state: nextState,
                 last_followup_at: new Date().toISOString(),
                 followup_count: newCount,
                 drip_stage: dripStage,
@@ -4255,10 +4287,10 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 client_id: leadTenantId,
                 lead_id: l.lead_id,
                 event_type: "DAILY_FOLLOWUP_SENT",
-                payload: { state: l.state, followup_count: newCount, dripStage, message: nudgeMsg.slice(0, 300), dispatchRes }
+                payload: { state: nextState, prev_state: l.state, followup_count: newCount, dripStage, message: nudgeMsg.slice(0, 300), dispatchRes }
               });
 
-              sweepLog.daily_followups.push({ lead_id: l.lead_id, name, state: l.state, followup_count: newCount });
+              sweepLog.daily_followups.push({ lead_id: l.lead_id, name, state: nextState, prev_state: l.state, followup_count: newCount });
             } catch (itemErr: any) {
               sweepLog.errors.push({ module: "daily_followup_item", lead_id: l.lead_id, error: itemErr.message });
             }
@@ -11808,7 +11840,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v102-adversarial-audit-verified",
+        version: "v103-incomplete-lead-contextual-followup",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
