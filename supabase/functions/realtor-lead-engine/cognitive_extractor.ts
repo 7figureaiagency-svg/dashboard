@@ -411,7 +411,7 @@ export function runDeterministicCognitiveExtractor(
 
   // 3. Lead Role & Budget Type
   let leadRole: "BUYER" | "TENANT" | "SELLER" | "LANDLORD" | "BROKER" | "UNKNOWN" = "UNKNOWN";
-  let budgetType: "OUTRIGHT_BUY" | "MONTHLY_RENT" | "COMMERCIAL_LEASE" | "UNKNOWN" = "OUTRIGHT_BUY";
+  let budgetType: "OUTRIGHT_BUY" | "MONTHLY_RENT" | "COMMERCIAL_LEASE" | "UNKNOWN" = "UNKNOWN";
 
   if (hasSellingAction || userNegatedAssumptions) {
     leadRole = "SELLER";
@@ -431,7 +431,12 @@ export function runDeterministicCognitiveExtractor(
   } else if (currentLead?.lead_type === "PROVIDER") {
     leadRole = "SELLER";
   } else if (currentLead?.lead_type === "SEEKER") {
-    leadRole = "BUYER";
+    leadRole = currentLead?.requirement === "RENT" ? "TENANT" : "BUYER";
+    budgetType = currentLead?.requirement === "RENT"
+      ? "MONTHLY_RENT"
+      : (currentLead?.requirement === "LEASE"
+        ? "COMMERCIAL_LEASE"
+        : (currentLead?.requirement === "BUY" ? "OUTRIGHT_BUY" : "UNKNOWN"));
   }
 
   // 4. Property Type & Category

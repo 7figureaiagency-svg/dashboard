@@ -1952,6 +1952,11 @@ const STOP_WORDS_SET = new Set([
   "potano", "potani", "potanu", "potana", "apni", "apna", "apne", "hamara", "hamari", "hamare",
   "i", "my", "we", "our", "me", "us", "humko", "hume", "hum", "main", "hu", "ame", "tame", "aap",
   "ek", "one", "1", "2", "3", "4", "5", "ye", "aa", "yeh", "this", "that",
+  // Pronouns, Demonstratives & Pointers (Hindi & Gujarati)
+  "usko", "isko", "unko", "inko", "use", "ise", "unhe", "inhe", "usse", "isse", "usme", "isme", "unme", "inme",
+  "uska", "uski", "uske", "iska", "iski", "iske", "unka", "unki", "unke", "inka", "inki", "inke",
+  "wo", "woh", "voh", "tene", "aene", "ene", "temne", "emne", "tenu", "teni", "teno", "tena", "enu", "eni", "eno", "ena",
+  "peli", "pelo", "pelu", "pela", "aavu", "tevu",
   // Adjectives (Gujarati, Hindi, English)
   "juno", "juni", "junu", "juna", "navo", "navi", "navu", "nava",
   "purana", "purani", "purane", "purano", "naya", "nayi", "naye",
@@ -1961,9 +1966,11 @@ const STOP_WORDS_SET = new Set([
   "bechvano", "bechvani", "bechvanu", "bechvana", "bechne", "bechna", "bechni", "bechvu",
   "aapo", "aapva", "aapvu", "aapvani", "aapvano", "dena", "deni", "dene",
   "sell", "selling", "list", "listing", "karna", "karni", "karne", "karvu", "karva", "karo", "want", "wants", "wanted",
-  // Auxiliary & Grammar
+  // Auxiliary, Grammar & Connectors
   "he", "hai", "h", "hain", "che", "chhe", "to", "chahiye", "joiye",
   "ka", "ki", "ke", "nu", "no", "ni", "na", "in", "at", "me", "ma", "par", "pe", "se", "thi", "as", "aur", "ane", "and", "is",
+  "bhi", "toh", "ab", "fir", "phir", "sirf", "bas", "lekin", "magar", "parantu", "kintu", "please", "plz", "bhai", "sir", "madam", "ji",
+  "griham", "nextgen", "realty", "realtors", "broker", "brokerage", "agent",
   // Unicode Indic Adjectives & Verbs
   "જૂનો", "જૂની", "જૂનું", "જૂના", "જુનો", "જુની", "જુનુ", "જુના", "નવો", "નવી", "નવું", "નવા",
   "વેચવાનો", "વેચવાની", "વેચવાનું", "વેચવાના", "વેચવું", "વેચવા",
@@ -2062,10 +2069,10 @@ function extractProjectOrSocietyFromText(text: string, parsedPropType?: string):
       .replace(/['"]/g, "")
       .replace(new RegExp(`\\b(?:${propTokens})\\b`, "gi"), "")
       .replace(/\b(?:property\s*type|project(?:\s*(?:ka|nu|no)?\s*name)?|society(?:\s*(?:ka|nu|no)?\s*name)?|type)\b/gi, "")
-      .replace(/\b(?:muje|mujhe|mane|mare|mari|maro|maru|mara|meri|mera|mere|taro|tari|taru|tara|tamaro|tamari|tamaru|tamara|amaro|amari|amaru|amara|potano|potani|potanu|potana|apni|apna|apne|hamara|hamari|hamare|i|my|we|our|me|us|humko|hume|hum|main|hu|ame|tame|aap|ek|one|1|2|3|4|5|ye|aa|yeh|this)\b/gi, "")
+      .replace(/\b(?:muje|mujhe|mane|mare|mari|maro|maru|mara|meri|mera|mere|taro|tari|taru|tara|tamaro|tamari|tamaru|tamara|amaro|amari|amaru|amara|potano|potani|potanu|potana|apni|apna|apne|hamara|hamari|hamare|i|my|we|our|me|us|humko|hume|hum|main|hu|ame|tame|aap|ek|one|1|2|3|4|5|ye|aa|yeh|this|that|usko|isko|unko|inko|use|ise|unhe|inhe|usse|isse|usme|isme|unme|inme|uska|uski|uske|iska|iski|iske|unka|unki|unke|inka|inki|inke|wo|woh|voh|tene|aene|ene|temne|emne|tenu|teni|teno|tena|enu|eni|eno|ena|peli|pelo|pelu|pela|aavu|tevu)\b/gi, "")
       .replace(/\b(?:bechna|bechni|bechne|bechvu|bechvano|bechvani|bechvanu|bechvana|vechvu|vechva|vechvo|vechvano|vechvani|vechvanu|vechvana|vechavo|vechavi|vechavu|vechava|aapo|aapva|aapvu|aapvani|aapvano|dena|deni|dene|sell|selling|list|listing|karna|karni|karne|karvu|karva|karo|want|wants|wanted)\b/gi, "")
       .replace(/\b(?:juno|juni|junu|juna|purana|purani|purane|purano|navo|navi|navu|nava|naya|nayi|naye|resale|re-sale|secondhand|second-hand|fresh|old|new|used)\b/gi, "")
-      .replace(/\b(?:he|hai|h|hain|che|chhe|to|chahiye|joiye|ka|ki|ke|nu|no|ni|na|in|at|me|ma|par|pe|se|thi|as|aur|ane|and|is)\b/gi, "")
+      .replace(/\b(?:he|hai|h|hain|che|chhe|to|chahiye|joiye|ka|ki|ke|nu|no|ni|na|in|at|me|ma|par|pe|se|thi|as|aur|ane|and|is|bhi|toh|ab|fir|phir|sirf|bas|griham|nextgen|realty|realtors)\b/gi, "")
       .replace(/\s+/g, " ")
       .trim();
 
@@ -2657,7 +2664,7 @@ export const REAL_ESTATE_EXTRACTION_SCHEMA = {
         budget_type: {
           type: "STRING",
           enum: ["OUTRIGHT_BUY", "MONTHLY_RENT", "COMMERCIAL_LEASE", "UNKNOWN"],
-          description: "Transaction budget type: outright purchase/sale, monthly rental, or commercial lease",
+          description: "Transaction budget type: outright purchase/sale, monthly rental, or commercial lease. If the user only mentions BHK or property type without explicit buy/rent words or budget figures, return UNKNOWN.",
         },
         location_name: {
           type: "STRING",
@@ -4144,7 +4151,7 @@ export function runDeterministicCognitiveExtractor(
 
   // 3. Lead Role & Budget Type
   let leadRole: "BUYER" | "TENANT" | "SELLER" | "LANDLORD" | "BROKER" | "UNKNOWN" = "UNKNOWN";
-  let budgetType: "OUTRIGHT_BUY" | "MONTHLY_RENT" | "COMMERCIAL_LEASE" | "UNKNOWN" = "OUTRIGHT_BUY";
+  let budgetType: "OUTRIGHT_BUY" | "MONTHLY_RENT" | "COMMERCIAL_LEASE" | "UNKNOWN" = "UNKNOWN";
 
   if (hasSellingAction || userNegatedAssumptions) {
     leadRole = "SELLER";
@@ -4164,7 +4171,12 @@ export function runDeterministicCognitiveExtractor(
   } else if (currentLead?.lead_type === "PROVIDER") {
     leadRole = "SELLER";
   } else if (currentLead?.lead_type === "SEEKER") {
-    leadRole = "BUYER";
+    leadRole = currentLead?.requirement === "RENT" ? "TENANT" : "BUYER";
+    budgetType = currentLead?.requirement === "RENT"
+      ? "MONTHLY_RENT"
+      : (currentLead?.requirement === "LEASE"
+        ? "COMMERCIAL_LEASE"
+        : (currentLead?.requirement === "BUY" ? "OUTRIGHT_BUY" : "UNKNOWN"));
   }
 
   // 4. Property Type & Category
@@ -4717,14 +4729,25 @@ export function mapCognitiveResultToActionResult(
           : null,
     };
   } else {
+    // Check if user specifically stated a requirement or if lead already has an established requirement
+    const parsedReqFromText = parseRequirementFromText(messageText);
+    const existingLeadReq = lead?.requirement || lead?.metadata?.seeker_draft?.requirement || null;
+    const resolvedReq =
+      parsedReqFromText
+        ? (parsedReqFromText === "RENT" ? "RENT" : parsedReqFromText === "LEASE" ? "LEASE" : parsedReqFromText === "BUY" ? "BUY" : null)
+        : existingLeadReq
+        ? existingLeadReq
+        : extracted.entities.budget_type === "MONTHLY_RENT"
+        ? "RENT"
+        : extracted.entities.budget_type === "COMMERCIAL_LEASE"
+        ? "LEASE"
+        : extracted.entities.budget_type === "OUTRIGHT_BUY"
+        ? "BUY"
+        : null;
+
     action = {
       intent: "CHANGE_REQUIREMENT",
-      requirement:
-        extracted.entities.budget_type === "MONTHLY_RENT"
-          ? "RENT"
-          : extracted.entities.budget_type === "COMMERCIAL_LEASE"
-          ? "LEASE"
-          : "BUY",
+      requirement: resolvedReq,
       property_type: formattedPropType || undefined,
       budget: extracted.entities.budget_inr || undefined,
       location: extracted.entities.location_name || undefined,
@@ -4740,7 +4763,7 @@ export function mapCognitiveResultToActionResult(
     transaction_type:
       (action as any).transaction_type ||
       (action as any).requirement ||
-      (userRole === "OWNER" ? "SELL" : "BUY"),
+      (userRole === "OWNER" ? "SELL" : (lead?.requirement || null)),
     property_category:
       extracted.entities.property_category !== "UNKNOWN"
         ? extracted.entities.property_category === "PLOT_LAND"
@@ -5212,20 +5235,29 @@ function matchesListingType(leadReq?: string | null, propListingType?: string | 
   const l = String(propListingType || "").toUpperCase().trim();
   const price = Number(propPrice || 0);
 
-  if (r === "LEASE" || (isCommercial && (r === "RENT" || r === "LEASE"))) {
-    if (l === "LEASE" || l === "RENT" || l === "RENTAL") return true;
-    if (!l && price > 0 && price <= 500000) return true;
-    return false;
-  }
+  const isListingRent = l === "RENT" || l === "LEASE" || l === "RENTAL";
+  const isListingSale = l === "BUY" || l === "SALE" || l === "RESALE" || l === "NEW_BOOKING";
 
   if (r === "RENT") {
-    if (l === "RENT" || l === "LEASE" || l === "RENTAL") return true;
+    // Invariant: Never show SALE properties for RENT inquiries!
+    if (isListingSale) return false;
+    if (isListingRent) return true;
     if (!l && price > 0 && price <= 200000) return true;
     return false;
   }
 
+  if (r === "LEASE" || (isCommercial && (r === "RENT" || r === "LEASE"))) {
+    // Invariant: Never show SALE properties for LEASE inquiries!
+    if (isListingSale) return false;
+    if (isListingRent) return true;
+    if (!l && price > 0 && price <= 500000) return true;
+    return false;
+  }
+
   if (r === "BUY") {
-    if (l === "BUY" || l === "SALE" || l === "RESALE" || l === "NEW_BOOKING") return true;
+    // Invariant: Never show RENT properties for BUY inquiries!
+    if (isListingRent) return false;
+    if (isListingSale) return true;
     if (!l && price >= 500000) return true;
     return false;
   }
@@ -7008,15 +7040,22 @@ async function handleOwnerFlow({
       }
     }
 
-    // Explicit Second Listing Check (Phase 41: Never trigger on generic affirmative 'ha' or buyer phrasing!)
+    const isAffirmativeListing = Boolean(
+      !isSeekingProperty &&
+      lead.state === "OWNER_DETAILS_GATHERED" &&
+      /^(?:yes|haan|ha|haa|ji\s*haan|sure|yep|list\s*another|ek\s*aur|dusri|doosri|property\s*list|list\s*karni|list\s*karvi|list\s*karo)\b/i.test(lower.trim())
+    );
+
+    // Explicit Second Listing Check
     const isSecondListing = Boolean(
-      !isSeekingProperty && (
+      isAffirmativeListing ||
+      (!isSeekingProperty && (
         (cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" && cognitiveTurn?.active_role === "SELLER") ||
         (cognitiveTurn?.selected_option === 2 && !isSeekingProperty) ||
         aiAnalysis?.action?.intent === "SUBMIT_LISTING" ||
         ((/(?:bechna|bechni|vechvu|vechva|sell|list|bhade|bhaade|kiraya|kiraye|rent\s*par\s*den|chadani|lease)/i.test(lower)) &&
          (/\b(flat|house|ghar|makan|villa|office|shop|plot|godown|showroom|commercial)\b/i.test(lower)))
-      )
+      ))
     );
 
     const isBuyerDemandInquiry = Boolean(
@@ -7255,9 +7294,23 @@ async function handleOwnerFlow({
         if (cleaned && isLikelySocietyOrProjectName(cleaned)) {
           draft.society_name = cleaned;
           draft.project_name = cleaned;
-        } else {
+        } else if (/(?:standalone|independent|private\s*house|kudrat|self|single\s*building)\b/i.test(lower)) {
           draft.society_name = "Standalone / Independent";
           draft.project_name = "Standalone / Independent";
+        } else {
+          // Pure conversational filler or unrecognized text -> prompt user clearly for society/project name!
+          const askAgain =
+            lang === "GUJLISH"
+              ? `👉 Kripya tamari property kaya <b>Society, Project ke Apartment</b> ma aaveli chhe e naam janavjo? 🏢\n<i>(Jem ke: 'Nilamber Bellissimo' ya 'Sun Crest'. Agar independent ghar hoy to 'Standalone' lakho)</i>`
+              : lang === "ENGLISH"
+              ? `👉 Please specify the name of the <b>Society, Project, or Complex</b> where your property is located? 🏢\n<i>(e.g., 'Nilamber Bellissimo' or 'Sun Crest'. If it's an independent house, reply 'Standalone')</i>`
+              : `👉 Kripya batayein aapki property kis <b>Society, Project ya Apartment</b> me sthit hai? 🏢\n<i>(Jaise: 'Nilamber Bellissimo' ya 'Sun Crest'. Agar independent house hai to 'Standalone' likhein)</i>`;
+
+          return {
+            replyText: askAgain,
+            nextState: "OWNER_SOCIETY_PENDING",
+            leadUpdates: buildOwnerLeadUpdates("OWNER_SOCIETY_PENDING", draft),
+          };
         }
       }
     } else {
@@ -8024,6 +8077,7 @@ export function getGreetingTriageReply(lang: string, nameStr: string, agencyName
 export function buildContextualRecapCard(lead: any, lang: string, senderName: string, agencyName: string): string {
   const draft = lead?.metadata?.seeker_draft || {};
   const propType = draft.property_type || lead.property_type;
+  const isPlot = /(plot|land|zameen|jameen|પ્લોટ|જમીન|जमीन)/i.test(propType || "");
   const req = draft.requirement || lead.requirement;
   const loc = draft.location || lead.location;
   const budget = draft.budget || lead.budget;
@@ -8036,7 +8090,7 @@ export function buildContextualRecapCard(lead: any, lang: string, senderName: st
   else if (loc === "FLEXIBLE") lines.push(`• <b>Location:</b> Flexible (Across City) 📍`);
   if (budget) lines.push(`• <b>Budget:</b> ${formatPriceShort(Number(budget))} 💰`);
   if (purpose) lines.push(`• <b>Purpose:</b> ${purpose === "INVESTMENT" ? "Investment 📈" : "Family / Self-Use 🏡"}`);
-  if (timeline) lines.push(`• <b>Timeline:</b> ${timeline === "READY_TO_MOVE" ? "Ready to Move 🔑" : "Under Construction 🏗️"}`);
+  if (timeline && !isPlot) lines.push(`• <b>Timeline:</b> ${timeline === "READY_TO_MOVE" ? "Ready to Move 🔑" : "Under Construction 🏗️"}`);
 
   // Pending item
   let pending = "";
@@ -8045,7 +8099,7 @@ export function buildContextualRecapCard(lead: any, lang: string, senderName: st
   else if (!purpose) pending = "Purpose (Self-Use vs Investment)";
   else if (!loc) pending = "Preferred Location";
   else if (!budget) pending = "Budget Range";
-  else if (!timeline) pending = "Possession Timeline";
+  else if (!timeline && !isPlot) pending = "Possession Timeline";
 
   const name = senderName ? `<b>${senderName}</b>` : "ji";
   const header = lang === "GUJLISH"
@@ -8074,9 +8128,10 @@ export function hasIncompleteSeekerDraft(lead: any): boolean {
   const reqVal = draft.requirement || lead?.requirement;
   const timelineVal = draft.timeline || lead?.timeline;
   const purposeVal = draft.purpose || lead?.purpose;
+  const isPlot = /(plot|land|zameen|jameen|પ્લોટ|જમીન|जमीन)/i.test(propVal || "");
 
   const hasSomeData = Boolean(propVal || locVal || budgetVal || reqVal);
-  const isMissingSomething = !propVal || !locVal || !budgetVal || !timelineVal || !purposeVal;
+  const isMissingSomething = !propVal || !locVal || !budgetVal || (!isPlot && !timelineVal) || !purposeVal;
   return hasSomeData && isMissingSomething;
 }
 
@@ -8174,10 +8229,12 @@ export function steerConversationTurn(
   } else {
     // Buyer Track
     const draft = lead?.metadata?.seeker_draft || {};
-    const hasProp = Boolean(lead?.property_type || draft.property_type);
+    const propType = lead?.property_type || draft.property_type;
+    const isPlot = /(plot|land|zameen|jameen|પ્લોટ|જમીન|जमीन)/i.test(propType || "");
+    const hasProp = Boolean(propType);
     const hasLoc = Boolean(lead?.location || draft.location);
     const hasBudget = Boolean(lead?.budget || draft.budget);
-    const hasTimeline = Boolean(lead?.timeline || draft.timeline);
+    const hasTimeline = isPlot || Boolean(lead?.timeline || draft.timeline);
 
     if (!hasProp) {
       pendingQuestion =
@@ -8999,8 +9056,11 @@ export async function dispatchStateAction(
     }
     // ── end site-visit intent guard ──────────────────────────────────────────────
 
+    // If user says "yes" / "haan" / "list another" in OWNER_DETAILS_GATHERED, do NOT let it be treated as buyer search!
+    const isAffirmativeListingTurn = /^(?:yes|haan|ha|haa|ji\s*haan|sure|yep|list\s*another|ek\s*aur|dusri|doosri|property\s*list|list\s*karni|list\s*karvi|list\s*karo)\b/i.test(lower.trim());
+
     // If owner explicitly asks for buyer property search, route to qualification cascade
-    const isExplicitBuyerSearch = Boolean(
+    const isExplicitBuyerSearch = !isAffirmativeListingTurn && Boolean(
       context.cognitiveTurn?.active_role === "BUYER" ||
       context.cognitiveTurn?.primary_intent === "SEARCH_PROPERTY" ||
       intent === "CHANGE_REQUIREMENT" ||
@@ -9459,9 +9519,30 @@ export async function dispatchStateAction(
         .limit(1)
         .maybeSingle();
 
-      const propLabel = sub
-        ? `${sub.configuration || sub.property_type || "Property"} at ${sub.society_name || sub.project_name || sub.location || displayCity}`
-        : "Aapki listed property";
+      if (!sub) {
+        const replyText =
+          lang === "GUJLISH"
+            ? `Ji <b>${nameStr}</b>! Amara records mujab tamari koi listed property hal ma active nathi. 📋\n\n👉 <b>Shu tame potani koi property Sell (vechva) ke Rent par aapva mate list karva mango chho?</b> 🏡\n<i>(Tame 'Ha' ke 'List another' lakhi shako chho)</i>`
+            : lang === "ENGLISH"
+            ? `Hello <b>${nameStr}</b>! According to our records, you do not have an active listed property yet. 📋\n\n👉 <b>Would you like to list a property for Sale or Rent?</b> 🏡\n<i>(You can reply 'Yes' or 'List another')</i>`
+            : `Ji <b>${nameStr}</b>! Hamare records ke mutabiq aapki koi listed property filhaal active nahi hai. 📋\n\n👉 <b>Kya aap apni koi property Sell ya Rent ke liye list karna chahte hain?</b> 🏡\n<i>(Aap 'Haan' ya 'List another' likh sakte hain)</i>`;
+
+        return {
+          replyText,
+          nextState: "OWNER_DETAILS_GATHERED",
+          leadUpdates: {
+            state: "OWNER_DETAILS_GATHERED",
+            lead_type: "DUAL_ROLE",
+            metadata: {
+              ...(lead.metadata || {}),
+              active_persona: "SELLER",
+              awaiting_listing_initiation: true,
+            },
+          },
+        };
+      }
+
+      const propLabel = `${sub.configuration || sub.property_type || "Property"} at ${sub.society_name || sub.project_name || sub.location || displayCity}`;
       const isSubApprovedB =
         sub?.status === "CONVERTED_TO_INVENTORY" ||
         sub?.status === "APPROVED" ||
@@ -12821,10 +12902,11 @@ async function handleQualificationCascade(
   // Extract what was JUST provided in this user turn vs cumulative values (AI-first single source of truth)
   const aiEntities = actionResult.extracted?.entities;
   const justPropType = actionResult.property_type || (aiEntities?.property_type !== "UNKNOWN" ? aiEntities?.property_type : null) || parsePropertyTypeFromText(context.messageText, lastPromptQ);
-  const justReq = actionResult.transaction_type || (aiEntities?.budget_type === "MONTHLY_RENT" ? "RENT" : (aiEntities?.budget_type === "COMMERCIAL_LEASE" ? "LEASE" : (aiEntities?.budget_type === "OUTRIGHT_BUY" ? "BUY" : null))) || parseRequirementFromText(context.messageText, lastPromptQ);
+  const explicitlyStatedReq = parseRequirementFromText(context.messageText, lastPromptQ);
+  const justReq = explicitlyStatedReq || null;
   const justPurpose = (aiEntities?.purpose !== "UNKNOWN" ? aiEntities?.purpose : null) || parsePurposeFromText(context.messageText, lastPromptQ);
   const justTimeline = actionResult.timeline || (aiEntities?.timeline !== "UNKNOWN" ? aiEntities?.timeline : null) || parseTimelineFromText(context.messageText, lastPromptQ);
-  const currentReqForBudget = lead?.requirement || actionResult.transaction_type || justReq;
+  const currentReqForBudget = lead?.requirement || explicitlyStatedReq || (actionResult.transaction_type && actionResult.transaction_type !== "BUY" ? actionResult.transaction_type : null);
   const justBudget = actionResult.price_or_budget || aiEntities?.budget_inr || parseBudgetFromText(context.messageText, lastPromptQ, currentReqForBudget);
 
   const { data: allTenantInventory } = await supabase
@@ -12847,10 +12929,15 @@ async function handleQualificationCascade(
 
   // Cumulative values from this message or previous lead/draft state
   let propType = actionResult.property_type || justPropType || lead?.property_type || lead?.metadata?.seeker_draft?.property_type;
-  let requirement = actionResult.transaction_type || justReq || lead?.requirement || lead?.metadata?.seeker_draft?.requirement;
+  let requirement = explicitlyStatedReq || lead?.requirement || lead?.metadata?.seeker_draft?.requirement || (actionResult.transaction_type && actionResult.transaction_type !== "BUY" ? actionResult.transaction_type : null);
   let purpose = justPurpose || lead?.purpose || lead?.metadata?.seeker_draft?.purpose;
   let budget = (justBudget && justBudget > 0) ? justBudget : (actionResult.price_or_budget || (lead?.budget ? Number(lead.budget) : 0) || (lead?.metadata?.seeker_draft?.budget ? Number(lead.metadata.seeker_draft.budget) : 0));
   let timeline = actionResult.timeline || justTimeline || lead?.timeline || lead?.metadata?.seeker_draft?.timeline;
+
+  const isPlot = /(plot|land|zameen|jameen|પ્લોટ|જમીન|जमीन)/i.test(propType || "");
+  if (isPlot && !timeline) {
+    timeline = "READY_TO_MOVE";
+  }
 
   // Phase 32: Stale Location Guard & Interactive Confirmation
   const explicitLoc = actionResult.location || justLoc;
@@ -13124,7 +13211,7 @@ async function handleQualificationCascade(
   const hasPropType = Boolean(propType && !isGenericCommercial && !isGenericResidential);
   const hasLocation = Boolean(location);
   const hasBudget = Boolean(budget && Number(budget) > 0);
-  const hasTimeline = Boolean(timeline);
+  const hasTimeline = isPlot || Boolean(timeline);
 
   // Determine Missing Stage (Fast-Track 4-Slot Order: Type -> Loc -> Budget -> Timeline)
   let missingStage: string | null = null;
@@ -13144,7 +13231,7 @@ async function handleQualificationCascade(
     }
   } else if (!hasBudget) {
     missingStage = "BUDGET";
-  } else if (!hasTimeline) {
+  } else if (!hasTimeline && !isPlot) {
     missingStage = "TIMELINE";
   }
 
@@ -13628,7 +13715,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v96-post-visit-disambiguation-engine",
+        version: "v98-strict-rent-invariant-and-plot-bypass",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,

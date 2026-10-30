@@ -109,6 +109,23 @@ export const VERNACULAR_LOCALITY_MAP: Record<string, string> = {
   "माकरपुरा": "Makarpura",
 };
 
+const STOP_WORDS_EXTRACT = new Set([
+  "usko", "isko", "unko", "inko", "use", "ise", "unhe", "inhe", "usse", "isse", "usme", "isme", "unme", "inme",
+  "uska", "uski", "uske", "iska", "iski", "iske", "unka", "unki", "unke", "inka", "inki", "inke",
+  "wo", "woh", "voh", "yeh", "ye", "mera", "meri", "mere", "apna", "apni", "apne", "maro", "mari", "maru",
+  "karna", "karni", "karne", "karvu", "karva", "karo", "list", "listing", "bechna", "bechni", "vechvu", "vechva",
+  "hai", "he", "h", "hain", "chhe", "che", "me", "ma", "par", "pe", "se", "thi", "in", "at", "to", "for",
+  "tene", "aene", "ene", "temne", "emne", "tenu", "teni", "teno", "tena", "enu", "eni", "eno", "ena",
+  "peli", "pelo", "pelu", "pela", "aavu", "tevu", "bhi", "toh", "ab", "fir", "phir", "sirf", "bas",
+  "realty", "realtors", "broker", "brokerage", "agent", "griham", "nextgen"
+]);
+
+function isAllStopWords(str: string): boolean {
+  if (!str) return true;
+  const words = str.toLowerCase().split(/[\s,.-]+/).filter(Boolean);
+  return words.length === 0 || words.every(w => STOP_WORDS_EXTRACT.has(w));
+}
+
 export function extractSocietyOrProjectName(text: string): string | null {
   if (!text) return null;
   const t = text.trim();
@@ -119,18 +136,26 @@ export function extractSocietyOrProjectName(text: string): string | null {
   const matchSuffix = t.match(societySuffixPattern);
   if (matchSuffix) {
     const raw = matchSuffix[0].trim();
-    return raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    if (!isAllStopWords(raw)) {
+      return raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    }
   }
 
-  const developerPrefixPattern = /\b(darshanam|shreeji|avadh|nilamber|narayan|samanvay|vihav|alembic|griham|shree ram|shri ram)\s+([a-zA-Z0-9\s]{2,25})\b/i;
+  const developerPrefixPattern = /\b(darshanam|shreeji|avadh|nilamber|narayan|samanvay|vihav|alembic|shree ram|shri ram)\s+([a-zA-Z0-9\s]{2,25})\b/i;
   const matchPrefix = t.match(developerPrefixPattern);
   if (matchPrefix) {
-    const raw = matchPrefix[0].trim();
-    return raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    const suffixPart = matchPrefix[2].trim();
+    if (!isAllStopWords(suffixPart)) {
+      const raw = matchPrefix[0].trim();
+      return raw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    }
   }
 
   if (/\b(?:perl|pearl)\s+[a-zA-Z0-9]+/i.test(t) || /[a-zA-Z0-9]+\s+(?:perl|pearl)\b/i.test(t)) {
-    return t.split(/\s+/).slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    const candidate = t.split(/\s+/).slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    if (!isAllStopWords(candidate)) {
+      return candidate;
+    }
   }
 
   return null;
@@ -389,7 +414,9 @@ export function routeCognitiveTurnDeterministic(
 
   // Possession Timeline
   let possession_timeline: "READY_TO_MOVE" | "UNDER_CONSTRUCTION" | null = null;
-  if (/\b(ready|rtm|ready\s*to\s*move|turant)\b/i.test(lower)) {
+  if (property_category === "PLOT_LAND" || property_type === "Plot" || /(plot|land|zameen|jameen)/i.test(property_type || "")) {
+    possession_timeline = "READY_TO_MOVE";
+  } else if (/\b(ready|rtm|ready\s*to\s*move|turant)\b/i.test(lower)) {
     possession_timeline = "READY_TO_MOVE";
   } else if (/\b(under\s*construction|construction|new\s*launch|upcoming)\b/i.test(lower)) {
     possession_timeline = "UNDER_CONSTRUCTION";
@@ -402,6 +429,30 @@ export function routeCognitiveTurnDeterministic(
   if (budget_max && lead?.budget && budget_max !== lead.budget) {
     reset_previous_context = true;
   }
+
+  const isRentMsg = /\b(rent|bhadu|bhade|kiraya|kiraye|भाड़ा|ભાડે|ભાડુ)\b/i.test(lower);
+  const isLeaseMsg = /\b(lease|pattay|લીઝ|लीज़)\b/i.test(lower);
+  const isBuyMsg = /\b(buy|purchase|kharid|khareed|lena|leni|खरीदना|લેવું)\b/i.test(lower);
+
+  const determinedTx: "BUY" | "RENT" | "LEASE" | "SELL" | null = hasSellIntent
+    ? "SELL"
+    : isRentMsg
+    ? "RENT"
+    : isLeaseMsg
+    ? "LEASE"
+    : isBuyMsg
+    ? "BUY"
+    : null;
+
+  const determinedPurpose: "buy" | "rent" | "lease" | "sell" | null = hasSellIntent
+    ? "sell"
+    : isRentMsg
+    ? "rent"
+    : isLeaseMsg
+    ? "lease"
+    : isBuyMsg
+    ? "buy"
+    : null;
 
   return {
     primary_intent,
@@ -420,8 +471,8 @@ export function routeCognitiveTurnDeterministic(
       size_area_sqft: null,
       project_or_society: extractSocietyOrProjectName(rawText),
       expected_price_inr: hasSellIntent ? budget_max : null,
-      transaction_type: hasSellIntent ? "SELL" : (/\b(rent|bhadu|भाड़ा)\b/i.test(lower) ? "RENT" : "BUY"),
-      purpose: hasSellIntent ? "sell" : (/\b(rent|bhadu|भाड़ा)\b/i.test(lower) ? "rent" : "buy"),
+      transaction_type: determinedTx,
+      purpose: determinedPurpose,
       reschedule_date: null,
       reschedule_time: null,
     },
@@ -430,6 +481,22 @@ export function routeCognitiveTurnDeterministic(
     user_negated_assumptions,
     reasoning: "deterministic_vernacular_fallback",
   };
+}
+
+function sanitizeCognitiveResult(res: any): MicroIntentResult {
+  if (res && res.entities) {
+    const isPlot = res.entities.property_category === "PLOT_LAND" || res.entities.property_type === "Plot" || /(plot|land|zameen|jameen)/i.test(res.entities.property_type || "");
+    if (isPlot) {
+      res.entities.possession_timeline = "READY_TO_MOVE";
+    }
+    if (res.entities.project_or_society) {
+      const rawProj = String(res.entities.project_or_society).trim();
+      if (STOP_WORDS_EXTRACT.has(rawProj.toLowerCase()) || isAllStopWords(rawProj)) {
+        res.entities.project_or_society = null;
+      }
+    }
+  }
+  return res as MicroIntentResult;
 }
 
 /**
@@ -482,9 +549,12 @@ Analyze the user message and extract strictly valid JSON conforming to MicroInte
 - OFF_TOPIC: Unrelated chitchat.
 
 ### CRITICAL RULES:
-1. "bechvo", "bechvu", "vechvo", "vechvu", "bechna", "bechni" is STRICTLY SUBMIT_PROPERTY (active_role: "SELLER"), NEVER SEARCH_PROPERTY!
+1. "bechvo", "bechvu", "vechvo", "vechvu", "bechna", "bechni", "list", "listing" is STRICTLY SUBMIT_PROPERTY (active_role: "SELLER"), NEVER SEARCH_PROPERTY!
 2. NEVER map an isolated digit "1", "2", "3" to budget_inr! Single digits are ALWAYS selected_option.
 3. Detect detected_language accurately: GUJARATI_SCRIPT, GUJLISH, HINGLISH, or ENGLISH.
+4. If property_type is "Plot" or property_category is "PLOT_LAND": possession_timeline MUST be "READY_TO_MOVE" (never "UNDER_CONSTRUCTION", plots have no building construction).
+5. If user utterance does not explicitly state "buy", "rent", or "sell", leave transaction_type and purpose as null (do NOT assume BUY). If user states "rent" or "bhade", transaction_type is STRICTLY "RENT".
+6. project_or_society should ONLY be extracted if it is a genuine building, residency, or township name (e.g. "Nilamber Bellissimo", "Perl Heights"). NEVER extract pronouns ("usko", "isko"), filler words, or the agency name ("Griham", "Nextgen").
 
 CURRENT CONTEXT:
 - Lead Stored Location: ${lead?.location || "None"}
@@ -519,7 +589,7 @@ CURRENT CONTEXT:
           if (rawJson) {
             const parsed = JSON.parse(rawJson);
             if (parsed && parsed.primary_intent && parsed.detected_language) {
-              return parsed as MicroIntentResult;
+              return sanitizeCognitiveResult(parsed);
             }
           }
         }
@@ -562,7 +632,7 @@ CURRENT CONTEXT:
         if (content) {
           const parsed = JSON.parse(content);
           if (parsed && parsed.primary_intent) {
-            return parsed as MicroIntentResult;
+            return sanitizeCognitiveResult(parsed);
           }
         }
       }
