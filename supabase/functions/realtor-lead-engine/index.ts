@@ -7973,6 +7973,7 @@ export interface DialogContext {
   languageProfile?: LanguageProfile;
   availableInventory?: any[];
   botKnowledge?: Record<string, any>;
+  cognitiveTurn?: CognitiveTurnResult;
 }
 
 export interface DialogTransitionResult {
@@ -8050,6 +8051,159 @@ export function hasIncompleteSeekerDraft(lead: any): boolean {
   const hasSomeData = Boolean(propVal || locVal || budgetVal || reqVal);
   const isMissingSomething = !propVal || !locVal || !budgetVal || !timelineVal || !purposeVal;
   return hasSomeData && isMissingSomething;
+}
+
+/**
+ * Conversational Steering Engine (Anti-Derailment AAS Formula - Phase 40.2)
+ * Formula: Acknowledge & Answer (1 line) -> Steer Back (repeat pending slot question).
+ * Guarantees the bot always keeps conversational control and never yields the steering wheel.
+ */
+export function steerConversationTurn(
+  lead: any,
+  context: DialogContext,
+  sideQuestion?: string | null
+): DialogTransitionResult {
+  const lang = context.lang || "HINGLISH";
+  const senderName = context.senderName || "Friend";
+  const nameStr = senderName ? (lang === "GUJLISH" ? `<b>${senderName} bhai</b>` : `<b>${senderName} ji</b>`) : "ji";
+  const lower = (sideQuestion || context.messageText || "").toLowerCase();
+
+  // 1. Concisely Answer the Side-FAQ in 1 sentence
+  let oneLineAnswer = "";
+  if (/(?:loan|sbi|bank|interest|emi|financ)/i.test(lower)) {
+    oneLineAnswer =
+      lang === "GUJLISH"
+        ? `Ji ${nameStr}, SBI ane badhi leading banks thi 100% home loan approved chhe. 🏦`
+        : lang === "ENGLISH"
+        ? `Yes ${nameStr}, home loans are approved from SBI and all leading banks. 🏦`
+        : `Ji ${nameStr}, SBI aur sabhi leading banks se home loan approved hai. 🏦`;
+  } else if (/(?:rera|approval|legal|document|verify|registry)/i.test(lower)) {
+    oneLineAnswer =
+      lang === "GUJLISH"
+        ? `Amara badha j featured projects 100% RERA registered ane verified chhe. 📜`
+        : lang === "ENGLISH"
+        ? `All our featured properties are 100% RERA registered and verified. 📜`
+        : `Hamare sabhi featured projects 100% RERA registered aur verified hain. 📜`;
+  } else if (/(?:brokerage|commission|dalali|fees|charge)/i.test(lower)) {
+    oneLineAnswer =
+      lang === "GUJLISH"
+        ? `Direct developer projects par amari buyer side brokerage 0% (Free) chhe. 🤝`
+        : lang === "ENGLISH"
+        ? `Our buyer side brokerage is 0% (Free) for direct developer properties. 🤝`
+        : `Direct developer projects par hamari buyer side brokerage 0% (Free) hai. 🤝`;
+  } else if (/(?:office|address|location|kaha|kidhar|karyalay)/i.test(lower)) {
+    const addr = context.botKnowledge?.office_address || "Alkapuri, Vadodara";
+    oneLineAnswer =
+      lang === "GUJLISH"
+        ? `Amari office <b>${addr}</b> par sthit chhe. 🏢`
+        : lang === "ENGLISH"
+        ? `Our office is located at <b>${addr}</b>. 🏢`
+        : `Hamara office <b>${addr}</b> me sthit hai. 🏢`;
+  } else {
+    oneLineAnswer =
+      lang === "GUJLISH"
+        ? `Ji bilkul ${nameStr}, amari team aa vishaye tamne puri detail aapshe. 👍`
+        : lang === "ENGLISH"
+        ? `Certainly ${nameStr}, our team will provide full details on this. 👍`
+        : `Ji bilkul ${nameStr}, hamari team is baare me aapko poori detail degi. 👍`;
+  }
+
+  // 2. Steer Back to the pending question
+  const isSeller = lead?.metadata?.active_persona === "SELLER" || lead?.lead_type === "PROVIDER" || (typeof lead?.state === "string" && lead.state.startsWith("OWNER_"));
+  const currentState: DialogState = (lead?.state as DialogState) || "QUALIFYING";
+  let pendingQuestion = "";
+
+  if (isSeller) {
+    const draft = lead?.metadata?.owner_draft || {};
+    if (!draft.property_type) {
+      pendingQuestion =
+        lang === "GUJLISH"
+          ? `👉 Tamari property kaya type ni chhe (Flat, Villa, Shop, ke Office)? 🏡`
+          : lang === "ENGLISH"
+          ? `👉 What type of property do you have (Flat, Villa, Shop, or Office)? 🏡`
+          : `👉 Aapki property kis type ki hai (Flat, Villa, Shop, ya Office)? 🏡`;
+    } else if (!draft.society_name && !draft.project_name) {
+      pendingQuestion =
+        lang === "GUJLISH"
+          ? `👉 Aa property kaya Project ke Society ma aaveli chhe? 🏢`
+          : lang === "ENGLISH"
+          ? `👉 Which Project or Society is your property located in? 🏢`
+          : `👉 Ye property kis Project ya Society me sthit hai? 🏢`;
+    } else if (!draft.carpet_area_sqft && !draft.super_built_up_sqft) {
+      pendingQuestion =
+        lang === "GUJLISH"
+          ? `👉 Property nu approximate Carpet Area (sqft) ketlu chhe? 📏`
+          : lang === "ENGLISH"
+          ? `👉 What is the approximate Carpet Area (sqft) of the property? 📏`
+          : `👉 Property ka approximate Carpet Area (sqft) kitna hai? 📏`;
+    } else {
+      pendingQuestion =
+        lang === "GUJLISH"
+          ? `👉 Tamaro expected Selling Price (Demand) ketlo chhe? 💰`
+          : lang === "ENGLISH"
+          ? `👉 What is your expected Selling Price? 💰`
+          : `👉 Aapka expected Selling Price kitna hai? 💰`;
+    }
+  } else {
+    // Buyer Track
+    const draft = lead?.metadata?.seeker_draft || {};
+    const hasProp = Boolean(lead?.property_type || draft.property_type);
+    const hasLoc = Boolean(lead?.location || draft.location);
+    const hasBudget = Boolean(lead?.budget || draft.budget);
+    const hasTimeline = Boolean(lead?.timeline || draft.timeline);
+
+    if (!hasProp) {
+      pendingQuestion =
+        lang === "GUJLISH"
+          ? `👉 Chaliye janavjo — tame kaya type ni property joi rahya chho (Flat, Villa, ke Commercial)? 🏡`
+          : lang === "ENGLISH"
+          ? `👉 Moving ahead — what type of property are you looking for (Flat, Villa, or Commercial)? 🏡`
+          : `👉 Chaliye batayein — aap kis type ki property search kar rahe hain (Flat, Villa, ya Commercial)? 🏡`;
+    } else if (!hasLoc) {
+      pendingQuestion =
+        lang === "GUJLISH"
+          ? `👉 Tame kaya preferred Area ke Locality ma property joi rahya chho? 📍`
+          : lang === "ENGLISH"
+          ? `👉 Which preferred Area or Locality are you looking in? 📍`
+          : `👉 Aap kis preferred Area ya Locality me property dekh rahe hain? 📍`;
+    } else if (!hasBudget) {
+      pendingQuestion =
+        lang === "GUJLISH"
+          ? `👉 Bas tamaro approximate Budget range janavi do jethi ame perfect options share kariye. 💰`
+          : lang === "ENGLISH"
+          ? `👉 Just share your approximate Budget range so we can match the best options. 💰`
+          : `👉 Bas aapka approximate Budget range bata dijiye taaki hum exact match hone wale options share karein. 💰`;
+    } else if (!hasTimeline) {
+      pendingQuestion =
+        lang === "GUJLISH"
+          ? `👉 Tamne Ready to Move joiye chhe ke Under Construction? 🔑`
+          : lang === "ENGLISH"
+          ? `👉 Are you looking for Ready to Move or Under Construction? 🔑`
+          : `👉 Aapko Ready to Move chahiye ya Under Construction? 🔑`;
+    } else {
+      pendingQuestion =
+        lang === "GUJLISH"
+          ? `👉 Tame kaya date ane time par VIP Site Visit plan karva mangsho? 🚗 (Jem ke: 'Kaale sanje 5:00 vage')`
+          : lang === "ENGLISH"
+          ? `👉 Which date and time would you prefer to plan your VIP Site Visit? 🚗 (e.g. 'Tomorrow 5:00 PM')`
+          : `👉 Aap kis date aur time par VIP Site Visit plan karna chahenge? 🚗 (Jaise: 'Kal shaam 5:00 baje')`;
+    }
+  }
+
+  return {
+    replyText: `${oneLineAnswer}\n\n${pendingQuestion}`,
+    nextState: currentState,
+    leadUpdates: {
+      state: currentState,
+      metadata: {
+        ...(lead?.metadata || {}),
+        last_bot_prompt: {
+          question_type: isSeller ? "SELLER_STEER" : "BUYER_STEER",
+          sent_at: new Date().toISOString(),
+        },
+      },
+    },
+  };
 }
 
 export async function dispatchStateAction(
@@ -9045,10 +9199,10 @@ export async function dispatchStateAction(
       // Fallback in initial onboarding: Re-prompt
       const replyText =
         lang === "GUJLISH"
-          ? `Tame pehla potani property list karva mango chho, ke pehla nava property options jova mango chho <b>${nameStr}</b>?\n👉 1️⃣ <b>Pehle property list karein 📋</b>  2️⃣ <b>Pehle naye options dekhein 🏡</b>`
+          ? `Tame navo flat explore karva mango chho ke pehla potano purano flat list karva mango chho <b>${nameStr}</b>?\n\n1️⃣ <b>Pehla Naya Options Jova Chhe 🏡</b>\n2️⃣ <b>Pehla Purano Flat List Karvo Chhe 📋</b>`
           : lang === "ENGLISH"
-          ? `Would you prefer to list your existing property first, or explore new property options first <b>${nameStr}</b>?\n👉 1️⃣ <b>List property first 📋</b>  2️⃣ <b>Search options first 🏡</b>`
-          : `Aap pehle apni existing property list karna chahenge, ya pehle naye property options dekhna chahenge <b>${nameStr}</b>?\n👉 1️⃣ <b>Pehle property list karein 📋</b>  2️⃣ <b>Pehle naye options dekhein 🏡</b>`;
+          ? `Would you prefer to explore new options first or list your existing property first <b>${nameStr}</b>?\n\n1️⃣ <b>Explore New Options First 🏡</b>\n2️⃣ <b>List Existing Property First 📋</b>`
+          : `Aap pehle naye property options dekhna chahenge ya purana flat list karna chahenge <b>${nameStr}</b>?\n\n1️⃣ <b>Pehle Naye Options Dekhna Hai 🏡</b>\n2️⃣ <b>Pehle Purana Flat List Karna Hai 📋</b>`;
 
       return {
         replyText,
@@ -9396,38 +9550,9 @@ export async function dispatchStateAction(
   // 4. ROLE SELECTION PENDING (State: ROLE_SELECTION_PENDING)
   // ---------------------------------------------------------------------------
   if (currentState === "ROLE_SELECTION_PENDING") {
-    // 1. Direct buyer criteria check: If user typed concrete criteria upfront, bypass menus and cascade directly!
-    const hasConcreteBuyerEntities = Boolean(
-      actionResult.property_type ||
-      (actionResult.location && actionResult.location !== "UNKNOWN" && actionResult.location !== "FLEXIBLE") ||
-      (actionResult.price_or_budget && actionResult.price_or_budget > 0)
-    );
-
-    if (hasConcreteBuyerEntities) {
-      return handleQualificationCascade(lead, actionResult, context);
-    }
-
-    // 2. F-02 Greeting Guard: Intercept pure greetings only if NO criteria provided!
-    const isPureGreeting =
-      intent === "GREETING" ||
-      actionResult.extracted?.primary_intent === "GREETING_ONLY" ||
-      /^(?:hi|hello|hey|namaste|kem\s*cho|pranam|namaskar|good\s*(?:morning|afternoon|evening))\s*(!|\.|\?)*$/i.test(lower.trim());
-
-    if (isPureGreeting) {
-      if (hasIncompleteSeekerDraft(lead)) {
-        return {
-          replyText: buildContextualRecapCard(lead, lang, nameStr, agencyName),
-          nextState: "RESUME_CONFIRMATION_PENDING",
-        };
-      }
-      return {
-        replyText: getGreetingTriageReply(lang, nameStr, agencyName),
-        nextState: "ROLE_SELECTION_PENDING",
-      };
-    }
-
-    // 3. Option 3: Both / Dual Role (Upgrade / Sell + Buy)
+    // 1. Option 3: Both / Dual Role (Upgrade / Sell + Buy)
     const isBothChoice =
+      context.cognitiveTurn?.primary_intent === "DUAL_ROLE_INTENT" ||
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 2) ||
       actionResult.selected_option_index === 2 ||
       actionResult.extracted?.selected_menu_option === 3 ||
@@ -9436,10 +9561,10 @@ export async function dispatchStateAction(
     if (isBothChoice) {
       const replyText =
         lang === "GUJLISH"
-          ? `Bilkul <b>${nameStr}</b>! Banne ma guide karshe. 👍\nPehla tame nava property options jova mango chho ke potani property list karvi chhe?\n👉 1️⃣ <b>Nava options jovo 🏡</b>  2️⃣ <b>Pehla property list karo 📋</b>`
+          ? `Bahuj saras <b>${nameStr}</b>! 🏡 Tame navo flat explore karva mango chho ke pehla potano purano flat list karva mango chho?\n\n1️⃣ <b>Pehla Naya Options Jova Chhe 🏡</b>\n2️⃣ <b>Pehla Purano Flat List Karvo Chhe 📋</b>`
           : lang === "ENGLISH"
-          ? `Certainly <b>${nameStr}</b>! We can assist with both. 👍\nWould you prefer to explore new property options first, or list your property?\n👉 1️⃣ <b>Explore new options 🏡</b>  2️⃣ <b>List property first 📋</b>`
-          : `Bilkul <b>${nameStr}</b>! Dono me assist karenge. 👍\nPehle aapko naye property options dekhne hain ya apni property list karni hai?\n👉 1️⃣ <b>Naye options dekhein 🏡</b>  2️⃣ <b>Pehle property list karein 📋</b>`;
+          ? `Wonderful <b>${nameStr}</b>! 🏡 Would you prefer to explore new options first, or list your existing property?\n\n1️⃣ <b>Explore New Options First 🏡</b>\n2️⃣ <b>List Existing Property First 📋</b>`
+          : `Bahut badhiya <b>${nameStr}</b>! 🏡 Aap pehle naya flat explore karna chahenge ya purana flat list karna chahenge?\n\n1️⃣ <b>Pehle Naye Options Dekhna Hai 🏡</b>\n2️⃣ <b>Pehle Purana Flat List Karna Hai 📋</b>`;
 
       return {
         replyText,
@@ -9461,7 +9586,7 @@ export async function dispatchStateAction(
       };
     }
 
-    // 4. Option 2: Owner / Seller / Landlord
+    // 2. Option 2: Owner / Seller / Landlord (Checked BEFORE buyer criteria to prevent seller misclassification!)
     const isPureOption2 =
       (intent === "SELECT_OPTION" && (action as SelectOptionAction).option_index === 1) ||
       actionResult.selected_option_index === 1 ||
@@ -9470,6 +9595,8 @@ export async function dispatchStateAction(
 
     const isOwnerChoice =
       isPureOption2 ||
+      context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+      context.cognitiveTurn?.active_role === "SELLER" ||
       actionResult.user_role === "OWNER" ||
       intent === "SUBMIT_LISTING" ||
       actionResult.extracted?.lead_role === "SELLER" ||
@@ -9477,15 +9604,18 @@ export async function dispatchStateAction(
       isOwnerIntentUtterance(context.messageText, lower, actionResult);
 
     if (isOwnerChoice) {
-      // If user already specified property type (e.g. "muje meri shop bechni he"), directly forward to handleOwnerFlow!
-      const detectedPropType = actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+      // If user already specified property type (e.g. "mare maro juno flat bechvo che"), directly forward to handleOwnerFlow!
+      const detectedPropType = context.cognitiveTurn?.entities?.property_type || actionResult.property_type || parsePropertyTypeFromText(context.messageText);
+      const isDualLead = lead.lead_type === "SEEKER" || Boolean(lead.metadata?.has_buyer_profile);
       if (detectedPropType) {
         const ownerRes = await handleOwnerFlow({
           lead: {
             ...lead,
-            lead_type: "PROVIDER",
+            lead_type: isDualLead ? "DUAL_ROLE" : "PROVIDER",
             metadata: {
               ...(lead.metadata || {}),
+              has_seller_profile: true,
+              active_persona: "SELLER",
               owner_draft: {
                 started_at: new Date().toISOString(),
                 transaction_type: (actionResult.transaction_type === "RENT" || actionResult.transaction_type === "LEASE") ? "RENT_OUT" : "SELL",
@@ -9535,10 +9665,12 @@ export async function dispatchStateAction(
         replyText,
         nextState: "OWNER_CONFIG_PENDING",
         leadUpdates: {
-          lead_type: "PROVIDER",
+          lead_type: isDualLead ? "DUAL_ROLE" : "PROVIDER",
           state: "OWNER_CONFIG_PENDING",
           metadata: {
             ...(lead.metadata || {}),
+            has_seller_profile: true,
+            active_persona: "SELLER",
             last_bot_prompt: {
               question_type: "DISPOSITION_TYPE",
               sent_at: new Date().toISOString(),
@@ -9547,6 +9679,17 @@ export async function dispatchStateAction(
           },
         },
       };
+    }
+
+    // 3. Direct buyer criteria check: If user typed concrete buyer criteria upfront, bypass menus and cascade directly!
+    const hasConcreteBuyerEntities = Boolean(
+      actionResult.property_type ||
+      (actionResult.location && actionResult.location !== "UNKNOWN" && actionResult.location !== "FLEXIBLE") ||
+      (actionResult.price_or_budget && actionResult.price_or_budget > 0)
+    );
+
+    if (hasConcreteBuyerEntities) {
+      return handleQualificationCascade(lead, actionResult, context);
     }
 
     // 5. Option 1: Seeker / Buyer / Tenant
@@ -12241,13 +12384,49 @@ async function handleQualificationCascade(
   const resolvedCity = context.resolvedCity;
   const lowerMsg = (context.messageText || "").toLowerCase();
 
-  // Phase 32: Instant Handoff to handleOwnerFlow if Owner Intent detected in cascade
-  if (isOwnerIntentUtterance(context.messageText, lowerMsg, actionResult)) {
+  // Phase 40.2: Instant Handoff to handleOwnerFlow or DUAL_ROLE if Owner/Dual Intent detected in cascade
+  if (context.cognitiveTurn?.primary_intent === "DUAL_ROLE_INTENT") {
+    const replyText =
+      lang === "GUJLISH"
+        ? `Bahuj saras <b>${nameStr}</b>! 🏡 Tame navo flat explore karva mango chho ke pehla potano purano flat list karva mango chho?\n\n1️⃣ <b>Pehla Naya Options Jova Chhe 🏡</b>\n2️⃣ <b>Pehla Purano Flat List Karvo Chhe 📋</b>`
+        : lang === "ENGLISH"
+        ? `Wonderful <b>${nameStr}</b>! 🏡 Would you prefer to explore new options first, or list your existing property?\n\n1️⃣ <b>Explore New Options First 🏡</b>\n2️⃣ <b>List Existing Property First 📋</b>`
+        : `Bahut badhiya <b>${nameStr}</b>! 🏡 Aap pehle naya flat explore karna chahenge ya purana flat list karna chahenge?\n\n1️⃣ <b>Pehle Naye Options Dekhna Hai 🏡</b>\n2️⃣ <b>Pehle Purana Flat List Karna Hai 📋</b>`;
+
+    return {
+      replyText,
+      nextState: "DUAL_ROLE_MENU_PENDING",
+      leadUpdates: {
+        lead_type: "DUAL_ROLE",
+        state: "DUAL_ROLE_MENU_PENDING",
+        metadata: {
+          ...(lead.metadata || {}),
+          has_buyer_profile: true,
+          has_seller_profile: true,
+          last_bot_prompt: {
+            question_type: "DUAL_PRIORITY",
+            sent_at: new Date().toISOString(),
+          },
+        },
+      },
+    };
+  }
+
+  if (
+    context.cognitiveTurn?.primary_intent === "SUBMIT_PROPERTY" ||
+    context.cognitiveTurn?.active_role === "SELLER" ||
+    isOwnerIntentUtterance(context.messageText, lowerMsg, actionResult)
+  ) {
     return handleOwnerFlow({
       lead: {
         ...lead,
         lead_type: lead.lead_type === "SEEKER" ? "DUAL_ROLE" : "PROVIDER",
         state: "OWNER_FLOW" as DialogState,
+        metadata: {
+          ...(lead.metadata || {}),
+          has_seller_profile: true,
+          active_persona: "SELLER",
+        },
       },
       messageText: context.messageText,
       lower: lowerMsg,
@@ -12552,6 +12731,27 @@ async function handleQualificationCascade(
     }
   }
 
+  // 4-Slot Fast-Track Buyer Qualification (Phase 40.2)
+  // Purpose defaults to SELF_USE unless explicit investor cues
+  if (!purpose) {
+    if (/(?:invest|investment|roi|rental\s*yield|capital\s*gain|rokan)/i.test(lowerMsg)) {
+      purpose = "INVESTMENT";
+    } else {
+      purpose = "SELF_USE";
+    }
+  }
+
+  // Requirement defaults to BUY unless explicit rent/lease cues
+  if (!requirement) {
+    if (isCommercialInquiry && /(?:lease|pattay)/i.test(lowerMsg)) {
+      requirement = "LEASE";
+    } else if (hasRentalCue || isSub50kMonthlyBudget) {
+      requirement = isCommercialInquiry ? "LEASE" : "RENT";
+    } else {
+      requirement = "BUY";
+    }
+  }
+
   // PURPOSE-FIRST INVESTMENT FAST-PATH:
   if (purpose === "INVESTMENT") {
     if (!location || location === "UNKNOWN") {
@@ -12567,19 +12767,15 @@ async function handleQualificationCascade(
   const isGenericCommercial = rawPropType.toLowerCase() === "commercial" || rawPropType === "કોમર્શિયલ";
   const isGenericResidential = rawPropType.toLowerCase() === "residential" || rawPropType === "રેસિડેન્શિયલ";
 
-  // Check stage presence
+  // Check 4 core buyer slots
   const hasPropType = Boolean(propType && !isGenericCommercial && !isGenericResidential);
-  const hasRequirement = Boolean(requirement);
-  const hasPurpose = Boolean(purpose);
   const hasLocation = Boolean(location);
   const hasBudget = Boolean(budget && Number(budget) > 0);
   const hasTimeline = Boolean(timeline);
 
-  // Determine Missing Stage (Purpose-First Order)
+  // Determine Missing Stage (Fast-Track 4-Slot Order: Type -> Loc -> Budget -> Timeline)
   let missingStage: string | null = null;
-  if (!hasPropType && !hasRequirement) {
-    missingStage = "TURN_1_COMPOUND";
-  } else if (!hasPropType) {
+  if (!hasPropType) {
     if (isGenericCommercial) {
       missingStage = "COMMERCIAL_SUBTYPE";
     } else if (isGenericResidential) {
@@ -12587,10 +12783,6 @@ async function handleQualificationCascade(
     } else {
       missingStage = "PROPERTY_TYPE";
     }
-  } else if (!hasRequirement) {
-    missingStage = "REQUIREMENT";
-  } else if (!hasPurpose) {
-    missingStage = "PURPOSE";
   } else if (!hasLocation) {
     if (staleLoc && !isLocationConfirmed) {
       missingStage = "LOCATION_CONFIRMATION";
@@ -13967,6 +14159,171 @@ Deno.serve(async (req: Request) => {
       await supabase.from("leads").update(updates).eq("id", lead.id);
     }
 
+    const nameStr = senderName ? (lang === "GUJLISH" ? `${senderName} bhai` : `${senderName} ji`) : "ji";
+
+    // 4. Opt-Out Interceptor (Phase 40.2)
+    if (cognitiveTurn.primary_intent === "OPT_OUT") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Aabhar <b>${nameStr}</b>. Have tamne koi automated messages nahi aave. Bhawishyaman koi jarur hoy to tame amaro sampark kari shako chho. Tamaro divas shubh rahe! 🙏`
+          : lang === "ENGLISH"
+          ? `Thank you <b>${nameStr}</b>. You have been opted out from automated messages. Feel free to contact us anytime if you need property assistance! 🙏`
+          : `Dhanyawad <b>${nameStr}</b>. Aapka number opt-out kar diya gaya hai. Aage se koi automated message nahi aayega. Have a great day! 🙏`;
+
+      await supabase.from("leads").update({ state: "DROPPED", bot_active: false, drip_stage: "CANCELLED" }).eq("id", lead.id);
+
+      if (platform === "TELEGRAM") {
+        await sendTelegramMessage(botToken, senderId, replyText);
+      } else if (platform === "WHATSAPP" && phoneNumberId) {
+        await sendWhatsAppMessage(phoneNumberId, waAccessToken, senderId, replyText);
+      }
+      return new Response(JSON.stringify({ success: true, intent: "OPT_OUT", reply_sent: replyText }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 5. Direct Human Call Request Interceptor (Phase 40.2 - Golden Rule 6)
+    if (cognitiveTurn.primary_intent === "REQUEST_CALL") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Ji bilkul <b>${nameStr}</b>! Amari sales team tamne jald j call par connect karshe. Kripya janavjo koi preferred time chhe? 📞`
+          : lang === "ENGLISH"
+          ? `Certainly <b>${nameStr}</b>! Our sales team will connect with you shortly over a call. Please let us know if you have a preferred time! 📞`
+          : `Ji bilkul <b>${nameStr}</b>! Hamari sales team aapse jald hi direct call par connect karegi. Kripya batayein kya koi specific time best rahega? 📞`;
+
+      await dispatchSalesAlert(activeTenantId, "CALL_REQUESTED", lead, { userText: messageText });
+
+      if (platform === "TELEGRAM") {
+        await sendTelegramMessage(botToken, senderId, replyText);
+      } else if (platform === "WHATSAPP" && phoneNumberId) {
+        await sendWhatsAppMessage(phoneNumberId, waAccessToken, senderId, replyText);
+      }
+      return new Response(JSON.stringify({ success: true, intent: "REQUEST_CALL", reply_sent: replyText }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 6. Dual-Role Priority Disambiguation Interceptor (Phase 40.2 - Golden Rule 2):
+    if (cognitiveTurn.primary_intent === "DUAL_ROLE_INTENT") {
+      replyText =
+        lang === "GUJLISH"
+          ? `Bahuj saras <b>${nameStr}</b>! 🏡 Tame navo flat explore karva mango chho ke pehla potano purano flat list karva mango chho?\n\n1️⃣ <b>Pehla Naya Options Jova Chhe 🏡</b>\n2️⃣ <b>Pehla Purano Flat List Karvo Chhe 📋</b>`
+          : lang === "ENGLISH"
+          ? `Wonderful <b>${nameStr}</b>! 🏡 Would you prefer to explore new options first, or list your existing property?\n\n1️⃣ <b>Explore New Options First 🏡</b>\n2️⃣ <b>List Existing Property First 📋</b>`
+          : `Bahut badhiya <b>${nameStr}</b>! 🏡 Aap pehle naya flat explore karna chahenge ya purana flat list karna chahenge?\n\n1️⃣ <b>Pehle Naye Options Dekhna Hai 🏡</b>\n2️⃣ <b>Pehle Purana Flat List Karna Hai 📋</b>`;
+
+      await supabase.from("leads").update({
+        lead_type: "DUAL_ROLE",
+        state: "DUAL_ROLE_MENU_PENDING",
+        metadata: {
+          ...(lead.metadata || {}),
+          is_initial_dual_onboarding: true,
+          has_buyer_profile: true,
+          has_seller_profile: true,
+          last_bot_prompt: {
+            question_type: "DUAL_ROLE_SELECTION",
+            sent_at: new Date().toISOString(),
+          },
+        },
+      }).eq("id", lead.id);
+
+      if (platform === "TELEGRAM") {
+        await sendTelegramMessage(botToken, senderId, replyText);
+      } else if (platform === "WHATSAPP" && phoneNumberId) {
+        await sendWhatsAppMessage(phoneNumberId, waAccessToken, senderId, replyText);
+      }
+      return new Response(JSON.stringify({ success: true, intent: "DUAL_ROLE_PROMPT", reply_sent: replyText }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 7. Seller Direct Action Interceptor (Phase 40.2 - Golden Rule 1):
+    // E.g. "Mare maro juno flat bechvo che" or "flat vechvo che" -> STRICT SELLER FLOW!
+    if (cognitiveTurn.primary_intent === "SUBMIT_PROPERTY" || cognitiveTurn.active_role === "SELLER") {
+      const isDualLead = lead.lead_type === "SEEKER" || Boolean(lead.metadata?.has_buyer_profile);
+      const detectedPropType = cognitiveTurn.entities?.property_type || "Flat";
+
+      const ownerRes = await handleOwnerFlow({
+        lead: {
+          ...lead,
+          lead_type: isDualLead ? "DUAL_ROLE" : "PROVIDER",
+          metadata: {
+            ...(lead.metadata || {}),
+            has_seller_profile: true,
+            active_persona: "SELLER",
+            owner_draft: {
+              started_at: new Date().toISOString(),
+              transaction_type: (cognitiveTurn.entities?.transaction_type === "RENT" || cognitiveTurn.entities?.transaction_type === "LEASE") ? "RENT_OUT" : "SELL",
+              property_type: detectedPropType,
+              configuration: detectedPropType,
+              ...(cognitiveTurn.entities?.property_category ? { property_category: cognitiveTurn.entities.property_category } : {}),
+              ...(cognitiveTurn.entities?.project_or_society ? { society_name: cognitiveTurn.entities.project_or_society } : {}),
+              ...(cognitiveTurn.entities?.size_area_sqft ? { carpet_area_sqft: cognitiveTurn.entities.size_area_sqft } : {}),
+              ...(cognitiveTurn.entities?.expected_price_inr ? { expected_price: cognitiveTurn.entities.expected_price_inr } : {}),
+            },
+          },
+        },
+        messageText,
+        lower,
+        lang: (lang === "ENGLISH" || lang === "GUJLISH" || lang === "HINGLISH") ? lang : "HINGLISH",
+        senderName,
+        senderId,
+        platform,
+        tenantId: activeTenantId,
+        supabase,
+        city: resolvedCity,
+        agencyName,
+      });
+
+      if (ownerRes.leadUpdates) {
+        await supabase.from("leads").update(ownerRes.leadUpdates).eq("id", lead.id);
+      }
+
+      if (platform === "TELEGRAM") {
+        await sendTelegramMessage(botToken, senderId, ownerRes.replyText);
+      } else if (platform === "WHATSAPP" && phoneNumberId) {
+        await sendWhatsAppMessage(phoneNumberId, waAccessToken, senderId, ownerRes.replyText);
+      }
+      return new Response(JSON.stringify({ success: true, intent: "SUBMIT_PROPERTY", reply_sent: ownerRes.replyText }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 8. Conversational Steering Engine (Anti-Derailment AAS Formula - Phase 40.2 Golden Rule 5):
+    // If user is mid-qualification or mid-intake and asks a side FAQ (e.g. "SBI loan mil jayega?"):
+    const isMidFlow = lead.state === "QUALIFYING" || (typeof lead.state === "string" && lead.state.startsWith("OWNER_") && lead.state !== "OWNER_DETAILS_GATHERED");
+    if (isMidFlow && (cognitiveTurn.primary_intent === "ASK_FAQ" || cognitiveTurn.side_question)) {
+      const dialogCtxForSteer: DialogContext = {
+        messageText,
+        normalizedMessage,
+        lower,
+        senderName,
+        senderId,
+        platform,
+        tenantId: activeTenantId,
+        agencyName,
+        resolvedCity,
+        displayCity,
+        lang: (lang === "GUJLISH" || lang === "HINGLISH" || lang === "ENGLISH" || lang === "GUJARATI_SCRIPT") ? lang : "HINGLISH",
+        botKnowledge,
+        cognitiveTurn,
+      };
+
+      const steerRes = steerConversationTurn(lead, dialogCtxForSteer, cognitiveTurn.side_question || messageText);
+      if (steerRes.leadUpdates) {
+        await supabase.from("leads").update(steerRes.leadUpdates).eq("id", lead.id);
+      }
+
+      if (platform === "TELEGRAM") {
+        await sendTelegramMessage(botToken, senderId, steerRes.replyText);
+      } else if (platform === "WHATSAPP" && phoneNumberId) {
+        await sendWhatsAppMessage(phoneNumberId, waAccessToken, senderId, steerRes.replyText);
+      }
+      return new Response(JSON.stringify({ success: true, intent: "CONVERSATIONAL_STEERING", reply_sent: steerRes.replyText }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Call Hybrid Micro-LLM Intent Classifier (Gemini Primary + Groq Fallback) for all substantive turns
     const aiAnalysis = await classifyLeadIntent(normalizedMessage, lead);
     console.log(`[AI INTENT] Classified: "${aiAnalysis.intent}" via ${aiAnalysis.provider_used} in ${aiAnalysis.latency_ms}ms`);
@@ -14041,6 +14398,7 @@ Deno.serve(async (req: Request) => {
       lang: (lang === "GUJLISH" || lang === "HINGLISH" || lang === "ENGLISH" || lang === "GUJARATI_SCRIPT") ? lang : "HINGLISH",
       languageProfile: updatedLanguageProfile,
       botKnowledge,
+      cognitiveTurn,
     };
 
     // Dispatch turn through Deterministic Finite State Machine (FSM) Router
