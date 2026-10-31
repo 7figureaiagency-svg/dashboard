@@ -3640,103 +3640,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
     };
 
     // =========================================================================
-    // 1A. MODULE 1A: MORNING-OF-VISIT BRIEFING (Sent 9:00 AM - 11:30 AM IST for TODAY's visits)
-    // =========================================================================
-    const ist = getIstTime();
-    const currentIstHour = ist.getUTCHours();
-    const isMorningBriefingWindow = options.force || (currentIstHour >= 9 && currentIstHour <= 11);
-
-    if (runPreVisit && isMorningBriefingWindow) {
-      const todayDateStr = ist.toISOString().slice(0, 10);
-      let qmb = supabase
-        .from("leads")
-        .select("*")
-        .eq("site_visit_booked", true)
-        .or("bot_active.is.null,bot_active.eq.true");
-
-      if (options.testLeadId) {
-        qmb = qmb.eq("lead_id", options.testLeadId);
-      }
-      qmb = qmb.order("site_visit_datetime", { ascending: true, nullsFirst: false }).limit(BATCH_LIMIT);
-
-      const { data: mbLeads } = await qmb;
-      if (mbLeads) {
-        for (const l of mbLeads) {
-          try {
-            const scheduledIso = l.site_visit_at || l.site_visit_datetime;
-            if (!scheduledIso) continue;
-            const visitDate = new Date(scheduledIso);
-            const visitIstEpoch = visitDate.getTime() + 5.5 * 3600 * 1000;
-            const visitIstDateStr = new Date(visitIstEpoch).toISOString().slice(0, 10);
-
-            if (visitIstDateStr !== todayDateStr && !options.force) continue;
-
-            const metadata = l.metadata || {};
-            if (metadata.morning_briefing_sent && !options.force) continue;
-
-            const leadTenantId = l.client_id || defaultTenantId;
-            const botToken = getTenantBotToken(l.client_id);
-            const { projectName, prop } = await resolveLeadProjectName(l, supabase, leadTenantId);
-            const propLoc = prop?.location || "the site";
-            const mapUrl = prop?.map_url || "https://maps.google.com";
-            const mapLink = formatMapHyperlink(mapUrl, "View on Google Maps");
-            const formattedTime = visitDate.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
-            const lang = l.user_language || "HINGLISH";
-            const name = l.first_name || "Customer";
-
-            let briefingMsg = "";
-            if (lang === "GUJLISH") {
-              briefingMsg = `Suprabhat <b>${name} bhai</b>! 🌅\n\nAaje tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>${formattedTime}</b> par scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par hajir raheshe. Tame direct site par pahonchi rahya chho ke raste koi landmark guidance joiye chhe? <i>(Jo timing ma thodo ferfar karvo hoy, to naya anukool time janavi shako chho)</i>`;
-            } else if (lang === "ENGLISH") {
-              briefingMsg = `Good morning <b>${name}</b>! 🌅\n\nA quick briefing that your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled today at <b>${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will be present directly on-site. Will you be reaching the site directly or do you need any navigation/landmark guidance? <i>(If you need to adjust the timing, simply let us know your preferred time)</i>`;
-            } else {
-              briefingMsg = `Suprabhat <b>${name} ji</b>! 🌅\n\nAaj aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>${formattedTime}</b> par scheduled hai! 🚗\n\n${mapLink}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par ready rahenge. Aap direct site par pahunch rahe hain ya raste me koi landmark guidance chahiye? <i>(Agar timing me thoda aage-piche karna ho, toh bas aapka naya convenient time bata dijiye)</i>`;
-            }
-
-            await sleepJitter();
-
-            const isTelegram = /^[0-9]+$/.test(l.lead_id) || !l.phone || l.phone.startsWith("tg_") || String(l.metadata?.platform).toUpperCase() === "TELEGRAM";
-            let dispatchRes: any;
-            if (isTelegram) {
-              dispatchRes = await sendTelegramMessage(botToken, l.lead_id, briefingMsg);
-            } else {
-              const { phoneId: waPhoneId, accessToken: waToken } = getTenantWaba(l.client_id);
-              dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, briefingMsg);
-            }
-
-            await supabase
-              .from("leads")
-              .update({
-                metadata: {
-                  ...metadata,
-                  morning_briefing_sent: true,
-                  morning_briefing_at: new Date().toISOString(),
-                  last_bot_prompt: {
-                    question_type: "VISIT_REMINDER",
-                    text_preview: safeSlice(briefingMsg, 150),
-                    asked_at: new Date().toISOString(),
-                  },
-                },
-              })
-              .eq("id", l.id);
-
-            await supabase.from("lead_events").insert({
-              client_id: leadTenantId,
-              lead_id: l.lead_id,
-              event_type: "MORNING_BRIEFING_SENT",
-              payload: { scheduled_at: scheduledIso, projectName, timeFormatted: formattedTime, dispatchRes }
-            });
-
-            sweepLog.morning_briefings.push({ lead_id: l.lead_id, name, scheduledAt: scheduledIso });
-          } catch (itemErr: any) {
-            sweepLog.errors.push({ module: "morning_briefing_item", lead_id: l.lead_id, error: itemErr.message });
-          }
-        }
-      }
-    }
-
-    // =========================================================================
-    // 1. MODULE 1: PRE-VISIT REMINDERS (1 Hour Before Scheduled Visit)
+    // 1. MODULE 1: PRE-VISIT REMINDERS (2 Hours Before Scheduled Visit - Single Consolidated Function)
     // =========================================================================
     if (runPreVisit) {
       let q = supabase
@@ -3764,8 +3668,8 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
             const visitTime = new Date(scheduledIso).getTime();
             const diffMinutes = Math.round((visitTime - nowMs) / (60 * 1000));
 
-            // Window: 35 to 85 minutes before visit (centered at 60 mins). Force allows any upcoming visit.
-            const inWindow = options.force ? true : (diffMinutes >= 35 && diffMinutes <= 85);
+            // Window: 90 to 150 minutes before visit (centered at 120 mins / 2 hours). Force allows any upcoming visit.
+            const inWindow = options.force ? true : (diffMinutes >= 90 && diffMinutes <= 150);
             if (!inWindow) continue;
 
             const leadTenantId = l.client_id || defaultTenantId;
@@ -3782,11 +3686,11 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
 
             let reminderMsg = "";
             if (lang === "GUJLISH") {
-              reminderMsg = `Namaste <b>${name} bhai</b>! ⏰ Reminder: Tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>1 kalak ma (${formattedTime})</b> scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Executive Site Par Ready Chhe!</b> Amara senior sales executive site location par pahonchi gaya chhe. Tame on-the-way chho, ke raste koi direction guidance joiye chhe? <i>(Jo pahonchva ma thodo samay lagvano hoy to kitla vage pahonchsho janavjo taaki executive wait kare)</i>`;
+              reminderMsg = `Namaste <b>${name} bhai</b>! ⏰ Reminder: Tamari <b>${projectName}</b> (${propLoc}) mate VIP Site Visit <b>2 kalak ma (${formattedTime})</b> scheduled chhe! 🚗\n\n${mapLink}\n\n🤝 <b>Site par maliye chhiye!</b> Amara senior sales executive time par direct site location par ready raheshe. Tame direct site par pahonchi rahya chho ke raste koi landmark guidance joiye chhe? <i>(Jo timing ma thodo ferfar karvo hoy, to naya anukool time janavi shako chho)</i>`;
             } else if (lang === "ENGLISH") {
-              reminderMsg = `Hello <b>${name}</b>! ⏰ Reminder: Your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled in <b>1 hour at ${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>Advisor Ready On-Site!</b> Our senior sales advisor has arrived at the property. Are you on the way, or do you need any directions assistance? <i>(If you are running slightly behind schedule, let us know your estimated arrival time so our team coordinates smoothly)</i>`;
+              reminderMsg = `Hello <b>${name}</b>! ⏰ Reminder: Your VIP Site Visit for <b>${projectName}</b> (${propLoc}) is scheduled in <b>2 hours at ${formattedTime}</b>! 🚗\n\n${mapLink}\n\n🤝 <b>See you at the site!</b> Our senior sales advisor will be present directly on-site. Will you be reaching the site directly or do you need any navigation/landmark guidance? <i>(If you need to adjust the timing, simply let us know your preferred time)</i>`;
             } else {
-              reminderMsg = `Namaste <b>${name} ji</b>! ⏰ Reminder: Aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>1 ghante me (${formattedTime})</b> scheduled hai! 🚗\n\n${mapLink}\n\n🤝 <b>Executive Site Par Ready Hain!</b> Hamare senior sales executive site location par pahunch chuke hain. Kya aap on-the-way hain, ya raste me koi direction guidance chahiye? <i>(Agar pahunchne me thoda extra time lag raha ho, toh lagbhag kitne baje tak pahuchenge bata dijiye taaki executive coordinate kare)</i>`;
+              reminderMsg = `Namaste <b>${name} ji</b>! ⏰ Reminder: Aapki <b>${projectName}</b> (${propLoc}) ke liye VIP Site Visit <b>2 ghante me (${formattedTime})</b> scheduled hai! 🚗\n\n${mapLink}\n\n🤝 <b>Milte hain site par!</b> Hamare senior sales executive time par direct site location par ready rahenge. Aap direct site par pahunch rahe hain ya raste me koi landmark guidance chahiye? <i>(Agar timing me thoda aage-piche karna ho, toh bas aapka naya convenient time bata dijiye)</i>`;
             }
 
             await sleepJitter();
@@ -11840,7 +11744,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v104-intent-driven-multilingual-cron-templates",
+        version: "v105-consolidated-2hour-pre-visit-reminder",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
