@@ -7,6 +7,7 @@ import {
   Landmark,
   MapPin,
   MessageSquare,
+  MessageCircleWarning,
   Monitor,
   Moon,
   Phone,
@@ -29,6 +30,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { uploadClientLogo, useClient } from "@/lib/crm-data";
+import { WhatsAppConnectCard } from "@/components/crm/whatsapp-connect";
 import { useQueryClient } from "@tanstack/react-query";
 
 export interface CustomFaq {
@@ -198,6 +200,16 @@ export function ProfileTab() {
 
   return (
     <div className="space-y-6 max-w-4xl pb-12">
+      {isAdmin && client && !client.access_token && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-300/80 bg-amber-50/90 dark:border-amber-700/60 dark:bg-amber-950/40 px-4 py-3.5 text-sm text-amber-900 dark:text-amber-200 shadow-xs">
+          <MessageCircleWarning className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span className="flex-1 text-xs sm:text-sm font-medium">
+            Your WhatsApp Business account isn't connected yet — leads from WhatsApp won't
+            reach this dashboard until it is.
+          </span>
+          <WhatsAppConnectCard clientId={client.id} compact />
+        </div>
+      )}
       {/* Personal info */}
       <Card className="apple-card overflow-hidden border border-border/50 bg-card shadow-xs rounded-2xl">
         <CardHeader className="bg-muted/15 border-b border-border/30 px-5 py-4">

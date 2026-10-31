@@ -5,7 +5,6 @@ import {
   LayoutList,
   LineChart,
   LogOut,
-  MessageCircleWarning,
   RefreshCw,
   Share2,
   UserCircle,
@@ -20,7 +19,6 @@ import { LeadsTab } from "@/components/crm/leads-tab";
 import { PerformanceTab } from "@/components/crm/performance-tab";
 import { ProfileTab } from "@/components/crm/profile-tab";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { WhatsAppConnectCard } from "@/components/crm/whatsapp-connect";
 import { useClient, useExecutives, useInventory, useLeads } from "@/lib/crm-data";
 import { useCurrentUser, useSignOut } from "@/lib/auth";
 import { inDatePreset, type DatePreset } from "@/lib/crm";
@@ -251,16 +249,6 @@ function Dashboard() {
         {/* Main Content Area — Full-Width Reclaimed Space (No Left Sidebar) */}
         <div className="mx-auto max-w-[1600px] px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 md:pb-8">
           <div className="w-full space-y-6">
-            {isAdmin && client && !client.access_token && (
-              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
-                <MessageCircleWarning className="size-4 shrink-0" />
-                <span className="flex-1">
-                  Your WhatsApp Business account isn't connected yet — leads from WhatsApp won't
-                  reach this dashboard until it is.
-                </span>
-                <WhatsAppConnectCard clientId={client.id} compact />
-              </div>
-            )}
 
             <TabsContent value="leads" className="mt-0">
               <LeadsTab
