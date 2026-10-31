@@ -4019,6 +4019,7 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
           .select("*")
           .or("site_visit_booked.is.null,site_visit_booked.eq.false")
           .or("bot_active.is.null,bot_active.eq.true")
+          .or("followup_count.is.null,followup_count.lt.3")
           .in("state", ["QUALIFYING", "OPTIONS_SENT", "FRESH", "VISIT_REQUESTED", "COLD_UNQUALIFIED", "COLD"])
           .is("rejection_reason", null);
 
@@ -4033,27 +4034,50 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
         } else if (eligibleLeads) {
           for (const l of eligibleLeads) {
             try {
-              // Anti-spam Rule 1: Frequency cap - Max 1 message per day (20 hours gap)
-              if (l.last_followup_at && !options.force) {
-                const hoursSinceFollowup = (nowMs - new Date(l.last_followup_at).getTime()) / (1000 * 3600);
-                if (hoursSinceFollowup < 20) continue;
-              }
+              const currentCount = Number(l.followup_count || 0);
 
-              // Anti-spam Rule 2: Inactivity gap - At least 4 hours of inactivity since last user action
+              // Anti-spam Rule 1: Max 3 total follow-ups strictly enforced (Zero-Spam Meta Invariant)
+              if (currentCount >= 3 && !options.force) continue;
+
               const lastActive = l.last_active_at || l.updated_at || l.created_at;
-              if (lastActive && !options.force) {
-                const hoursSinceActive = (nowMs - new Date(lastActive).getTime()) / (1000 * 3600);
-                if (hoursSinceActive < 4) continue;
+              const hoursSinceActive = lastActive ? (nowMs - new Date(lastActive).getTime()) / (1000 * 3600) : 999;
+              const hoursSinceFollowup = l.last_followup_at ? (nowMs - new Date(l.last_followup_at).getTime()) / (1000 * 3600) : 999;
+
+              // Rule 2A: Workaround 1 - Single In-Window Golden Nudge (Follow-up #1)
+              // Requires at least 3 hours of inactivity since last user action (ensures user dropped off naturally),
+              // dispatched within business hours (11:00 AM - 6:30 PM IST) while Meta 24-hr customer care window is active.
+              if (currentCount === 0) {
+                if (hoursSinceActive < 3 && !options.force) continue;
               }
 
-              // Anti-spam Rule 3: Max 3 total follow-ups
-              if ((l.followup_count || 0) >= 3 && !options.force) continue;
+              // Rule 2B: Day 3 Progressive Safe Gap (Follow-up #2)
+              // If user has not replied to Nudge 1, enforce at least 48 hours gap (2 full days)
+              // to prevent daily spam and protect WhatsApp Business Account quality score.
+              if (currentCount === 1) {
+                if (hoursSinceFollowup < 48 && !options.force) continue;
+              }
+
+              // Rule 2C: Day 6-7 Final Gentle Closure Nudge (Follow-up #3)
+              // Enforce at least 72 hours gap (3 full days) after Nudge 2.
+              if (currentCount === 2) {
+                if (hoursSinceFollowup < 72 && !options.force) continue;
+              }
 
               const lang = l.user_language || "HINGLISH";
               const name = l.first_name || "Customer";
               let nudgeMsg = "";
 
-              if (l.state === "OPTIONS_SENT") {
+              if (currentCount === 2) {
+                // Final Nudge #3: Respectful Breakup / File Closure Nudge (Anti-Spam & Anti-Ban safeguard)
+                const propLabel = l.property_type ? `<b>${l.property_type}</b>` : "property";
+                if (lang === "GUJLISH") {
+                  nudgeMsg = `Namaste <b>${name} bhai</b>! 👋 Shu tame haji pan ${propLabel} shodhva mango chho ke ame tamari inquiry close kari daie? Jo plan hold par hoy to fakt <b>'Close'</b> lakhi do, ame future ma disturb nahi kariye. 🤝`;
+                } else if (lang === "ENGLISH") {
+                  nudgeMsg = `Hello <b>${name}</b>! 👋 Are you still actively exploring ${propLabel}, or should we close your inquiry for now? If your search is on hold, simply reply <b>'Close'</b> and we will not follow up further. 🤝`;
+                } else {
+                  nudgeMsg = `Namaste <b>${name} ji</b>! 👋 Kya aap abhi bhi ${propLabel} search kar rahe hain ya hum aapki inquiry close kar dein? Agar aapka plan abhi hold par hai toh bas <b>'Close'</b> likh kar bata dijiye, hum aage disturb nahi karenge. 🤝`;
+                }
+              } else if (l.state === "OPTIONS_SENT") {
                 const leadTenantId = l.client_id || defaultTenantId;
                 const hasRealOptions = Array.isArray(l.last_option_ids) && l.last_option_ids.length > 0;
                 const isNoMatchLead = l.metadata?.sales_alert_reason === "NO_PROPERTY_MATCH" || !hasRealOptions;
@@ -4167,9 +4191,9 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 dispatchRes = await sendWhatsAppMessage(waPhoneId, waToken, l.phone || l.lead_id, nudgeMsg);
               }
 
-              const newCount = (l.followup_count || 0) + 1;
-              const dripStage = l.state === "OPTIONS_SENT" ? "OPTIONS_NUDGE" : "QUALIFYING_NUDGE";
-              const dailyQType = l.state === "OPTIONS_SENT" ? "VISIT_SLOT" : (l.state === "QUALIFYING" ? "QUALIFYING_FIELD" : "GENERAL_QUESTION");
+              const newCount = currentCount + 1;
+              const dripStage = newCount >= 3 ? "CLOSED_UNRESPONSIVE" : (l.state === "OPTIONS_SENT" ? "OPTIONS_NUDGE" : "QUALIFYING_NUDGE");
+              const dailyQType = newCount >= 3 ? "CLOSURE_CHECK" : (l.state === "OPTIONS_SENT" ? "VISIT_SLOT" : (l.state === "QUALIFYING" ? "QUALIFYING_FIELD" : "GENERAL_QUESTION"));
               const nextState = (l.state === "COLD_UNQUALIFIED" || l.state === "COLD") ? "QUALIFYING" : l.state;
 
               await supabase.from("leads").update({
@@ -11744,7 +11768,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v105-consolidated-2hour-pre-visit-reminder",
+        version: "v106-meta-safe-in-window-golden-nudge-and-cadence",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -12433,7 +12457,8 @@ Deno.serve(async (req: Request) => {
         .single();
       lead = newLead;
     } else {
-      const updates: any = { last_active_at: new Date().toISOString() };
+      const updates: any = { last_active_at: new Date().toISOString(), followup_count: 0 };
+      lead.followup_count = 0;
       if (lead.user_language !== lang) {
         updates.user_language = lang;
         lead.user_language = lang;
