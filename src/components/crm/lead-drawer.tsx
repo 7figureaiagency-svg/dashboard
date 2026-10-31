@@ -277,18 +277,65 @@ export function LeadDrawer({
 
   const chatMessages = useMemo(() => {
     if (!lead) return [];
-    const list: Array<{ sender: "user" | "bot"; text: string; time: string; badge?: string }> = [];
+    const list: Array<{ sender: "user" | "bot"; text: string; time: string; badge?: string; platform?: string }> = [];
     for (const ev of rawEvents) {
       const p = ev.payload || {};
+      const leadPlatform = p.platform || (lead.lead_id?.startsWith("tg_") || /^[0-9]+$/.test(lead.lead_id || "") ? "TELEGRAM" : "WHATSAPP");
+
       if (p.userText) {
-        list.push({ sender: "user", text: p.userText, time: ev.created_at });
+        list.push({
+          sender: "user",
+          text: p.userText,
+          time: ev.created_at,
+          platform: leadPlatform,
+        });
       }
-      if (p.replySent || p.replyText) {
+
+      // Check bot text across all possible fields (replySent, replyText, Telegram dispatch text, message, text, nudgeMsg, etc.)
+      let botText =
+        p.replySent ||
+        p.replyText ||
+        p.dispatchRes?.result?.text ||
+        p.message ||
+        p.text ||
+        p.nudgeMsg ||
+        p.bot_response;
+
+      // Ignore silent drops
+      if (botText === "[SILENT - 0 MSG DISPATCHED]") {
+        continue;
+      }
+
+      // Fallback synthesis for older legacy reminder/feedback events where message body wasn't stored in payload
+      if (!botText) {
+        if (ev.event_type === "PRE_VISIT_REMINDER_SENT") {
+          botText = `⏰ VIP Site Visit Reminder: Visit scheduled for ${p.projectName || "property"} at ${p.timeFormatted || "scheduled time"}. (Follow-up message dispatched to client)`;
+        } else if (ev.event_type === "POST_VISIT_FEEDBACK_SENT") {
+          botText = `📋 Post-Visit Feedback: How was your VIP site visit for ${p.projectName || "the property"}? Did layout and price match your expectations? (Follow-up feedback dispatched to client)`;
+        } else if (ev.event_type === "MISSED_VISIT_RESCHEDULE_NUDGE_SENT") {
+          botText = `🔄 Reschedule Nudge: Re-invitation to reschedule missed VIP site visit for ${p.projectName || "property"}. (Dispatched to client)`;
+        } else if (ev.event_type === "UNCONFIRMED_ATTENDANCE_NUDGE") {
+          botText = `🔔 Attendance Follow-up: Checking if client visited ${p.projectName || "property"} or needs to reschedule. (Dispatched to client)`;
+        }
+      }
+
+      if (botText) {
+        let badgeLabel = p.dripStage || p.state || ev.event_type;
+        if (ev.event_type === "DAILY_FOLLOWUP_SENT") badgeLabel = "FOLLOW_UP_NUDGE";
+        else if (ev.event_type === "PRE_VISIT_REMINDER_SENT") badgeLabel = "PRE_VISIT_REMINDER";
+        else if (ev.event_type === "POST_VISIT_FEEDBACK_SENT") badgeLabel = "POST_VISIT_FEEDBACK";
+        else if (ev.event_type === "UNCONFIRMED_ATTENDANCE_NUDGE") badgeLabel = "ATTENDANCE_NUDGE";
+        else if (ev.event_type === "MISSED_VISIT_RESCHEDULE_NUDGE_SENT") badgeLabel = "RESCHEDULE_NUDGE";
+        else if (ev.event_type === "POST_VISIT_DRIP_SENT") badgeLabel = p.stage ? `DRIP_${p.stage}` : "POST_VISIT_DRIP";
+        else if (ev.event_type === "PORTAL_OUTREACH_SENT") badgeLabel = "PORTAL_OUTREACH";
+        else if (ev.event_type === "VOICE_NOTE_INAUDIBLE") badgeLabel = "VOICE_CLARIFICATION";
+
         list.push({
           sender: "bot",
-          text: p.replySent || p.replyText,
+          text: botText,
           time: ev.created_at,
-          badge: p.state || ev.event_type,
+          badge: badgeLabel,
+          platform: leadPlatform,
         });
       }
     }
@@ -697,7 +744,7 @@ export function LeadDrawer({
                 value="chat"
                 className="flex items-center justify-center gap-1.5 text-xs font-semibold data-[state=active]:bg-[#008069] data-[state=active]:text-white transition-all rounded-lg truncate"
               >
-                <MessageCircle className="size-3.5 shrink-0" /> WhatsApp ({chatMessages.length})
+                <MessageCircle className="size-3.5 shrink-0" /> {(lead?.source?.toUpperCase().includes("TELEGRAM") || lead?.lead_id?.startsWith("tg_") || /^[0-9]+$/.test(lead?.lead_id || "")) ? "Telegram" : "WhatsApp"} ({chatMessages.length})
               </TabsTrigger>
               <TabsTrigger
                 value="ai"

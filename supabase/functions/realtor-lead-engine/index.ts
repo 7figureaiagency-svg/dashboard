@@ -3720,7 +3720,14 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               client_id: leadTenantId,
               lead_id: l.lead_id,
               event_type: "PRE_VISIT_REMINDER_SENT",
-              payload: { scheduled_at: new Date(visitTime).toISOString(), projectName, timeFormatted: formattedTime, dispatchRes }
+              payload: {
+                scheduled_at: new Date(visitTime).toISOString(),
+                projectName,
+                timeFormatted: formattedTime,
+                message: reminderMsg,
+                replySent: reminderMsg,
+                dispatchRes,
+              }
             });
 
             sweepLog.pre_visit_reminders.push({ lead_id: l.lead_id, name, scheduledAt: scheduledIso, diffMinutes });
@@ -3813,7 +3820,14 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
               client_id: leadTenantId,
               lead_id: l.lead_id,
               event_type: "POST_VISIT_FEEDBACK_SENT",
-              payload: { visitTime: new Date(visitTime).toISOString(), projectName, diffMinutesPast, dispatchRes }
+              payload: {
+                visitTime: new Date(visitTime).toISOString(),
+                projectName,
+                diffMinutesPast,
+                message: feedbackMsg,
+                replySent: feedbackMsg,
+                dispatchRes,
+              }
             });
 
             sweepLog.post_visit_feedbacks.push({ lead_id: l.lead_id, name, scheduledAt: scheduledIso, diffMinutesPast });
@@ -3899,6 +3913,18 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 metadata: updatedMeta,
                 last_followup_at: new Date().toISOString(),
               }).eq("id", l.id);
+
+              await supabase.from("lead_events").insert({
+                client_id: leadTenantId,
+                lead_id: l.lead_id,
+                event_type: "UNCONFIRMED_ATTENDANCE_NUDGE",
+                payload: {
+                  projectName,
+                  hoursSinceCheck: Math.round(hoursSinceCheck * 10) / 10,
+                  message: nudgeMsg,
+                  replySent: nudgeMsg,
+                },
+              });
 
               // If hoursSinceCheck >= 36 and alert not sent yet, alert sales team for courtesy call
               if (hoursSinceCheck >= 36 && !meta.unconfirmed_visit_alert_sent) {
@@ -3994,7 +4020,13 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 client_id: leadTenantId,
                 lead_id: l.lead_id,
                 event_type: "MISSED_VISIT_RESCHEDULE_NUDGE_SENT",
-                payload: { projectName, hoursSinceLast: Math.round(hoursSinceLast * 10) / 10, dispatchRes },
+                payload: {
+                  projectName,
+                  hoursSinceLast: Math.round(hoursSinceLast * 10) / 10,
+                  message: rescheduleMsg,
+                  replySent: rescheduleMsg,
+                  dispatchRes,
+                },
               });
 
               sweepLog.missed_visit_followups.push({ lead_id: l.lead_id, name, projectName, hoursSinceLast });
@@ -4215,7 +4247,15 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 client_id: leadTenantId,
                 lead_id: l.lead_id,
                 event_type: "DAILY_FOLLOWUP_SENT",
-                payload: { state: nextState, prev_state: l.state, followup_count: newCount, dripStage, message: nudgeMsg.slice(0, 300), dispatchRes }
+                payload: {
+                  state: nextState,
+                  prev_state: l.state,
+                  followup_count: newCount,
+                  dripStage,
+                  message: nudgeMsg,
+                  replySent: nudgeMsg,
+                  dispatchRes,
+                }
               });
 
               sweepLog.daily_followups.push({ lead_id: l.lead_id, name, state: nextState, prev_state: l.state, followup_count: newCount });
@@ -4334,7 +4374,14 @@ async function executeAutomatedCronSweep(options: SweepOptions = {}) {
                 client_id: leadTenantId,
                 lead_id: l.lead_id,
                 event_type: "POST_VISIT_DRIP_SENT",
-                payload: { stage, nextDripStage, projectName, message: dripMsg.slice(0, 300), dispatchRes }
+                payload: {
+                  stage,
+                  nextDripStage,
+                  projectName,
+                  message: dripMsg,
+                  replySent: dripMsg,
+                  dispatchRes,
+                }
               });
 
               sweepLog.post_visit_drips.push({ lead_id: l.lead_id, name, stage, nextDripStage });
@@ -11768,7 +11815,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         status: "ONLINE",
-        version: "v106-meta-safe-in-window-golden-nudge-and-cadence",
+        version: "v107-audit-followup-messages-in-crm-chat",
         runtime: "Supabase Edge Serverless (Deno)",
         uptime_sla: "99.99%",
         zero_downtime: true,
@@ -12200,6 +12247,8 @@ Deno.serve(async (req: Request) => {
           outreach_dispatched: withinHours && outreachResult.success,
           outreach_error: outreachResult.error || null,
           deferred_reason: withinHours ? null : "Outside 9 AM - 9 PM IST window",
+          message: outreachResult.messageText || undefined,
+          replySent: outreachResult.messageText || undefined,
         },
       });
 
@@ -12390,6 +12439,9 @@ Deno.serve(async (req: Request) => {
             platform,
             duration: voiceDuration,
             file_id: telegramVoiceFileId || whatsAppMediaId,
+            userText: "🎤 [Voice note inaudible / background noise]",
+            replySent: clarificationText,
+            message: clarificationText,
           },
         });
 

@@ -138,7 +138,7 @@ export function useLeadEvents(leadId?: string | null) {
         .select("*")
         .eq("lead_id", leadId)
         .order("created_at", { ascending: true })
-        .limit(50);
+        .limit(150);
       if (error) {
         console.warn("fetch lead_events error:", error);
         return [];

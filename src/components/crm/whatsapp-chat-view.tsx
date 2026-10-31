@@ -327,14 +327,36 @@ export function WhatsAppChatView({
                           <span>Nextgen AI Bot</span>
                           {msg.badge && (
                             <span
-                              className={`ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                              className={`ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 ${
                                 msg.badge.includes("DUAL_ROLE")
                                   ? "bg-purple-500/25 text-purple-900 dark:text-purple-200 border border-purple-500/30"
+                                  : msg.badge.includes("FOLLOW_UP") || msg.badge.includes("NUDGE")
+                                  ? "bg-amber-500/25 text-amber-900 dark:text-amber-200 border border-amber-500/35"
+                                  : msg.badge.includes("REMINDER")
+                                  ? "bg-blue-500/25 text-blue-900 dark:text-blue-200 border border-blue-500/35"
+                                  : msg.badge.includes("FEEDBACK")
+                                  ? "bg-emerald-500/25 text-emerald-900 dark:text-emerald-200 border border-emerald-500/35"
+                                  : msg.badge.includes("DRIP")
+                                  ? "bg-indigo-500/25 text-indigo-900 dark:text-indigo-200 border border-indigo-500/35"
+                                  : msg.badge.includes("PORTAL")
+                                  ? "bg-teal-500/25 text-teal-900 dark:text-teal-200 border border-teal-500/35"
                                   : "bg-black/5 dark:bg-black/20 text-[#54656F] dark:text-white/70"
                               }`}
                             >
                               {msg.badge === "DUAL_ROLE_MENU_PENDING"
                                 ? "🌟 DUAL ROLE MENU"
+                                : msg.badge === "FOLLOW_UP_NUDGE"
+                                ? "⚡ Follow-up Nudge"
+                                : msg.badge === "PRE_VISIT_REMINDER"
+                                ? "⏰ Pre-Visit Reminder"
+                                : msg.badge === "POST_VISIT_FEEDBACK"
+                                ? "📋 Post-Visit Feedback"
+                                : msg.badge === "ATTENDANCE_NUDGE"
+                                ? "🔔 Attendance Nudge"
+                                : msg.badge === "RESCHEDULE_NUDGE"
+                                ? "🔄 Reschedule Nudge"
+                                : msg.badge === "PORTAL_OUTREACH"
+                                ? "🚀 Portal Outreach"
                                 : msg.badge.replace(/_/g, " ")}
                             </span>
                           )}
